@@ -1,0 +1,161 @@
+From,To,EMU,Freight,Tilt,Travel Train
+Roma Street,Normanby,3,4,2,2
+Normanby,Exhibition,2,3,1,1
+Exhibition,Campbell Street,1,1,1,1
+Campbell Street,Mayne Junction,1,2,1,1
+Mayne Junction,Mayne,2,1,1,1
+Bowen Hills,Campbell Street,1,,,
+Roma Street,Central,2,2,2,2
+Central,Brunswick Street,2,3,2,2
+Brunswick Street,Bowen Hills,1,2,2,2
+Bowen Hills,Mayne,2,1,1,1
+Mayne,Albion,1,2,2,2
+Albion,Wooloowin,1,2,1,1
+Wooloowin,Eagle Junction,1,1,1,1
+Eagle Junction,Airport Junction,1,1,1,1
+Airport Junction,Toombul,1,1,1,1
+Toombul,Nundah,1,1,1,1
+Nundah,Northgate,1,1,1,1
+Northgate,Virginia,2,2,1,2
+Virginia,Sunshine,1,1,1,1
+Sunshine,Geebung,1,1,1,1
+Geebung,Zillmere,1,2,1,2
+Zillmere,Carseldine,1,2,1,2
+Carseldine,Bald Hills,2,2,2,3
+Bald Hills,Strathpine,2,2,2,2
+Strathpine,Bray Park,1,2,2,1
+Bray Park,Lawnton,1,2,1,2
+Lawnton,Petrie,2,2,2,2
+Petrie,Dakabin,3,6,4,4
+Dakabin,Narangba,3,3,2,4
+Narangba,Burpengary,3,4,3,4
+Burpengary,Morayfield,3,4,4,5
+Morayfield,Caboolture,3,3,2,4
+Caboolture,Elimbah,6,7,5,7
+Elimbah,Beerburrum,4,5,4,5
+Beerburrum,Glasshouse Mountains,6,8,6,8
+Glasshouse Mountains,Beerwah,3,4,3,5
+Beerwah,Landsborough,5,5,3,5
+Landsborough,Mooloolah,5,5,4,6
+Mooloolah,Eudlo,6,6,5,7
+Eudlo,Palmwoods,3,5,4,4
+Palmwoods,Woombye,3,4,4,4
+Woombye,Nambour,4,5,4,2
+Northgate,Bindha,1,2,,,
+Bindha,Banyo,1,2,,,
+Banyo,Nudgee,1,1,,,
+Nudgee,Boondall,2,2,,,
+Boondall,North Boondall,1,2,,,
+North Boondall,Deagon,1,2,,,
+Deagon,Sandgate,1,2,,,
+Sandgate,Shorncliffe,2,1,,,
+Airport Junction,International Terminal,7,7,3,3
+International Terminal,Domestic Terminal,7,7,3,3
+Eagle Junction,Clayfield,1,2,,,
+Clayfield,Hendra,1,1,,,
+Hendra,Ascot,1,1,,,
+Ascot,Doomben,2,3,,,
+Doomben,Eagle Farm,,,1,,
+Eagle Farm,Bunour,1,,,,
+Bunour,Meeandah,1,2,,,
+Meeandah,Pinkenba,2,,,,
+Bowen Hills,Electric Depot Junction,2,1,,,
+Electric Depot Junction,Windsor,1,2,,,
+Windsor,Wilston,1,2,,,
+Wilston,Newmarket,1,2,,,
+Newmarket,Alderley,1,2,,,
+Alderley,Enoggera,1,2,,,
+Enoggera,Gaythorne,1,2,,,
+Gaythorne,Mitchelton,1,2,,,
+Mitchelton,Oxford Park,1,1,,,
+Oxford Park,Grovely,1,1,,,
+Grovely,Keperra,1,1,,,
+Keperra,Ferny Grove,3,1,,,
+Roma Street,Milton,1,3,2,
+Milton,Auchenflower,1,1,1,
+Auchenflower,Toowong,1,1,,
+Toowong,Taringa,1,2,2,
+Taringa,Indooroopilly,1,2,2,
+Indooroopilly,Chelmer,2,2,1,
+Chelmer,Graceville,1,1,1,
+Graceville,Sherwood,1,1,1,
+Sherwood,Corinda,1,2,1,
+Corinda,Oxley,2,2,1,
+Oxley,Darra,2,3,2,
+Darra,Wacol,2,4,3,
+Wacol,Gailes,2,1,1,
+Gailes,Goodna,1,2,1,
+Goodna,Redbank,2,3,,4
+Redbank,Riverview,2,2,,2
+Riverview,Dinmore,1,2,,1
+Dinmore,Ebbw Vale,1,1,,2
+Ebbw Vale,Bundamba,1,2,,2
+Bundamba,Booval,1,2,,
+Booval,East Ipswich,1,2,,
+East Ipswich,Ipswich,2,2,,
+Ipswich,Thomas Street,2,3,2,
+Thomas Street,Wulkuraka,2,2,1,
+Wulkuraka,Karrabin,2,2,2,
+Karrabin,Walloon,3,5,3,
+Walloon,Thagoona,3,5,4,
+Thagoona,Yarrowlea,3,2,1,
+Yarrowlea,Rosewood,1,3,2,
+Yarrowlea,Ebenezer,,,10,,
+Bundamba,Box Flat Junction,,,15,,
+Box Flat,Box Flat Junction,,,2,,
+Box Flat Junction,Swanbank,,,15,,
+Corinda,Moolabin,1,4,,,,
+Yeerongpilly,Tennyson Yard,2,3,,,,
+Clapham,Yeerongpilly,1,3,,,,
+Tennyson Yard,Moolabin,2,1,,,,
+Salisbury,Acacia Ridge,5,2,,,,
+Roma Street,South Brisbane,4,4,,,,
+South Brisbane,South Bank,1,,,,
+South Bank,Park Road,1,2,,,,
+Park Road,Dutton Park,2,2,,,,
+Dutton Park,Fairfield,1,2,,,,
+Fairfield,Yeronga,2,2,,,,
+Yeronga,Yeerongpilly,1,1,,,,
+Yeerongpilly,Moorooka,1,1,,,,
+Moorooka,Rocklea,2,1,,,,
+Rocklea,Salisbury,1,3,,,,
+Salisbury,Coopers Plains,2,3,,,,
+Coopers Plains,Banoon,1,2,,,,
+Banoon,Sunnybank,1,1,,,,
+Sunnybank,Altandi,1,3,,,,
+Altandi,Runcorn,1,2,,,,
+Runcorn,Fruitgrove,2,2,,,,
+Fruitgrove,Kuraby,1,2,,,,
+Kuraby,Trinder Park,3,4,,,,
+Trinder Park,Woodridge,1,2,,,,
+Woodridge,Kingston,2,3,,,,
+Kingston,Loganlea,1,3,,,,
+Loganlea,Bethania,2,4,,,,
+Bethania,Eden's Landing,1,2,,,,
+Eden's Landing,Holmview,1,3,,,,
+Holmview,Beenleigh,2,3,,,,
+Beenleigh,Ormeau,7,13,,,,
+Ormeau,Coomera,5,8,,,,
+Coomera,Helensvale,5,10,,,,
+Helensvale,Nerang,5,8,,,,
+Nerang,Robina Town Centre,5,10,,,,
+Park Road,Buranda,2,2,,,,
+Buranda,Coorparoo,1,2,,,,
+Coorparoo,Norman Park,1,2,,,,
+Norman Park,Morningside,2,4,,,,
+Morningside,Cannon Hill,1,2,,,,
+Cannon Hill,Murarrie,1,3,,,,
+Murarrie,Hemmant,2,5,,,,
+Hemmant,Lindum,2,3,,,,
+Lindum,Lytton Junction,1,2,,,,
+Lytton Junction,Wynnum North,1,1,,,,
+Wynnum North,Wynnum,2,2,,,,
+Wynnum,Wynnum Central,2,1,,,,
+Wynnum Central,Manly,2,4,,,,
+Manly,Lota,1,3,,,
+Lota,Thorneside,1,3,,,
+Thorneside,Birkdale,2,6,,,
+Birkdale,Wellington Point,2,3,,,
+Wellington Point,Ormiston,1,3,,,
+Ormiston,Cleveland,2,2,,,
+Lytton Junction,Fisherman Islands,10,,,,

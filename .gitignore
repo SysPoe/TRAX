@@ -1,0 +1,7 @@
+node_modules
+db.sqlite
+db.sqlite-journal
+package-lock.json
+.cache
+.git
+dist

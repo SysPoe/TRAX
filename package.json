@@ -1,0 +1,16 @@
+{
+    "type": "module",
+    "name": "translink-rail-api",
+    "version": "1.0.0",
+    "description": "High-level API for TransLink Rail services",
+    "main": "index.js",
+    "devDependencies": {
+        "@types/node": "^24.0.14"
+    },
+    "dependencies": {
+        "gtfs": "^4.17.5"
+    },
+    "scripts": {
+        "test": "env NODE_OPTIONS=\"--max-old-space-size=8192\" npx tsx test.ts"
+    }
+}
