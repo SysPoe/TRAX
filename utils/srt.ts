@@ -126,6 +126,7 @@ Ormeau,Coomera,5
 Coomera,Helensvale,5
 Helensvale,Nerang,5
 Nerang,Robina,5
+Robina,Varsity Lakes,4
 Boggo,Buranda,2
 Park Road,Buranda,2
 Buranda,Coorparoo,1
@@ -136,15 +137,32 @@ Cannon Hill,Murarrie,1
 Murarrie,Hemmant,2
 Hemmant,Lindum,2
 Lindum,Wynnum North,2
-Wynnum North,Wynnum,2
-Wynnum,Wynnum Central,2
+Wynnum North,Wynnum station,2
+Wynnum station,Wynnum Central,2
 Wynnum Central,Manly,2
 Manly,Lota,1
 Lota,Thorneside,1
 Thorneside,Birkdale,2
 Birkdale,Wellington Point,2
 Wellington Point,Ormiston,1
-Ormiston,Cleveland,2`;
+Ormiston,Cleveland,2
+Nambour,Yandina,9
+Yandina,Eumundi,10
+Eumundi,Cooroy,8
+Cooroy,Pomona,9
+Pomona,Cooran,7
+Cooran,Traveston,6
+Traveston,Gympie North,19
+Petrie,Kallangur,2
+Kallangur,Murrumba Downs,1
+Murrumba Downs,Mango Hill station,2
+Mango Hill station,Mango Hill East,2
+Mango Hill East,Rothwell,2
+Rothwell,Kippa-Ring,4
+Darra,Richlands,3
+Richlands,Springfield station,5
+Springfield station,Springfield Central,3
+`;
 
 export type SRTMatrix = {
   [from: string]: {
