@@ -1,5 +1,23 @@
 {
     "compilerOptions": {
-        "module": "nodenext"
-    }
+        "target": "ESNext",
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "declaration": true,
+        "outDir": "dist",
+        "rootDir": "./",
+        "esModuleInterop": true,
+        "forceConsistentCasingInFileNames": true,
+        "strict": true
+    },
+    "include": [
+        "index.ts",
+        "utils/**/*.ts",
+        "cache.ts",
+        "stations.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist"
+    ]
 }

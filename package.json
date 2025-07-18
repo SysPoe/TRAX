@@ -3,14 +3,30 @@
     "name": "translink-rail-api",
     "version": "1.0.0",
     "description": "High-level API for TransLink Rail services",
-    "main": "index.js",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
     "devDependencies": {
-        "@types/node": "^24.0.14"
+        "@types/node": "^24.0.14",
+        "@types/readline-sync": "^1.4.8",
+        "tsx": "^3.12.7",
+        "typescript": "^5.0.0"
     },
     "dependencies": {
-        "gtfs": "^4.17.5"
+        "chalk": "^5.4.1",
+        "gtfs": "^4.17.5",
+        "readline-sync": "^1.4.10"
     },
     "scripts": {
-        "test": "env NODE_OPTIONS=\"--max-old-space-size=8192\" npx tsx test.ts"
+        "test": "npx tsx test.ts",
+        "build": "tsc"
+    },
+    "files": [
+        "dist"
+    ],
+    "exports": {
+        ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+        }
     }
 }

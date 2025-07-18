@@ -1,6 +1,6 @@
 import type * as gtfs from "gtfs";
 import * as cache from "../cache.js";
-import { AugmentedStoptime } from "./augmentedStoptime.js";
+import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { getAugmentedTrips } from "../cache.js";
 import { findExpressString } from "./express.js";
 
@@ -11,7 +11,7 @@ export type AugmentedStop = gtfs.Stop & {
     date: number,
     start_time: string,
     end_time: string
-  ) => (AugmentedStoptime & { express_string: string })[];
+  ) => (AugmentedStopTime & { express_string: string })[];
 };
 
 export function augmentStop(stop: gtfs.Stop): AugmentedStop {
@@ -42,22 +42,22 @@ export function augmentStop(stop: gtfs.Stop): AugmentedStop {
         [stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]
       );
       const tripCache = new Map<string, ReturnType<typeof getAugmentedTrips>[0]>();
-      const results: { st: AugmentedStoptime; trip: any }[] = [];
-      for (const st of cache.getAugmentedStoptimes()) {
-        if (!validStops.has(st.actual_stop.stop_id)) continue;
+      const results: { st: AugmentedStopTime; trip: any }[] = [];
+      for (const st of cache.getAugmentedStopTimes()) {
+        if (!st.actual_stop || !validStops.has(st.actual_stop.stop_id)) continue;
         let trip = tripCache.get(st.trip_id);
         if (!trip) {
           trip = getAugmentedTrips(st.trip_id)[0];
           tripCache.set(st.trip_id, trip);
         }
-        if (!trip.serviceDates.includes(date)) continue;
+        if (!trip?.serviceDates?.includes(date)) continue;
         const ts = st.actual_departure_timestamp;
-        if (ts < startSec || ts > endSec) continue;
+        if (ts == null || ts < startSec || ts > endSec) continue;
         results.push({ st, trip });
       }
       return results
         .sort(
-          (a, b) => a.st.actual_departure_timestamp - b.st.actual_departure_timestamp
+          (a, b) => (a.st.actual_departure_timestamp ?? 0) - (b.st.actual_departure_timestamp ?? 0)
         )
         .map(({ st, trip }) => {
           const expressString = findExpressString(

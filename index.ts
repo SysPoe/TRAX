@@ -29,9 +29,9 @@ let config = {
 let realtimeInterval: NodeJS.Timeout | null = null;
 let staticInterval: NodeJS.Timeout | null = null;
 
-export async function loadGTFS(refresh: boolean = false): Promise<void> {
+export async function loadGTFS(refresh: boolean = false, forceReload: boolean = false): Promise<void> {
   const dbExists = fs.existsSync(config.sqlitePath);
-  if (!dbExists) {
+  if (!dbExists || forceReload) {
     await gtfs.importGtfs(config);
   }
 

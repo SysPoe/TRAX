@@ -182,10 +182,10 @@ function parseSRTtoMatrix(srtString: string): SRTMatrix {
 
     from = stations.find((v) =>
       v.stop_name?.toLowerCase().startsWith(from.toLowerCase())
-    )?.stop_id;
+    )?.stop_id ?? "";
     to = stations.find((v) =>
       v.stop_name?.toLowerCase().startsWith(to.toLowerCase())
-    )?.stop_id;
+    )?.stop_id ?? "";
 
     if (DEBUG) {
       if (!from) {
