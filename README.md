@@ -10,6 +10,10 @@ This project provides a high-level API for accessing and working with TransLink'
 - **Express and Passing Stop Calculation**: Automatically calculates express segments and passing stops for a given trip.
 - **Service Date Calculation**: Determines the dates a trip is active based on the GTFS calendar.
 
+## Drawbacks
+
+- For the Redcliffe and Springfield lines (from Petrie and from Darra respectively), official sectional running times are not available  and instead are estimated, and thus passing stop times may not be accurate.
+
 ## Getting Started
 
 ### Prerequisites

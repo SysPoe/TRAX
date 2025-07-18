@@ -3,6 +3,7 @@ import { AugmentedStop } from "./augmentedStop.js";
 import * as cache from "../cache.js";
 import { findExpress } from "./express.js";
 import { getSRT } from "./srt.js";
+import { DEBUG } from "../index.js";
 
 export enum ScheduleRelationship {
   "SCHEDULED",
@@ -102,12 +103,19 @@ function findPassingStopSRTs(stops: string[]): PassingStopSRT[] {
   for (let i = 0; i < allStops.length - 1; i++) {
     let srt = getSRT(allStops[i].stop_id, allStops[i + 1].stop_id);
     if (srt === undefined) {
-      console.error(
+      if (DEBUG) console.error(
         "[ERROR] No SRT found between",
         allStops[i],
         "and",
         allStops[i + 1]
       );
+
+      allStopSRTs.push({
+        from: allStops[i].stop_id,
+        to: allStops[i + 1].stop_id,
+        emu: 1,
+        passing: allStops[i + 1].passing,
+      });
       continue;
     }
     allStopSRTs.push({
@@ -221,9 +229,11 @@ function findPassingStoptimes(stopTimes: gtfs.StopTime[]): PassingStoptime[] {
     }
 
     times.push({ ...endTime, _passing: false });
-
     passingRun = [];
   }
+
+  if (times.at(-1)?.stop_sequence != stopTimes.at(-1).stop_sequence)
+    times.push({ ...stopTimes.at(-1), _passing: false });
 
   return times;
 }
@@ -249,7 +259,6 @@ export function augmentStoptimes(
 
   // Propagation state
   let lastDelay = 0;
-  let lastRealtimeUpdate = null;
   let lastScheduleRelationship = ScheduleRelationship.SCHEDULED;
   let lastPlatformCode = null;
 

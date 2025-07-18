@@ -13,17 +13,19 @@ type RawCache = {
   trips: gtfs.Trip[];
   stops: gtfs.Stop[];
 
-  tripsRec: Record<string, gtfs.Trip>;
-  stopsRec: Record<string, gtfs.Stop>;
+  tripsRec: { [trip_id: string]: gtfs.Trip };
+  stopsRec: { [stop_id: string]: gtfs.Stop };
 };
 
 type AugmentedCache = {
   trips?: AugmentedTrip[];
   stops?: AugmentedStop[];
-  stoptimes?: AugmentedStoptime[];
 
-  tripsRec?: Record<string, AugmentedTrip>;
-  stopsRec?: Record<string, AugmentedStop>;
+  stoptimes?: { [trip_id: string]: AugmentedStoptime[] };
+  tripsRec?: { [trip_id: string]: AugmentedTrip };
+  stopsRec?: { [stop_id: string]: AugmentedStop };
+
+  serviceDateTrips?: { [service_date: number]: string[] }; // Maps serviceDate to trip IDs
 };
 
 let rawCache: RawCache = {
@@ -42,8 +44,8 @@ let rawCache: RawCache = {
 let augmentedCache: AugmentedCache = {
   trips: [],
   stops: [],
-  stoptimes: [],
 
+  stoptimes: {},
   tripsRec: {},
   stopsRec: {},
 };
@@ -109,8 +111,11 @@ export function getAugmentedStops(stop_id?: string): AugmentedStop[] {
   return augmentedCache.stops;
 }
 
-export function getAugmentedStoptimes(): AugmentedStoptime[] {
-  return augmentedCache.stoptimes;
+export function getAugmentedStoptimes(trip_id?: number): AugmentedStoptime[] {
+  if (trip_id) {
+    return augmentedCache.stoptimes[trip_id] || [];
+  }
+  return Object.values(augmentedCache.stoptimes).flat();
 }
 
 /**
@@ -123,7 +128,7 @@ export async function refreshStaticCache(): Promise<void> {
   rawCache.stops = gtfs.getStops();
   if (DEBUG) console.log("Loaded", rawCache.stops.length, "stops.");
   if (DEBUG) console.log("Loading trips...");
-  rawCache.trips = gtfs.getTrips();
+  rawCache.trips = gtfs.getTrips().filter((v) => v.trip_id.includes("-QR "));
   if (DEBUG) console.log("Loaded", rawCache.trips.length, "trips.");
   if (DEBUG) console.log("Building raw cache records...");
   rawCache.tripsRec = {};
@@ -134,6 +139,31 @@ export async function refreshStaticCache(): Promise<void> {
   }
   for (const stop of rawCache.stops) {
     rawCache.stopsRec[stop.stop_id] = stop;
+  }
+
+  if (DEBUG) console.log("Augmenting trips...");
+  augmentedCache.trips = rawCache.trips.map(augmentTrip);
+  if (DEBUG) console.log("Augmented", augmentedCache.trips.length, "trips.");
+  if (DEBUG) console.log("Augmenting stops...");
+  augmentedCache.stops = rawCache.stops.map(augmentStop);
+  if (DEBUG) console.log("Augmented", augmentedCache.stops.length, "stops.");
+  augmentedCache.tripsRec = {};
+  augmentedCache.stopsRec = {};
+  augmentedCache.serviceDateTrips = {};
+
+  if (DEBUG) console.log("Building augmented cache records...");
+  for (const trip of augmentedCache.trips) {
+    augmentedCache.tripsRec[trip._trip.trip_id] = trip;
+    augmentedCache.stoptimes[trip._trip.trip_id] = trip.stopTimes;
+    for(const serviceDate of trip.serviceDates) {
+      if (!augmentedCache.serviceDateTrips[serviceDate]) {
+        augmentedCache.serviceDateTrips[serviceDate] = [];
+      }
+      augmentedCache.serviceDateTrips[serviceDate].push(trip._trip.trip_id);
+    }
+  }
+  for (const stop of augmentedCache.stops) {
+    augmentedCache.stopsRec[stop.stop_id] = stop;
   }
 
   if (DEBUG) console.log("Done. Static GTFS cache refreshed.");

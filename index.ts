@@ -59,6 +59,12 @@ export function clearIntervals(): void {
   }
 }
 
+export function formatTimestamp(ts?: number | null): string {
+  if (!ts) return "--:--";
+  const d = new Date(ts * 1000);
+  return d.toISOString().slice(11, 16);
+}
+
 export async function updateRealtime(): Promise<void> {
   await gtfs.updateGtfsRealtime(config);
   cache.refreshRealtimeCache();
@@ -69,6 +75,7 @@ export default {
   loadGTFS,
   updateRealtime,
   clearIntervals,
+  formatTimestamp,
   ...cache,
   ...calendar,
   ...stations,
