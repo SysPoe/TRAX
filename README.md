@@ -1,24 +1,29 @@
+
 # TRAX - TransLink Rail (GTFS) API eXtended
 
-This project provides a high-level API for accessing and working with TransLink's rail services data, including static GTFS and realtime updates.
+TRAX is a high-level TypeScript/Node.js API for accessing and working with TransLink's Queensland Rail (QR) services data, including both static GTFS and realtime updates. It provides powerful data augmentation, caching, and express/passing stop calculations for advanced timetable and live train information.
+
 
 ## Features
 
-- **GTFS Data Loading**: Easily load and cache GTFS data from TransLink's public API.
+- **GTFS Data Loading**: Load and cache static GTFS data from TransLink's public API.
 - **Realtime Updates**: Fetch and apply realtime updates for trip delays, cancellations, and vehicle positions.
-- **Augmented Data Models**: Provides augmented data models for `Stop`, `Trip`, and `StopTime` that include additional useful information and lazy-loading capabilities.
-- **Express and Passing Stop Calculation**: Automatically calculates express segments and passing stops for a given trip.
-- **Service Date Calculation**: Determines the dates a trip is active based on the GTFS calendar.
+- **Augmented Data Models**: Use enhanced models for `Stop`, `Trip`, and `StopTime` with extra info and lazy-loading.
+- **Express and Passing Stop Calculation**: Automatically determine express segments and passing stops for any trip.
+- **Service Date Calculation**: Find all dates a trip is active using the GTFS calendar.
+- **Sectional Running Times**: Built-in QR sectional running time matrix for accurate timing between stations.
 
-## Drawbacks
 
-- For the Redcliffe and Springfield lines (from Petrie and from Darra respectively), official sectional running times are not available  and instead are estimated, and thus passing stop times may not be accurate.
+## Limitations
+
+- For the Redcliffe and Springfield lines (from Petrie and from Darra respectively), official sectional running times are not available and are estimated, so passing stop times may not be accurate.
+
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js
+- Node.js (v16+ recommended)
 - npm
 
 ### Installation
@@ -35,46 +40,133 @@ This project provides a high-level API for accessing and working with TransLink'
 
 ### Usage
 
-The main entry point for the API is `index.ts`, which exports all the necessary functions and modules.
+The main entry point for the API is `index.ts`, which exports all main functions and modules as a single `TRAX` object.
 
-To use the API, you first need to load the GTFS data:
+To use the API, first load the GTFS data:
 
 ```typescript
 import TRAX from './index.js';
 
 async function main() {
-  // Load the GTFS data (static and realtime)
+  // Load static and realtime GTFS data
   await TRAX.loadGTFS();
 
-  // Get an augmented trip
+  // Get an augmented trip by trip_id
   const trip = TRAX.getAugmentedTrips("33551352-QR 25_26-39954-D159")[0];
-
-  // Display the trip information
   console.log(trip);
 }
 
 main();
 ```
 
-The `test.ts` file contains an example of how to use the API to fetch and display trip information. You can run it with:
+See `test.ts` for a more detailed example, including how to fetch and display departures for a station:
 
 ```bash
 npm test
 ```
 
+
+
 ## API Overview
 
 The `TRAX` object provides the following main functions and modules:
 
-- `loadGTFS()`: Loads the static and realtime GTFS data.
-- `getAugmentedTrips(trip_id)`: Returns an array of augmented trips.
-- `getAugmentedStops(stop_id)`: Returns an array of augmented stops.
-- `getStations()`: Returns a list of all train stations.
-- `cache`: Provides access to the raw and augmented data caches.
-- `calendar`: Provides functions for working with service dates.
+- `loadGTFS(refresh = false, forceReload = false)`: Loads static and realtime GTFS data. Call this before using other functions.
+  ```typescript
+  await TRAX.loadGTFS();
+  
+  // Refresh static GTFS data every 24 hours and realtime data every 60 seconds:
+  await TRAX.loadGTFS(true, false);
+
+  // Force reload static GTFS data even if db.sqlite exists
+  await TRAX.loadGTFS(false, true);
+
+  // Force reload static GTFS data and refresh by interval
+  await TRAX.loadGTFS(true, true);
+  ```
+
+- `updateRealtime()`: Manually refreshes realtime GTFS data.
+  ```typescript
+  await TRAX.updateRealtime();
+  ```
+
+- `getAugmentedTrips(trip_id?)`: Returns an array of augmented trips, optionally filtered by `trip_id`.
+  ```typescript
+  const allTrips: Trax.AugmentedTrip[] = TRAX.getAugmentedTrips();
+  const specificTrip: TRAX.AugmentedTrip? = TRAX.getAugmentedTrips("trip_id")[0];
+  ```
+
+- `getAugmentedStops(stop_id?)`: Returns an array of augmented stops, optionally filtered by `stop_id`.
+  ```typescript
+  const allStops: Trax.AugmentedStop[] = TRAX.getAugmentedStops();
+  const station: Trax.AugmentedStop? = TRAX.getAugmentedStops("place_romsta")[0];
+  ```
+
+- `getStations()`: Returns a list of all train stations in SEQ.
+  ```typescript
+  const stationIds: TRAX.AugmentedStop[] = TRAX.getStations();
+  ```
+
+- `getRaw...()`: Access to cached raw GTFS information.
+  ```typescript
+  // import type * as gtfs from "gtfs"
+  const trips: gtfs.Trip[] = TRAX.getRawTrips();
+  const trip: gtfs.Trip? = TRAX.getRawTrips("trip_id")[0];
+
+  const stops: gtfs.Stop[] = TRAX.getRawStops();
+  const stop: gtfs.Stop? = TRAX.getRawStops("stop_id")[0];
+
+  const stopTimes: gtfs.StopTime[] = TRAX.getRawStopTimes();
+  const stopTime: gtfs.StopTime[] = TRAX.getRawStopTimes("trip_id");
+
+  const stopTimeUpdates: gtfs.StoptimeUpdate[] = TRAX.getStopTimeUpdates();
+  const vehiclePositions: gtfs.VehiclePosition[] = TRAX.getVehiclePositions();  
+  ```
+
+- `calendar`: Functions for working with service dates and calendar info.
+  ```typescript
+  // Example: check if a service is active on a date
+  const serviceDates = TRAX.calendar.getServiceDatesByTrip("trip_id")
+  ```
+
+- `formatTimestamp(ts)`: Formats a timestamp in seconds since midnight as "HH:MM".
+  ```typescript
+  const formatted = TRAX.formatTimestamp(37800); // "10:30"
+  ```
 
 ### Augmented Models
 
-- **`AugmentedTrip`**: Represents a trip with additional information like service dates, lazy-loaded stoptimes, and express run information.
-- **`AugmentedStop`**: Represents a stop with lazy-loaded parent and child stops.
-- **`AugmentedStoptime`**: Represents a stop time with both scheduled and actual (realtime) arrival/departure times, and propagation of delays.
+- **`AugmentedTrip`**: Represents a train trip with the following properties and methods:
+  - `trip_id: string`, `route_id: string`, `service_id: string`, `direction_id: string`, `block_id: string`: Standard GTFS trip fields. See the [GTFS Documentation](https://gtfs.org/documentation/overview/).
+  - `serviceDates: number[]`: Array of dates (YYYYMMDD) when this trip operates.
+  - `stopTimes: AugmentedStopTime[]`: Array of `AugmentedStopTime` objects for this trip (lazy-loaded). It is important to note that this applies to all service dates and includes realtime data, so if the date you want the StopTimes for is not today, use the scheduled information instead of actual or realtime.
+  - `expressSegments`: Array of segments where the train runs express (skips stops).
+  - `getStopTimes()`: Loads and returns all stop times for this trip.
+  - `getExpressSegments()`: Returns express/passing stop segments for this trip.
+  - `realtimeStatus`: Object with current delay, cancellation, and vehicle position (if available).
+
+- **`AugmentedStop`**: Represents a station or stop with the following properties and methods:
+  - `stop_id`: The unique GTFS stop identifier.
+  - `stop_name`, `stop_lat`, `stop_lon`: Standard GTFS stop fields.
+  - `parent_station`: The parent station (if this is a platform or child stop).
+  - `child_stops`: Array of child stops/platforms (if any).
+  - `isStation`: Boolean, true if this stop is a main station.
+  - `getDepartures(date, start_time, end_time)`: Returns departures from this stop for a given date and time window, as an array of `AugmentedStopTime` objects.
+  - `getTrips()`: Returns all `AugmentedTrip` objects serving this stop.
+
+- **`AugmentedStopTime`**: Represents a scheduled or realtime stop event with the following properties and methods:
+  - `trip_id`, `stop_id`, `stop_sequence`: Standard GTFS stop time fields.
+  - `arrival_time`, `departure_time`: Scheduled times (seconds since midnight).
+  - `actual_arrival_time`, `actual_departure_time`: Realtime-adjusted times (if available).
+  - `delay`: Current delay in seconds (if available).
+  - `isPassing`: Boolean, true if the train passes this stop without stopping.
+  - `isExpress`: Boolean, true if this stop is part of an express segment.
+  - `serviceDate`: The date (YYYYMMDD) for this stop time.
+  - `getTrip()`: Returns the parent `AugmentedTrip` object.
+  - `getStop()`: Returns the parent `AugmentedStop` object.
+
+### How it Works
+
+- **Caching**: Static and realtime GTFS data is cached in memory for fast access. Use `refreshStaticCache()` and `refreshRealtimeCache()` (from `cache`) to manually refresh if needed.
+- **Augmentation**: Raw GTFS objects are wrapped with extra info and methods for easier querying and analysis.
+- **Express/Passing Stops**: The library automatically determines which stops are passed (not stopped at) and calculates their times using QR's sectional running times.

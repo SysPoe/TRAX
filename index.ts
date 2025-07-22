@@ -77,6 +77,6 @@ export default {
   clearIntervals,
   formatTimestamp,
   ...cache,
-  ...calendar,
+  calendar,
   ...stations,
 };
