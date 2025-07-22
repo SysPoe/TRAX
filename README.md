@@ -1,7 +1,7 @@
 
 # TRAX - TransLink Rail (GTFS) API eXtended
 
-TRAX is a high-level TypeScript/Node.js API for accessing and working with TransLink's Queensland Rail (QR) services data, including both static GTFS and realtime updates. It provides powerful data augmentation, caching, and express/passing stop calculations for advanced timetable and live train information.
+TRAX is a high-level TypeScript/Node.js API for accessing and working with TransLink's Queensland Rail services data, including both static GTFS and realtime updates. It provides powerful data augmentation, caching, and express/passing stop calculations for advanced timetable and live train information.
 
 
 ## Features
@@ -16,7 +16,7 @@ TRAX is a high-level TypeScript/Node.js API for accessing and working with Trans
 
 ## Limitations
 
-- For the Redcliffe and Springfield lines (from Petrie and from Darra respectively), official sectional running times are not available and are estimated, so passing stop times may not be accurate.
+- For the Redcliffe and Springfield lines (from Petrie and from Darra respectively), as well as between Robina and Varsity Lakes, official sectional running times are not available and have been manually estimated using timetables, so passing stop times may not be entirely accurate.
 
 
 ## Getting Started
@@ -167,6 +167,6 @@ The `TRAX` object provides the following main functions and modules:
 
 ### How it Works
 
-- **Caching**: Static and realtime GTFS data is cached in memory for fast access. Use `refreshStaticCache()` and `refreshRealtimeCache()` (from `cache`) to manually refresh if needed.
+- **Caching**: Static and realtime GTFS data is cached in memory for fast access. Use `refreshStaticCache()` and `refreshRealtimeCache()` to manually refresh if needed.
 - **Augmentation**: Raw GTFS objects are wrapped with extra info and methods for easier querying and analysis.
 - **Express/Passing Stops**: The library automatically determines which stops are passed (not stopped at) and calculates their times using QR's sectional running times.
