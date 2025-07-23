@@ -92,6 +92,12 @@ The `TRAX` object provides the following main functions and modules:
   await TRAX.updateRealtime();
   ```
 
+- `getCurrentQRTravelTrains()`: Gets all current QR Travel trains and converts them to AugmentedTrip format.
+  ```typescript
+  import { getCurrentQRTravelTrains } from './qr-travel/qr-travel-tracker.js';
+  const qrTravelTrips = await getCurrentQRTravelTrains();
+  ```
+
 - `getAugmentedTrips(trip_id?)`: Returns an array of augmented trips, optionally filtered by `trip_id`.
   ```typescript
   const allTrips: Trax.AugmentedTrip[] = TRAX.getAugmentedTrips();

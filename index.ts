@@ -39,6 +39,10 @@ export async function loadGTFS(refresh: boolean = false, forceReload: boolean = 
   cache.refreshStaticCache();
   cache.refreshRealtimeCache();
 
+  if(gtfs.getStops().length === 0) {
+    await gtfs.importGtfs(config);
+  }
+
   if (!refresh) return;
 
   realtimeInterval = setInterval(updateRealtime, 60 * 1000);
