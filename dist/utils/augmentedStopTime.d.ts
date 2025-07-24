@@ -11,6 +11,7 @@ export declare enum ScheduleRelationship {
     "DELETED" = 7
 }
 export type AugmentedStopTime = {
+    toSerializable: () => SerializableAugmentedStopTime;
     _stopTime: gtfs.StopTime | null;
     trip_id: string;
     passing: boolean;
@@ -38,4 +39,11 @@ export type AugmentedStopTime = {
         propagated: boolean;
     } | null;
 };
+export type SerializableAugmentedStopTime = Omit<AugmentedStopTime, "actual_stop" | "actual_parent_station" | "scheduled_stop" | "scheduled_parent_station" | "toSerializable"> & {
+    actual_stop: string | null;
+    actual_parent_station: string | null;
+    scheduled_stop: string | null;
+    scheduled_parent_station: string | null;
+};
+export declare function toSerializableAugmentedStopTime(st: Omit<AugmentedStopTime, "toSerializable">): SerializableAugmentedStopTime;
 export declare function augmentStopTimes(stopTimes: gtfs.StopTime[]): AugmentedStopTime[];

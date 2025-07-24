@@ -8,15 +8,15 @@ export declare function updateRealtime(): Promise<void>;
 declare const _default: {
     getStations(): import("./utils/augmentedStop.js").AugmentedStop[];
     calendar: typeof calendar;
-    getRawTrips(trip_id?: string): gtfs.Trip[];
-    getRawStops(stop_id?: string): gtfs.Stop[];
+    getRawTrips(trip_id?: string | undefined): gtfs.Trip[];
+    getRawStops(stop_id?: string | undefined): gtfs.Stop[];
     getStopTimeUpdates(): gtfs.StopTimeUpdate[];
     getTripUpdates(): gtfs.TripUpdate[];
     getVehiclePositions(): gtfs.VehiclePosition[];
     getRawStopTimes(trip_id: string | undefined): gtfs.StopTime[];
-    getAugmentedTrips(trip_id?: string): import("./utils/augmentedTrip.js").AugmentedTrip[];
-    getAugmentedStops(stop_id?: string): import("./utils/augmentedStop.js").AugmentedStop[];
-    getAugmentedStopTimes(trip_id?: string): import("./utils/augmentedStopTime.js").AugmentedStopTime[];
+    getAugmentedTrips(trip_id?: string | undefined): import("./utils/augmentedTrip.js").AugmentedTrip[];
+    getAugmentedStops(stop_id?: string | undefined): import("./utils/augmentedStop.js").AugmentedStop[];
+    getAugmentedStopTimes(trip_id?: string | undefined): import("./utils/augmentedStopTime.js").AugmentedStopTime[];
     refreshStaticCache(): void;
     refreshRealtimeCache(): void;
     config: {

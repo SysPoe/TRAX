@@ -162,7 +162,7 @@ function findPassingStopTimes(stopTimes: gtfs.StopTime[]): PassingStopTime[] {
   let stops = stopTimes
     .sort((a, b) => (a.stop_sequence ?? 0) - (b.stop_sequence ?? 0))
     .map((st) => cache.getRawStops(st.stop_id)[0]?.parent_station)
-    .filter((v) => v != undefined);
+    .filter((v) => v != undefined) as string[];
   let idsToTimes: Record<string, gtfs.StopTime> = {};
   for (let st of stopTimes) {
     let parent = cache.getRawStops(st.stop_id)[0]?.parent_station;

@@ -13,6 +13,15 @@ export var ScheduleRelationship;
     ScheduleRelationship[ScheduleRelationship["NEW"] = 6] = "NEW";
     ScheduleRelationship[ScheduleRelationship["DELETED"] = 7] = "DELETED";
 })(ScheduleRelationship || (ScheduleRelationship = {}));
+export function toSerializableAugmentedStopTime(st) {
+    return {
+        ...st,
+        actual_stop: st.actual_stop?.stop_id ?? null,
+        actual_parent_station: st.actual_parent_station?.stop_id ?? null,
+        scheduled_stop: st.scheduled_stop?.stop_id ?? null,
+        scheduled_parent_station: st.scheduled_parent_station?.stop_id ?? null,
+    };
+}
 function findPassingStops(stops) {
     let express = findExpress(stops);
     let allStops = [];
@@ -145,7 +154,9 @@ function findPassingStopTimes(stopTimes) {
         times.push({ ...endTime, _passing: false });
         passingRun = [];
     }
-    if (times.at(-1) && stopTimes.at(-1) && times.at(-1).stop_sequence != stopTimes.at(-1).stop_sequence)
+    if (times.at(-1) &&
+        stopTimes.at(-1) &&
+        times.at(-1).stop_sequence != stopTimes.at(-1).stop_sequence)
         times.push({ ...stopTimes.at(-1), _passing: false });
     return times;
 }
@@ -170,7 +181,11 @@ export function augmentStopTimes(stopTimes) {
         let actualParentStation = actualStop?.parent_station
             ? cache.getAugmentedStops(actualStop.parent_station)[0]
             : null;
-        let realtimeUpdate = realtimeUpdates.find((update) => update.stop_id == stopId || actualParentStation?.stop_id == update.stop_id || cache.getAugmentedStops(stopId)[0].children.some((child) => child.stop_id == update.stop_id));
+        let realtimeUpdate = realtimeUpdates.find((update) => update.stop_id == stopId ||
+            actualParentStation?.stop_id == update.stop_id ||
+            cache
+                .getAugmentedStops(stopId)[0]
+                .children.some((child) => child.stop_id == update.stop_id));
         // Get scheduled stop information
         let scheduledStop = cache.getAugmentedStops(stopId)[0];
         let scheduledParentStation = scheduledStop?.parent_station
@@ -193,38 +208,42 @@ export function augmentStopTimes(stopTimes) {
         let scheduleRelationship = lastScheduleRelationship;
         if (realtimeUpdate) {
             if (realtimeUpdate.departure_delay !== undefined) {
-                actualDepartureTimestamp = scheduledDepartureTimestamp !== undefined
-                    ? scheduledDepartureTimestamp + realtimeUpdate.departure_delay
-                    : undefined;
+                actualDepartureTimestamp =
+                    scheduledDepartureTimestamp !== undefined
+                        ? scheduledDepartureTimestamp + realtimeUpdate.departure_delay
+                        : undefined;
                 rtDepartureUpdated = true;
                 delaySecs = realtimeUpdate.departure_delay;
                 lastDelay = delaySecs;
                 propagated = false;
             }
             else if (lastDelay) {
-                actualDepartureTimestamp = scheduledDepartureTimestamp !== undefined
-                    ? scheduledDepartureTimestamp + lastDelay
-                    : undefined;
+                actualDepartureTimestamp =
+                    scheduledDepartureTimestamp !== undefined
+                        ? scheduledDepartureTimestamp + lastDelay
+                        : undefined;
                 propagated = true;
             }
             if (realtimeUpdate.arrival_delay !== undefined) {
-                actualArrivalTimestamp = scheduledArrivalTimestamp !== undefined
-                    ? scheduledArrivalTimestamp + realtimeUpdate.arrival_delay
-                    : undefined;
+                actualArrivalTimestamp =
+                    scheduledArrivalTimestamp !== undefined
+                        ? scheduledArrivalTimestamp + realtimeUpdate.arrival_delay
+                        : undefined;
                 rtArrivalUpdated = true;
                 delaySecs = realtimeUpdate.arrival_delay;
                 lastDelay = delaySecs;
                 propagated = false;
             }
             else if (lastDelay) {
-                actualArrivalTimestamp = scheduledArrivalTimestamp !== undefined
-                    ? scheduledArrivalTimestamp + lastDelay
-                    : undefined;
+                actualArrivalTimestamp =
+                    scheduledArrivalTimestamp !== undefined
+                        ? scheduledArrivalTimestamp + lastDelay
+                        : undefined;
                 propagated = true;
             }
             if (cache.getRawStops(realtimeUpdate.stop_id)[0]?.platform_code) {
-                platformCode = cache.getRawStops(realtimeUpdate.stop_id)[0]
-                    ?.platform_code ?? null;
+                platformCode =
+                    cache.getRawStops(realtimeUpdate.stop_id)[0]?.platform_code ?? null;
                 lastPlatformCode = platformCode;
                 rtPlatformCodeUpdated = true;
             }
@@ -244,12 +263,14 @@ export function augmentStopTimes(stopTimes) {
         }
         else if (lastDelay) {
             // Propagate previous delay if no explicit update
-            actualArrivalTimestamp = scheduledArrivalTimestamp !== undefined
-                ? scheduledArrivalTimestamp + lastDelay
-                : undefined;
-            actualDepartureTimestamp = scheduledDepartureTimestamp !== undefined
-                ? scheduledDepartureTimestamp + lastDelay
-                : undefined;
+            actualArrivalTimestamp =
+                scheduledArrivalTimestamp !== undefined
+                    ? scheduledArrivalTimestamp + lastDelay
+                    : undefined;
+            actualDepartureTimestamp =
+                scheduledDepartureTimestamp !== undefined
+                    ? scheduledDepartureTimestamp + lastDelay
+                    : undefined;
             propagated = true;
         }
         // Calculate realtime info
@@ -287,7 +308,7 @@ export function augmentStopTimes(stopTimes) {
                 propagated,
             };
         }
-        augmentedStopTimes.push({
+        let partialAugmentedStopTime = {
             _stopTime: passingStopTime._passing ? null : passingStopTime,
             trip_id: stopTimes[0].trip_id,
             passing: passingStopTime._passing,
@@ -295,7 +316,9 @@ export function augmentStopTimes(stopTimes) {
             actual_departure_timestamp: actualDepartureTimestamp ?? null,
             actual_stop: actualStop,
             actual_parent_station: actualParentStation,
-            actual_platform_code: passingStopTime._passing ? null : platformCode ?? scheduledStop.platform_code ?? null,
+            actual_platform_code: passingStopTime._passing
+                ? null
+                : (platformCode ?? scheduledStop.platform_code ?? null),
             rt_stop_updated: rtStopUpdated,
             rt_parent_station_updated: rtParentStationUpdated,
             rt_platform_code_updated: rtPlatformCodeUpdated,
@@ -305,9 +328,15 @@ export function augmentStopTimes(stopTimes) {
             scheduled_departure_timestamp: scheduledDepartureTimestamp ?? null,
             scheduled_stop: scheduledStop,
             scheduled_parent_station: scheduledParentStation,
-            scheduled_platform_code: passingStopTime._passing ? null : scheduledStop.platform_code ?? null,
+            scheduled_platform_code: passingStopTime._passing
+                ? null
+                : (scheduledStop.platform_code ?? null),
             realtime: hasRealtime,
             realtime_info: realtimeInfo,
+        };
+        augmentedStopTimes.push({
+            ...partialAugmentedStopTime,
+            toSerializable: () => toSerializableAugmentedStopTime(partialAugmentedStopTime),
         });
     }
     return augmentedStopTimes;
