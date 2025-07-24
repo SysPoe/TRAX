@@ -1,0 +1,162 @@
+import * as gtfs from "gtfs";
+import { augmentStop } from "./utils/augmentedStop.js";
+import { augmentTrip } from "./utils/augmentedTrip.js";
+import { DEBUG } from "./index.js";
+let rawCache = {
+    stopTimeUpdates: [],
+    tripUpdates: [],
+    vehiclePositions: [],
+    stopTimes: [],
+    trips: [],
+    stops: [],
+    tripsRec: {},
+    stopsRec: {},
+};
+let augmentedCache = {
+    trips: [],
+    stops: [],
+    stopTimes: {},
+    tripsRec: {},
+    stopsRec: {},
+    serviceDateTrips: {},
+};
+export function getRawTrips(trip_id) {
+    if (trip_id)
+        return rawCache.tripsRec[trip_id] ? [rawCache.tripsRec[trip_id]] : [];
+    return rawCache.trips;
+}
+export function getRawStops(stop_id) {
+    if (stop_id)
+        return rawCache.stopsRec[stop_id] ? [rawCache.stopsRec[stop_id]] : [];
+    return rawCache.stops;
+}
+export function getStopTimeUpdates() {
+    if (rawCache.stopTimeUpdates.length === 0)
+        rawCache.stopTimeUpdates = gtfs.getStopTimeUpdates();
+    return rawCache.stopTimeUpdates;
+}
+export function getTripUpdates() {
+    if (rawCache.tripUpdates.length === 0)
+        rawCache.tripUpdates = gtfs.getTripUpdates();
+    return rawCache.tripUpdates;
+}
+export function getVehiclePositions() {
+    if (rawCache.vehiclePositions.length === 0)
+        rawCache.vehiclePositions = gtfs.getVehiclePositions();
+    return rawCache.vehiclePositions;
+}
+/**
+ * Retrieve stopTimes, optionally filtered by trip id, lazily loading from GTFS.
+ */
+export function getRawStopTimes(trip_id) {
+    if (trip_id)
+        return gtfs.getStoptimes({ trip_id });
+    return gtfs.getStoptimes();
+}
+export function getAugmentedTrips(trip_id) {
+    if (trip_id) {
+        if (augmentedCache.tripsRec && augmentedCache.tripsRec[trip_id])
+            return [augmentedCache.tripsRec[trip_id]];
+        if (rawCache.tripsRec[trip_id]) {
+            const trip = rawCache.tripsRec[trip_id];
+            const augmentedTrip = augmentTrip(trip);
+            if (!augmentedCache.tripsRec)
+                augmentedCache.tripsRec = {};
+            augmentedCache.tripsRec[trip_id] = augmentedTrip;
+            return [augmentedTrip];
+        }
+        return [];
+    }
+    return augmentedCache.trips ?? [];
+}
+export function getAugmentedStops(stop_id) {
+    if (stop_id) {
+        if (augmentedCache.stopsRec && augmentedCache.stopsRec[stop_id])
+            return [augmentedCache.stopsRec[stop_id]];
+        if (rawCache.stopsRec[stop_id]) {
+            const stop = rawCache.stopsRec[stop_id];
+            const augmentedStop = augmentStop(stop);
+            if (!augmentedCache.stopsRec)
+                augmentedCache.stopsRec = {};
+            augmentedCache.stopsRec[stop_id] = augmentedStop;
+            return [augmentedStop];
+        }
+        return [];
+    }
+    return augmentedCache.stops ?? [];
+}
+export function getAugmentedStopTimes(trip_id) {
+    if (trip_id) {
+        return (augmentedCache.stopTimes?.[trip_id] ?? []);
+    }
+    return Object.values(augmentedCache.stopTimes ?? {}).flat();
+}
+/**
+ * Refresh static GTFS cache (stops, stopTimes).
+ * @returns {void}
+ */
+export function refreshStaticCache() {
+    if (DEBUG)
+        console.log("Refreshing static GTFS cache...");
+    if (DEBUG)
+        console.log("Loading stops...");
+    rawCache.stops = gtfs.getStops();
+    if (DEBUG)
+        console.log("Loaded", rawCache.stops.length, "stops.");
+    if (DEBUG)
+        console.log("Loading trips...");
+    rawCache.trips = gtfs.getTrips().filter((v) => v.trip_id.includes("-QR "));
+    if (DEBUG)
+        console.log("Loaded", rawCache.trips.length, "trips.");
+    if (DEBUG)
+        console.log("Building raw cache records...");
+    rawCache.tripsRec = {};
+    rawCache.stopsRec = {};
+    for (const trip of rawCache.trips) {
+        rawCache.tripsRec[trip.trip_id] = trip;
+    }
+    for (const stop of rawCache.stops) {
+        rawCache.stopsRec[stop.stop_id] = stop;
+    }
+    if (DEBUG)
+        console.log("Augmenting trips...");
+    augmentedCache.trips = rawCache.trips.map(augmentTrip);
+    if (DEBUG)
+        console.log("Augmented", augmentedCache.trips.length, "trips.");
+    if (DEBUG)
+        console.log("Augmenting stops...");
+    augmentedCache.stops = rawCache.stops.map(augmentStop);
+    if (DEBUG)
+        console.log("Augmented", augmentedCache.stops.length, "stops.");
+    augmentedCache.tripsRec = {};
+    augmentedCache.stopsRec = {};
+    augmentedCache.serviceDateTrips = {};
+    if (DEBUG)
+        console.log("Building augmented cache records...");
+    for (const trip of augmentedCache.trips) {
+        if (!augmentedCache.stopTimes)
+            augmentedCache.stopTimes = {};
+        augmentedCache.tripsRec[trip._trip.trip_id] = trip;
+        augmentedCache.stopTimes[trip._trip.trip_id] = trip.stopTimes;
+        for (const serviceDate of trip.serviceDates) {
+            if (!augmentedCache.serviceDateTrips[serviceDate]) {
+                augmentedCache.serviceDateTrips[serviceDate] = [];
+            }
+            augmentedCache.serviceDateTrips[serviceDate].push(trip._trip.trip_id);
+        }
+    }
+    for (const stop of augmentedCache.stops) {
+        augmentedCache.stopsRec[stop.stop_id] = stop;
+    }
+    if (DEBUG)
+        console.log("Done. Static GTFS cache refreshed.");
+}
+/**
+ * Refresh realtime GTFS cache (stopTimeUpdates, tripUpdates, vehiclePositions).
+ * @returns {Promise<void>}
+ */
+export function refreshRealtimeCache() {
+    rawCache.stopTimeUpdates = gtfs.getStopTimeUpdates();
+    rawCache.tripUpdates = gtfs.getTripUpdates();
+    rawCache.vehiclePositions = gtfs.getVehiclePositions();
+}
