@@ -1,12 +1,19 @@
 import * as cache from "../cache.js";
 import { getAugmentedTrips } from "../cache.js";
 import { findExpressString } from "./express.js";
+export function toSerializableAugmentedStop(stop) {
+    return {
+        ...stop,
+        parent: stop.parent_station ?? null,
+        children: stop.children.map((child) => child.stop_id),
+    };
+}
 export function augmentStop(stop) {
     const getChildren = () => {
         const childStops = cache
             .getRawStops()
             .filter((s) => s.parent_station === stop.stop_id);
-        return childStops.map((s) => augmentStop(s));
+        return childStops.map((s) => cache.getAugmentedStops(s.stop_id)[0] || augmentStop(s));
     };
     const getParent = () => {
         if (!stop.parent_station)
@@ -20,6 +27,17 @@ export function augmentStop(stop) {
         },
         get children() {
             return getChildren();
+        },
+        toSerializable() {
+            return toSerializableAugmentedStop({
+                ...stop,
+                get parent() {
+                    return getParent();
+                },
+                get children() {
+                    return getChildren();
+                },
+            });
         },
         getDepartures: (date, start_time, end_time) => {
             const startSec = timeSeconds(start_time);
@@ -45,7 +63,8 @@ export function augmentStop(stop) {
                 results.push({ st, trip });
             }
             return results
-                .sort((a, b) => (a.st.actual_departure_timestamp ?? 0) - (b.st.actual_departure_timestamp ?? 0))
+                .sort((a, b) => (a.st.actual_departure_timestamp ?? 0) -
+                (b.st.actual_departure_timestamp ?? 0))
                 .map(({ st, trip }) => {
                 const expressString = findExpressString(trip.expressInfo, st.actual_parent_station?.stop_id ||
                     st.actual_stop?.parent_station ||

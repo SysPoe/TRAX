@@ -6,5 +6,14 @@ export type AugmentedStop = gtfs.Stop & {
     getDepartures: (date: number, start_time: string, end_time: string) => (AugmentedStopTime & {
         express_string: string;
     })[];
+    toSerializable: () => SerializableAugmentedStop;
 };
+export type SerializableAugmentedStop = gtfs.Stop & {
+    parent: string | null;
+    children: string[];
+};
+export declare function toSerializableAugmentedStop(stop: AugmentedStop | (gtfs.Stop & {
+    parent: AugmentedStop | null;
+    children: AugmentedStop[];
+})): SerializableAugmentedStop;
 export declare function augmentStop(stop: gtfs.Stop): AugmentedStop;

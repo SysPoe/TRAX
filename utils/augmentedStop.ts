@@ -1,6 +1,9 @@
 import type * as gtfs from "gtfs";
 import * as cache from "../cache.js";
-import { AugmentedStopTime } from "./augmentedStopTime.js";
+import {
+  AugmentedStopTime,
+  SerializableAugmentedStopTime,
+} from "./augmentedStopTime.js";
 import { getAugmentedTrips } from "../cache.js";
 import { findExpressString } from "./express.js";
 
@@ -12,14 +15,37 @@ export type AugmentedStop = gtfs.Stop & {
     start_time: string,
     end_time: string
   ) => (AugmentedStopTime & { express_string: string })[];
+  toSerializable: () => SerializableAugmentedStop;
 };
+
+export type SerializableAugmentedStop = gtfs.Stop & {
+  parent: string | null;
+  children: string[];
+};
+
+export function toSerializableAugmentedStop(
+  stop:
+    | AugmentedStop
+    | (gtfs.Stop & {
+        parent: AugmentedStop | null;
+        children: AugmentedStop[];
+      })
+): SerializableAugmentedStop {
+  return {
+    ...stop,
+    parent: stop.parent_station ?? null,
+    children: stop.children.map((child) => child.stop_id),
+  };
+}
 
 export function augmentStop(stop: gtfs.Stop): AugmentedStop {
   const getChildren = (): AugmentedStop[] => {
     const childStops = cache
       .getRawStops()
       .filter((s) => s.parent_station === stop.stop_id);
-    return childStops.map((s) => augmentStop(s));
+    return childStops.map(
+      (s) => cache.getAugmentedStops(s.stop_id)[0] || augmentStop(s)
+    );
   };
   const getParent = (): AugmentedStop | null => {
     if (!stop.parent_station) return null;
@@ -33,6 +59,17 @@ export function augmentStop(stop: gtfs.Stop): AugmentedStop {
     get children(): AugmentedStop[] {
       return getChildren();
     },
+    toSerializable() {
+      return toSerializableAugmentedStop({
+        ...stop,
+        get parent(): AugmentedStop | null {
+          return getParent();
+        },
+        get children(): AugmentedStop[] {
+          return getChildren();
+        },
+      });
+    },
     getDepartures: (date: number, start_time: string, end_time: string) => {
       const startSec = timeSeconds(start_time);
       const endSec = timeSeconds(end_time);
@@ -41,10 +78,14 @@ export function augmentStop(stop: gtfs.Stop): AugmentedStop {
       const validStops = new Set<string>(
         [stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]
       );
-      const tripCache = new Map<string, ReturnType<typeof getAugmentedTrips>[0]>();
+      const tripCache = new Map<
+        string,
+        ReturnType<typeof getAugmentedTrips>[0]
+      >();
       const results: { st: AugmentedStopTime; trip: any }[] = [];
       for (const st of cache.getAugmentedStopTimes()) {
-        if (!st.actual_stop || !validStops.has(st.actual_stop.stop_id)) continue;
+        if (!st.actual_stop || !validStops.has(st.actual_stop.stop_id))
+          continue;
         let trip = tripCache.get(st.trip_id);
         if (!trip) {
           trip = getAugmentedTrips(st.trip_id)[0];
@@ -57,7 +98,9 @@ export function augmentStop(stop: gtfs.Stop): AugmentedStop {
       }
       return results
         .sort(
-          (a, b) => (a.st.actual_departure_timestamp ?? 0) - (b.st.actual_departure_timestamp ?? 0)
+          (a, b) =>
+            (a.st.actual_departure_timestamp ?? 0) -
+            (b.st.actual_departure_timestamp ?? 0)
         )
         .map(({ st, trip }) => {
           const expressString = findExpressString(
