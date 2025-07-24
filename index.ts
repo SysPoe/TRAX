@@ -84,3 +84,22 @@ export default {
   calendar,
   ...stations,
 };
+
+// Export all types
+export type { AugmentedTrip } from "./utils/augmentedTrip.js";
+export type { AugmentedStopTime, ScheduleRelationship } from "./utils/augmentedStopTime.js";
+export type { AugmentedStop } from "./utils/augmentedStop.js";
+export type { 
+  TrainMovementDTO, 
+  ServiceDisruption, 
+  GetServiceResponse, 
+  QRTPlace, 
+  Service, 
+  Direction, 
+  ServiceLine, 
+  AllServicesResponse, 
+  QRTService, 
+  ServiceUpdate,
+  TravelStopTime,
+  TravelTrip
+} from "./qr-travel/types.js";
