@@ -1,0 +1,163 @@
+Location,Location,80k Freight Up,80k Freight Down
+Rockhampton,Glenmore Junction,12,14
+Glenmore Junction,Parkhurst,7,8
+Parkhurst,The Caves,12,14
+The Caves,Yaamba,12,10
+Yaamba,Glen Geddes,17,15
+Glen Geddes,Kunwarara,15,17
+Kunwarara,Princhester,17,20
+Princhester,Marlborough,10,14
+Marlborough,Kooltandra,15,16
+Kooltandra,Ogmore,14,13
+Ogmore,Wumalgi,15,15
+Wumalgi,St. Lawrence,17,15
+St. Lawrence,Kalarka,20,18
+Kalarka,Elalie,15,13
+Elalie,Carmila,14,15
+Carmila,Orkabie,9,10
+Orkabie,Ilbilbie,14,14
+Ilbilbie,Koumala,14,14
+Koumala,Yukan QR,11,8
+Yukan QR,Sarina,14,11
+Sarina,Dawlish,9,10
+Dawlish,Balberra,6,6
+Balberra,Rosella,6,8
+Rosella,Mackay,14,15
+Mackay,Erakala,6,7
+Erakala,Farleigh,7,7
+Farleigh,Aminungo,11,13
+Aminungo,Kuttabul,9,10
+Kuttabul,Mt. Ossa,12,9
+Mt. Ossa,Calen,10,10
+Calen,Yalboroo,13,13
+Yalboroo,Bloomsbury,18,15
+Bloomsbury,Thoopara,16,16
+Thoopara,Proserpine,17,15
+Proserpine,Bubialo,20,17
+Bubialo,Longford Creek,12,12
+Longford Creek,Mookarra,13,16
+Mookarra,Bowen Junction,10,13
+Bowen Junction,Merinda,5,7
+Merinda,QNIP02,1,4
+QNIP02,Durroburra,1,1
+Durroburra,Kaili,7,8
+Kaili,QNIP01,2,2
+QNIP01,Wathana,1,1
+Wathana,Wilmington,9,9
+Wilmington,Guthalungra,14,14
+Guthalungra,Gumlu,13,13
+Gumlu,Bobawaba,10,10
+Bobawaba,Inkerman,9,9
+Inkerman,Home Hill,10,10
+Home Hill,Ayr,13,11
+Ayr,Pioneer,11,9
+Pioneer,Barratta,10,10
+Barratta,Giru,8,11
+Giru,Cromarty,7,6
+Cromarty,Storth,7,6
+Storth,Nome,13,10
+Nome,Julago,6,5
+Julago,Sun Metals Junction,1,1
+Sun Metals Junction,Partington,3,2
+Partington,Stuart,3,3
+Stuart,Stuart Yard,5,5
+Stuart Yard,Cluden,6,7
+Cluden,Oonoonba,2,2
+Oonoonba,Townsville Fork Points,2,1
+Townsville Fork Points,Townsville New Station,6,6
+Townsville New Station,Garbutt,15,15
+Garbutt,Bohle Industrial Siding,8,8
+Bohle Industrial Siding,Nightjar,1,1
+Nightjar,Deeragun,3,3
+Deeragun,Cobarra New Leg,8,8
+Cobarra New Leg,Cobarra Old Leg,1,1
+Cobarra Old Leg,Purono,3,3
+Purono,Kurukan,12,14
+Kurukan,Rollingstone,14,16
+Rollingstone,Mutarnee,16,11
+Mutarnee,Bambaroo,14,11
+Bambaroo,Pombel,11,11
+Pombel,Ingham,15,12
+Ingham,Hinchinbrook,20,20
+Hinchinbrook,Conn,15,14
+Conn,Cardwell,19,18
+Cardwell,Kennedy,12,12
+Kennedy,Bilyana,10,10
+Bilyana,Hewitt,20,17
+Hewitt,Tully,5,5
+Tully,El Arish,19,18
+El Arish,Silkwood,8,8
+Silkwood,Boogan,19,17
+Boogan,Mundoo,9,9
+Mundoo,Innisfail,11,8
+Innisfail,Waugh,21,21
+Waugh,Babinda,18,17
+Babinda,Deeral,17,16
+Deeral,Aloomba,15,13
+Aloomba,Gordonvale,8,7
+Gordonvale,Kamma,7,10
+Kamma,Woree QRX SDG,10,12
+Woree QRX SDG,Portsmith,8,7
+Portsmith,Cairns,,
+Mackay,Walkerston,10,10
+Walkerston,Marian,18,18
+Erakala,Mackay Harbour,17,13
+Home Hill,Carstairs,15,20
+Ayr,Kalamia Mill,25,25
+Pioneer,Pioneer Sugar Mill,20,15
+Giru,Invicta (Giru) Sugar Mill,10,10
+Julago,Stuart Meatworks SDG,5,5
+Stuart,Stuart Yard,5,5
+Stuart Yard,Cluden,6,7
+Townsville Fork Points,Townsville,5,5
+Townsville,Townsville Jetty,5,5
+Townsville New Station,Townsville,2,2
+Nambour,Yandina,9,9
+Yandina,North Arm,6,5
+North Arm,Eumundi,4,6
+Eumundi,Sunrise,2,2
+Sunrise,Cooroy,6,7
+Cooroy,Pomona,9,8
+Pomona,Cooran,7,7
+Cooran,Traveston,6,6
+Traveston,Woondum,7,7
+Woondum,Glanmire,8,8
+Glanmire,Gympie North,4,4
+Gympie North,Tamaree,3,5
+Tamaree,Harvey's Siding,6,9
+Harvey's Siding,Curra,5,5
+Curra,Theebine,9,9
+Theebine,Paterson,6,6
+Paterson,Gundiah,6,7
+Gundiah,Netherby,4,5
+Netherby,Tiaro,7,6
+Tiaro,Owanyilla,10,7
+Owanyilla,Mungar,11,9
+Mungar,Yengarie,6,6
+Yengarie,Maryborough West,9,9
+Maryborough West,Colton,9,10
+Colton,Torbanlea,7,7
+Torbanlea,Howard,4,4
+Howard,Wokka,7,7
+Wokka,Isis Junction,5,5
+Isis Junction,Goodwood,7,7
+Goodwood,Kinkuna,7,7
+Kinkuna,Elliott,7,6
+Elliott,Bundaberg,12,14
+Bundaberg,Meadowvale,16,17
+Meadowvale,Avondale,13,11
+Avondale,Littabella,8,8
+Littabella,Flinders,15,17
+Flinders,Berajondo,10,13
+Berajondo,Baffle,9,10
+Baffle,Irkanda,7,6
+Irkanda,Netley,11,8
+Netley,Miriam Vale,11,9
+Miriam Vale,Bororen,8,8
+Bororen,Iveragh,13,12
+Iveragh,Benaraby,16,15
+Benaraby,Parana,9,10
+Parana,Gladstone,11,9
+Rocklands,Rockhampton,10,11
+Gympie North,Gympie,10,10
+Maryborough West,Maryborough,10,10

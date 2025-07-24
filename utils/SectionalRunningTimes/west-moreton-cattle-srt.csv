@@ -1,0 +1,48 @@
+Control,From,To,Cattle Pass-Pass,Cattle Pass-Stop,Cattle Start-Pass,Cattle Start-Stop
+Brisbane West,Ebenezer,Yarrowlea,,,,
+Brisbane West,Helidon,Grantham,9,11,12,14
+Brisbane West,Grantham,Gatton,9,11,12,14
+Brisbane West,Gatton,Forest Hill,7,9,10,12
+Brisbane West,Forest Hill,Laidley,5,7,8,10
+Brisbane West,Laidley,Yarongmulu,17,19,20,22
+Brisbane West,Yarongmulu,Grandchester,15,17,18,20
+Brisbane West,Grandchester,Rosewood,11,13,14,16
+Brisbane West,Helidon,Lockyer,12,14,15,17
+Brisbane West,Lockyer,Murphys Creek,16,18,19,21
+Brisbane West,Murphys Creek,Holmes,20,22,23,25
+Brisbane West,Holmes,Spring Bluff,17,19,20,22
+Brisbane West,Spring Bluff,Rangeview,22,24,25,27
+Brisbane West,Rangeview,Harlaxton,4,6,7,9
+Brisbane West,Harlaxton,Toowoomba,7,9,10,12
+Brisbane West,Rosewood,Grandchester,12,14,15,17
+Brisbane West,Grandchester,Yarongmulu,15,17,18,20
+Brisbane West,Yarongmulu,Laidley,7,9,10,12
+Brisbane West,Laidley,Forest Hill,5,7,8,10
+Brisbane West,Forest Hill,Gatton,7,9,10,12
+Brisbane West,Gatton,Grantham,9,11,12,14
+Brisbane West,Grantham,Helidon,9,11,12,14
+Brisbane West,Rosewood,Yarrowlea,3,4,4,5
+Brisbane West,Toowoomba,Harlaxton,6,8,9,11
+Brisbane West,Harlaxton,Rangeview,4,6,7,9
+Brisbane West,Rangeview,Spring Bluff,21,23,24,26
+Brisbane West,Spring Bluff,Holmes,16,18,19,21
+Brisbane West,Holmes,Murphys Creek,20,22,23,25
+Brisbane West,Murphys Creek,Lockyer,15,17,18,20
+Brisbane West,Lockyer,Helidon,11,13,14,16
+Brisbane West,Toowoomba,Toowoomba Marshalling Yard,5,5,5,5
+Brisbane West,Toowoomba Marshalling Yard,Willowburn,5,5,5,5
+Brisbane West,Toowoomba,Toowoomba Passenger Station,3,3,3,3
+Brisbane West,Toowoomba Passenger Station,Harristown,,,,
+Brisbane West,Harristown,Wyreema,,,,
+Brisbane West,Willowburn,Toowoomba Marshalling Yard,10,10,10,10
+Brisbane West,Toowoomba Marshalling Yard,Toowoomba,5,5,5,5
+Brisbane West,Wulkuraka,Karrabin,2,3,3,4
+Brisbane West,Karrabin,Walloon,5,6,6,7
+Brisbane West,Walloon,Thagoona,4,5,5,6
+Brisbane West,Thagoona,Yarrowlea,1,2,2,3
+Brisbane West,Yarrowlea,Ebenezer,,,,
+Brisbane West,Yarrowlea,Rosewood,3,4,4,5
+Brisbane West,Yarrowlea,Thagoona,1,2,2,3
+Brisbane West,Thagoona,Walloon,4,5,5,6
+Brisbane West,Walloon,Karrabin,5,6,6,7
+Brisbane West,Karrabin,Wulkuraka,2,3,3,4
