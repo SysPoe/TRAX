@@ -33,6 +33,9 @@ export async function loadGTFS(refresh = false, forceReload = false) {
     await gtfs.updateGtfsRealtime(config);
     cache.refreshStaticCache();
     cache.refreshRealtimeCache();
+    if (gtfs.getStops().length === 0) {
+        await gtfs.importGtfs(config);
+    }
     if (!refresh)
         return;
     realtimeInterval = setInterval(updateRealtime, 60 * 1000);
@@ -68,6 +71,6 @@ export default {
     clearIntervals,
     formatTimestamp,
     ...cache,
-    ...calendar,
+    calendar,
     ...stations,
 };

@@ -1,7 +1,7 @@
 import type * as gtfs from "gtfs";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { ExpressInfo } from "./express.js";
-export declare type AugmentedTrip = {
+export type AugmentedTrip = {
     _trip: gtfs.Trip;
     serviceDates: number[];
     tracks: {

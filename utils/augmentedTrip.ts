@@ -34,7 +34,10 @@ export function augmentTrip(trip: gtfs.Trip): AugmentedTrip {
     _trip: trip,
     serviceDates,
     get stopTimes() {
-      return augmentStopTimes(rawStopTimes);
+      let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
+      if (stopTimes.length === 0)
+        stopTimes = augmentStopTimes(rawStopTimes);
+      return stopTimes;
     },
     expressInfo,
     tracks,

@@ -13,7 +13,7 @@ export declare function getVehiclePositions(): gtfs.VehiclePosition[];
 export declare function getRawStopTimes(trip_id: string | undefined): gtfs.StopTime[];
 export declare function getAugmentedTrips(trip_id?: string): AugmentedTrip[];
 export declare function getAugmentedStops(stop_id?: string): AugmentedStop[];
-export declare function getAugmentedStopTimes(trip_id?: number): AugmentedStopTime[];
+export declare function getAugmentedStopTimes(trip_id?: string): AugmentedStopTime[];
 /**
  * Refresh static GTFS cache (stops, stopTimes).
  * @returns {void}

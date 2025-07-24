@@ -10,7 +10,7 @@ export declare enum ScheduleRelationship {
     "NEW" = 6,
     "DELETED" = 7
 }
-export declare type AugmentedStopTime = {
+export type AugmentedStopTime = {
     _stopTime: gtfs.StopTime | null;
     trip_id: string;
     passing: boolean;

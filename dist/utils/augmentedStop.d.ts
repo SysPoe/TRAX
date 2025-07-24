@@ -1,6 +1,6 @@
 import type * as gtfs from "gtfs";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
-export declare type AugmentedStop = gtfs.Stop & {
+export type AugmentedStop = gtfs.Stop & {
     parent: AugmentedStop | null;
     children: AugmentedStop[];
     getDepartures: (date: number, start_time: string, end_time: string) => (AugmentedStopTime & {

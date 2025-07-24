@@ -118,7 +118,7 @@ export function getAugmentedStops(stop_id?: string): AugmentedStop[] {
     return augmentedCache.stops ?? [];
 }
 
-export function getAugmentedStopTimes(trip_id?: number): AugmentedStopTime[] {
+export function getAugmentedStopTimes(trip_id?: string): AugmentedStopTime[] {
     if (trip_id) {
         return (augmentedCache.stopTimes?.[trip_id] ?? []);
     }
