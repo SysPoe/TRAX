@@ -1,6 +1,11 @@
 import type * as gtfs from "gtfs";
 import { getServiceDatesByTrip } from "./calendar.js";
-import { AugmentedStopTime, augmentStopTimes } from "./augmentedStopTime.js";
+import {
+  AugmentedStopTime,
+  augmentStopTimes,
+  SerializableAugmentedStopTime,
+  toSerializableAugmentedStopTime,
+} from "./augmentedStopTime.js";
 import { ExpressInfo, findExpress } from "./express.js";
 import * as cache from "../cache.js";
 
@@ -11,7 +16,35 @@ export type AugmentedTrip = {
   stopTimes: AugmentedStopTime[];
   expressInfo: ExpressInfo[];
   run: string;
+  toSerializable: () => SerializableAugmentedTrip;
 };
+
+export type SerializableAugmentedTrip = Omit<
+  AugmentedTrip,
+  "stopTimes" | "toSerializable"
+> & {
+  stopTimes: SerializableAugmentedStopTime[];
+};
+
+export function toSerializableAugmentedTrip(
+  trip: AugmentedTrip | Omit<AugmentedTrip, "toSerializable">
+): SerializableAugmentedTrip {
+  return {
+    _trip: trip._trip,
+    serviceDates: trip.serviceDates,
+    tracks: trip.tracks,
+    stopTimes: Array.isArray(trip.stopTimes)
+      ? trip.stopTimes.map((st) =>
+          // @ts-ignore
+          typeof st === "object" && "actual_stop" in st
+            ? toSerializableAugmentedStopTime(st)
+            : st
+        )
+      : [],
+    expressInfo: trip.expressInfo,
+    run: trip.run,
+  };
+}
 
 export function augmentTrip(trip: gtfs.Trip): AugmentedTrip {
   const serviceDates = getServiceDatesByTrip(trip.trip_id);
@@ -35,12 +68,23 @@ export function augmentTrip(trip: gtfs.Trip): AugmentedTrip {
     serviceDates,
     get stopTimes() {
       let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
-      if (stopTimes.length === 0)
-        stopTimes = augmentStopTimes(rawStopTimes);
+      if (stopTimes.length === 0) stopTimes = augmentStopTimes(rawStopTimes);
       return stopTimes;
     },
     expressInfo,
     tracks,
     run: trip.trip_id.slice(-4),
+    toSerializable: () => {
+      let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
+      if (stopTimes.length === 0) stopTimes = augmentStopTimes(rawStopTimes);
+      return toSerializableAugmentedTrip({
+        _trip: trip,
+        serviceDates,
+        stopTimes,
+        expressInfo,
+        tracks,
+        run: trip.trip_id.slice(-4),
+      });
+    },
   };
 }

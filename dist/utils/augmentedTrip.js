@@ -1,7 +1,23 @@
 import { getServiceDatesByTrip } from "./calendar.js";
-import { augmentStopTimes } from "./augmentedStopTime.js";
+import { augmentStopTimes, toSerializableAugmentedStopTime, } from "./augmentedStopTime.js";
 import { findExpress } from "./express.js";
 import * as cache from "../cache.js";
+export function toSerializableAugmentedTrip(trip) {
+    return {
+        _trip: trip._trip,
+        serviceDates: trip.serviceDates,
+        tracks: trip.tracks,
+        stopTimes: Array.isArray(trip.stopTimes)
+            ? trip.stopTimes.map((st) => 
+            // @ts-ignore
+            typeof st === "object" && "actual_stop" in st
+                ? toSerializableAugmentedStopTime(st)
+                : st)
+            : [],
+        expressInfo: trip.expressInfo,
+        run: trip.run,
+    };
+}
 export function augmentTrip(trip) {
     const serviceDates = getServiceDatesByTrip(trip.trip_id);
     let rawStopTimes = cache
@@ -25,5 +41,18 @@ export function augmentTrip(trip) {
         expressInfo,
         tracks,
         run: trip.trip_id.slice(-4),
+        toSerializable: () => {
+            let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
+            if (stopTimes.length === 0)
+                stopTimes = augmentStopTimes(rawStopTimes);
+            return toSerializableAugmentedTrip({
+                _trip: trip,
+                serviceDates,
+                stopTimes,
+                expressInfo,
+                tracks,
+                run: trip.trip_id.slice(-4),
+            });
+        },
     };
 }
