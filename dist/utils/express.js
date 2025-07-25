@@ -310,9 +310,6 @@ export function findExpressString(expressData, stop_id) {
     expressData = expressData.filter((v) => v.type !== "local");
     if (expressData.length === 0)
         return "All stops";
-    if (expressData.length === 0 ||
-        expressData.findIndex((v) => v.from === stop_id || v.skipping?.includes(stop_id) || v.to === stop_id) === -1)
-        return "All stops";
     const segments = expressData.reduce((acc, segment, index) => {
         if (index === 0 || segment.from !== acc[acc.length - 1].to) {
             acc.push({ from: segment.from, to: segment.to, stoppingAt: [] });
