@@ -10,6 +10,7 @@ declare const _default: {
     calendar: typeof calendar;
     getRawTrips(trip_id?: string | undefined): gtfs.Trip[];
     getRawStops(stop_id?: string | undefined): gtfs.Stop[];
+    getRawRoutes(route_id?: string | undefined): gtfs.Route[];
     getStopTimeUpdates(): gtfs.StopTimeUpdate[];
     getTripUpdates(): gtfs.TripUpdate[];
     getVehiclePositions(): gtfs.VehiclePosition[];

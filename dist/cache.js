@@ -9,8 +9,10 @@ let rawCache = {
     stopTimes: [],
     trips: [],
     stops: [],
+    routes: [],
     tripsRec: {},
     stopsRec: {},
+    routesRec: {},
 };
 let augmentedCache = {
     trips: [],
@@ -29,6 +31,11 @@ export function getRawStops(stop_id) {
     if (stop_id)
         return rawCache.stopsRec[stop_id] ? [rawCache.stopsRec[stop_id]] : [];
     return rawCache.stops;
+}
+export function getRawRoutes(route_id) {
+    if (route_id)
+        return rawCache.routesRec[route_id] ? [rawCache.routesRec[route_id]] : [];
+    return rawCache.routes;
 }
 export function getStopTimeUpdates() {
     if (rawCache.stopTimeUpdates.length === 0)
@@ -104,6 +111,11 @@ export function refreshStaticCache() {
     if (DEBUG)
         console.log("Loaded", rawCache.stops.length, "stops.");
     if (DEBUG)
+        console.log("Loading routes...");
+    rawCache.routes = gtfs.getRoutes();
+    if (DEBUG)
+        console.log("Loaded", rawCache.routes.length, "routes.");
+    if (DEBUG)
         console.log("Loading trips...");
     rawCache.trips = gtfs.getTrips().filter((v) => v.trip_id.includes("-QR "));
     if (DEBUG)
@@ -112,11 +124,15 @@ export function refreshStaticCache() {
         console.log("Building raw cache records...");
     rawCache.tripsRec = {};
     rawCache.stopsRec = {};
+    rawCache.routesRec = {};
     for (const trip of rawCache.trips) {
         rawCache.tripsRec[trip.trip_id] = trip;
     }
     for (const stop of rawCache.stops) {
         rawCache.stopsRec[stop.stop_id] = stop;
+    }
+    for (const route of rawCache.routes) {
+        rawCache.routesRec[route.route_id] = route;
     }
     if (DEBUG)
         console.log("Augmenting trips...");

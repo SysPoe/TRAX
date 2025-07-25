@@ -4,6 +4,7 @@ import { AugmentedTrip } from "./utils/augmentedTrip.js";
 import { AugmentedStopTime } from "./utils/augmentedStopTime.js";
 export declare function getRawTrips(trip_id?: string): gtfs.Trip[];
 export declare function getRawStops(stop_id?: string): gtfs.Stop[];
+export declare function getRawRoutes(route_id?: string): gtfs.Route[];
 export declare function getStopTimeUpdates(): gtfs.StopTimeUpdate[];
 export declare function getTripUpdates(): gtfs.TripUpdate[];
 export declare function getVehiclePositions(): gtfs.VehiclePosition[];

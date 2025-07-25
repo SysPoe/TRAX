@@ -34,12 +34,7 @@ export function toSerializableAugmentedTrip(
     serviceDates: trip.serviceDates,
     tracks: trip.tracks,
     stopTimes: Array.isArray(trip.stopTimes)
-      ? trip.stopTimes.map((st) =>
-          // @ts-ignore
-          typeof st === "object" && "actual_stop" in st
-            ? toSerializableAugmentedStopTime(st)
-            : st
-        )
+      ? trip.stopTimes.map((st) => toSerializableAugmentedStopTime(st as AugmentedStopTime))
       : [],
     expressInfo: trip.expressInfo,
     run: trip.run,
