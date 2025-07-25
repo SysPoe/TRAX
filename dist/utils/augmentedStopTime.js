@@ -2,6 +2,10 @@ import * as cache from "../cache.js";
 import { findExpress } from "./express.js";
 import { getSRT } from "./srt.js";
 import { DEBUG } from "../index.js";
+// Simple hash function for stop lists
+function hashStopList(stops) {
+    return stops.join('|');
+}
 export var ScheduleRelationship;
 (function (ScheduleRelationship) {
     ScheduleRelationship[ScheduleRelationship["SCHEDULED"] = 0] = "SCHEDULED";
@@ -23,6 +27,12 @@ export function toSerializableAugmentedStopTime(st) {
     };
 }
 function findPassingStops(stops) {
+    const stopListHash = hashStopList(stops);
+    // Check cache first
+    const cached = cache.getCachedPassingStops(stopListHash);
+    if (cached) {
+        return cached;
+    }
     let express = findExpress(stops);
     let allStops = [];
     for (const e of express) {
@@ -46,6 +56,8 @@ function findPassingStops(stops) {
         if (allStops.at(-1)?.stop_id != e.to)
             allStops.push({ stop_id: e.to, passing: false });
     }
+    // Cache the result
+    cache.cachePassingStops(stopListHash, allStops);
     return allStops;
 }
 function findPassingStopSRTs(stops) {
@@ -175,7 +187,6 @@ export function augmentStopTimes(stopTimes) {
     let lastPlatformCode = null;
     for (let passingStopTime of passingStopTimes) {
         let stopId = passingStopTime.stop_id;
-        let stopSequence = passingStopTime.stop_sequence;
         // Get the actual stop information
         let actualStop = cache.getAugmentedStops(stopId)[0];
         let actualParentStation = actualStop?.parent_station

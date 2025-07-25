@@ -38,14 +38,21 @@ export function toSerializableAugmentedStop(
 }
 
 export function augmentStop(stop: gtfs.Stop): AugmentedStop {
+  // Cache children lookup to avoid repeated expensive operations
+  let cachedChildren: AugmentedStop[] | null = null;
+  
   const getChildren = (): AugmentedStop[] => {
+    if (cachedChildren) return cachedChildren;
+    
     const childStops = cache
       .getRawStops()
       .filter((s) => s.parent_station === stop.stop_id);
-    return childStops.map(
+    cachedChildren = childStops.map(
       (s) => cache.getAugmentedStops(s.stop_id)[0] || augmentStop(s)
     );
+    return cachedChildren;
   };
+  
   const getParent = (): AugmentedStop | null => {
     if (!stop.parent_station) return null;
     return cache.getAugmentedStops(stop.parent_station)[0];

@@ -18,8 +18,15 @@ declare const _default: {
     getAugmentedTrips(trip_id?: string | undefined): import("./utils/augmentedTrip.js").AugmentedTrip[];
     getAugmentedStops(stop_id?: string | undefined): import("./utils/augmentedStop.js").AugmentedStop[];
     getAugmentedStopTimes(trip_id?: string | undefined): import("./utils/augmentedStopTime.js").AugmentedStopTime[];
+    getBaseStopTimes(trip_id: string): import("./utils/augmentedStopTime.js").AugmentedStopTime[];
+    cacheExpressInfo(stopListHash: string, expressInfo: any[]): void;
+    getCachedExpressInfo(stopListHash: string): any[] | undefined;
+    cachePassingStops(stopListHash: string, passingStops: any[]): void;
+    getCachedPassingStops(stopListHash: string): any[] | undefined;
     refreshStaticCache(): void;
     refreshRealtimeCache(): void;
+    clearPerformanceCaches(): void;
+    batchProcessTrips(tripIds: string[]): void;
     config: {
         agencies: {
             url: string;

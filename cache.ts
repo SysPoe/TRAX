@@ -24,10 +24,15 @@ type AugmentedCache = {
     stops?: AugmentedStop[];
 
     stopTimes?: { [trip_id: string]: AugmentedStopTime[] };
+    baseStopTimes?: { [trip_id: string]: AugmentedStopTime[] }; // Cached base stop times without realtime
     tripsRec?: { [trip_id: string]: AugmentedTrip };
     stopsRec?: { [stop_id: string]: AugmentedStop };
 
     serviceDateTrips?: { [service_date: number]: string[] }; // Maps serviceDate to trip IDs
+    
+    // Performance caches
+    expressInfoCache?: { [stopListHash: string]: any[] };
+    passingStopsCache?: { [stopListHash: string]: any[] };
 };
 
 let rawCache: RawCache = {
@@ -49,9 +54,12 @@ let augmentedCache: AugmentedCache = {
     trips: [],
     stops: [],
     stopTimes: {},
+    baseStopTimes: {},
     tripsRec: {},
     stopsRec: {},
     serviceDateTrips: {},
+    expressInfoCache: {},
+    passingStopsCache: {},
 };
 
 export function getRawTrips(trip_id?: string): gtfs.Trip[] {
@@ -135,6 +143,28 @@ export function getAugmentedStopTimes(trip_id?: string): AugmentedStopTime[] {
     return Object.values(augmentedCache.stopTimes ?? {}).flat();
 }
 
+export function getBaseStopTimes(trip_id: string): AugmentedStopTime[] {
+    return (augmentedCache.baseStopTimes?.[trip_id] ?? []);
+}
+
+export function cacheExpressInfo(stopListHash: string, expressInfo: any[]) {
+    if (!augmentedCache.expressInfoCache) augmentedCache.expressInfoCache = {};
+    augmentedCache.expressInfoCache[stopListHash] = expressInfo;
+}
+
+export function getCachedExpressInfo(stopListHash: string): any[] | undefined {
+    return augmentedCache.expressInfoCache?.[stopListHash];
+}
+
+export function cachePassingStops(stopListHash: string, passingStops: any[]) {
+    if (!augmentedCache.passingStopsCache) augmentedCache.passingStopsCache = {};
+    augmentedCache.passingStopsCache[stopListHash] = passingStops;
+}
+
+export function getCachedPassingStops(stopListHash: string): any[] | undefined {
+    return augmentedCache.passingStopsCache?.[stopListHash];
+}
+
 /**
  * Refresh static GTFS cache (stops, stopTimes).
  * @returns {void}
@@ -178,8 +208,13 @@ export function refreshStaticCache() {
     if (DEBUG) console.log("Building augmented cache records...");
     for (const trip of augmentedCache.trips) {
         if (!augmentedCache.stopTimes) augmentedCache.stopTimes = {};
+        if (!augmentedCache.baseStopTimes) augmentedCache.baseStopTimes = {};
         augmentedCache.tripsRec[trip._trip.trip_id] = trip;
+        
+        // Store both current stop times and base stop times (without realtime)
         augmentedCache.stopTimes[trip._trip.trip_id] = trip.stopTimes;
+        augmentedCache.baseStopTimes[trip._trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
+        
         for (const serviceDate of trip.serviceDates) {
             if (!augmentedCache.serviceDateTrips[serviceDate]) {
                 augmentedCache.serviceDateTrips[serviceDate] = [];
@@ -199,7 +234,127 @@ export function refreshStaticCache() {
  * @returns {Promise<void>}
  */
 export function refreshRealtimeCache() {
+    if (DEBUG) console.log("Refreshing realtime GTFS cache...");
+    if (DEBUG) console.log("Loading stop time updates...");
     rawCache.stopTimeUpdates = gtfs.getStopTimeUpdates();
+    if (DEBUG) console.log("Loaded", rawCache.stopTimeUpdates.length, "stop time updates.");
+    if (DEBUG) console.log("Loading trip updates...");
     rawCache.tripUpdates = gtfs.getTripUpdates();
+    if (DEBUG) console.log("Loaded", rawCache.tripUpdates.length, "trip updates.");
+    if (DEBUG) console.log("Loading vehicle positions...");
     rawCache.vehiclePositions = gtfs.getVehiclePositions();
+    if (DEBUG) console.log("Loaded", rawCache.vehiclePositions.length, "vehicle positions.");
+    if (DEBUG) console.log("Updating realtime data efficiently...");
+    updateRealtimeDataEfficiently();
+    if (DEBUG) console.log("Done. Realtime GTFS cache refreshed.");
+}
+
+/**
+ * Efficiently update only the realtime portions of stop times without recalculating everything
+ */
+function updateRealtimeDataEfficiently() {
+    if (!augmentedCache.stopTimes || !augmentedCache.baseStopTimes) return;
+    
+    // Group stop time updates by trip for efficient processing
+    const updatesByTrip = new Map<string, gtfs.StopTimeUpdate[]>();
+    for (const update of rawCache.stopTimeUpdates) {
+        if (!update.trip_id) continue; // Skip updates without trip_id
+        if (!updatesByTrip.has(update.trip_id)) {
+            updatesByTrip.set(update.trip_id, []);
+        }
+        updatesByTrip.get(update.trip_id)!.push(update);
+    }
+    
+    // Only update trips that have realtime updates
+    for (const [tripId, updates] of updatesByTrip) {
+        if (augmentedCache.baseStopTimes[tripId]) {
+            augmentedCache.stopTimes[tripId] = applyRealtimeUpdates(
+                augmentedCache.baseStopTimes[tripId], 
+                updates
+            );
+        }
+    }
+}
+
+/**
+ * Clear performance caches to free memory
+ */
+export function clearPerformanceCaches() {
+    augmentedCache.expressInfoCache = {};
+    augmentedCache.passingStopsCache = {};
+}
+
+/**
+ * Batch process trips for better performance during initial load
+ */
+export function batchProcessTrips(tripIds: string[]): void {
+    if (DEBUG) console.log(`Batch processing ${tripIds.length} trips...`);
+    
+    for (const tripId of tripIds) {
+        if (!augmentedCache.tripsRec?.[tripId]) continue;
+        
+        const trip = augmentedCache.tripsRec[tripId];
+        // Pre-calculate stop times during batch processing
+        const stopTimes = trip.stopTimes;
+        if (!augmentedCache.stopTimes) augmentedCache.stopTimes = {};
+        if (!augmentedCache.baseStopTimes) augmentedCache.baseStopTimes = {};
+        
+        augmentedCache.stopTimes[tripId] = stopTimes;
+        augmentedCache.baseStopTimes[tripId] = [...stopTimes];
+    }
+    
+    if (DEBUG) console.log(`Batch processing completed for ${tripIds.length} trips.`);
+}
+function applyRealtimeUpdates(baseStopTimes: AugmentedStopTime[], updates: gtfs.StopTimeUpdate[]): AugmentedStopTime[] {
+    // Create a map of updates by stop for fast lookup
+    const updatesByStop = new Map<string, gtfs.StopTimeUpdate>();
+    for (const update of updates) {
+        if (update.stop_id) {
+            updatesByStop.set(update.stop_id, update);
+        }
+    }
+    
+    // Clone base stop times and apply realtime updates
+    return baseStopTimes.map(baseStopTime => {
+        const stopId = baseStopTime.actual_stop?.stop_id || baseStopTime.scheduled_stop?.stop_id;
+        if (!stopId) return baseStopTime;
+        
+        const update = updatesByStop.get(stopId);
+        if (!update) return baseStopTime; // No update for this stop
+        
+        // Create updated stop time with minimal changes
+        const updatedStopTime = { ...baseStopTime };
+        
+        // Apply delay updates
+        if (update.departure_delay !== undefined) {
+            updatedStopTime.actual_departure_timestamp = 
+                (baseStopTime.scheduled_departure_timestamp ?? 0) + update.departure_delay;
+            updatedStopTime.rt_departure_updated = true;
+        }
+        
+        if (update.arrival_delay !== undefined) {
+            updatedStopTime.actual_arrival_timestamp = 
+                (baseStopTime.scheduled_arrival_timestamp ?? 0) + update.arrival_delay;
+            updatedStopTime.rt_arrival_updated = true;
+        }
+        
+        // Update realtime info
+        if (update.departure_delay !== undefined || update.arrival_delay !== undefined) {
+            const delaySecs = update.departure_delay ?? update.arrival_delay ?? 0;
+            updatedStopTime.realtime = true;
+            updatedStopTime.realtime_info = {
+                delay_secs: delaySecs,
+                delay_string: delaySecs === 0 ? "on time" : 
+                             delaySecs > 0 ? `${Math.round(delaySecs / 60)}m late` :
+                             `${Math.round(Math.abs(delaySecs) / 60)}m early`,
+                delay_class: delaySecs === 0 ? "on-time" :
+                            delaySecs > 300 ? "very-late" :
+                            delaySecs > 0 ? "late" : "early",
+                schedule_relationship: baseStopTime.realtime_info?.schedule_relationship ?? 0,
+                propagated: false
+            };
+        }
+        
+        return updatedStopTime;
+    });
 }

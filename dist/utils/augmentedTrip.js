@@ -25,22 +25,34 @@ export function augmentTrip(trip) {
     for (const serviceDate of serviceDates) {
         tracks[serviceDate] = "Not implemented";
     }
+    // Pre-calculate stop times during trip creation instead of on-demand
+    let cachedStopTimes = null;
     return {
         _trip: trip,
         serviceDates,
         get stopTimes() {
+            // Use cached version if available
             let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
-            if (stopTimes.length === 0)
-                stopTimes = augmentStopTimes(rawStopTimes);
-            return stopTimes;
+            if (stopTimes.length > 0)
+                return stopTimes;
+            // Calculate once and cache
+            if (!cachedStopTimes) {
+                cachedStopTimes = augmentStopTimes(rawStopTimes);
+            }
+            return cachedStopTimes;
         },
         expressInfo,
         tracks,
         run: trip.trip_id.slice(-4),
         toSerializable: () => {
+            // Use cached version if available
             let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
-            if (stopTimes.length === 0)
-                stopTimes = augmentStopTimes(rawStopTimes);
+            if (stopTimes.length === 0) {
+                if (!cachedStopTimes) {
+                    cachedStopTimes = augmentStopTimes(rawStopTimes);
+                }
+                stopTimes = cachedStopTimes;
+            }
             return toSerializableAugmentedTrip({
                 _trip: trip,
                 serviceDates,

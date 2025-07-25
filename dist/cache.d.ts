@@ -15,6 +15,11 @@ export declare function getRawStopTimes(trip_id: string | undefined): gtfs.StopT
 export declare function getAugmentedTrips(trip_id?: string): AugmentedTrip[];
 export declare function getAugmentedStops(stop_id?: string): AugmentedStop[];
 export declare function getAugmentedStopTimes(trip_id?: string): AugmentedStopTime[];
+export declare function getBaseStopTimes(trip_id: string): AugmentedStopTime[];
+export declare function cacheExpressInfo(stopListHash: string, expressInfo: any[]): void;
+export declare function getCachedExpressInfo(stopListHash: string): any[] | undefined;
+export declare function cachePassingStops(stopListHash: string, passingStops: any[]): void;
+export declare function getCachedPassingStops(stopListHash: string): any[] | undefined;
 /**
  * Refresh static GTFS cache (stops, stopTimes).
  * @returns {void}
@@ -25,3 +30,11 @@ export declare function refreshStaticCache(): void;
  * @returns {Promise<void>}
  */
 export declare function refreshRealtimeCache(): void;
+/**
+ * Clear performance caches to free memory
+ */
+export declare function clearPerformanceCaches(): void;
+/**
+ * Batch process trips for better performance during initial load
+ */
+export declare function batchProcessTrips(tripIds: string[]): void;

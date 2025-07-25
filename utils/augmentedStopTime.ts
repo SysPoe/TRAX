@@ -5,6 +5,11 @@ import { findExpress } from "./express.js";
 import { getSRT } from "./srt.js";
 import { DEBUG } from "../index.js";
 
+// Simple hash function for stop lists
+function hashStopList(stops: string[]): string {
+  return stops.join('|');
+}
+
 export enum ScheduleRelationship {
   "SCHEDULED",
   "ADDED",
@@ -90,6 +95,14 @@ type PassingStopTime = gtfs.StopTime & { _passing: boolean };
 function findPassingStops(
   stops: string[]
 ): { stop_id: string; passing: boolean }[] {
+  const stopListHash = hashStopList(stops);
+  
+  // Check cache first
+  const cached = cache.getCachedPassingStops(stopListHash);
+  if (cached) {
+    return cached;
+  }
+  
   let express = findExpress(stops);
   let allStops: { stop_id: string; passing: boolean }[] = [];
 
@@ -121,6 +134,10 @@ function findPassingStops(
     if (allStops.at(-1)?.stop_id != e.to)
       allStops.push({ stop_id: e.to, passing: false });
   }
+  
+  // Cache the result
+  cache.cachePassingStops(stopListHash, allStops);
+  
   return allStops;
 }
 
@@ -297,7 +314,6 @@ export function augmentStopTimes(
 
   for (let passingStopTime of passingStopTimes) {
     let stopId = passingStopTime.stop_id;
-    let stopSequence = passingStopTime.stop_sequence;
 
     // Get the actual stop information
     let actualStop = cache.getAugmentedStops(stopId)[0];

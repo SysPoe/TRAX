@@ -9,11 +9,16 @@ export function toSerializableAugmentedStop(stop) {
     };
 }
 export function augmentStop(stop) {
+    // Cache children lookup to avoid repeated expensive operations
+    let cachedChildren = null;
     const getChildren = () => {
+        if (cachedChildren)
+            return cachedChildren;
         const childStops = cache
             .getRawStops()
             .filter((s) => s.parent_station === stop.stop_id);
-        return childStops.map((s) => cache.getAugmentedStops(s.stop_id)[0] || augmentStop(s));
+        cachedChildren = childStops.map((s) => cache.getAugmentedStops(s.stop_id)[0] || augmentStop(s));
+        return cachedChildren;
     };
     const getParent = () => {
         if (!stop.parent_station)
