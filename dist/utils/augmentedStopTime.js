@@ -12,7 +12,7 @@ export var ScheduleRelationship;
     ScheduleRelationship[ScheduleRelationship["DUPLICATED"] = 5] = "DUPLICATED";
     ScheduleRelationship[ScheduleRelationship["NEW"] = 6] = "NEW";
     ScheduleRelationship[ScheduleRelationship["DELETED"] = 7] = "DELETED";
-})(ScheduleRelationship = ScheduleRelationship || (ScheduleRelationship = {}));
+})(ScheduleRelationship || (ScheduleRelationship = {}));
 export function toSerializableAugmentedStopTime(st) {
     return {
         ...st,

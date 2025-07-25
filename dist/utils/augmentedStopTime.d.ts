@@ -10,7 +10,7 @@ export declare enum ScheduleRelationship {
     "NEW" = 6,
     "DELETED" = 7
 }
-export declare type AugmentedStopTime = {
+export type AugmentedStopTime = {
     toSerializable: () => SerializableAugmentedStopTime;
     _stopTime: gtfs.StopTime | null;
     trip_id: string;
@@ -39,7 +39,7 @@ export declare type AugmentedStopTime = {
         propagated: boolean;
     } | null;
 };
-export declare type SerializableAugmentedStopTime = Omit<AugmentedStopTime, "actual_stop" | "actual_parent_station" | "scheduled_stop" | "scheduled_parent_station" | "toSerializable"> & {
+export type SerializableAugmentedStopTime = Omit<AugmentedStopTime, "actual_stop" | "actual_parent_station" | "scheduled_stop" | "scheduled_parent_station" | "toSerializable"> & {
     actual_stop: string | null;
     actual_parent_station: string | null;
     scheduled_stop: string | null;

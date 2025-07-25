@@ -306,8 +306,12 @@ export function findExpress(givenStops, combosData = combos) {
     return result;
 }
 export function findExpressString(expressData, stop_id) {
+    expressData = expressData.slice(expressData.findIndex((v) => v.from === stop_id || v.skipping?.includes(stop_id) || v.to === stop_id));
     expressData = expressData.filter((v) => v.type !== "local");
     if (expressData.length === 0)
+        return "All stops";
+    if (expressData.length === 0 ||
+        expressData.findIndex((v) => v.from === stop_id || v.skipping?.includes(stop_id) || v.to === stop_id) === -1)
         return "All stops";
     const segments = expressData.reduce((acc, segment, index) => {
         if (index === 0 || segment.from !== acc[acc.length - 1].to) {
@@ -319,30 +323,31 @@ export function findExpressString(expressData, stop_id) {
         }
         return acc;
     }, []);
-    return "Running express " + segments
-        .map((run) => {
-        const startName = cache
-            .getRawStops(run.from)[0]
-            ?.stop_name?.replace(" station", "");
-        const endName = cache
-            .getRawStops(run.to)[0]
-            ?.stop_name?.replace(" station", "");
-        const stoppingAtNames = run.stoppingAt.map((stopId) => cache.getRawStops(stopId)[0]?.stop_name?.replace(" station", ""));
-        const formattedStoppingAtNames = stoppingAtNames.length <= 1
-            ? stoppingAtNames[0]
-            : stoppingAtNames.length == 2
-                ? `${stoppingAtNames[0]} and ${stoppingAtNames[1]}`
-                : `${stoppingAtNames.slice(0, -1).join(", ")}, and ${stoppingAtNames[stoppingAtNames.length - 1]}`;
-        return run.from == cache.getRawStops(stop_id)[0]?.parent_station ||
-            run.from == stop_id
-            ? run.stoppingAt.length > 0
-                ? `to ${endName}, stopping only at ${formattedStoppingAtNames}`
-                : `to ${endName}`
-            : run.stoppingAt.length > 0
-                ? `between ${startName} and ${endName}, stopping only at ${formattedStoppingAtNames}`
-                : `between ${startName} and ${endName}`;
-    })
-        .join("; ");
+    return ("Running express " +
+        segments
+            .map((run) => {
+            const startName = cache
+                .getRawStops(run.from)[0]
+                ?.stop_name?.replace(" station", "");
+            const endName = cache
+                .getRawStops(run.to)[0]
+                ?.stop_name?.replace(" station", "");
+            const stoppingAtNames = run.stoppingAt.map((stopId) => cache.getRawStops(stopId)[0]?.stop_name?.replace(" station", ""));
+            const formattedStoppingAtNames = stoppingAtNames.length <= 1
+                ? stoppingAtNames[0]
+                : stoppingAtNames.length == 2
+                    ? `${stoppingAtNames[0]} and ${stoppingAtNames[1]}`
+                    : `${stoppingAtNames.slice(0, -1).join(", ")}, and ${stoppingAtNames[stoppingAtNames.length - 1]}`;
+            return run.from == cache.getRawStops(stop_id)[0]?.parent_station ||
+                run.from == stop_id
+                ? run.stoppingAt.length > 0
+                    ? `to ${endName}, stopping only at ${formattedStoppingAtNames}`
+                    : `to ${endName}`
+                : run.stoppingAt.length > 0
+                    ? `between ${startName} and ${endName}, stopping only at ${formattedStoppingAtNames}`
+                    : `between ${startName} and ${endName}`;
+        })
+            .join("; "));
 }
 export default {
     findExpress,
