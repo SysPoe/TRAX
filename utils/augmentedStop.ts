@@ -1,8 +1,7 @@
 import type * as gtfs from "gtfs";
 import * as cache from "../cache.js";
 import {
-  AugmentedStopTime,
-  SerializableAugmentedStopTime,
+  AugmentedStopTime
 } from "./augmentedStopTime.js";
 import { getAugmentedTrips } from "../cache.js";
 import { findExpressString } from "./express.js";

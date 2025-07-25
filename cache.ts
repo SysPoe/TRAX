@@ -12,9 +12,11 @@ type RawCache = {
 
     trips: gtfs.Trip[];
     stops: gtfs.Stop[];
+    routes: gtfs.Route[];
 
     tripsRec: { [trip_id: string]: gtfs.Trip };
     stopsRec: { [stop_id: string]: gtfs.Stop };
+    routesRec: { [route_id: string]: gtfs.Route };
 };
 
 type AugmentedCache = {
@@ -36,9 +38,11 @@ let rawCache: RawCache = {
 
     trips: [],
     stops: [],
+    routes: [],
 
     tripsRec: {},
     stopsRec: {},
+    routesRec: {},
 };
 
 let augmentedCache: AugmentedCache = {
@@ -60,6 +64,12 @@ export function getRawStops(stop_id?: string): gtfs.Stop[] {
     if (stop_id)
         return rawCache.stopsRec[stop_id] ? [rawCache.stopsRec[stop_id]] : [];
     return rawCache.stops;
+}
+
+export function getRawRoutes(route_id?: string): gtfs.Route[] {
+    if (route_id)
+        return rawCache.routesRec[route_id] ? [rawCache.routesRec[route_id]] : [];
+    return rawCache.routes;
 }
 
 export function getStopTimeUpdates(): gtfs.StopTimeUpdate[] {
@@ -134,18 +144,25 @@ export function refreshStaticCache() {
     if (DEBUG) console.log("Loading stops...");
     rawCache.stops = gtfs.getStops();
     if (DEBUG) console.log("Loaded", rawCache.stops.length, "stops.");
+    if (DEBUG) console.log("Loading routes...");
+    rawCache.routes = gtfs.getRoutes();
+    if (DEBUG) console.log("Loaded", rawCache.routes.length, "routes.");
     if (DEBUG) console.log("Loading trips...");
     rawCache.trips = gtfs.getTrips().filter((v) => v.trip_id.includes("-QR "));
     if (DEBUG) console.log("Loaded", rawCache.trips.length, "trips.");
     if (DEBUG) console.log("Building raw cache records...");
     rawCache.tripsRec = {};
     rawCache.stopsRec = {};
+    rawCache.routesRec = {};
 
     for (const trip of rawCache.trips) {
         rawCache.tripsRec[trip.trip_id] = trip;
     }
     for (const stop of rawCache.stops) {
         rawCache.stopsRec[stop.stop_id] = stop;
+    }
+    for (const route of rawCache.routes) {
+        rawCache.routesRec[route.route_id] = route;
     }
 
     if (DEBUG) console.log("Augmenting trips...");
