@@ -2,7 +2,8 @@ import * as gtfs from "gtfs";
 import {AugmentedStop, augmentStop} from "./utils/augmentedStop.js";
 import {AugmentedTrip, augmentTrip} from "./utils/augmentedTrip.js";
 import {AugmentedStopTime} from "./utils/augmentedStopTime.js";
-import {DEBUG} from "./index.js";
+import {DEBUG, QRTPlace, TravelTrip} from "./index.js";
+import { getCurrentQRTravelTrains, getPlaces } from "./qr-travel/qr-travel-tracker.js";
 
 type RawCache = {
     stopTimeUpdates: gtfs.StopTimeUpdate[];
@@ -17,6 +18,9 @@ type RawCache = {
     tripsRec: { [trip_id: string]: gtfs.Trip };
     stopsRec: { [stop_id: string]: gtfs.Stop };
     routesRec: { [route_id: string]: gtfs.Route };
+
+    qrtPlaces: QRTPlace[];
+    qrtTrains: TravelTrip[];
 };
 
 type AugmentedCache = {
@@ -48,6 +52,9 @@ let rawCache: RawCache = {
     tripsRec: {},
     stopsRec: {},
     routesRec: {},
+
+    qrtPlaces: [],
+    qrtTrains: [],
 };
 
 let augmentedCache: AugmentedCache = {
@@ -93,6 +100,14 @@ export function getTripUpdates(): gtfs.TripUpdate[] {
 export function getVehiclePositions(): gtfs.VehiclePosition[] {
     if(rawCache.vehiclePositions.length === 0) rawCache.vehiclePositions = gtfs.getVehiclePositions();
     return rawCache.vehiclePositions;
+}
+
+export function getQRTPlaces(): QRTPlace[] {
+    return rawCache.qrtPlaces;
+}
+
+export function getQRTTrains(): TravelTrip[] {
+    return rawCache.qrtTrains;
 }
 
 /**
@@ -167,10 +182,15 @@ export function getCachedPassingStops(stopListHash: string): any[] | undefined {
 
 /**
  * Refresh static GTFS cache (stops, stopTimes).
- * @returns {void}
+ * @returns {Promise<void>}
  */
-export function refreshStaticCache() {
+export async function refreshStaticCache(): Promise<void> {
     if (DEBUG) console.log("Refreshing static GTFS cache...");
+    
+    if (DEBUG) console.log("Loading QRT places...");
+    rawCache.qrtPlaces = await getPlaces();
+    if (DEBUG) console.log("Loaded", rawCache.qrtPlaces.length, "QRT places.");
+
     if (DEBUG) console.log("Loading stops...");
     rawCache.stops = gtfs.getStops();
     if (DEBUG) console.log("Loaded", rawCache.stops.length, "stops.");
@@ -233,8 +253,11 @@ export function refreshStaticCache() {
  * Refresh realtime GTFS cache (stopTimeUpdates, tripUpdates, vehiclePositions).
  * @returns {Promise<void>}
  */
-export function refreshRealtimeCache() {
+export async function refreshRealtimeCache(): Promise<void> {
     if (DEBUG) console.log("Refreshing realtime GTFS cache...");
+    if(DEBUG) console.log("Refreshing qrtTrains cache...");
+    rawCache.qrtTrains = await getCurrentQRTravelTrains();
+    if (DEBUG) console.log("Loaded", rawCache.qrtTrains.length, "QRT trains.");
     if (DEBUG) console.log("Loading stop time updates...");
     rawCache.stopTimeUpdates = gtfs.getStopTimeUpdates();
     if (DEBUG) console.log("Loaded", rawCache.stopTimeUpdates.length, "stop time updates.");

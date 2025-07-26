@@ -1,5 +1,5 @@
 import { getServiceDatesByTrip } from "./calendar.js";
-import { augmentStopTimes, toSerializableAugmentedStopTime, } from "./augmentedStopTime.js";
+import { augmentStopTimes, } from "./augmentedStopTime.js";
 import { findExpress } from "./express.js";
 import * as cache from "../cache.js";
 export function toSerializableAugmentedTrip(trip) {
@@ -8,7 +8,7 @@ export function toSerializableAugmentedTrip(trip) {
         serviceDates: trip.serviceDates,
         tracks: trip.tracks,
         stopTimes: Array.isArray(trip.stopTimes)
-            ? trip.stopTimes.map((st) => toSerializableAugmentedStopTime(st))
+            ? trip.stopTimes.map((st) => st.toSerializable())
             : [],
         expressInfo: trip.expressInfo,
         run: trip.run,

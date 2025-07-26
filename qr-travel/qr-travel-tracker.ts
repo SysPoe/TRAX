@@ -7,7 +7,7 @@ import type {
   TrainMovementDTO,
   TravelStopTime,
   TravelTrip,
-} from "./types";
+} from "./types.js";
 
 // Main function to fetch and parse the XML file
 export async function trackTrain(
@@ -199,8 +199,8 @@ function convertQRTServiceToTravelTrip(
       trainPosition: movement.TrainPosition,
       plannedArrival: movement.PlannedArrival,
       plannedDeparture: movement.PlannedDeparture,
-      actualArrival: movement.ActualArrival,
-      actualDeparture: movement.ActualDeparture,
+      actualArrival: movement.ActualArrival == "0001-01-01T00:00:00" ? movement.PlannedArrival : movement.ActualArrival,
+      actualDeparture: movement.ActualDeparture == "0001-01-01T00:00:00" ? movement.PlannedDeparture : movement.ActualDeparture,
       arrivalDelaySeconds,
       departureDelaySeconds,
       delayString,
@@ -221,16 +221,12 @@ function convertQRTServiceToTravelTrip(
   };
 }
 
-/**
- * Get all current QR Travel trains and convert them to AugmentedTrip format
- */
 export async function getCurrentQRTravelTrains(): Promise<TravelTrip[]> {
   try {
     // Get all the required data
-    const [services, serviceLines, places] = await Promise.all([
+    const [services, serviceLines] = await Promise.all([
       getAllServices(),
-      getServiceLines(),
-      getPlaces(),
+      getServiceLines()
     ]);
 
     const travelTrips: TravelTrip[] = [];

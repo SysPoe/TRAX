@@ -3,6 +3,7 @@ import fs from "fs";
 import * as cache from "./cache.js";
 import * as calendar from "./utils/calendar.js";
 import * as stations from "./stations.js";
+import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 export const DEBUG = true;
 let config = {
     agencies: [
@@ -31,17 +32,17 @@ export async function loadGTFS(refresh = false, forceReload = false) {
         await gtfs.importGtfs(config);
     }
     await gtfs.updateGtfsRealtime(config);
-    cache.refreshStaticCache();
-    cache.refreshRealtimeCache();
+    await cache.refreshStaticCache();
+    await cache.refreshRealtimeCache();
     if (gtfs.getStops().length === 0) {
         await gtfs.importGtfs(config);
     }
     if (!refresh)
         return;
     realtimeInterval = setInterval(updateRealtime, 60 * 1000);
-    staticInterval = setInterval(() => {
-        gtfs.importGtfs(config);
-        cache.refreshStaticCache();
+    staticInterval = setInterval(async () => {
+        await gtfs.importGtfs(config);
+        await cache.refreshStaticCache();
     }, 24 * 60 * 60 * 1000);
 }
 export function clearIntervals() {
@@ -62,7 +63,7 @@ export function formatTimestamp(ts) {
 }
 export async function updateRealtime() {
     await gtfs.updateGtfsRealtime(config);
-    cache.refreshRealtimeCache();
+    await cache.refreshRealtimeCache();
 }
 export default {
     config,
@@ -73,4 +74,5 @@ export default {
     ...cache,
     calendar,
     ...stations,
+    qrTravel,
 };

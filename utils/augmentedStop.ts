@@ -1,12 +1,12 @@
 import type * as gtfs from "gtfs";
 import * as cache from "../cache.js";
-import {
-  AugmentedStopTime
-} from "./augmentedStopTime.js";
+import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { getAugmentedTrips } from "../cache.js";
 import { findExpressString } from "./express.js";
 
 export type AugmentedStop = gtfs.Stop & {
+  qrt_Place: boolean;
+  qrt_PlaceCode?: string;
   parent: AugmentedStop | null;
   children: AugmentedStop[];
   getDepartures: (
@@ -18,17 +18,14 @@ export type AugmentedStop = gtfs.Stop & {
 };
 
 export type SerializableAugmentedStop = gtfs.Stop & {
+  qrt_Place: boolean;
+  qrt_PlaceCode?: string;
   parent: string | null;
   children: string[];
 };
 
 export function toSerializableAugmentedStop(
-  stop:
-    | AugmentedStop
-    | (gtfs.Stop & {
-        parent: AugmentedStop | null;
-        children: AugmentedStop[];
-      })
+  stop: Omit<AugmentedStop, "toSerializable" | "getDepartures">
 ): SerializableAugmentedStop {
   return {
     ...stop,
@@ -40,10 +37,10 @@ export function toSerializableAugmentedStop(
 export function augmentStop(stop: gtfs.Stop): AugmentedStop {
   // Cache children lookup to avoid repeated expensive operations
   let cachedChildren: AugmentedStop[] | null = null;
-  
+
   const getChildren = (): AugmentedStop[] => {
     if (cachedChildren) return cachedChildren;
-    
+
     const childStops = cache
       .getRawStops()
       .filter((s) => s.parent_station === stop.stop_id);
@@ -52,13 +49,19 @@ export function augmentStop(stop: gtfs.Stop): AugmentedStop {
     );
     return cachedChildren;
   };
-  
+
+  let qrt_Places = cache.getQRTPlaces();
+  let trimmedStopName = stop.stop_name?.toLowerCase().replace("station", "").trim();
+  let myPlace = qrt_Places.find((v) => v.Title?.toLowerCase().trim() === trimmedStopName || (trimmedStopName === "roma street" && v.Title?.toLowerCase().trim().includes("roma street")));
+
   const getParent = (): AugmentedStop | null => {
     if (!stop.parent_station) return null;
     return cache.getAugmentedStops(stop.parent_station)[0];
   };
   return {
     ...stop,
+    qrt_Place: !!myPlace,
+    qrt_PlaceCode: myPlace?.qrt_PlaceCode,
     get parent(): AugmentedStop | null {
       return getParent();
     },
@@ -68,6 +71,8 @@ export function augmentStop(stop: gtfs.Stop): AugmentedStop {
     toSerializable() {
       return toSerializableAugmentedStop({
         ...stop,
+        qrt_Place: !!myPlace,
+        qrt_PlaceCode: myPlace?.qrt_PlaceCode,
         get parent(): AugmentedStop | null {
           return getParent();
         },

@@ -3,6 +3,7 @@ import fs from "fs";
 import * as cache from "./cache.js";
 import * as calendar from "./utils/calendar.js";
 import * as stations from "./stations.js";
+import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 
 export const DEBUG = true;
 
@@ -29,26 +30,29 @@ let config = {
 let realtimeInterval: NodeJS.Timeout | null = null;
 let staticInterval: NodeJS.Timeout | null = null;
 
-export async function loadGTFS(refresh: boolean = false, forceReload: boolean = false): Promise<void> {
+export async function loadGTFS(
+  refresh: boolean = false,
+  forceReload: boolean = false
+): Promise<void> {
   const dbExists = fs.existsSync(config.sqlitePath);
   if (!dbExists || forceReload) {
     await gtfs.importGtfs(config);
   }
 
   await gtfs.updateGtfsRealtime(config);
-  cache.refreshStaticCache();
-  cache.refreshRealtimeCache();
+  await cache.refreshStaticCache();
+  await cache.refreshRealtimeCache();
 
-  if(gtfs.getStops().length === 0) {
+  if (gtfs.getStops().length === 0) {
     await gtfs.importGtfs(config);
   }
 
   if (!refresh) return;
 
   realtimeInterval = setInterval(updateRealtime, 60 * 1000);
-  staticInterval = setInterval(() => {
-    gtfs.importGtfs(config);
-    cache.refreshStaticCache();
+  staticInterval = setInterval(async () => {
+    await gtfs.importGtfs(config);
+    await cache.refreshStaticCache();
   }, 24 * 60 * 60 * 1000);
 }
 
@@ -71,7 +75,7 @@ export function formatTimestamp(ts?: number | null): string {
 
 export async function updateRealtime(): Promise<void> {
   await gtfs.updateGtfsRealtime(config);
-  cache.refreshRealtimeCache();
+  await cache.refreshRealtimeCache();
 }
 
 export default {
@@ -83,22 +87,36 @@ export default {
   ...cache,
   calendar,
   ...stations,
+  qrTravel,
 };
 
 // Export all types
-export type { AugmentedTrip } from "./utils/augmentedTrip.js";
-export type { AugmentedStopTime, ScheduleRelationship } from "./utils/augmentedStopTime.js";
-export type { AugmentedStop } from "./utils/augmentedStop.js";
-export type { 
-  TrainMovementDTO, 
-  ServiceDisruption, 
-  GetServiceResponse, 
-  QRTPlace, 
-  Service, 
-  Direction, 
-  ServiceLine, 
-  AllServicesResponse, 
-  QRTService, 
+export type {
+  AugmentedTrip,
+  SerializableAugmentedTrip
+} from "./utils/augmentedTrip.js";
+
+export type {
+  AugmentedStopTime,
+  SerializableAugmentedStopTime,
+  ScheduleRelationship
+} from "./utils/augmentedStopTime.js";
+
+export type {
+  AugmentedStop,
+  SerializableAugmentedStop
+} from "./utils/augmentedStop.js";
+
+export type {
+  TrainMovementDTO,
+  ServiceDisruption,
+  GetServiceResponse,
+  QRTPlace,
+  Service,
+  Direction,
+  ServiceLine,
+  AllServicesResponse,
+  QRTService,
   ServiceUpdate,
   TravelStopTime,
   TravelTrip

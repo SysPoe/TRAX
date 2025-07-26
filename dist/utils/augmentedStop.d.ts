@@ -1,6 +1,8 @@
 import type * as gtfs from "gtfs";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
 export declare type AugmentedStop = gtfs.Stop & {
+    qrt_Place: boolean;
+    qrt_PlaceCode?: string;
     parent: AugmentedStop | null;
     children: AugmentedStop[];
     getDepartures: (date: number, start_time: string, end_time: string) => (AugmentedStopTime & {
@@ -9,11 +11,10 @@ export declare type AugmentedStop = gtfs.Stop & {
     toSerializable: () => SerializableAugmentedStop;
 };
 export declare type SerializableAugmentedStop = gtfs.Stop & {
+    qrt_Place: boolean;
+    qrt_PlaceCode?: string;
     parent: string | null;
     children: string[];
 };
-export declare function toSerializableAugmentedStop(stop: AugmentedStop | (gtfs.Stop & {
-    parent: AugmentedStop | null;
-    children: AugmentedStop[];
-})): SerializableAugmentedStop;
+export declare function toSerializableAugmentedStop(stop: Omit<AugmentedStop, "toSerializable" | "getDepartures">): SerializableAugmentedStop;
 export declare function augmentStop(stop: gtfs.Stop): AugmentedStop;

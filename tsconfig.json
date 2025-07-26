@@ -13,6 +13,7 @@
     "include": [
         "index.ts",
         "utils/**/*.ts",
+        "qr-travel/**/*.ts",
         "cache.ts",
         "stations.ts"
     ],

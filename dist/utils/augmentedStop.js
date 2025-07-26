@@ -20,6 +20,9 @@ export function augmentStop(stop) {
         cachedChildren = childStops.map((s) => cache.getAugmentedStops(s.stop_id)[0] || augmentStop(s));
         return cachedChildren;
     };
+    let qrt_Places = cache.getQRTPlaces();
+    let trimmedStopName = stop.stop_name?.toLowerCase().replace("station", "").trim();
+    let myPlace = qrt_Places.find((v) => v.Title?.toLowerCase().trim() === trimmedStopName || (trimmedStopName === "roma street" && v.Title?.toLowerCase().trim().includes("roma street")));
     const getParent = () => {
         if (!stop.parent_station)
             return null;
@@ -27,6 +30,8 @@ export function augmentStop(stop) {
     };
     return {
         ...stop,
+        qrt_Place: !!myPlace,
+        qrt_PlaceCode: myPlace?.qrt_PlaceCode,
         get parent() {
             return getParent();
         },
@@ -36,6 +41,8 @@ export function augmentStop(stop) {
         toSerializable() {
             return toSerializableAugmentedStop({
                 ...stop,
+                qrt_Place: !!myPlace,
+                qrt_PlaceCode: myPlace?.qrt_PlaceCode,
                 get parent() {
                     return getParent();
                 },

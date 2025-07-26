@@ -1,11 +1,13 @@
 import * as gtfs from "gtfs";
 import * as calendar from "./utils/calendar.js";
+import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 export declare const DEBUG = true;
 export declare function loadGTFS(refresh?: boolean, forceReload?: boolean): Promise<void>;
 export declare function clearIntervals(): void;
 export declare function formatTimestamp(ts?: number | null): string;
 export declare function updateRealtime(): Promise<void>;
 declare const _default: {
+    qrTravel: typeof qrTravel;
     getStations(): import("./utils/augmentedStop.js").AugmentedStop[];
     calendar: typeof calendar;
     getRawTrips(trip_id?: string | undefined): gtfs.Trip[];
@@ -14,6 +16,8 @@ declare const _default: {
     getStopTimeUpdates(): gtfs.StopTimeUpdate[];
     getTripUpdates(): gtfs.TripUpdate[];
     getVehiclePositions(): gtfs.VehiclePosition[];
+    getQRTPlaces(): import("./qr-travel/types.js").QRTPlace[];
+    getQRTTrains(): import("./qr-travel/types.js").TravelTrip[];
     getRawStopTimes(trip_id: string | undefined): gtfs.StopTime[];
     getAugmentedTrips(trip_id?: string | undefined): import("./utils/augmentedTrip.js").AugmentedTrip[];
     getAugmentedStops(stop_id?: string | undefined): import("./utils/augmentedStop.js").AugmentedStop[];
@@ -23,8 +27,8 @@ declare const _default: {
     getCachedExpressInfo(stopListHash: string): any[] | undefined;
     cachePassingStops(stopListHash: string, passingStops: any[]): void;
     getCachedPassingStops(stopListHash: string): any[] | undefined;
-    refreshStaticCache(): void;
-    refreshRealtimeCache(): void;
+    refreshStaticCache(): Promise<void>;
+    refreshRealtimeCache(): Promise<void>;
     clearPerformanceCaches(): void;
     batchProcessTrips(tripIds: string[]): void;
     config: {
@@ -50,7 +54,7 @@ declare const _default: {
     formatTimestamp: typeof formatTimestamp;
 };
 export default _default;
-export type { AugmentedTrip } from "./utils/augmentedTrip.js";
-export type { AugmentedStopTime, ScheduleRelationship } from "./utils/augmentedStopTime.js";
-export type { AugmentedStop } from "./utils/augmentedStop.js";
+export type { AugmentedTrip, SerializableAugmentedTrip } from "./utils/augmentedTrip.js";
+export type { AugmentedStopTime, SerializableAugmentedStopTime, ScheduleRelationship } from "./utils/augmentedStopTime.js";
+export type { AugmentedStop, SerializableAugmentedStop } from "./utils/augmentedStop.js";
 export type { TrainMovementDTO, ServiceDisruption, GetServiceResponse, QRTPlace, Service, Direction, ServiceLine, AllServicesResponse, QRTService, ServiceUpdate, TravelStopTime, TravelTrip } from "./qr-travel/types.js";
