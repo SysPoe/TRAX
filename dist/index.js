@@ -39,10 +39,15 @@ export async function loadGTFS(refresh = false, forceReload = false) {
     }
     if (!refresh)
         return;
-    realtimeInterval = setInterval(updateRealtime, 60 * 1000);
+    realtimeInterval = setInterval(() => updateRealtime().catch((err) => console.error("Error refreshing realtime GTFS data:", err)), 60 * 1000);
     staticInterval = setInterval(async () => {
-        await gtfs.importGtfs(config);
-        await cache.refreshStaticCache();
+        try {
+            await gtfs.importGtfs(config);
+            await cache.refreshStaticCache();
+        }
+        catch (error) {
+            console.error("Error refreshing static GTFS data:", error);
+        }
     }, 24 * 60 * 60 * 1000);
 }
 export function clearIntervals() {

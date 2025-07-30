@@ -54,7 +54,8 @@ declare const _default: {
     formatTimestamp: typeof formatTimestamp;
 };
 export default _default;
-export type { AugmentedTrip, SerializableAugmentedTrip } from "./utils/augmentedTrip.js";
-export type { AugmentedStopTime, SerializableAugmentedStopTime, ScheduleRelationship } from "./utils/augmentedStopTime.js";
-export type { AugmentedStop, SerializableAugmentedStop } from "./utils/augmentedStop.js";
-export type { TrainMovementDTO, ServiceDisruption, GetServiceResponse, QRTPlace, Service, Direction, ServiceLine, AllServicesResponse, QRTService, ServiceUpdate, TravelStopTime, TravelTrip } from "./qr-travel/types.js";
+export type { AugmentedTrip, SerializableAugmentedTrip, } from "./utils/augmentedTrip.js";
+export type { AugmentedStopTime, SerializableAugmentedStopTime, ScheduleRelationship, } from "./utils/augmentedStopTime.js";
+export type { AugmentedStop, SerializableAugmentedStop, } from "./utils/augmentedStop.js";
+export type { TrainMovementDTO, ServiceDisruption, GetServiceResponse, QRTPlace, Service, Direction, ServiceLine, AllServicesResponse, QRTService, ServiceUpdate, TravelStopTime, TravelTrip, } from "./qr-travel/types.js";
+export type { SRTStop } from "./utils/SectionalRunningTimes/metroSRTTravelTrain.js";

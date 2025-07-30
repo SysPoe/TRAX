@@ -101,6 +101,7 @@ export interface TravelStopTime {
   delayClass: "on-time" | "scheduled" | "late" | "very-late" | "early";
 }
 
+import type { SRTStop } from "../utils/SectionalRunningTimes/metroSRTTravelTrain.js";
 export interface TravelTrip {
   serviceId: string;
   serviceName: string;
@@ -111,5 +112,6 @@ export interface TravelTrip {
   serviceDate: string;
   departureDate: string;
   stops: TravelStopTime[];
+  stopsWithPassing?: SRTStop[];
   disruption?: ServiceDisruption;
 }

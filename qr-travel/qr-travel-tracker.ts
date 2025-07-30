@@ -1,3 +1,5 @@
+// For SRT passing stop expansion
+import { expandWithSRTPassingStops } from "../utils/SectionalRunningTimes/metroSRTTravelTrain.js";
 import type {
   GetServiceResponse,
   QRTPlace,
@@ -260,7 +262,23 @@ export async function getCurrentQRTravelTrains(): Promise<TravelTrip[]> {
                     direction.DirectionName,
                     serviceLine.ServiceLineName
                   );
-                  travelTrips.push(travelTrip);
+                  // Add SRT passing stops expansion (SEQ region only)
+                  // Map TravelStopTime[] to TrainMovementDTO[]
+                  const trainMovements = travelTrip.stops.map(s => ({
+                    PlaceCode: s.placeCode,
+                    PlaceName: s.placeName,
+                    KStation: s.kStation,
+                    Status: s.status,
+                    TrainPosition: s.trainPosition,
+                    PlannedArrival: s.plannedArrival,
+                    PlannedDeparture: s.plannedDeparture,
+                    ActualArrival: s.actualArrival,
+                    ActualDeparture: s.actualDeparture,
+                  }));
+                  // Expand with SRT passing stops
+                  const expanded = expandWithSRTPassingStops(trainMovements);
+                  // Attach to the trip
+                  travelTrips.push({ ...travelTrip, stopsWithPassing: expanded });
                 }
               }
             } catch (error) {

@@ -49,10 +49,20 @@ export async function loadGTFS(
 
   if (!refresh) return;
 
-  realtimeInterval = setInterval(updateRealtime, 60 * 1000);
+  realtimeInterval = setInterval(
+    () =>
+      updateRealtime().catch((err) =>
+        console.error("Error refreshing realtime GTFS data:", err)
+      ),
+    60 * 1000
+  );
   staticInterval = setInterval(async () => {
-    await gtfs.importGtfs(config);
-    await cache.refreshStaticCache();
+    try {
+      await gtfs.importGtfs(config);
+      await cache.refreshStaticCache();
+    } catch (error) {
+      console.error("Error refreshing static GTFS data:", error);
+    }
   }, 24 * 60 * 60 * 1000);
 }
 
@@ -90,21 +100,20 @@ export default {
   qrTravel,
 };
 
-// Export all types
 export type {
   AugmentedTrip,
-  SerializableAugmentedTrip
+  SerializableAugmentedTrip,
 } from "./utils/augmentedTrip.js";
 
 export type {
   AugmentedStopTime,
   SerializableAugmentedStopTime,
-  ScheduleRelationship
+  ScheduleRelationship,
 } from "./utils/augmentedStopTime.js";
 
 export type {
   AugmentedStop,
-  SerializableAugmentedStop
+  SerializableAugmentedStop,
 } from "./utils/augmentedStop.js";
 
 export type {
@@ -119,5 +128,7 @@ export type {
   QRTService,
   ServiceUpdate,
   TravelStopTime,
-  TravelTrip
+  TravelTrip,
 } from "./qr-travel/types.js";
+
+export type { SRTStop } from "./utils/SectionalRunningTimes/metroSRTTravelTrain.js";
