@@ -234,9 +234,20 @@ export async function refreshRealtimeCache() {
     rawCache.vehiclePositions = gtfs.getVehiclePositions();
     if (DEBUG)
         console.log("Loaded", rawCache.vehiclePositions.length, "vehicle positions.");
+    // if (DEBUG) console.log("Updating realtime data efficiently...");
+    // updateRealtimeDataEfficiently();
     if (DEBUG)
-        console.log("Updating realtime data efficiently...");
-    updateRealtimeDataEfficiently();
+        console.warn("Re-augmenting trips as efficient realtime updates are not implemented yet.");
+    // Re-augment trips to apply realtime updates
+    augmentedCache.trips = rawCache.trips.map(augmentTrip);
+    if (DEBUG)
+        console.log("Augmented", augmentedCache.trips.length, "trips.");
+    if (DEBUG)
+        console.log("Building augmented cache records...");
+    augmentedCache.tripsRec = {};
+    for (const trip of augmentedCache.trips) {
+        augmentedCache.tripsRec[trip._trip.trip_id] = trip;
+    }
     if (DEBUG)
         console.log("Done. Realtime GTFS cache refreshed.");
 }

@@ -1,6 +1,6 @@
 // Hardcoded SRT data from metro-srt-travel-train.csv (modified slightly)
 export type SRTEntry = { from: string; to: string; travelTrain: number };
-export const SRT_DATA: SRTEntry[] = [
+export let SRT_DATA: SRTEntry[] = [
   { from: "Roma Street", to: "Normanby", travelTrain: 2 },
   { from: "Brisbane - Roma Street", to: "Normanby", travelTrain: 2 },
   { from: "Normanby", to: "Exhibition", travelTrain: 1 },
@@ -157,7 +157,6 @@ export const SRT_DATA: SRTEntry[] = [
   { from: "Wellington Point", to: "Ormiston", travelTrain: 1 },
   { from: "Ormiston", to: "Cleveland", travelTrain: 2 },
   { from: "Lytton Junction", to: "Fisherman Islands", travelTrain: 10 },
-  { from: "Ormiston", to: "Cleveland", travelTrain: 2 },
   { from: "Nambour", to: "Yandina", travelTrain: 9 },
   { from: "Yandina", to: "North Arm", travelTrain: 6 },
   { from: "North Arm", to: "Eumundi", travelTrain: 4 },
@@ -169,23 +168,27 @@ export const SRT_DATA: SRTEntry[] = [
   { from: "Traveston", to: "Woondum", travelTrain: 7 },
   { from: "Woondum", to: "Glanmire", travelTrain: 8 },
   { from: "Glanmire", to: "Gympie North", travelTrain: 4 },
-  { from: "Nambour", to: "Yandina", travelTrain: 9 },
   { from: "Yandina", to: "Eumundi", travelTrain: 10 },
   { from: "Eumundi", to: "Cooroy", travelTrain: 8 },
-  { from: "Cooroy", to: "Pomona", travelTrain: 9 },
-  { from: "Pomona", to: "Cooran", travelTrain: 7 },
-  { from: "Cooran", to: "Traveston", travelTrain: 6 },
   { from: "Traveston", to: "Gympie North", travelTrain: 19 },
   { from: "Petrie", to: "Kallangur", travelTrain: 2 },
   { from: "Kallangur", to: "Murrumba Downs", travelTrain: 1 },
-  { from: "Murrumba Downs", to: "Mango Hill station", travelTrain: 2 },
-  { from: "Mango Hill station", to: "Mango Hill East", travelTrain: 2 },
+  { from: "Murrumba Downs", to: "Mango Hill", travelTrain: 2 },
+  { from: "Mango Hill", to: "Mango Hill East", travelTrain: 2 },
   { from: "Mango Hill East", to: "Rothwell", travelTrain: 2 },
   { from: "Rothwell", to: "Kippa-Ring", travelTrain: 4 },
   { from: "Darra", to: "Richlands", travelTrain: 3 },
-  { from: "Richlands", to: "Springfield station", travelTrain: 5 },
-  { from: "Springfield station", to: "Springfield Central", travelTrain: 3 },
+  { from: "Richlands", to: "Springfield", travelTrain: 5 },
+  { from: "Springfield", to: "Springfield Central", travelTrain: 3 },
 ];
+
+SRT_DATA = SRT_DATA.concat(
+  SRT_DATA.map((v) => ({
+    from: v.to,
+    to: v.from,
+    travelTrain: v.travelTrain,
+  }))
+);
 
 import type { TrainMovementDTO } from "../../qr-travel/types.js";
 
@@ -203,29 +206,37 @@ export interface SRTStop {
   departureDelaySeconds?: number | null;
 }
 
-
 /**
  * Given an array of TrainMovementDTOs (stopping pattern), return an array of SRTStop including both stops and passing stops with SRT times.
  * For segments not in SRT_DATA, just include the stops as-is.
  */
-export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[]): SRTStop[] {
+export function expandWithSRTPassingStops(
+  stoppingMovements: TrainMovementDTO[]
+): SRTStop[] {
   function calcDelay(actual?: string, planned?: string): number | null {
-    if (!actual || !planned || actual === "0001-01-01T00:00:00" || planned === "0001-01-01T00:00:00") return null;
+    if (
+      !actual ||
+      !planned ||
+      actual === "0001-01-01T00:00:00" ||
+      planned === "0001-01-01T00:00:00"
+    )
+      return null;
     const a = new Date(actual).getTime();
     const p = new Date(planned).getTime();
     if (isNaN(a) || isNaN(p)) return null;
     return Math.round((a - p) / 1000);
   }
-  if (stoppingMovements.length < 2) return stoppingMovements.map(m => ({
-    placeName: m.PlaceName,
-    isStop: true,
-    plannedArrival: m.PlannedArrival,
-    plannedDeparture: m.PlannedDeparture,
-    actualArrival: m.ActualArrival,
-    actualDeparture: m.ActualDeparture,
-    arrivalDelaySeconds: calcDelay(m.ActualArrival, m.PlannedArrival),
-    departureDelaySeconds: calcDelay(m.ActualDeparture, m.PlannedDeparture),
-  }));
+  if (stoppingMovements.length < 2)
+    return stoppingMovements.map((m) => ({
+      placeName: m.PlaceName,
+      isStop: true,
+      plannedArrival: m.PlannedArrival,
+      plannedDeparture: m.PlannedDeparture,
+      actualArrival: m.ActualArrival,
+      actualDeparture: m.ActualDeparture,
+      arrivalDelaySeconds: calcDelay(m.ActualArrival, m.PlannedArrival),
+      departureDelaySeconds: calcDelay(m.ActualDeparture, m.PlannedDeparture),
+    }));
 
   const result: SRTStop[] = [];
   let prevTime: Date | null = null;
@@ -242,23 +253,39 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
         actualArrival: from.ActualArrival,
         actualDeparture: from.ActualDeparture,
         arrivalDelaySeconds: calcDelay(from.ActualArrival, from.PlannedArrival),
-        departureDelaySeconds: calcDelay(from.ActualDeparture, from.PlannedDeparture),
+        departureDelaySeconds: calcDelay(
+          from.ActualDeparture,
+          from.PlannedDeparture
+        ),
       });
       // Set prevTime to actual/planned departure if available
-      if (from.ActualDeparture && from.ActualDeparture !== "0001-01-01T00:00:00") {
+      if (
+        from.ActualDeparture &&
+        from.ActualDeparture !== "0001-01-01T00:00:00"
+      ) {
         prevTime = new Date(from.ActualDeparture);
-      } else if (from.PlannedDeparture && from.PlannedDeparture !== "0001-01-01T00:00:00") {
+      } else if (
+        from.PlannedDeparture &&
+        from.PlannedDeparture !== "0001-01-01T00:00:00"
+      ) {
         prevTime = new Date(from.PlannedDeparture);
       } else {
         prevTime = null;
       }
     }
     // Find all SRT segments between from and to
-    let seg = SRT_DATA.find(s => s.from === from.PlaceName && s.to === to.PlaceName);
+    let seg = SRT_DATA.find(
+      (s) =>
+        (s.from === from.PlaceName && s.to === to.PlaceName) ||
+        (s.from === to.PlaceName && s.to === from.PlaceName)
+    );
     if (seg) {
       // Direct SRT segment, no passing stops
       // Estimate next stop's arrival time
-      let estPass: Date | undefined = prevTime && seg.travelTrain ? new Date(prevTime.getTime() + seg.travelTrain * 60000) : undefined;
+      let estPass: Date | undefined =
+        prevTime && seg.travelTrain
+          ? new Date(prevTime.getTime() + seg.travelTrain * 60000)
+          : undefined;
       result.push({
         placeName: to.PlaceName,
         isStop: true,
@@ -267,23 +294,46 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
         actualArrival: to.ActualArrival,
         actualDeparture: to.ActualDeparture,
         srtMinutes: seg.travelTrain,
-        estimatedPassingTime: estPass ? estPass.getFullYear().toString().padStart(4, '0') + '-' +
-          (estPass.getMonth() + 1).toString().padStart(2, '0') + '-' +
-          estPass.getDate().toString().padStart(2, '0') + 'T' +
-          estPass.getHours().toString().padStart(2, '0') + ':' +
-          estPass.getMinutes().toString().padStart(2, '0') + ':' +
-          estPass.getSeconds().toString().padStart(2, '0') : undefined,
+        estimatedPassingTime: estPass
+          ? estPass.getFullYear().toString().padStart(4, "0") +
+            "-" +
+            (estPass.getMonth() + 1).toString().padStart(2, "0") +
+            "-" +
+            estPass.getDate().toString().padStart(2, "0") +
+            "T" +
+            estPass.getHours().toString().padStart(2, "0") +
+            ":" +
+            estPass.getMinutes().toString().padStart(2, "0") +
+            ":" +
+            estPass.getSeconds().toString().padStart(2, "0")
+          : undefined,
         arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
-        departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
+        departureDelaySeconds: calcDelay(
+          to.ActualDeparture,
+          to.PlannedDeparture
+        ),
       });
       prevTime = estPass ?? null;
       continue;
     }
     // Try to find a chain of SRT segments between from and to (i.e. passing stops)
     // BFS to find shortest SRT path
-    let queue: { path: SRTEntry[]; last: string }[] = SRT_DATA.filter(s => s.from === from.PlaceName).map(s => ({ path: [s], last: s.to }));
+    let queue: { path: SRTEntry[]; last: string }[] = SRT_DATA.filter(
+      (s) =>
+        s.from.trim().toLocaleLowerCase() ===
+        from.PlaceName.trim().toLowerCase()
+    ).map((s) => ({ path: [s], last: s.to }));
+    queue =
+      queue.length == 0
+        ? SRT_DATA.filter(
+            (s) =>
+              s.to.trim().toLocaleLowerCase() ===
+              from.PlaceName.trim().toLowerCase()
+          ).map((s) => ({ path: [s], last: s.from }))
+        : queue;
     let found: SRTEntry[] | null = null;
     let visited = new Set<string>();
+
     while (queue.length && !found) {
       let { path, last } = queue.shift()!;
       if (last === to.PlaceName) {
@@ -292,8 +342,14 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
       }
       if (visited.has(last)) continue;
       visited.add(last);
-      for (let next of SRT_DATA.filter(s => s.from === last)) {
-        queue.push({ path: [...path, next], last: next.to });
+
+      for (let next of SRT_DATA.filter(
+        (s) =>
+          s.from.trim().toLowerCase() === last.trim().toLowerCase() ||
+          s.to.trim().toLowerCase() === last.trim().toLowerCase()
+      )) {
+        if (!visited.has(next.to))
+          queue.push({ path: [...path, next], last: next.to });
       }
     }
     if (found) {
@@ -301,8 +357,13 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
       for (let j = 1; j < found.length - 1; ++j) {
         const foundSeg = found[j];
         if (foundSeg) {
-          const orig = stoppingMovements.find(m => m.PlaceName === foundSeg.from);
-          let estPass: Date | undefined = prevTime && foundSeg.travelTrain ? new Date(prevTime.getTime() + foundSeg.travelTrain * 60000) : undefined;
+          const orig = stoppingMovements.find(
+            (m) => m.PlaceName === foundSeg.from
+          );
+          let estPass: Date | undefined =
+            prevTime && foundSeg.travelTrain
+              ? new Date(prevTime.getTime() + foundSeg.travelTrain * 60000)
+              : undefined;
           result.push({
             placeName: foundSeg.from,
             isStop: false,
@@ -311,19 +372,30 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
             actualArrival: orig?.ActualArrival,
             actualDeparture: orig?.ActualDeparture,
             srtMinutes: foundSeg.travelTrain,
-            estimatedPassingTime: estPass ? estPass.getFullYear().toString().padStart(4, '0') + '-' +
-              (estPass.getMonth() + 1).toString().padStart(2, '0') + '-' +
-              estPass.getDate().toString().padStart(2, '0') + 'T' +
-              estPass.getHours().toString().padStart(2, '0') + ':' +
-              estPass.getMinutes().toString().padStart(2, '0') + ':' +
-              estPass.getSeconds().toString().padStart(2, '0') : undefined,
+            estimatedPassingTime: estPass
+              ? estPass.getFullYear().toString().padStart(4, "0") +
+                "-" +
+                (estPass.getMonth() + 1).toString().padStart(2, "0") +
+                "-" +
+                estPass.getDate().toString().padStart(2, "0") +
+                "T" +
+                estPass.getHours().toString().padStart(2, "0") +
+                ":" +
+                estPass.getMinutes().toString().padStart(2, "0") +
+                ":" +
+                estPass.getSeconds().toString().padStart(2, "0")
+              : undefined,
             arrivalDelaySeconds: calcDelay(
-              orig?.ActualArrival || (estPass ? estPass.toISOString() : undefined),
-              orig?.PlannedArrival || (estPass ? estPass.toISOString() : undefined)
+              orig?.ActualArrival ||
+                (estPass ? estPass.toISOString() : undefined),
+              orig?.PlannedArrival ||
+                (estPass ? estPass.toISOString() : undefined)
             ),
             departureDelaySeconds: calcDelay(
-              orig?.ActualDeparture || (estPass ? estPass.toISOString() : undefined),
-              orig?.PlannedDeparture || (estPass ? estPass.toISOString() : undefined)
+              orig?.ActualDeparture ||
+                (estPass ? estPass.toISOString() : undefined),
+              orig?.PlannedDeparture ||
+                (estPass ? estPass.toISOString() : undefined)
             ),
           });
           prevTime = estPass ?? null;
@@ -331,7 +403,10 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
       }
       // Add the final stop (not as a passing stop)
       let lastSeg = found[found.length - 1];
-      let estArr: Date | undefined = prevTime && lastSeg && lastSeg.travelTrain ? new Date(prevTime.getTime() + lastSeg.travelTrain * 60000) : undefined;
+      let estArr: Date | undefined =
+        prevTime && lastSeg && lastSeg.travelTrain
+          ? new Date(prevTime.getTime() + lastSeg.travelTrain * 60000)
+          : undefined;
       result.push({
         placeName: to.PlaceName,
         isStop: true,
@@ -340,18 +415,45 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
         actualArrival: to.ActualArrival,
         actualDeparture: to.ActualDeparture,
         srtMinutes: lastSeg?.travelTrain,
-        estimatedPassingTime: estArr ? estArr.getFullYear().toString().padStart(4, '0') + '-' +
-          (estArr.getMonth() + 1).toString().padStart(2, '0') + '-' +
-          estArr.getDate().toString().padStart(2, '0') + 'T' +
-          estArr.getHours().toString().padStart(2, '0') + ':' +
-          estArr.getMinutes().toString().padStart(2, '0') + ':' +
-          estArr.getSeconds().toString().padStart(2, '0') : undefined,
+        estimatedPassingTime: estArr
+          ? estArr.getFullYear().toString().padStart(4, "0") +
+            "-" +
+            (estArr.getMonth() + 1).toString().padStart(2, "0") +
+            "-" +
+            estArr.getDate().toString().padStart(2, "0") +
+            "T" +
+            estArr.getHours().toString().padStart(2, "0") +
+            ":" +
+            estArr.getMinutes().toString().padStart(2, "0") +
+            ":" +
+            estArr.getSeconds().toString().padStart(2, "0")
+          : undefined,
         arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
-        departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
+        departureDelaySeconds: calcDelay(
+          to.ActualDeparture,
+          to.PlannedDeparture
+        ),
       });
       prevTime = estArr ?? null;
+      continue;
     }
-    // else: no SRT path found, skip passing stops
+    // else: no SRT path found, include the stop
+    result.push({
+      placeName: to.PlaceName,
+      isStop: true,
+      plannedArrival: to.PlannedArrival,
+      plannedDeparture: to.PlannedDeparture,
+      actualArrival: to.ActualArrival,
+      actualDeparture: to.ActualDeparture,
+      arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
+      departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
+    });
+    // Update prevTime for next segments
+    if (to.ActualDeparture && to.ActualDeparture !== "0001-01-01T00:00:00") {
+      prevTime = new Date(to.ActualDeparture);
+    } else if (to.PlannedDeparture && to.PlannedDeparture !== "0001-01-01T00:00:00") {
+      prevTime = new Date(to.PlannedDeparture);
+    }
   }
   // End for loop
   return result;
