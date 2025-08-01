@@ -275,8 +275,25 @@ export async function refreshRealtimeCache(): Promise<void> {
     if (DEBUG) console.log("Augmented", augmentedCache.trips.length, "trips.");
     if (DEBUG) console.log("Building augmented cache records...");
     augmentedCache.tripsRec = {};
+    augmentedCache.serviceDateTrips = {};
+    augmentedCache.baseStopTimes = {};
+    augmentedCache.stopTimes = {};
+    
     for (const trip of augmentedCache.trips) {
+        if (!augmentedCache.stopTimes) augmentedCache.stopTimes = {};
+        if (!augmentedCache.baseStopTimes) augmentedCache.baseStopTimes = {};
         augmentedCache.tripsRec[trip._trip.trip_id] = trip;
+        
+        // Store both current stop times and base stop times (without realtime)
+        augmentedCache.stopTimes[trip._trip.trip_id] = trip.stopTimes;
+        augmentedCache.baseStopTimes[trip._trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
+        
+        for (const serviceDate of trip.serviceDates) {
+            if (!augmentedCache.serviceDateTrips[serviceDate]) {
+                augmentedCache.serviceDateTrips[serviceDate] = [];
+            }
+            augmentedCache.serviceDateTrips[serviceDate].push(trip._trip.trip_id);
+        }
     }
     if (DEBUG) console.log("Done. Realtime GTFS cache refreshed.");
 }
