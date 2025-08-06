@@ -303,6 +303,8 @@ export function augmentStopTimes(
     .filter((v) => v.trip_id === stopTimes[0].trip_id)
     .sort((a, b) => (a.stop_sequence ?? 0) - (b.stop_sequence ?? 0));
 
+  let tripUpdate = cache.getTripUpdates().find((tu: any) => tu.trip_id === stopTimes[0].trip_id)
+
   let passingStopTimes = findPassingStopTimes(stopTimes);
 
   let augmentedStopTimes: AugmentedStopTime[] = [];
@@ -311,6 +313,8 @@ export function augmentStopTimes(
   let lastDelay = 0;
   let lastScheduleRelationship = ScheduleRelationship.SCHEDULED;
   let lastPlatformCode = null;
+
+  let propagateOnTime = tripUpdate && tripUpdate.schedule_relationship === "SCHEDULED";
 
   for (let passingStopTime of passingStopTimes) {
     let stopId = passingStopTime.stop_id;
@@ -420,6 +424,11 @@ export function augmentStopTimes(
           ? scheduledDepartureTimestamp + lastDelay
           : undefined;
       propagated = true;
+    } else if (propagateOnTime) {
+      // No realtime updates, but tripUpdate is SCHEDULED: propagate on time
+      delaySecs = 0;
+      propagated = true;
+      scheduleRelationship = ScheduleRelationship.SCHEDULED;
     }
 
     // Calculate realtime info

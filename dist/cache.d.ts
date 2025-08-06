@@ -33,11 +33,3 @@ export declare function refreshStaticCache(): Promise<void>;
  * @returns {Promise<void>}
  */
 export declare function refreshRealtimeCache(): Promise<void>;
-/**
- * Clear performance caches to free memory
- */
-export declare function clearPerformanceCaches(): void;
-/**
- * Batch process trips for better performance during initial load
- */
-export declare function batchProcessTrips(tripIds: string[]): void;

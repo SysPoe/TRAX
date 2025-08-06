@@ -1,54 +1,12 @@
 import TRAX from ".";
-import type { SRTStop } from "./utils/SectionalRunningTimes/metroSRTTravelTrain.js";
+import * as gtfs from "gtfs";
+import fs from "fs";
 
 async function main() {
-  const trains = await TRAX.qrTravel.getCurrentQRTravelTrains();
-  if (!trains || trains.length === 0) {
-    console.log("No QR Travel trains found.");
-    return;
-  }
-  const first = trains.find((v) => v.serviceId === "976T");
-  if (!first) {
-    console.log("No train with serviceId '976T' found.");
-    return;
-  }
-
-  for (const stop of first.stopsWithPassing ?? []) {
-    if (!stop.isStop) {
-      // Passing stop: show estimated passing time if available
-      const passTime =
-        stop.estimatedPassingTime ||
-        stop.actualDeparture ||
-        stop.plannedDeparture ||
-        "--";
-      console.log(
-        `PASS: ${stop.placeName}  time: ${passTime} arrDelay: ${
-          stop.arrivalDelaySeconds ?? "--"
-        } depDelay: ${stop.departureDelaySeconds ?? "--"}`
-      );
-    } else {
-      // Stopping stop: show actual/planned times (do not use estimatedPassingTime)
-      const arr = stop.actualArrival || stop.plannedArrival || "--";
-      const dep = stop.actualDeparture || stop.plannedDeparture || "--";
-      console.log(
-        `STOP: ${stop.placeName}  arr: ${arr} dep: ${dep} arrDelay: ${
-          stop.arrivalDelaySeconds ?? "--"
-        } depDelay: ${stop.departureDelaySeconds ?? "--"}`
-      );
-    }
-  }
-
-  console.log(" ------ ");
-
-  for (const stop of first.stops) {
-    // Stopping stop: show actual/planned times (do not use estimatedPassingTime)
-    const arr = stop.actualArrival || stop.plannedArrival || "--";
-    const dep = stop.actualDeparture || stop.plannedDeparture || "--";
-    console.log(
-      `STOP: ${stop.placeName}  arr: ${arr} dep: ${dep} arrDelay: ${
-        stop.arrivalDelaySeconds ?? "--"
-      } depDelay: ${stop.departureDelaySeconds ?? "--"}`
-    );
-  }
+  await TRAX.loadGTFS(false, false);
+  console.log(TRAX.getAugmentedTrips("33995889-QR 25_26-40277-TY93"));
+  console.log(gtfs.getTripUpdates({trip_id: "33995889-QR 25_26-40277-TY93"}));
+  // fs.writeFileSync("tripUpdates.json", JSON.stringify(gtfs.getTripUpdates().filter(v =>v.trip_id?.includes("QR")), null, 4));
+  // fs.writeFileSync("stopTimeUpdates.json", JSON.stringify(gtfs.getStopTimeUpdates().filter(v =>v.trip_id?.includes("QR")), null, 4));
 }
 main();

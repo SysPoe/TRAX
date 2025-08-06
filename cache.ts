@@ -269,6 +269,7 @@ export async function refreshRealtimeCache(): Promise<void> {
     if (DEBUG) console.log("Loaded", rawCache.vehiclePositions.length, "vehicle positions.");
     // if (DEBUG) console.log("Updating realtime data efficiently...");
     // updateRealtimeDataEfficiently();
+
     if(DEBUG) console.warn("Re-augmenting trips as efficient realtime updates are not implemented yet.");
     // Re-augment trips to apply realtime updates
     augmentedCache.trips = rawCache.trips.map(augmentTrip);
@@ -296,114 +297,4 @@ export async function refreshRealtimeCache(): Promise<void> {
         }
     }
     if (DEBUG) console.log("Done. Realtime GTFS cache refreshed.");
-}
-
-/**
- * Efficiently update only the realtime portions of stop times without recalculating everything
- */
-function updateRealtimeDataEfficiently() {
-    if (!augmentedCache.stopTimes || !augmentedCache.baseStopTimes) return;
-    
-    // Group stop time updates by trip for efficient processing
-    const updatesByTrip = new Map<string, gtfs.StopTimeUpdate[]>();
-    for (const update of rawCache.stopTimeUpdates) {
-        if (!update.trip_id) continue; // Skip updates without trip_id
-        if (!updatesByTrip.has(update.trip_id)) {
-            updatesByTrip.set(update.trip_id, []);
-        }
-        updatesByTrip.get(update.trip_id)!.push(update);
-    }
-    
-    // Only update trips that have realtime updates
-    for (const [tripId, updates] of updatesByTrip) {
-        if (augmentedCache.baseStopTimes[tripId]) {
-            augmentedCache.stopTimes[tripId] = applyRealtimeUpdates(
-                augmentedCache.baseStopTimes[tripId], 
-                updates
-            );
-        }
-    }
-}
-
-/**
- * Clear performance caches to free memory
- */
-export function clearPerformanceCaches() {
-    augmentedCache.expressInfoCache = {};
-    augmentedCache.passingStopsCache = {};
-}
-
-/**
- * Batch process trips for better performance during initial load
- */
-export function batchProcessTrips(tripIds: string[]): void {
-    if (DEBUG) console.log(`Batch processing ${tripIds.length} trips...`);
-    
-    for (const tripId of tripIds) {
-        if (!augmentedCache.tripsRec?.[tripId]) continue;
-        
-        const trip = augmentedCache.tripsRec[tripId];
-        // Pre-calculate stop times during batch processing
-        const stopTimes = trip.stopTimes;
-        if (!augmentedCache.stopTimes) augmentedCache.stopTimes = {};
-        if (!augmentedCache.baseStopTimes) augmentedCache.baseStopTimes = {};
-        
-        augmentedCache.stopTimes[tripId] = stopTimes;
-        augmentedCache.baseStopTimes[tripId] = [...stopTimes];
-    }
-    
-    if (DEBUG) console.log(`Batch processing completed for ${tripIds.length} trips.`);
-}
-function applyRealtimeUpdates(baseStopTimes: AugmentedStopTime[], updates: gtfs.StopTimeUpdate[]): AugmentedStopTime[] {
-    // Create a map of updates by stop for fast lookup
-    const updatesByStop = new Map<string, gtfs.StopTimeUpdate>();
-    for (const update of updates) {
-        if (update.stop_id) {
-            updatesByStop.set(update.stop_id, update);
-        }
-    }
-    
-    // Clone base stop times and apply realtime updates
-    return baseStopTimes.map(baseStopTime => {
-        const stopId = baseStopTime.actual_stop?.stop_id || baseStopTime.scheduled_stop?.stop_id;
-        if (!stopId) return baseStopTime;
-        
-        const update = updatesByStop.get(stopId);
-        if (!update) return baseStopTime; // No update for this stop
-        
-        // Create updated stop time with minimal changes
-        const updatedStopTime = { ...baseStopTime };
-        
-        // Apply delay updates
-        if (update.departure_delay !== undefined) {
-            updatedStopTime.actual_departure_timestamp = 
-                (baseStopTime.scheduled_departure_timestamp ?? 0) + update.departure_delay;
-            updatedStopTime.rt_departure_updated = true;
-        }
-        
-        if (update.arrival_delay !== undefined) {
-            updatedStopTime.actual_arrival_timestamp = 
-                (baseStopTime.scheduled_arrival_timestamp ?? 0) + update.arrival_delay;
-            updatedStopTime.rt_arrival_updated = true;
-        }
-        
-        // Update realtime info
-        if (update.departure_delay !== undefined || update.arrival_delay !== undefined) {
-            const delaySecs = update.departure_delay ?? update.arrival_delay ?? 0;
-            updatedStopTime.realtime = true;
-            updatedStopTime.realtime_info = {
-                delay_secs: delaySecs,
-                delay_string: delaySecs === 0 ? "on time" : 
-                             delaySecs > 0 ? `${Math.round(delaySecs / 60)}m late` :
-                             `${Math.round(Math.abs(delaySecs) / 60)}m early`,
-                delay_class: delaySecs === 0 ? "on-time" :
-                            delaySecs > 300 ? "very-late" :
-                            delaySecs > 0 ? "late" : "early",
-                schedule_relationship: baseStopTime.realtime_info?.schedule_relationship ?? 0,
-                propagated: false
-            };
-        }
-        
-        return updatedStopTime;
-    });
 }

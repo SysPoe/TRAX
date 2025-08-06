@@ -29,8 +29,6 @@ declare const _default: {
     getCachedPassingStops(stopListHash: string): any[] | undefined;
     refreshStaticCache(): Promise<void>;
     refreshRealtimeCache(): Promise<void>;
-    clearPerformanceCaches(): void;
-    batchProcessTrips(tripIds: string[]): void;
     config: {
         agencies: {
             url: string;
