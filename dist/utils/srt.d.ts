@@ -1,4 +1,4 @@
-export declare type SRTMatrix = {
+export type SRTMatrix = {
     [from: string]: {
         [to: string]: number;
     };

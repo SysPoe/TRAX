@@ -1,7 +1,7 @@
 import type * as gtfs from "gtfs";
 import { AugmentedStopTime, SerializableAugmentedStopTime } from "./augmentedStopTime.js";
 import { ExpressInfo } from "./express.js";
-export declare type AugmentedTrip = {
+export type AugmentedTrip = {
     _trip: gtfs.Trip;
     serviceDates: number[];
     tracks: {
@@ -12,7 +12,7 @@ export declare type AugmentedTrip = {
     run: string;
     toSerializable: () => SerializableAugmentedTrip;
 };
-export declare type SerializableAugmentedTrip = Omit<AugmentedTrip, "stopTimes" | "toSerializable"> & {
+export type SerializableAugmentedTrip = Omit<AugmentedTrip, "stopTimes" | "toSerializable"> & {
     stopTimes: SerializableAugmentedStopTime[];
 };
 export declare function toSerializableAugmentedTrip(trip: AugmentedTrip | Omit<AugmentedTrip, "toSerializable">): SerializableAugmentedTrip;

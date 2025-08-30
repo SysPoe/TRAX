@@ -1,7 +1,6 @@
 import * as cache from "../cache.js";
 import { findExpress } from "./express.js";
 import { getSRT } from "./srt.js";
-import { DEBUG } from "../index.js";
 // Simple hash function for stop lists
 function hashStopList(stops) {
     return stops.join('|');
@@ -16,7 +15,7 @@ export var ScheduleRelationship;
     ScheduleRelationship[ScheduleRelationship["DUPLICATED"] = 5] = "DUPLICATED";
     ScheduleRelationship[ScheduleRelationship["NEW"] = 6] = "NEW";
     ScheduleRelationship[ScheduleRelationship["DELETED"] = 7] = "DELETED";
-})(ScheduleRelationship = ScheduleRelationship || (ScheduleRelationship = {}));
+})(ScheduleRelationship || (ScheduleRelationship = {}));
 export function toSerializableAugmentedStopTime(st) {
     return {
         ...st,
@@ -66,7 +65,8 @@ function findPassingStopSRTs(stops) {
     for (let i = 0; i < allStops.length - 1; i++) {
         let srt = getSRT(allStops[i].stop_id, allStops[i + 1].stop_id);
         if (srt === undefined) {
-            if (DEBUG)
+            // if (DEBUG)
+            if (false)
                 console.error("[ERROR] No SRT found between", allStops[i], "and", allStops[i + 1]);
             allStopSRTs.push({
                 from: allStops[i].stop_id,

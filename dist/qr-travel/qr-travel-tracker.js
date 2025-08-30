@@ -169,7 +169,7 @@ function convertQRTServiceToTravelTrip(service, serviceResponse, direction, line
         direction,
         line,
         status: serviceMeta.ServiceDisruption?.Status || "Scheduled",
-        offersGoldClass: false,
+        offersGoldClass: false, // Not available in QRTService, could be added if needed
         serviceDate: serviceMeta.Modified,
         departureDate: stops[0]?.plannedDeparture || "",
         stops,

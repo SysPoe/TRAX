@@ -214,6 +214,11 @@ export async function refreshStaticCache() {
 export async function refreshRealtimeCache() {
     if (DEBUG)
         console.log("Refreshing realtime GTFS cache...");
+    // Reset realtime cache first
+    rawCache.stopTimeUpdates = [];
+    rawCache.tripUpdates = [];
+    rawCache.vehiclePositions = [];
+    rawCache.qrtTrains = [];
     if (DEBUG)
         console.log("Refreshing qrtTrains cache...");
     rawCache.qrtTrains = await getCurrentQRTravelTrains();

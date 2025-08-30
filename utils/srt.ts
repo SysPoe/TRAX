@@ -180,10 +180,15 @@ function parseSRTtoMatrix(srtString: string): SRTMatrix {
   for (let i = startIdx; i < lines.length; i++) {
     let [from, to, emu] = lines[i].split(",");
 
-    from = stations.find((v) =>
+
+    if (from === "Exhibition") from = "place_exhsta";
+    else from = stations.find((v) =>
       v.stop_name?.toLowerCase().startsWith(from.toLowerCase())
     )?.stop_id ?? "";
-    to = stations.find((v) =>
+
+
+    if (to === "Exhibition") to = "place_exhsta";
+    else to = stations.find((v) =>
       v.stop_name?.toLowerCase().startsWith(to.toLowerCase())
     )?.stop_id ?? "";
 

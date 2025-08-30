@@ -1,4 +1,4 @@
-export declare type SRTEntry = {
+export type SRTEntry = {
     from: string;
     to: string;
     travelTrain: number;

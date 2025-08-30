@@ -1,8 +1,8 @@
 import * as gtfs from "gtfs";
-import {AugmentedStop, augmentStop} from "./utils/augmentedStop.js";
-import {AugmentedTrip, augmentTrip} from "./utils/augmentedTrip.js";
-import {AugmentedStopTime} from "./utils/augmentedStopTime.js";
-import {DEBUG, QRTPlace, TravelTrip} from "./index.js";
+import { AugmentedStop, augmentStop } from "./utils/augmentedStop.js";
+import { AugmentedTrip, augmentTrip } from "./utils/augmentedTrip.js";
+import { AugmentedStopTime } from "./utils/augmentedStopTime.js";
+import { DEBUG, QRTPlace, TravelTrip } from "./index.js";
 import { getCurrentQRTravelTrains, getPlaces } from "./qr-travel/qr-travel-tracker.js";
 
 type RawCache = {
@@ -33,7 +33,7 @@ type AugmentedCache = {
     stopsRec?: { [stop_id: string]: AugmentedStop };
 
     serviceDateTrips?: { [service_date: number]: string[] }; // Maps serviceDate to trip IDs
-    
+
     // Performance caches
     expressInfoCache?: { [stopListHash: string]: any[] };
     passingStopsCache?: { [stopListHash: string]: any[] };
@@ -88,17 +88,17 @@ export function getRawRoutes(route_id?: string): gtfs.Route[] {
 }
 
 export function getStopTimeUpdates(): gtfs.StopTimeUpdate[] {
-    if(rawCache.stopTimeUpdates.length === 0) rawCache.stopTimeUpdates = gtfs.getStopTimeUpdates();
+    if (rawCache.stopTimeUpdates.length === 0) rawCache.stopTimeUpdates = gtfs.getStopTimeUpdates();
     return rawCache.stopTimeUpdates;
 }
 
 export function getTripUpdates(): gtfs.TripUpdate[] {
-    if(rawCache.tripUpdates.length === 0) rawCache.tripUpdates = gtfs.getTripUpdates();
+    if (rawCache.tripUpdates.length === 0) rawCache.tripUpdates = gtfs.getTripUpdates();
     return rawCache.tripUpdates;
 }
 
 export function getVehiclePositions(): gtfs.VehiclePosition[] {
-    if(rawCache.vehiclePositions.length === 0) rawCache.vehiclePositions = gtfs.getVehiclePositions();
+    if (rawCache.vehiclePositions.length === 0) rawCache.vehiclePositions = gtfs.getVehiclePositions();
     return rawCache.vehiclePositions;
 }
 
@@ -115,7 +115,7 @@ export function getQRTTrains(): TravelTrip[] {
  */
 export function getRawStopTimes(trip_id: string | undefined): gtfs.StopTime[] {
     if (trip_id)
-        return gtfs.getStoptimes({trip_id});
+        return gtfs.getStoptimes({ trip_id });
     return gtfs.getStoptimes();
 }
 
@@ -186,7 +186,7 @@ export function getCachedPassingStops(stopListHash: string): any[] | undefined {
  */
 export async function refreshStaticCache(): Promise<void> {
     if (DEBUG) console.log("Refreshing static GTFS cache...");
-    
+
     if (DEBUG) console.log("Loading QRT places...");
     rawCache.qrtPlaces = await getPlaces();
     if (DEBUG) console.log("Loaded", rawCache.qrtPlaces.length, "QRT places.");
@@ -230,11 +230,11 @@ export async function refreshStaticCache(): Promise<void> {
         if (!augmentedCache.stopTimes) augmentedCache.stopTimes = {};
         if (!augmentedCache.baseStopTimes) augmentedCache.baseStopTimes = {};
         augmentedCache.tripsRec[trip._trip.trip_id] = trip;
-        
+
         // Store both current stop times and base stop times (without realtime)
         augmentedCache.stopTimes[trip._trip.trip_id] = trip.stopTimes;
         augmentedCache.baseStopTimes[trip._trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
-        
+
         for (const serviceDate of trip.serviceDates) {
             if (!augmentedCache.serviceDateTrips[serviceDate]) {
                 augmentedCache.serviceDateTrips[serviceDate] = [];
@@ -255,7 +255,13 @@ export async function refreshStaticCache(): Promise<void> {
  */
 export async function refreshRealtimeCache(): Promise<void> {
     if (DEBUG) console.log("Refreshing realtime GTFS cache...");
-    if(DEBUG) console.log("Refreshing qrtTrains cache...");
+    // Reset realtime cache first
+    rawCache.stopTimeUpdates = [];
+    rawCache.tripUpdates = [];
+    rawCache.vehiclePositions = [];
+    rawCache.qrtTrains = [];
+
+    if (DEBUG) console.log("Refreshing qrtTrains cache...");
     rawCache.qrtTrains = await getCurrentQRTravelTrains();
     if (DEBUG) console.log("Loaded", rawCache.qrtTrains.length, "QRT trains.");
     if (DEBUG) console.log("Loading stop time updates...");
@@ -270,7 +276,7 @@ export async function refreshRealtimeCache(): Promise<void> {
     // if (DEBUG) console.log("Updating realtime data efficiently...");
     // updateRealtimeDataEfficiently();
 
-    if(DEBUG) console.warn("Re-augmenting trips as efficient realtime updates are not implemented yet.");
+    if (DEBUG) console.warn("Re-augmenting trips as efficient realtime updates are not implemented yet.");
     // Re-augment trips to apply realtime updates
     augmentedCache.trips = rawCache.trips.map(augmentTrip);
     if (DEBUG) console.log("Augmented", augmentedCache.trips.length, "trips.");
@@ -279,16 +285,16 @@ export async function refreshRealtimeCache(): Promise<void> {
     augmentedCache.serviceDateTrips = {};
     augmentedCache.baseStopTimes = {};
     augmentedCache.stopTimes = {};
-    
+
     for (const trip of augmentedCache.trips) {
         if (!augmentedCache.stopTimes) augmentedCache.stopTimes = {};
         if (!augmentedCache.baseStopTimes) augmentedCache.baseStopTimes = {};
         augmentedCache.tripsRec[trip._trip.trip_id] = trip;
-        
+
         // Store both current stop times and base stop times (without realtime)
         augmentedCache.stopTimes[trip._trip.trip_id] = trip.stopTimes;
         augmentedCache.baseStopTimes[trip._trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
-        
+
         for (const serviceDate of trip.serviceDates) {
             if (!augmentedCache.serviceDateTrips[serviceDate]) {
                 augmentedCache.serviceDateTrips[serviceDate] = [];

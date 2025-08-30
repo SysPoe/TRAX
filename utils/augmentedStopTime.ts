@@ -96,13 +96,13 @@ function findPassingStops(
   stops: string[]
 ): { stop_id: string; passing: boolean }[] {
   const stopListHash = hashStopList(stops);
-  
+
   // Check cache first
   const cached = cache.getCachedPassingStops(stopListHash);
   if (cached) {
     return cached;
   }
-  
+
   let express = findExpress(stops);
   let allStops: { stop_id: string; passing: boolean }[] = [];
 
@@ -134,10 +134,10 @@ function findPassingStops(
     if (allStops.at(-1)?.stop_id != e.to)
       allStops.push({ stop_id: e.to, passing: false });
   }
-  
+
   // Cache the result
   cache.cachePassingStops(stopListHash, allStops);
-  
+
   return allStops;
 }
 
@@ -148,7 +148,8 @@ function findPassingStopSRTs(stops: string[]): PassingStopSRT[] {
   for (let i = 0; i < allStops.length - 1; i++) {
     let srt = getSRT(allStops[i].stop_id, allStops[i + 1].stop_id);
     if (srt === undefined) {
-      if (DEBUG)
+      // if (DEBUG)
+      if (false)
         console.error(
           "[ERROR] No SRT found between",
           allStops[i],
@@ -401,7 +402,7 @@ export function augmentStopTimes(
       if (realtimeUpdate.schedule_relationship) {
         scheduleRelationship =
           ScheduleRelationship[
-            realtimeUpdate.schedule_relationship as keyof typeof ScheduleRelationship
+          realtimeUpdate.schedule_relationship as keyof typeof ScheduleRelationship
           ] ?? ScheduleRelationship.SCHEDULED;
         lastScheduleRelationship = scheduleRelationship;
       }
