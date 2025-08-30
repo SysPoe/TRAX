@@ -1,5 +1,6 @@
 import * as gtfs from "gtfs";
 import * as calendar from "./utils/calendar.js";
+import * as express from "./utils/express.js";
 import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 export declare const DEBUG = true;
 export declare function loadGTFS(refresh?: boolean, forceReload?: boolean): Promise<void>;
@@ -9,6 +10,7 @@ export declare function updateRealtime(): Promise<void>;
 declare const _default: {
     qrTravel: typeof qrTravel;
     getStations(): import("./utils/augmentedStop.js").AugmentedStop[];
+    express: typeof express;
     calendar: typeof calendar;
     getRawTrips(trip_id?: string): gtfs.Trip[];
     getRawStops(stop_id?: string): gtfs.Stop[];
@@ -56,4 +58,5 @@ export type { AugmentedTrip, SerializableAugmentedTrip, } from "./utils/augmente
 export type { AugmentedStopTime, SerializableAugmentedStopTime, ScheduleRelationship, } from "./utils/augmentedStopTime.js";
 export type { AugmentedStop, SerializableAugmentedStop, } from "./utils/augmentedStop.js";
 export type { TrainMovementDTO, ServiceDisruption, GetServiceResponse, QRTPlace, Service, Direction, ServiceLine, AllServicesResponse, QRTService, ServiceUpdate, TravelStopTime, TravelTrip, } from "./qr-travel/types.js";
+export type { ExpressInfo } from "./utils/express.js";
 export type { SRTStop } from "./utils/SectionalRunningTimes/metroSRTTravelTrain.js";
