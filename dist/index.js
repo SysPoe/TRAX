@@ -63,7 +63,7 @@ export function clearIntervals() {
     }
 }
 export function formatTimestamp(ts) {
-    if (!ts)
+    if (ts === null || ts === undefined)
         return "--:--";
     const d = new Date(ts * 1000);
     return d.toISOString().slice(11, 16);

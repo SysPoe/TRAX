@@ -80,7 +80,7 @@ export function clearIntervals(): void {
 }
 
 export function formatTimestamp(ts?: number | null): string {
-  if (!ts) return "--:--";
+  if (ts === null || ts === undefined) return "--:--";
   const d = new Date(ts * 1000);
   return d.toISOString().slice(11, 16);
 }
