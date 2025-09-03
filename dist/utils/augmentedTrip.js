@@ -8,7 +8,7 @@ export function toSerializableAugmentedTrip(trip) {
         scheduledStartServiceDates: trip.scheduledStartServiceDates,
         scheduledTripDates: trip.scheduledTripDates,
         actualTripDates: trip.actualTripDates,
-        tracks: trip.tracks,
+        runSeries: trip.runSeries,
         stopTimes: Array.isArray(trip.stopTimes)
             ? trip.stopTimes.map((st) => st.toSerializable())
             : [],
@@ -25,7 +25,7 @@ export function augmentTrip(trip) {
     let expressInfo = findExpress(parentStops.filter((id) => !!id));
     let tracks = {};
     for (const serviceDate of serviceDates) {
-        tracks[serviceDate] = "Not implemented";
+        tracks[serviceDate] = null;
     }
     // Pre-calculate stop times during trip creation instead of on-demand
     let cachedStopTimes = null;
@@ -91,7 +91,7 @@ export function augmentTrip(trip) {
             return cachedStopTimes;
         },
         expressInfo,
-        tracks,
+        runSeries: tracks,
         run: trip.trip_id.slice(-4),
         toSerializable: function () {
             // Use cached version if available
@@ -109,7 +109,7 @@ export function augmentTrip(trip) {
                 actualTripDates: this.actualTripDates,
                 stopTimes,
                 expressInfo,
-                tracks,
+                runSeries: tracks,
                 run: trip.trip_id.slice(-4),
             });
         },

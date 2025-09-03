@@ -6,8 +6,8 @@ export type AugmentedTrip = {
     scheduledStartServiceDates: number[];
     scheduledTripDates: number[];
     actualTripDates: number[];
-    tracks: {
-        [serviceDate: number]: string;
+    runSeries: {
+        [serviceDate: number]: string | null;
     };
     stopTimes: AugmentedStopTime[];
     expressInfo: ExpressInfo[];

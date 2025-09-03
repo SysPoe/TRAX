@@ -6,7 +6,7 @@ export interface ExpressInfo {
     message?: string;
 }
 export declare function findExpress(givenStops: string[], combosData?: string[][]): ExpressInfo[];
-export declare function findExpressString(expressData: ExpressInfo[], stop_id: string): string;
+export declare function findExpressString(expressData: ExpressInfo[], stop_id?: string | null): string;
 declare const _default: {
     findExpress: typeof findExpress;
     findExpressString: typeof findExpressString;

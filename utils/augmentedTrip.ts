@@ -14,7 +14,7 @@ export type AugmentedTrip = {
   scheduledStartServiceDates: number[]; // Days on which the trip is scheduled to start
   scheduledTripDates: number[]; // Days on which the trip is scheduled to have stops
   actualTripDates: number[]; // Days on which the trip actually has stops (with real-time updates)
-  tracks: { [serviceDate: number]: string };
+  runSeries: { [serviceDate: number]: string | null };
   stopTimes: AugmentedStopTime[];
   expressInfo: ExpressInfo[];
   run: string;
@@ -36,7 +36,7 @@ export function toSerializableAugmentedTrip(
     scheduledStartServiceDates: trip.scheduledStartServiceDates,
     scheduledTripDates: trip.scheduledTripDates,
     actualTripDates: trip.actualTripDates,
-    tracks: trip.tracks,
+    runSeries: trip.runSeries,
     stopTimes: Array.isArray(trip.stopTimes)
       ? trip.stopTimes.map((st) => st.toSerializable())
       : [],
@@ -57,9 +57,9 @@ export function augmentTrip(trip: gtfs.Trip): AugmentedTrip {
   );
   let expressInfo = findExpress(parentStops.filter((id): id is string => !!id));
 
-  let tracks: { [serviceDate: number]: string } = {};
+  let tracks: { [serviceDate: number]: string | null } = {};
   for (const serviceDate of serviceDates) {
-    tracks[serviceDate] = "Not implemented";
+    tracks[serviceDate] = null;
   }
 
   // Pre-calculate stop times during trip creation instead of on-demand
@@ -132,7 +132,7 @@ export function augmentTrip(trip: gtfs.Trip): AugmentedTrip {
       return cachedStopTimes;
     },
     expressInfo,
-    tracks,
+    runSeries: tracks,
     run: trip.trip_id.slice(-4),
     toSerializable: function () {
       // Use cached version if available
@@ -150,7 +150,7 @@ export function augmentTrip(trip: gtfs.Trip): AugmentedTrip {
         actualTripDates: this.actualTripDates,
         stopTimes,
         expressInfo,
-        tracks,
+        runSeries: tracks,
         run: trip.trip_id.slice(-4),
       });
     },

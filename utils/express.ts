@@ -343,9 +343,9 @@ export function findExpress(
 
 export function findExpressString(
   expressData: ExpressInfo[],
-  stop_id: string
+  stop_id: string | null = null
 ): string {
-  expressData = expressData.slice(
+  if (stop_id != null) expressData = expressData.slice(
     expressData.findIndex(
       (v) =>
         v.from === stop_id || v.skipping?.includes(stop_id) || v.to === stop_id
@@ -382,18 +382,17 @@ export function findExpressString(
           stoppingAtNames.length <= 1
             ? stoppingAtNames[0]
             : stoppingAtNames.length == 2
-            ? `${stoppingAtNames[0]} and ${stoppingAtNames[1]}`
-            : `${stoppingAtNames.slice(0, -1).join(", ")}, and ${
-                stoppingAtNames[stoppingAtNames.length - 1]
+              ? `${stoppingAtNames[0]} and ${stoppingAtNames[1]}`
+              : `${stoppingAtNames.slice(0, -1).join(", ")}, and ${stoppingAtNames[stoppingAtNames.length - 1]
               }`;
-        return run.from == cache.getRawStops(stop_id)[0]?.parent_station ||
-          run.from == stop_id
+        return stop_id !== null && (run.from == cache.getRawStops(stop_id)[0]?.parent_station ||
+          run.from == stop_id)
           ? run.stoppingAt.length > 0
             ? `to ${endName}, stopping only at ${formattedStoppingAtNames}`
             : `to ${endName}`
           : run.stoppingAt.length > 0
-          ? `between ${startName} and ${endName}, stopping only at ${formattedStoppingAtNames}`
-          : `between ${startName} and ${endName}`;
+            ? `between ${startName} and ${endName}, stopping only at ${formattedStoppingAtNames}`
+            : `between ${startName} and ${endName}`;
       })
       .join("; ")
   );

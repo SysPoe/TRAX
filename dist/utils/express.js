@@ -305,8 +305,9 @@ export function findExpress(givenStops, combosData = combos) {
     }
     return result;
 }
-export function findExpressString(expressData, stop_id) {
-    expressData = expressData.slice(expressData.findIndex((v) => v.from === stop_id || v.skipping?.includes(stop_id) || v.to === stop_id));
+export function findExpressString(expressData, stop_id = null) {
+    if (stop_id != null)
+        expressData = expressData.slice(expressData.findIndex((v) => v.from === stop_id || v.skipping?.includes(stop_id) || v.to === stop_id));
     expressData = expressData.filter((v) => v.type !== "local");
     if (expressData.length === 0)
         return "All stops";
@@ -335,8 +336,8 @@ export function findExpressString(expressData, stop_id) {
                 : stoppingAtNames.length == 2
                     ? `${stoppingAtNames[0]} and ${stoppingAtNames[1]}`
                     : `${stoppingAtNames.slice(0, -1).join(", ")}, and ${stoppingAtNames[stoppingAtNames.length - 1]}`;
-            return run.from == cache.getRawStops(stop_id)[0]?.parent_station ||
-                run.from == stop_id
+            return stop_id !== null && (run.from == cache.getRawStops(stop_id)[0]?.parent_station ||
+                run.from == stop_id)
                 ? run.stoppingAt.length > 0
                     ? `to ${endName}, stopping only at ${formattedStoppingAtNames}`
                     : `to ${endName}`
