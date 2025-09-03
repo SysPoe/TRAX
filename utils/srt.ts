@@ -127,6 +127,7 @@ Coomera,Helensvale,5
 Helensvale,Nerang,5
 Nerang,Robina,5
 Robina,Varsity Lakes,4
+Varsity Lakes,Robina,4
 Boggo,Buranda,2
 Park Road,Buranda,2
 Buranda,Coorparoo,1
