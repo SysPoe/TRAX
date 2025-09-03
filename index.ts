@@ -23,7 +23,7 @@ let config = {
       },
     },
   ],
-  sqlitePath: "./db.sqlite",
+  sqlitePath: "./.TRAXCACHE.sqlite",
   verbose: DEBUG,
   db: undefined,
 };
@@ -89,12 +89,17 @@ export async function updateRealtime(): Promise<void> {
   await cache.refreshRealtimeCache();
 }
 
+export function today(): number {
+  return Number.parseInt(new Date(Date.now() + 3600 * 10 * 1000).toISOString().slice(0, 10).replace(/-/g, ""));
+}
+
 export default {
   config,
   loadGTFS,
   updateRealtime,
   clearIntervals,
   formatTimestamp,
+  today,
   ...cache,
   express,
   calendar,
@@ -110,7 +115,7 @@ export type {
 export type {
   AugmentedStopTime,
   SerializableAugmentedStopTime,
-  ScheduleRelationship,
+
 } from "./utils/augmentedStopTime.js";
 
 export type {

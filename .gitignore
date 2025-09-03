@@ -1,6 +1,6 @@
 **/node_modules
-**/db.sqlite
-**/db.sqlite-journal
+**/.TRAXCACHE.sqlite
+**/.TRAXCACHE.sqlite-journal
 **/package-lock.json
 **/.cache
 **/.git

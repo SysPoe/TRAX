@@ -7,6 +7,7 @@ export declare function loadGTFS(refresh?: boolean, forceReload?: boolean): Prom
 export declare function clearIntervals(): void;
 export declare function formatTimestamp(ts?: number | null): string;
 export declare function updateRealtime(): Promise<void>;
+export declare function today(): number;
 declare const _default: {
     qrTravel: typeof qrTravel;
     getStations(): import("./utils/augmentedStop.js").AugmentedStop[];
@@ -52,10 +53,11 @@ declare const _default: {
     updateRealtime: typeof updateRealtime;
     clearIntervals: typeof clearIntervals;
     formatTimestamp: typeof formatTimestamp;
+    today: typeof today;
 };
 export default _default;
 export type { AugmentedTrip, SerializableAugmentedTrip, } from "./utils/augmentedTrip.js";
-export type { AugmentedStopTime, SerializableAugmentedStopTime, ScheduleRelationship, } from "./utils/augmentedStopTime.js";
+export type { AugmentedStopTime, SerializableAugmentedStopTime, } from "./utils/augmentedStopTime.js";
 export type { AugmentedStop, SerializableAugmentedStop, } from "./utils/augmentedStop.js";
 export type { TrainMovementDTO, ServiceDisruption, GetServiceResponse, QRTPlace, Service, Direction, ServiceLine, AllServicesResponse, QRTService, ServiceUpdate, TravelStopTime, TravelTrip, } from "./qr-travel/types.js";
 export type { ExpressInfo } from "./utils/express.js";

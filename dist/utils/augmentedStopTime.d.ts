@@ -30,6 +30,14 @@ export type AugmentedStopTime = {
     scheduled_stop: AugmentedStop | null;
     scheduled_parent_station: AugmentedStop | null;
     scheduled_platform_code: string | null;
+    scheduled_arrival_dates: number[];
+    actual_arrival_dates: number[];
+    scheduled_arrival_date_offset: number;
+    actual_arrival_date_offset: number;
+    scheduled_departure_dates: number[];
+    actual_departure_dates: number[];
+    scheduled_departure_date_offset: number;
+    actual_departure_date_offset: number;
     realtime: boolean;
     realtime_info: {
         delay_secs: number;
@@ -46,4 +54,4 @@ export type SerializableAugmentedStopTime = Omit<AugmentedStopTime, "actual_stop
     scheduled_parent_station: string | null;
 };
 export declare function toSerializableAugmentedStopTime(st: Omit<AugmentedStopTime, "toSerializable">): SerializableAugmentedStopTime;
-export declare function augmentStopTimes(stopTimes: gtfs.StopTime[]): AugmentedStopTime[];
+export declare function augmentStopTimes(stopTimes: gtfs.StopTime[], serviceDates: number[]): AugmentedStopTime[];

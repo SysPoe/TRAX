@@ -194,7 +194,7 @@ export async function refreshStaticCache() {
         // Store both current stop times and base stop times (without realtime)
         augmentedCache.stopTimes[trip._trip.trip_id] = trip.stopTimes;
         augmentedCache.baseStopTimes[trip._trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
-        for (const serviceDate of trip.serviceDates) {
+        for (const serviceDate of trip.actualTripDates) {
             if (!augmentedCache.serviceDateTrips[serviceDate]) {
                 augmentedCache.serviceDateTrips[serviceDate] = [];
             }
@@ -262,7 +262,7 @@ export async function refreshRealtimeCache() {
         // Store both current stop times and base stop times (without realtime)
         augmentedCache.stopTimes[trip._trip.trip_id] = trip.stopTimes;
         augmentedCache.baseStopTimes[trip._trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
-        for (const serviceDate of trip.serviceDates) {
+        for (const serviceDate of trip.actualTripDates) {
             if (!augmentedCache.serviceDateTrips[serviceDate]) {
                 augmentedCache.serviceDateTrips[serviceDate] = [];
             }

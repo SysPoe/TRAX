@@ -3,7 +3,9 @@ import { AugmentedStopTime, SerializableAugmentedStopTime } from "./augmentedSto
 import { ExpressInfo } from "./express.js";
 export type AugmentedTrip = {
     _trip: gtfs.Trip;
-    serviceDates: number[];
+    scheduledStartServiceDates: number[];
+    scheduledTripDates: number[];
+    actualTripDates: number[];
     tracks: {
         [serviceDate: number]: string;
     };

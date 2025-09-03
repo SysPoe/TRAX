@@ -1,6 +1,7 @@
 import * as cache from "../cache.js";
 import { findExpress } from "./express.js";
 import { getSRT } from "./srt.js";
+import { today } from "../index.js";
 // Simple hash function for stop lists
 function hashStopList(stops) {
     return stops.join('|');
@@ -172,7 +173,8 @@ function findPassingStopTimes(stopTimes) {
         times.push({ ...stopTimes.at(-1), _passing: false });
     return times;
 }
-export function augmentStopTimes(stopTimes) {
+export function augmentStopTimes(stopTimes, serviceDates // Dates in the format YYYYMMDD as a number
+) {
     if (!stopTimes.map((v) => v.trip_id == stopTimes[0].trip_id).every((v) => v))
         console.error("[ERROR] All stopTimes must belong to the same trip: ", stopTimes[0].trip_id, stopTimes);
     let realtimeUpdates = cache
@@ -327,12 +329,21 @@ export function augmentStopTimes(stopTimes) {
                 propagated,
             };
         }
+        // Calculate arrival/departure date offsets
+        let scheduled_arrival_date_offset = scheduledArrivalTimestamp ? Math.floor(scheduledArrivalTimestamp / 86400) : 0;
+        let actual_arrival_date_offset = actualArrivalTimestamp ? Math.floor(actualArrivalTimestamp / 86400) : 0;
+        let scheduled_departure_date_offset = scheduledDepartureTimestamp ? Math.floor(scheduledDepartureTimestamp / 86400) : 0;
+        let actual_departure_date_offset = actualDepartureTimestamp ? Math.floor(actualDepartureTimestamp / 86400) : 0;
+        let scheduled_arrival_dates = serviceDates.map(d => d + scheduled_arrival_date_offset);
+        let scheduled_departure_dates = serviceDates.map(d => d + scheduled_departure_date_offset);
+        let actual_arrival_dates = serviceDates.map(d => d == today() ? d + actual_arrival_date_offset : d + scheduled_arrival_date_offset);
+        let actual_departure_dates = serviceDates.map(d => d == today() ? d + actual_departure_date_offset : d + scheduled_departure_date_offset);
         let partialAugmentedStopTime = {
             _stopTime: passingStopTime._passing ? null : passingStopTime,
             trip_id: stopTimes[0].trip_id,
             passing: passingStopTime._passing,
-            actual_arrival_timestamp: actualArrivalTimestamp ?? null,
-            actual_departure_timestamp: actualDepartureTimestamp ?? null,
+            actual_arrival_timestamp: actualArrivalTimestamp ? actualArrivalTimestamp % 86400 : null,
+            actual_departure_timestamp: actualDepartureTimestamp ? actualDepartureTimestamp % 86400 : null,
             actual_stop: actualStop,
             actual_parent_station: actualParentStation,
             actual_platform_code: passingStopTime._passing
@@ -343,8 +354,8 @@ export function augmentStopTimes(stopTimes) {
             rt_platform_code_updated: rtPlatformCodeUpdated,
             rt_arrival_updated: rtArrivalUpdated,
             rt_departure_updated: rtDepartureUpdated,
-            scheduled_arrival_timestamp: scheduledArrivalTimestamp ?? null,
-            scheduled_departure_timestamp: scheduledDepartureTimestamp ?? null,
+            scheduled_arrival_timestamp: scheduledArrivalTimestamp ? scheduledArrivalTimestamp % 86400 : null,
+            scheduled_departure_timestamp: scheduledDepartureTimestamp ? scheduledDepartureTimestamp % 86400 : null,
             scheduled_stop: scheduledStop,
             scheduled_parent_station: scheduledParentStation,
             scheduled_platform_code: passingStopTime._passing
@@ -352,6 +363,14 @@ export function augmentStopTimes(stopTimes) {
                 : (scheduledStop.platform_code ?? null),
             realtime: hasRealtime,
             realtime_info: realtimeInfo,
+            scheduled_arrival_dates,
+            actual_arrival_dates,
+            scheduled_arrival_date_offset,
+            actual_arrival_date_offset,
+            scheduled_departure_dates,
+            actual_departure_dates,
+            scheduled_departure_date_offset,
+            actual_departure_date_offset,
         };
         augmentedStopTimes.push({
             ...partialAugmentedStopTime,

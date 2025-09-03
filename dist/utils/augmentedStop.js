@@ -67,7 +67,7 @@ export function augmentStop(stop) {
                     trip = getAugmentedTrips(st.trip_id)[0];
                     tripCache.set(st.trip_id, trip);
                 }
-                if (!trip?.serviceDates?.includes(date))
+                if (!trip?.actualTripDates?.includes(date))
                     continue;
                 const ts = st.actual_departure_timestamp;
                 if (ts == null || ts < startSec || ts > endSec)

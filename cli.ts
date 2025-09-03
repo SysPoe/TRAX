@@ -89,15 +89,15 @@ async function qrTravelFlow() {
       stop.ActualArrival && stop.ActualArrival !== "0001-01-01T00:00:00"
         ? new Date(stop.ActualArrival).toTimeString().slice(0, 5)
         : stop.PlannedArrival && stop.PlannedArrival !== "0001-01-01T00:00:00"
-        ? new Date(stop.PlannedArrival).toTimeString().slice(0, 5)
-        : "--:--";
+          ? new Date(stop.PlannedArrival).toTimeString().slice(0, 5)
+          : "--:--";
     const depTime =
       stop.ActualDeparture && stop.ActualDeparture !== "0001-01-01T00:00:00"
         ? new Date(stop.ActualDeparture).toTimeString().slice(0, 5)
         : stop.PlannedDeparture &&
           stop.PlannedDeparture !== "0001-01-01T00:00:00"
-        ? new Date(stop.PlannedDeparture).toTimeString().slice(0, 5)
-        : "--:--";
+          ? new Date(stop.PlannedDeparture).toTimeString().slice(0, 5)
+          : "--:--";
     // Request stop
     let reqStop = "";
     if (
@@ -199,24 +199,22 @@ async function viewDepartures(stationId?: string, timeOffset: number = 0) {
     const startTime = `${(baseTime.getHours() + timeOffset)
       .toString()
       .padStart(2, "0")}:${baseTime
-      .getMinutes()
-      .toString()
-      .padStart(2, "0")}:00`;
+        .getMinutes()
+        .toString()
+        .padStart(2, "0")}:00`;
 
     const laterTime = `${(baseTime.getHours() + timeOffset + 4)
       .toString()
       .padStart(2, "0")}:${baseTime
-      .getMinutes()
-      .toString()
-      .padStart(2, "0")}:00`;
+        .getMinutes()
+        .toString()
+        .padStart(2, "0")}:00`;
 
     // Handle day changes
-    let targetDate = new Date();
+    let targetDate = new Date(Date.now() + 3600 * 10 * 1000); // Add +10 hours so the UTC time is in the current timezone
     targetDate.setHours(targetDate.getHours() + timeOffset);
-    const today = parseInt(
-      targetDate.toISOString().slice(0, 10).replace(/-/g, "")
-    );
-
+    const today = TRAX.today();
+    
     let departures = stop.getDepartures(today, startTime, laterTime);
     if (!showPassing) {
       departures = departures.filter((dep: any) => !dep.passing);
@@ -267,8 +265,8 @@ async function viewDepartures(stationId?: string, timeOffset: number = 0) {
       const platform = dep.actual_platform_code
         ? chalk.magenta("p" + dep.actual_platform_code.padEnd(2, " "))
         : dep.scheduled_platform_code
-        ? chalk.dim("p" + dep.scheduled_platform_code.padEnd(2, " "))
-        : chalk.gray("   ");
+          ? chalk.dim("p" + dep.scheduled_platform_code.padEnd(2, " "))
+          : chalk.gray("   ");
       const realtimeIndicator = dep.realtime
         ? chalk.green("RT")
         : chalk.gray("  ");
@@ -384,8 +382,8 @@ async function viewDepartures(stationId?: string, timeOffset: number = 0) {
       timeOffset === 0
         ? chalk.green("📍 Current Time")
         : timeOffset > 0
-        ? chalk.blue(`⏭ +${timeOffset}h from now`)
-        : chalk.yellow(`⏪ ${timeOffset}h from now`);
+          ? chalk.blue(`⏭ +${timeOffset}h from now`)
+          : chalk.yellow(`⏪ ${timeOffset}h from now`);
 
     const { selectedDeparture } = await inquirer.prompt([
       {
@@ -393,9 +391,8 @@ async function viewDepartures(stationId?: string, timeOffset: number = 0) {
         name: "selectedDeparture",
         message: `${chalk.bold(
           stop.stop_name
-        )} • ${timeIndicator} • ${startTime} to ${laterTime} ${
-          showPassing ? chalk.gray("[showing passing]") : ""
-        }`,
+        )} • ${timeIndicator} • ${startTime} to ${laterTime} ${showPassing ? chalk.gray("[showing passing]") : ""
+          }`,
         choices: [
           { name: "⬆ Earlier departures (previous 4 hours)", value: "earlier" },
           { name: "⬇ Later departures (next 4 hours)", value: "later" },
@@ -464,7 +461,7 @@ async function viewTripFromDeparture(departure: any) {
     );
     console.log(
       chalk.white(
-        `📅 Service Dates: ${chalk.blue(trip.serviceDates.join(", "))}`
+        `📅 Service Dates: ${chalk.blue(trip.scheduledStartServiceDates.join(", "))}`
       )
     );
 
@@ -502,8 +499,8 @@ async function viewTripFromDeparture(departure: any) {
       const platform = st.actual_platform_code
         ? chalk.magenta(`p${st.actual_platform_code}`)
         : st.scheduled_platform_code
-        ? chalk.dim(`p${st.scheduled_platform_code}`)
-        : "";
+          ? chalk.dim(`p${st.scheduled_platform_code}`)
+          : "";
       // Status and delay information
       let statusColor = chalk.white;
       let rtInfo = "";
@@ -555,8 +552,7 @@ async function viewTripFromDeparture(departure: any) {
       )}${rtInfo}${firstStop}${lastStop}`;
       if (st.passing) {
         displayName = chalk.gray(
-          `${stopNumber} ${
-            arrTime === depTime ? arrTime : arrTime + "→" + depTime
+          `${stopNumber} ${arrTime === depTime ? arrTime : arrTime + "→" + depTime
           } ${platform} ${name} [PASSING]${firstStop}${lastStop}`
         );
       }
@@ -571,8 +567,7 @@ async function viewTripFromDeparture(departure: any) {
         type: "list",
         name: "selectedStop",
         message: chalk.bold(
-          `🚏 Stop Times (select a station to view its departures): ${
-            showPassing ? chalk.gray("[showing passing]") : ""
+          `🚏 Stop Times (select a station to view its departures): ${showPassing ? chalk.gray("[showing passing]") : ""
           }`
         ),
         choices: [
@@ -631,12 +626,11 @@ async function viewTrip() {
   const trip = trips[0];
   console.log(chalk.bold(`\nTrip: ${trip._trip.trip_id}`));
   console.log(
-    `Route: ${
-      gtfs.getRoutes({ route_id: trip._trip.route_id })[0].route_short_name
+    `Route: ${gtfs.getRoutes({ route_id: trip._trip.route_id })[0].route_short_name
     }`
   );
   console.log(`Headsign: ${trip._trip.trip_headsign}`);
-  console.log(`Service Dates: ${trip.serviceDates.join(", ")}`);
+  console.log(`Service Dates: ${trip.scheduledStartServiceDates.join(", ")}`);
   console.log("Stop Times:");
 
   for (const st of trip.stopTimes) {
@@ -647,9 +641,9 @@ async function viewTrip() {
       st.scheduled_stop?.stop_id;
     const actDep = TRAX.formatTimestamp(
       st.actual_departure_timestamp ||
-        st.actual_arrival_timestamp ||
-        st.scheduled_departure_timestamp ||
-        st.scheduled_arrival_timestamp
+      st.actual_arrival_timestamp ||
+      st.scheduled_departure_timestamp ||
+      st.scheduled_arrival_timestamp
     );
     const rtInfo = st.realtime_info
       ? st.realtime_info.propagated
@@ -658,8 +652,7 @@ async function viewTrip() {
       : "";
 
     console.log(
-      `  ${name}: ${actDep} ${st.passing ? chalk.magenta("(Passing)") : ""} ${
-        rtInfo ? chalk.yellow(rtInfo) : ""
+      `  ${name}: ${actDep} ${st.passing ? chalk.magenta("(Passing)") : ""} ${rtInfo ? chalk.yellow(rtInfo) : ""
       }`
     );
   }

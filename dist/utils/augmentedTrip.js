@@ -5,7 +5,9 @@ import * as cache from "../cache.js";
 export function toSerializableAugmentedTrip(trip) {
     return {
         _trip: trip._trip,
-        serviceDates: trip.serviceDates,
+        scheduledStartServiceDates: trip.scheduledStartServiceDates,
+        scheduledTripDates: trip.scheduledTripDates,
+        actualTripDates: trip.actualTripDates,
         tracks: trip.tracks,
         stopTimes: Array.isArray(trip.stopTimes)
             ? trip.stopTimes.map((st) => st.toSerializable())
@@ -29,7 +31,54 @@ export function augmentTrip(trip) {
     let cachedStopTimes = null;
     return {
         _trip: trip,
-        serviceDates,
+        scheduledStartServiceDates: serviceDates,
+        get scheduledTripDates() {
+            // Use cached version if available
+            let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
+            let stopTimesToUse;
+            if (stopTimes.length > 0) {
+                stopTimesToUse = stopTimes;
+            }
+            else {
+                // Calculate once and cache
+                if (!cachedStopTimes) {
+                    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
+                }
+                stopTimesToUse = cachedStopTimes;
+            }
+            let dates = [
+                ...new Set(stopTimesToUse
+                    .map((st) => [
+                    ...(st.scheduled_arrival_dates || []),
+                    ...(st.scheduled_departure_dates || []),
+                ])
+                    .flat()),
+            ];
+            return dates.sort((a, b) => a - b);
+        },
+        get actualTripDates() {
+            let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
+            let stopTimesToUse;
+            if (stopTimes.length > 0) {
+                stopTimesToUse = stopTimes;
+            }
+            else {
+                // Calculate once and cache
+                if (!cachedStopTimes) {
+                    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
+                }
+                stopTimesToUse = cachedStopTimes;
+            }
+            let dates = [
+                ...new Set(stopTimesToUse
+                    .map((st) => [
+                    ...(st.actual_arrival_dates || []),
+                    ...(st.actual_departure_dates || []),
+                ])
+                    .flat()),
+            ];
+            return dates.sort((a, b) => a - b);
+        },
         get stopTimes() {
             // Use cached version if available
             let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
@@ -37,25 +86,27 @@ export function augmentTrip(trip) {
                 return stopTimes;
             // Calculate once and cache
             if (!cachedStopTimes) {
-                cachedStopTimes = augmentStopTimes(rawStopTimes);
+                cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
             }
             return cachedStopTimes;
         },
         expressInfo,
         tracks,
         run: trip.trip_id.slice(-4),
-        toSerializable: () => {
+        toSerializable: function () {
             // Use cached version if available
             let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
             if (stopTimes.length === 0) {
                 if (!cachedStopTimes) {
-                    cachedStopTimes = augmentStopTimes(rawStopTimes);
+                    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
                 }
                 stopTimes = cachedStopTimes;
             }
             return toSerializableAugmentedTrip({
                 _trip: trip,
-                serviceDates,
+                scheduledStartServiceDates: serviceDates,
+                scheduledTripDates: this.scheduledTripDates,
+                actualTripDates: this.actualTripDates,
                 stopTimes,
                 expressInfo,
                 tracks,

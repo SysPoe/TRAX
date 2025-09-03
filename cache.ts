@@ -235,7 +235,7 @@ export async function refreshStaticCache(): Promise<void> {
         augmentedCache.stopTimes[trip._trip.trip_id] = trip.stopTimes;
         augmentedCache.baseStopTimes[trip._trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
 
-        for (const serviceDate of trip.serviceDates) {
+        for (const serviceDate of trip.actualTripDates) {
             if (!augmentedCache.serviceDateTrips[serviceDate]) {
                 augmentedCache.serviceDateTrips[serviceDate] = [];
             }
@@ -295,7 +295,7 @@ export async function refreshRealtimeCache(): Promise<void> {
         augmentedCache.stopTimes[trip._trip.trip_id] = trip.stopTimes;
         augmentedCache.baseStopTimes[trip._trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
 
-        for (const serviceDate of trip.serviceDates) {
+        for (const serviceDate of trip.actualTripDates) {
             if (!augmentedCache.serviceDateTrips[serviceDate]) {
                 augmentedCache.serviceDateTrips[serviceDate] = [];
             }
