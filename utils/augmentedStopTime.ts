@@ -207,6 +207,10 @@ function findPassingStopTimes(stopTimes: gtfs.StopTime[]): PassingStopTime[] {
 
   let passingSRTs = findPassingStopSRTs(stops);
   let passingRun: PassingStopSRT[] = [];
+  if (!passingSRTs || passingSRTs.length === 0) {
+    console.error("No passing SRTs found for stops", stops);
+    return [];
+  }
   let times: PassingStopTime[] = [
     { ...idsToTimes[passingSRTs[0].from], _passing: false },
   ];

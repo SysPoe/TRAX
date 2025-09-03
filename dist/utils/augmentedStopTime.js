@@ -101,6 +101,10 @@ function findPassingStopTimes(stopTimes) {
     }
     let passingSRTs = findPassingStopSRTs(stops);
     let passingRun = [];
+    if (!passingSRTs || passingSRTs.length === 0) {
+        console.error("No passing SRTs found for stops", stops);
+        return [];
+    }
     let times = [
         { ...idsToTimes[passingSRTs[0].from], _passing: false },
     ];
