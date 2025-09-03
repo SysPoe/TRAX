@@ -11,14 +11,14 @@ function hashStopList(stops: string[]): string {
 }
 
 export enum ScheduleRelationship {
-  "SCHEDULED",
-  "ADDED",
-  "UNSCHEDULED",
-  "CANCELED",
-  "REPLACEMENT",
-  "DUPLICATED",
-  "NEW",
-  "DELETED",
+  "SCHEDULED",    // 0
+  "ADDED",        // 1
+  "UNSCHEDULED",  // 2
+  "CANCELLED",    // 3
+  "REPLACEMENT",  // 4
+  "DUPLICATED",   // 5
+  "NEW",          // 6
+  "DELETED",      // 7
 }
 
 export type AugmentedStopTime = {
@@ -317,6 +317,11 @@ export function augmentStopTimes(
       stopTimes
     );
 
+  let initialScheduledArrivalTimestamp;
+  let initialScheduledDepartureTimestamp;
+  let initialActualArrivalTimestamp;
+  let initialActualDepartureTimestamp;
+
   let realtimeUpdates = cache
     .getStopTimeUpdates()
     .filter((v) => v.trip_id === stopTimes[0].trip_id)
@@ -486,6 +491,18 @@ export function augmentStopTimes(
       };
     }
 
+    if(passingStopTime.stop_sequence == 1) {
+      initialScheduledArrivalTimestamp = scheduledArrivalTimestamp;
+      initialScheduledDepartureTimestamp = scheduledDepartureTimestamp;
+      initialActualArrivalTimestamp = actualArrivalTimestamp;
+      initialActualDepartureTimestamp = actualDepartureTimestamp;
+    }
+
+    let initial_scheduled_arrival_date_offset = initialScheduledArrivalTimestamp ? Math.floor(initialScheduledArrivalTimestamp / 86400) : 0;
+    let initial_scheduled_departure_date_offset = initialScheduledDepartureTimestamp ? Math.floor(initialScheduledDepartureTimestamp / 86400) : 0;
+    let initial_actual_arrival_date_offset = initialActualArrivalTimestamp ? Math.floor(initialActualArrivalTimestamp / 86400) : 0;
+    let initial_actual_departure_date_offset = initialActualDepartureTimestamp ? Math.floor(initialActualDepartureTimestamp / 86400) : 0;
+
     // Calculate arrival/departure date offsets
     let scheduled_arrival_date_offset = scheduledArrivalTimestamp ? Math.floor(scheduledArrivalTimestamp / 86400) : 0;
     let actual_arrival_date_offset = actualArrivalTimestamp ? Math.floor(actualArrivalTimestamp / 86400) : 0;
@@ -501,6 +518,11 @@ export function augmentStopTimes(
     let actual_departure_dates = serviceDates.map(d =>
       d == today() ? d + actual_departure_date_offset : d + scheduled_departure_date_offset
     );
+
+    scheduled_arrival_date_offset -= initial_scheduled_arrival_date_offset;
+    actual_arrival_date_offset -= initial_actual_arrival_date_offset;
+    scheduled_departure_date_offset -= initial_scheduled_departure_date_offset;
+    actual_departure_date_offset -= initial_actual_departure_date_offset;
 
     let partialAugmentedStopTime: Omit<AugmentedStopTime, "toSerializable"> = {
       _stopTime: passingStopTime._passing ? null : passingStopTime,

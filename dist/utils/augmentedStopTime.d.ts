@@ -1,13 +1,13 @@
 import type * as gtfs from "gtfs";
 import { AugmentedStop } from "./augmentedStop.js";
 export declare enum ScheduleRelationship {
-    "SCHEDULED" = 0,
-    "ADDED" = 1,
-    "UNSCHEDULED" = 2,
-    "CANCELED" = 3,
-    "REPLACEMENT" = 4,
-    "DUPLICATED" = 5,
-    "NEW" = 6,
+    "SCHEDULED" = 0,// 0
+    "ADDED" = 1,// 1
+    "UNSCHEDULED" = 2,// 2
+    "CANCELLED" = 3,// 3
+    "REPLACEMENT" = 4,// 4
+    "DUPLICATED" = 5,// 5
+    "NEW" = 6,// 6
     "DELETED" = 7
 }
 export type AugmentedStopTime = {

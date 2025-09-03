@@ -11,7 +11,7 @@ export var ScheduleRelationship;
     ScheduleRelationship[ScheduleRelationship["SCHEDULED"] = 0] = "SCHEDULED";
     ScheduleRelationship[ScheduleRelationship["ADDED"] = 1] = "ADDED";
     ScheduleRelationship[ScheduleRelationship["UNSCHEDULED"] = 2] = "UNSCHEDULED";
-    ScheduleRelationship[ScheduleRelationship["CANCELED"] = 3] = "CANCELED";
+    ScheduleRelationship[ScheduleRelationship["CANCELLED"] = 3] = "CANCELLED";
     ScheduleRelationship[ScheduleRelationship["REPLACEMENT"] = 4] = "REPLACEMENT";
     ScheduleRelationship[ScheduleRelationship["DUPLICATED"] = 5] = "DUPLICATED";
     ScheduleRelationship[ScheduleRelationship["NEW"] = 6] = "NEW";
@@ -177,6 +177,10 @@ export function augmentStopTimes(stopTimes, serviceDates // Dates in the format 
 ) {
     if (!stopTimes.map((v) => v.trip_id == stopTimes[0].trip_id).every((v) => v))
         console.error("[ERROR] All stopTimes must belong to the same trip: ", stopTimes[0].trip_id, stopTimes);
+    let initialScheduledArrivalTimestamp;
+    let initialScheduledDepartureTimestamp;
+    let initialActualArrivalTimestamp;
+    let initialActualDepartureTimestamp;
     let realtimeUpdates = cache
         .getStopTimeUpdates()
         .filter((v) => v.trip_id === stopTimes[0].trip_id)
@@ -329,6 +333,16 @@ export function augmentStopTimes(stopTimes, serviceDates // Dates in the format 
                 propagated,
             };
         }
+        if (passingStopTime.stop_sequence == 1) {
+            initialScheduledArrivalTimestamp = scheduledArrivalTimestamp;
+            initialScheduledDepartureTimestamp = scheduledDepartureTimestamp;
+            initialActualArrivalTimestamp = actualArrivalTimestamp;
+            initialActualDepartureTimestamp = actualDepartureTimestamp;
+        }
+        let initial_scheduled_arrival_date_offset = initialScheduledArrivalTimestamp ? Math.floor(initialScheduledArrivalTimestamp / 86400) : 0;
+        let initial_scheduled_departure_date_offset = initialScheduledDepartureTimestamp ? Math.floor(initialScheduledDepartureTimestamp / 86400) : 0;
+        let initial_actual_arrival_date_offset = initialActualArrivalTimestamp ? Math.floor(initialActualArrivalTimestamp / 86400) : 0;
+        let initial_actual_departure_date_offset = initialActualDepartureTimestamp ? Math.floor(initialActualDepartureTimestamp / 86400) : 0;
         // Calculate arrival/departure date offsets
         let scheduled_arrival_date_offset = scheduledArrivalTimestamp ? Math.floor(scheduledArrivalTimestamp / 86400) : 0;
         let actual_arrival_date_offset = actualArrivalTimestamp ? Math.floor(actualArrivalTimestamp / 86400) : 0;
@@ -338,6 +352,10 @@ export function augmentStopTimes(stopTimes, serviceDates // Dates in the format 
         let scheduled_departure_dates = serviceDates.map(d => d + scheduled_departure_date_offset);
         let actual_arrival_dates = serviceDates.map(d => d == today() ? d + actual_arrival_date_offset : d + scheduled_arrival_date_offset);
         let actual_departure_dates = serviceDates.map(d => d == today() ? d + actual_departure_date_offset : d + scheduled_departure_date_offset);
+        scheduled_arrival_date_offset -= initial_scheduled_arrival_date_offset;
+        actual_arrival_date_offset -= initial_actual_arrival_date_offset;
+        scheduled_departure_date_offset -= initial_scheduled_departure_date_offset;
+        actual_departure_date_offset -= initial_actual_departure_date_offset;
         let partialAugmentedStopTime = {
             _stopTime: passingStopTime._passing ? null : passingStopTime,
             trip_id: stopTimes[0].trip_id,
