@@ -2,6 +2,7 @@ import * as gtfs from "gtfs";
 import * as calendar from "./utils/calendar.js";
 import * as express from "./utils/express.js";
 import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
+import * as augmentedStopTime from "./utils/augmentedStopTime.js";
 export declare const DEBUG = true;
 export declare function loadGTFS(refresh?: boolean, forceReload?: boolean): Promise<void>;
 export declare function clearIntervals(): void;
@@ -10,6 +11,7 @@ export declare function updateRealtime(): Promise<void>;
 export declare function today(): number;
 declare const _default: {
     qrTravel: typeof qrTravel;
+    ScheduleRelationship: typeof augmentedStopTime.ScheduleRelationship;
     getStations(): import("./utils/augmentedStop.js").AugmentedStop[];
     express: typeof express;
     calendar: typeof calendar;
@@ -24,8 +26,8 @@ declare const _default: {
     getRawStopTimes(trip_id: string | undefined): gtfs.StopTime[];
     getAugmentedTrips(trip_id?: string): import("./utils/augmentedTrip.js").AugmentedTrip[];
     getAugmentedStops(stop_id?: string): import("./utils/augmentedStop.js").AugmentedStop[];
-    getAugmentedStopTimes(trip_id?: string): import("./utils/augmentedStopTime.js").AugmentedStopTime[];
-    getBaseStopTimes(trip_id: string): import("./utils/augmentedStopTime.js").AugmentedStopTime[];
+    getAugmentedStopTimes(trip_id?: string): augmentedStopTime.AugmentedStopTime[];
+    getBaseStopTimes(trip_id: string): augmentedStopTime.AugmentedStopTime[];
     cacheExpressInfo(stopListHash: string, expressInfo: any[]): void;
     getCachedExpressInfo(stopListHash: string): any[] | undefined;
     cachePassingStops(stopListHash: string, passingStops: any[]): void;
