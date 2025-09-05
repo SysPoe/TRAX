@@ -141,7 +141,8 @@ export function getRunSeries(date, runSeries, calcIfNotFound = true) {
     else if (!augmentedCache.runSeriesCache[date][runSeries])
         augmentedCache.runSeriesCache[date][runSeries] = {
             trips: [],
-            vehicle_sightings: []
+            vehicle_sightings: [],
+            series: runSeries.toUpperCase()
         };
     return augmentedCache.runSeriesCache?.[date]?.[runSeries];
 }

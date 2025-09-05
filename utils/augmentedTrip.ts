@@ -29,6 +29,7 @@ export type RunSeries = {
     run: string;
   }[];
   vehicle_sightings: string[]; // TODO fill this in
+  series: string;
 };
 
 export type SerializableAugmentedTrip = Omit<

@@ -24,6 +24,7 @@ export type RunSeries = {
         run: string;
     }[];
     vehicle_sightings: string[];
+    series: string;
 };
 export type SerializableAugmentedTrip = Omit<AugmentedTrip, "stopTimes" | "toSerializable" | "_runSeries"> & {
     stopTimes: SerializableAugmentedStopTime[];
