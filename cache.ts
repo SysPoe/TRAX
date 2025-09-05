@@ -201,6 +201,10 @@ export function getRunSeries(date: number, runSeries: string, calcIfNotFound: bo
 export function setRunSeries(date: number, runSeries: string, data: RunSeries): void {
     if (!augmentedCache.runSeriesCache) augmentedCache.runSeriesCache = {};
     if (!augmentedCache.runSeriesCache[date]) augmentedCache.runSeriesCache[date] = {};
+    // Remove duplicate trips from data.trips
+    data.trips = Array.from(new Set(data.trips.map(trip => trip.trip_id)))
+        .map(id => data.trips.find(trip => trip.trip_id === id) as { trip_start_time: number; trip_id: string; run: string });
+
     augmentedCache.runSeriesCache[date][runSeries] = data;
 }
 
