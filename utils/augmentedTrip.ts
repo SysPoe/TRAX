@@ -217,11 +217,12 @@ function trackBackwards(trip: AugmentedTrip, serviceDate: number): string {
   let rs = cache.getRunSeries(serviceDate, run, false);
   for (const prevTrip of prevTrips) {
     prevTrip._runSeries[serviceDate] = run;
-    rs?.trips.push({
-      trip_id: prevTrip._trip.trip_id,
-      trip_start_time: prevTrip.stopTimes[0].scheduled_departure_timestamp || prevTrip.stopTimes[0].scheduled_arrival_timestamp || 0,
-      run: prevTrip.run
-    })
+    if (!rs.trips.some(v => v.trip_id === prevTrip._trip.trip_id))
+      rs?.trips.push({
+        trip_id: prevTrip._trip.trip_id,
+        trip_start_time: prevTrip.stopTimes[0].scheduled_departure_timestamp || prevTrip.stopTimes[0].scheduled_arrival_timestamp || 0,
+        run: prevTrip.run
+      })
   }
   rs.trips = rs.trips.sort((a, b) => a.trip_start_time - b.trip_start_time);
   cache.setRunSeries(serviceDate, run, rs);
@@ -256,11 +257,12 @@ function trackForwards(trip: AugmentedTrip, serviceDate: number, runSeries: stri
     if (deps[0]?._stopTime?.stop_sequence != 1) break;
     newTrip._runSeries[serviceDate] = runSeries;
     run = newTrip.run;
-    rs.trips.push({
-      trip_id: newTrip._trip.trip_id,
-      trip_start_time: newTrip.stopTimes[0].scheduled_departure_timestamp || newTrip.stopTimes[0].scheduled_arrival_timestamp || 0,
-      run,
-    });
+    if (!rs.trips.some(v => v.trip_id === newTrip._trip.trip_id))
+      rs.trips.push({
+        trip_id: newTrip._trip.trip_id,
+        trip_start_time: newTrip.stopTimes[0].scheduled_departure_timestamp || newTrip.stopTimes[0].scheduled_arrival_timestamp || 0,
+        run,
+      });
     trip = newTrip;
   }
   rs.trips = rs.trips.sort((a, b) => a.trip_start_time - b.trip_start_time);

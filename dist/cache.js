@@ -152,9 +152,6 @@ export function setRunSeries(date, runSeries, data) {
         augmentedCache.runSeriesCache = {};
     if (!augmentedCache.runSeriesCache[date])
         augmentedCache.runSeriesCache[date] = {};
-    // Remove duplicate trips from data.trips
-    data.trips = Array.from(new Set(data.trips.map(trip => trip.trip_id)))
-        .map(id => data.trips.find(trip => trip.trip_id === id));
     augmentedCache.runSeriesCache[date][runSeries] = data;
 }
 /**
