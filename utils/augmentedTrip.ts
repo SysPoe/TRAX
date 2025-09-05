@@ -210,6 +210,7 @@ function trackBackwards(trip: AugmentedTrip, serviceDate: number): string {
 
     prevTrips.push(newTrip);
     run = newTrip.run;
+    trip = newTrip;
   }
   let rs = cache.getRunSeries(serviceDate, run, false);
   for (const prevTrip of prevTrips) {
@@ -258,6 +259,7 @@ function trackForwards(trip: AugmentedTrip, serviceDate: number, runSeries: stri
       trip_start_time: newTrip.stopTimes[0].scheduled_departure_timestamp || newTrip.stopTimes[0].scheduled_arrival_timestamp || 0,
       run,
     });
+    trip = newTrip;
   }
   rs.trips = rs.trips.sort((a, b) => a.trip_start_time - b.trip_start_time);
   cache.setRunSeries(serviceDate, runSeries, rs);
