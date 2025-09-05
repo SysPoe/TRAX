@@ -65,8 +65,9 @@ export function clearIntervals() {
 export function formatTimestamp(ts) {
     if (ts === null || ts === undefined)
         return "--:--";
-    const d = new Date(ts * 1000);
-    return d.toISOString().slice(11, 16);
+    let h = Math.floor(ts / 3600);
+    let m = Math.floor((ts % 3600) / 60);
+    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }
 export async function updateRealtime() {
     await gtfs.updateGtfsRealtime(config);

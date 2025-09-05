@@ -8,6 +8,9 @@ export type AugmentedStop = gtfs.Stop & {
     getDepartures: (date: number, start_time: string, end_time: string) => (AugmentedStopTime & {
         express_string: string;
     })[];
+    _getSDDepartures: (serviceDate: number, start_time_secs: number, end_time_secs: number) => (AugmentedStopTime & {
+        express_string: string;
+    })[];
     toSerializable: () => SerializableAugmentedStop;
 };
 export type SerializableAugmentedStop = gtfs.Stop & {
@@ -16,5 +19,5 @@ export type SerializableAugmentedStop = gtfs.Stop & {
     parent: string | null;
     children: string[];
 };
-export declare function toSerializableAugmentedStop(stop: Omit<AugmentedStop, "toSerializable" | "getDepartures">): SerializableAugmentedStop;
+export declare function toSerializableAugmentedStop(stop: Omit<AugmentedStop, "toSerializable" | "getDepartures" | "_getSDDepartures">): SerializableAugmentedStop;
 export declare function augmentStop(stop: gtfs.Stop): AugmentedStop;

@@ -1,6 +1,6 @@
 import * as gtfs from "gtfs";
 import { augmentStop } from "./utils/augmentedStop.js";
-import { augmentTrip } from "./utils/augmentedTrip.js";
+import { augmentTrip, calculateRunSeries } from "./utils/augmentedTrip.js";
 import { DEBUG } from "./index.js";
 import { getCurrentQRTravelTrains, getPlaces } from "./qr-travel/qr-travel-tracker.js";
 let rawCache = {
@@ -27,6 +27,7 @@ let augmentedCache = {
     serviceDateTrips: {},
     expressInfoCache: {},
     passingStopsCache: {},
+    runSeriesCache: {},
 };
 export function getRawTrips(trip_id) {
     if (trip_id)
@@ -129,6 +130,28 @@ export function cachePassingStops(stopListHash, passingStops) {
 export function getCachedPassingStops(stopListHash) {
     return augmentedCache.passingStopsCache?.[stopListHash];
 }
+export function getRunSeries(date, runSeries, calcIfNotFound = true) {
+    if (!augmentedCache.runSeriesCache)
+        augmentedCache.runSeriesCache = {};
+    if (!augmentedCache.runSeriesCache[date])
+        augmentedCache.runSeriesCache[date] = {};
+    if (!augmentedCache.runSeriesCache[date][runSeries] && calcIfNotFound && Object.keys(augmentedCache.serviceDateTrips[date]).find(v => v.endsWith(runSeries))) {
+        calculateRunSeries(getAugmentedTrips(Object.keys(augmentedCache.serviceDateTrips[date]).find(v => v.endsWith(runSeries)))[0]);
+    }
+    else if (!augmentedCache.runSeriesCache[date][runSeries])
+        augmentedCache.runSeriesCache[date][runSeries] = {
+            trips: [],
+            vehicle_sightings: []
+        };
+    return augmentedCache.runSeriesCache?.[date]?.[runSeries];
+}
+export function setRunSeries(date, runSeries, data) {
+    if (!augmentedCache.runSeriesCache)
+        augmentedCache.runSeriesCache = {};
+    if (!augmentedCache.runSeriesCache[date])
+        augmentedCache.runSeriesCache[date] = {};
+    augmentedCache.runSeriesCache[date][runSeries] = data;
+}
 /**
  * Refresh static GTFS cache (stops, stopTimes).
  * @returns {Promise<void>}
@@ -136,6 +159,33 @@ export function getCachedPassingStops(stopListHash) {
 export async function refreshStaticCache() {
     if (DEBUG)
         console.log("Refreshing static GTFS cache...");
+    // Reset data
+    rawCache = {
+        stopTimeUpdates: [],
+        tripUpdates: [],
+        vehiclePositions: [],
+        stopTimes: [],
+        trips: [],
+        stops: [],
+        routes: [],
+        tripsRec: {},
+        stopsRec: {},
+        routesRec: {},
+        qrtPlaces: [],
+        qrtTrains: [],
+    };
+    augmentedCache = {
+        trips: [],
+        stops: [],
+        stopTimes: {},
+        baseStopTimes: {},
+        tripsRec: {},
+        stopsRec: {},
+        serviceDateTrips: {},
+        expressInfoCache: {},
+        passingStopsCache: {},
+        runSeriesCache: {},
+    };
     if (DEBUG)
         console.log("Loading QRT places...");
     rawCache.qrtPlaces = await getPlaces();

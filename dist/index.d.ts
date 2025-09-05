@@ -32,6 +32,8 @@ declare const _default: {
     getCachedExpressInfo(stopListHash: string): any[] | undefined;
     cachePassingStops(stopListHash: string, passingStops: any[]): void;
     getCachedPassingStops(stopListHash: string): any[] | undefined;
+    getRunSeries(date: number, runSeries: string, calcIfNotFound?: boolean): import("./utils/augmentedTrip.js").RunSeries;
+    setRunSeries(date: number, runSeries: string, data: import("./utils/augmentedTrip.js").RunSeries): void;
     refreshStaticCache(): Promise<void>;
     refreshRealtimeCache(): Promise<void>;
     config: {
@@ -58,7 +60,7 @@ declare const _default: {
     today: typeof today;
 };
 export default _default;
-export type { AugmentedTrip, SerializableAugmentedTrip, } from "./utils/augmentedTrip.js";
+export type { AugmentedTrip, SerializableAugmentedTrip, RunSeries } from "./utils/augmentedTrip.js";
 export type { AugmentedStopTime, SerializableAugmentedStopTime, } from "./utils/augmentedStopTime.js";
 export type { AugmentedStop, SerializableAugmentedStop, } from "./utils/augmentedStop.js";
 export type { TrainMovementDTO, ServiceDisruption, GetServiceResponse, QRTPlace, Service, Direction, ServiceLine, AllServicesResponse, QRTService, ServiceUpdate, TravelStopTime, TravelTrip, } from "./qr-travel/types.js";

@@ -1,6 +1,6 @@
 import * as gtfs from "gtfs";
 import { AugmentedStop } from "./utils/augmentedStop.js";
-import { AugmentedTrip } from "./utils/augmentedTrip.js";
+import { AugmentedTrip, RunSeries } from "./utils/augmentedTrip.js";
 import { AugmentedStopTime } from "./utils/augmentedStopTime.js";
 import { QRTPlace, TravelTrip } from "./index.js";
 export declare function getRawTrips(trip_id?: string): gtfs.Trip[];
@@ -23,6 +23,8 @@ export declare function cacheExpressInfo(stopListHash: string, expressInfo: any[
 export declare function getCachedExpressInfo(stopListHash: string): any[] | undefined;
 export declare function cachePassingStops(stopListHash: string, passingStops: any[]): void;
 export declare function getCachedPassingStops(stopListHash: string): any[] | undefined;
+export declare function getRunSeries(date: number, runSeries: string, calcIfNotFound?: boolean): RunSeries;
+export declare function setRunSeries(date: number, runSeries: string, data: RunSeries): void;
 /**
  * Refresh static GTFS cache (stops, stopTimes).
  * @returns {Promise<void>}

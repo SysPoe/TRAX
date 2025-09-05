@@ -81,8 +81,9 @@ export function clearIntervals(): void {
 
 export function formatTimestamp(ts?: number | null): string {
   if (ts === null || ts === undefined) return "--:--";
-  const d = new Date(ts * 1000);
-  return d.toISOString().slice(11, 16);
+  let h = Math.floor(ts / 3600);
+  let m = Math.floor((ts % 3600) / 60);
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }
 
 export async function updateRealtime(): Promise<void> {
@@ -112,6 +113,7 @@ export default {
 export type {
   AugmentedTrip,
   SerializableAugmentedTrip,
+  RunSeries
 } from "./utils/augmentedTrip.js";
 
 export type {

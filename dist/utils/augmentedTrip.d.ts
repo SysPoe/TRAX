@@ -1,4 +1,4 @@
-import type * as gtfs from "gtfs";
+import * as gtfs from "gtfs";
 import { AugmentedStopTime, SerializableAugmentedStopTime } from "./augmentedStopTime.js";
 import { ExpressInfo } from "./express.js";
 export type AugmentedTrip = {
@@ -6,16 +6,28 @@ export type AugmentedTrip = {
     scheduledStartServiceDates: number[];
     scheduledTripDates: number[];
     actualTripDates: number[];
-    runSeries: {
+    _runSeries: {
         [serviceDate: number]: string | null;
+    };
+    runSeries: {
+        [serviceDate: number]: string;
     };
     stopTimes: AugmentedStopTime[];
     expressInfo: ExpressInfo[];
     run: string;
     toSerializable: () => SerializableAugmentedTrip;
 };
-export type SerializableAugmentedTrip = Omit<AugmentedTrip, "stopTimes" | "toSerializable"> & {
+export type RunSeries = {
+    trips: {
+        trip_start_time: number;
+        trip_id: string;
+        run: string;
+    }[];
+    vehicle_sightings: string[];
+};
+export type SerializableAugmentedTrip = Omit<AugmentedTrip, "stopTimes" | "toSerializable" | "_runSeries"> & {
     stopTimes: SerializableAugmentedStopTime[];
 };
-export declare function toSerializableAugmentedTrip(trip: AugmentedTrip | Omit<AugmentedTrip, "toSerializable">): SerializableAugmentedTrip;
+export declare function toSerializableAugmentedTrip(trip: AugmentedTrip | Omit<AugmentedTrip, "toSerializable" | "toSerializable" | "_runSeries">): SerializableAugmentedTrip;
 export declare function augmentTrip(trip: gtfs.Trip): AugmentedTrip;
+export declare function calculateRunSeries(trip: AugmentedTrip): void;

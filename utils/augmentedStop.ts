@@ -14,6 +14,11 @@ export type AugmentedStop = gtfs.Stop & {
     start_time: string,
     end_time: string
   ) => (AugmentedStopTime & { express_string: string })[];
+  _getSDDepartures: (
+    serviceDate: number,
+    start_time_secs: number,
+    end_time_secs: number
+  ) => (AugmentedStopTime & { express_string: string })[];
   toSerializable: () => SerializableAugmentedStop;
 };
 
@@ -25,7 +30,7 @@ export type SerializableAugmentedStop = gtfs.Stop & {
 };
 
 export function toSerializableAugmentedStop(
-  stop: Omit<AugmentedStop, "toSerializable" | "getDepartures">
+  stop: Omit<AugmentedStop, "toSerializable" | "getDepartures" | "_getSDDepartures">
 ): SerializableAugmentedStop {
   return {
     ...stop,
@@ -105,6 +110,50 @@ export function augmentStop(stop: gtfs.Stop): AugmentedStop {
         if (!trip?.actualTripDates?.includes(date)) continue;
         const ts = st.actual_departure_timestamp;
         if (ts == null || ts < startSec || ts > endSec) continue;
+        results.push({ st, trip });
+      }
+      return results
+        .sort(
+          (a, b) =>
+            (a.st.actual_departure_timestamp ?? 0) -
+            (b.st.actual_departure_timestamp ?? 0)
+        )
+        .map(({ st, trip }) => {
+          const expressString = findExpressString(
+            trip.expressInfo,
+            st.actual_parent_station?.stop_id ||
+              st.actual_stop?.parent_station ||
+              st.actual_stop?.stop_id ||
+              ""
+          );
+          return {
+            ...st,
+            express_string: expressString,
+          };
+        });
+    },
+    _getSDDepartures: (serviceDate: number, start_time_secs: number, end_time_secs: number) => {
+      const parentId = getParent()?.stop_id;
+      const childIds = getChildren().map((c) => c.stop_id);
+      const validStops = new Set<string>(
+        [stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]
+      );
+      const tripCache = new Map<
+        string,
+        ReturnType<typeof getAugmentedTrips>[0]
+      >();
+      const results: { st: AugmentedStopTime; trip: any }[] = [];
+      for (const st of cache.getAugmentedStopTimes()) {
+        if (!st.actual_stop || !validStops.has(st.actual_stop.stop_id))
+          continue;
+        let trip = tripCache.get(st.trip_id);
+        if (!trip) {
+          trip = getAugmentedTrips(st.trip_id)[0];
+          tripCache.set(st.trip_id, trip);
+        }
+        if (!trip?.scheduledStartServiceDates?.includes(serviceDate)) continue;
+        const ts = st.actual_departure_timestamp;
+        if (ts == null || ts < start_time_secs || ts > end_time_secs) continue;
         results.push({ st, trip });
       }
       return results
