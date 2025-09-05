@@ -3,7 +3,7 @@ import { getServiceDatesByTrip } from "./calendar.js";
 import {
   AugmentedStopTime,
   augmentStopTimes,
-  SerializableAugmentedStopTime,
+  SerializableAugmentedStopTime
 } from "./augmentedStopTime.js";
 import { ExpressInfo, findExpress } from "./express.js";
 import * as cache from "../cache.js";
@@ -220,6 +220,7 @@ function trackBackwards(trip: AugmentedTrip, serviceDate: number): string {
       run: prevTrip.run
     })
   }
+  rs.trips = rs.trips.sort((a, b) => a.trip_start_time - b.trip_start_time);
   cache.setRunSeries(serviceDate, run, rs);
   return run;
 }

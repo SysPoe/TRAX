@@ -1,6 +1,6 @@
 import * as gtfs from "gtfs";
 import { getServiceDatesByTrip } from "./calendar.js";
-import { augmentStopTimes, } from "./augmentedStopTime.js";
+import { augmentStopTimes } from "./augmentedStopTime.js";
 import { findExpress } from "./express.js";
 import * as cache from "../cache.js";
 import { formatTimestamp } from "../index.js";
@@ -167,6 +167,7 @@ function trackBackwards(trip, serviceDate) {
             run: prevTrip.run
         });
     }
+    rs.trips = rs.trips.sort((a, b) => a.trip_start_time - b.trip_start_time);
     cache.setRunSeries(serviceDate, run, rs);
     return run;
 }
