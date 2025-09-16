@@ -64,6 +64,12 @@ export type AugmentedStopTime = {
   scheduled_departure_date_offset: number; // Offset from the trip's start date e.g. +1 day
   actual_departure_date_offset: number; // Offset from the trip's start date e.g. +1 day
 
+  _DEBUG: { // Stuff put here for debugging the issue with TRAX-GUI involving no realtime updates (beyond first load)
+    lastUpdated: string; // ISO Date
+    tripUpdate: gtfs.TripUpdate | null;
+    stopTimeUpdates: gtfs.StopTimeUpdate[];
+  };
+
   realtime: boolean;
   realtime_info: {
     delay_secs: number;
@@ -561,6 +567,12 @@ export function augmentStopTimes(
       actual_departure_dates,
       scheduled_departure_date_offset,
       actual_departure_date_offset,
+
+      _DEBUG: {
+        lastUpdated: new Date().toISOString(),
+        tripUpdate: tripUpdate || null,
+        stopTimeUpdates: realtimeUpdates
+      }
     };
 
     augmentedStopTimes.push({

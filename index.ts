@@ -34,7 +34,9 @@ let staticInterval: NodeJS.Timeout | null = null;
 
 export async function loadGTFS(
   refresh: boolean = false,
-  forceReload: boolean = false
+  forceReload: boolean = false,
+  realtimeIntervalMs: number = 60 * 1000, // 1 minute
+  staticIntervalMs: number = 24 * 60 * 60 * 1000 // 24 hours
 ): Promise<void> {
   const dbExists = fs.existsSync(config.sqlitePath);
   if (!dbExists || forceReload) {
@@ -56,7 +58,7 @@ export async function loadGTFS(
       updateRealtime().catch((err) =>
         console.error("Error refreshing realtime GTFS data:", err)
       ),
-    60 * 1000
+    realtimeIntervalMs
   );
   staticInterval = setInterval(async () => {
     try {
@@ -65,7 +67,7 @@ export async function loadGTFS(
     } catch (error) {
       console.error("Error refreshing static GTFS data:", error);
     }
-  }, 24 * 60 * 60 * 1000);
+  }, staticIntervalMs);
 }
 
 export function clearIntervals(): void {

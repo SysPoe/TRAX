@@ -393,6 +393,11 @@ export function augmentStopTimes(stopTimes, serviceDates // Dates in the format 
             actual_departure_dates,
             scheduled_departure_date_offset,
             actual_departure_date_offset,
+            _DEBUG: {
+                lastUpdated: new Date().toISOString(),
+                tripUpdate: tripUpdate || null,
+                stopTimeUpdates: realtimeUpdates
+            }
         };
         augmentedStopTimes.push({
             ...partialAugmentedStopTime,

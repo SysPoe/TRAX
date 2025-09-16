@@ -4,7 +4,8 @@ import * as express from "./utils/express.js";
 import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 import * as augmentedStopTime from "./utils/augmentedStopTime.js";
 export declare const DEBUG = true;
-export declare function loadGTFS(refresh?: boolean, forceReload?: boolean): Promise<void>;
+export declare function loadGTFS(refresh?: boolean, forceReload?: boolean, realtimeIntervalMs?: number, // 1 minute
+staticIntervalMs?: number): Promise<void>;
 export declare function clearIntervals(): void;
 export declare function formatTimestamp(ts?: number | null): string;
 export declare function updateRealtime(): Promise<void>;

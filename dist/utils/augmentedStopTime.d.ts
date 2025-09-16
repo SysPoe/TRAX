@@ -38,6 +38,11 @@ export type AugmentedStopTime = {
     actual_departure_dates: number[];
     scheduled_departure_date_offset: number;
     actual_departure_date_offset: number;
+    _DEBUG: {
+        lastUpdated: string;
+        tripUpdate: gtfs.TripUpdate | null;
+        stopTimeUpdates: gtfs.StopTimeUpdate[];
+    };
     realtime: boolean;
     realtime_info: {
         delay_secs: number;

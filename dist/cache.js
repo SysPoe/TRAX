@@ -271,6 +271,7 @@ export async function refreshRealtimeCache() {
     rawCache.tripUpdates = [];
     rawCache.vehiclePositions = [];
     rawCache.qrtTrains = [];
+    augmentedCache.trips = [];
     if (DEBUG)
         console.log("Refreshing qrtTrains cache...");
     rawCache.qrtTrains = await getCurrentQRTravelTrains();
