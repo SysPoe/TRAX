@@ -177,10 +177,8 @@ function findPassingStopSRTs(stops: string[]): PassingStopSRT[] {
     let srt = getSRT(allStops[i].stop_id, allStops[i + 1].stop_id);
     if (srt === undefined) {
       logger.error(`No SRT found between ${allStops[i].stop_id} and ${allStops[i + 1].stop_id}`, { 
-        module: "augmentedStopTime", 
+        module: "augmentedStopTime",
         function: "findPassingStopSRTs",
-        from: allStops[i].stop_id,
-        to: allStops[i + 1].stop_id
       });
 
       allStopSRTs.push({
@@ -217,10 +215,9 @@ function findPassingStopTimes(stopTimes: gtfs.StopTime[]): PassingStopTime[] {
   let passingSRTs = findPassingStopSRTs(stops);
   let passingRun: PassingStopSRT[] = [];
   if (!passingSRTs || passingSRTs.length === 0) {
-    logger.error(`No passing SRTs found for stops`, { 
+    logger.error(`No passing SRTs found for stops ${stops.join(", ")}`, { 
       module: "augmentedStopTime", 
-      function: "findPassingStopTimes",
-      stops
+      function: "findPassingStopTimes"
     });
     return [];
   }

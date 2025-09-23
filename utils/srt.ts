@@ -197,7 +197,6 @@ function parseSRTtoMatrix(srtString: string): SRTMatrix {
       logger.error(`Invalid SRT from: ${lines[i]}`, { 
         module: "srt", 
         function: "parseSRTtoMatrix",
-        line: lines[i]
       });
       continue;
     }
@@ -205,7 +204,6 @@ function parseSRTtoMatrix(srtString: string): SRTMatrix {
       logger.error(`Invalid SRT to: ${lines[i]}`, { 
         module: "srt", 
         function: "parseSRTtoMatrix",
-        line: lines[i]
       });
       continue;
     }
@@ -230,5 +228,6 @@ export function getSRT(
   to: string
 ): number | undefined {
   let matrix = getSRTMatrix();
+  if(from == "place_exhsta" && to == "place_bowsta" || from == "place_bowsta" && to == "place_exhsta") return 3; // Exhibition to Bowen Hills is 3 minutes, but not in the SRT data
   return matrix[from]?.[to] || matrix[to]?.[from];
 }

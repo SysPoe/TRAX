@@ -59,26 +59,24 @@ class Logger {
   ): string {
     const timestamp = new Date().toISOString();
     const levelStr = color(`[${level}]`.padStart(7));
-    
+
     let contextStr = '';
     if (context) {
       const contextParts: string[] = [];
-      if (context.module) contextParts.push(`module:${context.module}`);
-      if (context.function) contextParts.push(`fn:${context.function}`);
-      
+
       // Add any additional context properties
       Object.keys(context).forEach(key => {
         if (key !== 'module' && key !== 'function') {
           contextParts.push(`${key}:${context[key]}`);
         }
       });
-      
+
       if (contextParts.length > 0) {
         contextStr = ` [${contextParts.join(', ')}]`;
       }
     }
-    
-    return `${chalk.gray(timestamp)} ${levelStr} ${chalk.magenta(`[${this.prefix}]`)}${contextStr} ${message}`;
+
+    return `${chalk.gray(timestamp)} ${levelStr} ${chalk.magenta(`[${this.prefix}]`)}${context?.module ? chalk.gray(`[m:${context.module}]`) : ''}${context?.function ? chalk.gray(`[f:${context.function}]`) : ''} ${contextStr} ${message}`;
   }
 }
 

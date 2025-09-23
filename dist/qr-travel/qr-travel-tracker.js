@@ -251,34 +251,26 @@ export async function getCurrentQRTravelTrains() {
                                     logger.debug(`Successfully processed service ${service.ServiceId}`, {
                                         module: "qr-travel-tracker",
                                         function: "getCurrentQRTravelTrains",
-                                        serviceId: service.ServiceId
                                     });
                                 }
                                 else {
                                     logger.warn(`No matching QRT service found for service ${service.ServiceId}`, {
                                         module: "qr-travel-tracker",
                                         function: "getCurrentQRTravelTrains",
-                                        serviceId: service.ServiceId,
-                                        direction: direction.DirectionName,
-                                        serviceLine: serviceLine.ServiceLineName
                                     });
                                 }
                             }
                             else {
                                 logger.warn(`Service response not successful for service ${service.ServiceId}`, {
                                     module: "qr-travel-tracker",
-                                    function: "getCurrentQRTravelTrains",
-                                    serviceId: service.ServiceId,
-                                    success: serviceResponse.Success
+                                    function: "getCurrentQRTravelTrains"
                                 });
                             }
                         }
                         catch (error) {
                             logger.warn(`Failed to track service ${service.ServiceId}: ${error.message || error}`, {
                                 module: "qr-travel-tracker",
-                                function: "getCurrentQRTravelTrains",
-                                serviceId: service.ServiceId,
-                                error: error.message || error
+                                function: "getCurrentQRTravelTrains"
                             });
                             // Continue processing other services
                         }

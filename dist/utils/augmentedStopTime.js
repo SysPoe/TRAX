@@ -76,8 +76,6 @@ function findPassingStopSRTs(stops) {
             logger.error(`No SRT found between ${allStops[i].stop_id} and ${allStops[i + 1].stop_id}`, {
                 module: "augmentedStopTime",
                 function: "findPassingStopSRTs",
-                from: allStops[i].stop_id,
-                to: allStops[i + 1].stop_id
             });
             allStopSRTs.push({
                 from: allStops[i].stop_id,
@@ -112,10 +110,9 @@ function findPassingStopTimes(stopTimes) {
     let passingSRTs = findPassingStopSRTs(stops);
     let passingRun = [];
     if (!passingSRTs || passingSRTs.length === 0) {
-        logger.error(`No passing SRTs found for stops`, {
+        logger.error(`No passing SRTs found for stops ${stops.join(", ")}`, {
             module: "augmentedStopTime",
-            function: "findPassingStopTimes",
-            stops
+            function: "findPassingStopTimes"
         });
         return [];
     }

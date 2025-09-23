@@ -17,9 +17,8 @@ export async function trackTrain(
   serviceID: string,
   serviceDate: string
 ): Promise<GetServiceResponse> {
-  const url = `https://www.queenslandrailtravel.com.au/SPWebApp/api/ServiceUpdates/GetService?serviceId=${serviceID}&serivceDate=${serviceDate}${
-    serviceDate.includes("T") ? "" : "T00:00:00.000Z"
-  }`;
+  const url = `https://www.queenslandrailtravel.com.au/SPWebApp/api/ServiceUpdates/GetService?serviceId=${serviceID}&serivceDate=${serviceDate}${serviceDate.includes("T") ? "" : "T00:00:00.000Z"
+    }`;
 
   const response = await fetch(url);
   if (!response.ok) {
@@ -34,8 +33,7 @@ export async function trackTrain(
       errorText
     });
     throw new Error(
-      `Failed to fetch: ${response.status} ${
-        response.statusText
+      `Failed to fetch: ${response.status} ${response.statusText
       } ${url}. ${errorText}`
     );
   }
@@ -43,7 +41,7 @@ export async function trackTrain(
   return jsonObj as GetServiceResponse;
 }
 
-export async function getPlaces() {  
+export async function getPlaces() {
   let res = await fetch(
     "https://www.queenslandrailtravel.com.au/SPWebApp/api/ContentQuery/GetItems",
     {
@@ -106,8 +104,8 @@ export async function getAllServices() {
   // Return double-parsed JSON because the response is a string containing JSON.
   const responseText = await res.json();
   const json = JSON.parse(responseText);
-  logger.debug(`Successfully fetched ${json.length} services`, { 
-    module: "qr-travel-tracker", 
+  logger.debug(`Successfully fetched ${json.length} services`, {
+    module: "qr-travel-tracker",
     function: "getAllServices",
     count: json.length
   });
@@ -170,8 +168,8 @@ export async function getServiceUpdates(
   );
   const responseText = await res.json();
   const json = JSON.parse(responseText);
-  logger.debug(`Successfully fetched ${json.length} service updates`, { 
-    module: "qr-travel-tracker", 
+  logger.debug(`Successfully fetched ${json.length} service updates`, {
+    module: "qr-travel-tracker",
     function: "getServiceUpdates",
     count: json.length
   });
@@ -255,7 +253,7 @@ function convertQRTServiceToTravelTrip(
 }
 
 export async function getCurrentQRTravelTrains(): Promise<TravelTrip[]> {
-  try {    
+  try {
     // Get all the required data
     const [services, serviceLines] = await Promise.all([
       getAllServices(),
@@ -271,7 +269,7 @@ export async function getCurrentQRTravelTrains(): Promise<TravelTrip[]> {
         for (const service of direction.Services) {
           // Only process services for today
           if (service.ServiceDate.slice(0, 10) === today) {
-            try {              
+            try {
               // Get detailed service information
               const serviceResponse = await trackTrain(
                 service.ServiceId,
@@ -310,35 +308,27 @@ export async function getCurrentQRTravelTrains(): Promise<TravelTrip[]> {
                   const expanded = expandWithSRTPassingStops(trainMovements);
                   // Attach to the trip
                   travelTrips.push({ ...travelTrip, stopsWithPassing: expanded });
-                  
-                  logger.debug(`Successfully processed service ${service.ServiceId}`, { 
-                    module: "qr-travel-tracker", 
+
+                  logger.debug(`Successfully processed service ${service.ServiceId}`, {
+                    module: "qr-travel-tracker",
                     function: "getCurrentQRTravelTrains",
-                    serviceId: service.ServiceId
                   });
                 } else {
-                  logger.warn(`No matching QRT service found for service ${service.ServiceId}`, { 
-                    module: "qr-travel-tracker", 
+                  logger.warn(`No matching QRT service found for service ${service.ServiceId}`, {
+                    module: "qr-travel-tracker",
                     function: "getCurrentQRTravelTrains",
-                    serviceId: service.ServiceId,
-                    direction: direction.DirectionName,
-                    serviceLine: serviceLine.ServiceLineName
                   });
                 }
               } else {
-                logger.warn(`Service response not successful for service ${service.ServiceId}`, { 
-                  module: "qr-travel-tracker", 
-                  function: "getCurrentQRTravelTrains",
-                  serviceId: service.ServiceId,
-                  success: serviceResponse.Success
+                logger.warn(`Service response not successful for service ${service.ServiceId}`, {
+                  module: "qr-travel-tracker",
+                  function: "getCurrentQRTravelTrains"
                 });
               }
             } catch (error: any) {
               logger.warn(`Failed to track service ${service.ServiceId}: ${error.message || error}`, {
                 module: "qr-travel-tracker",
-                function: "getCurrentQRTravelTrains",
-                serviceId: service.ServiceId,
-                error: error.message || error
+                function: "getCurrentQRTravelTrains"
               });
               // Continue processing other services
             }
@@ -346,7 +336,7 @@ export async function getCurrentQRTravelTrains(): Promise<TravelTrip[]> {
         }
       }
     }
-    
+
     return travelTrips;
   } catch (error: any) {
     logger.error(`Failed to get current QR Travel trains: ${error.message || error}`, {
