@@ -13,6 +13,7 @@ export declare function today(): number;
 declare const _default: {
     qrTravel: typeof qrTravel;
     ScheduleRelationship: typeof augmentedStopTime.ScheduleRelationship;
+    logger: import("./utils/logger.js").Logger;
     getStations(): import("./utils/augmentedStop.js").AugmentedStop[];
     express: typeof express;
     calendar: typeof calendar;
@@ -53,6 +54,7 @@ declare const _default: {
         sqlitePath: string;
         verbose: boolean;
         db: undefined;
+        logFunction: (message: string) => void;
     };
     loadGTFS: typeof loadGTFS;
     updateRealtime: typeof updateRealtime;
@@ -67,3 +69,4 @@ export type { AugmentedStop, SerializableAugmentedStop, } from "./utils/augmente
 export type { TrainMovementDTO, ServiceDisruption, GetServiceResponse, QRTPlace, Service, Direction, ServiceLine, AllServicesResponse, QRTService, ServiceUpdate, TravelStopTime, TravelTrip, } from "./qr-travel/types.js";
 export type { ExpressInfo } from "./utils/express.js";
 export type { SRTStop } from "./utils/SectionalRunningTimes/metroSRTTravelTrain.js";
+export { Logger, LogLevel } from "./utils/logger.js";

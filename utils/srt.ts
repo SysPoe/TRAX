@@ -1,7 +1,7 @@
 // Sectional Running Times data for QR's rail network
 
-import { DEBUG } from "../index.js";
 import { getStations } from "../stations.js";
+import logger from "./logger.js";
 
 let rawSRT = `From,To,EMU
 Roma Street,Exhibition,5
@@ -193,15 +193,21 @@ function parseSRTtoMatrix(srtString: string): SRTMatrix {
       v.stop_name?.toLowerCase().startsWith(to.toLowerCase())
     )?.stop_id ?? "";
 
-    if (DEBUG) {
-      if (!from) {
-        console.error(`Invalid SRT from: ${lines[i]}`);
-        continue;
-      }
-      if (!to) {
-        console.error(`Invalid SRT to: ${lines[i]}`);
-        continue;
-      }
+    if (!from) {
+      logger.error(`Invalid SRT from: ${lines[i]}`, { 
+        module: "srt", 
+        function: "parseSRTtoMatrix",
+        line: lines[i]
+      });
+      continue;
+    }
+    if (!to) {
+      logger.error(`Invalid SRT to: ${lines[i]}`, { 
+        module: "srt", 
+        function: "parseSRTtoMatrix",
+        line: lines[i]
+      });
+      continue;
     }
 
     if (!matrix[from]) matrix[from] = {};

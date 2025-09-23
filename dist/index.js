@@ -6,7 +6,15 @@ import * as stations from "./stations.js";
 import * as express from "./utils/express.js";
 import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 import * as augmentedStopTime from "./utils/augmentedStopTime.js";
+import logger, { LogLevel } from "./utils/logger.js";
 export const DEBUG = true;
+// Configure logger based on DEBUG flag
+if (DEBUG) {
+    logger.setLevel(LogLevel.DEBUG);
+}
+else {
+    logger.setLevel(LogLevel.INFO);
+}
 let config = {
     agencies: [
         {
@@ -25,6 +33,7 @@ let config = {
     sqlitePath: "./.TRAXCACHE.sqlite",
     verbose: DEBUG,
     db: undefined,
+    logFunction: (message) => logger.debug(message, { module: "gtfs" }),
 };
 let realtimeInterval = null;
 let staticInterval = null;
@@ -43,14 +52,14 @@ staticIntervalMs = 24 * 60 * 60 * 1000 // 24 hours
     }
     if (!autoRefresh)
         return;
-    realtimeInterval = setInterval(() => updateRealtime().catch((err) => console.error("Error refreshing realtime GTFS data:", err)), realtimeIntervalMs);
+    realtimeInterval = setInterval(() => updateRealtime().catch((err) => logger.error("Error refreshing realtime GTFS data", { module: "index", function: "loadGTFS", error: err.message || err })), realtimeIntervalMs);
     staticInterval = setInterval(async () => {
         try {
             await gtfs.importGtfs(config);
             await cache.refreshStaticCache();
         }
         catch (error) {
-            console.error("Error refreshing static GTFS data:", error);
+            logger.error("Error refreshing static GTFS data", { module: "index", function: "loadGTFS", error: error.message || error });
         }
     }, staticIntervalMs);
 }
@@ -72,8 +81,14 @@ export function formatTimestamp(ts) {
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }
 export async function updateRealtime() {
-    await gtfs.updateGtfsRealtime(config);
-    await cache.refreshRealtimeCache();
+    try {
+        await gtfs.updateGtfsRealtime(config);
+        await cache.refreshRealtimeCache();
+    }
+    catch (error) {
+        logger.error("Error updating realtime GTFS data", { module: "index", function: "updateRealtime", error: error.message || error });
+        throw error;
+    }
 }
 export function today() {
     return Number.parseInt(new Date(Date.now() + 3600 * 10 * 1000).toISOString().slice(0, 10).replace(/-/g, ""));
@@ -91,4 +106,6 @@ export default {
     ...stations,
     qrTravel,
     ScheduleRelationship: augmentedStopTime.ScheduleRelationship,
+    logger, // Export the logger
 };
+export { Logger, LogLevel } from "./utils/logger.js"; // Export logger types

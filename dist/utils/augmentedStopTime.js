@@ -2,6 +2,7 @@ import * as cache from "../cache.js";
 import { findExpress } from "./express.js";
 import { getSRT } from "./srt.js";
 import { today } from "../index.js";
+import logger from "./logger.js";
 // Simple hash function for stop lists
 function hashStopList(stops) {
     return stops.join('|');
@@ -37,7 +38,13 @@ function findPassingStops(stops) {
     let allStops = [];
     for (const e of express) {
         if (e.type == "unknown_segment") {
-            console.error(`Unknown segment between ${e.from} and ${e.to}: ${e.message}`);
+            logger.error(`Unknown segment between ${e.from} and ${e.to}: ${e.message}`, {
+                module: "augmentedStopTime",
+                function: "findPassingStops",
+                from: e.from,
+                to: e.to,
+                message: e.message
+            });
             continue;
         }
         if (e.type == "local") {
@@ -66,9 +73,12 @@ function findPassingStopSRTs(stops) {
     for (let i = 0; i < allStops.length - 1; i++) {
         let srt = getSRT(allStops[i].stop_id, allStops[i + 1].stop_id);
         if (srt === undefined) {
-            // if (DEBUG)
-            if (false)
-                console.error("[ERROR] No SRT found between", allStops[i], "and", allStops[i + 1]);
+            logger.error(`No SRT found between ${allStops[i].stop_id} and ${allStops[i + 1].stop_id}`, {
+                module: "augmentedStopTime",
+                function: "findPassingStopSRTs",
+                from: allStops[i].stop_id,
+                to: allStops[i + 1].stop_id
+            });
             allStopSRTs.push({
                 from: allStops[i].stop_id,
                 to: allStops[i + 1].stop_id,
@@ -102,7 +112,11 @@ function findPassingStopTimes(stopTimes) {
     let passingSRTs = findPassingStopSRTs(stops);
     let passingRun = [];
     if (!passingSRTs || passingSRTs.length === 0) {
-        console.error("No passing SRTs found for stops", stops);
+        logger.error(`No passing SRTs found for stops`, {
+            module: "augmentedStopTime",
+            function: "findPassingStopTimes",
+            stops
+        });
         return [];
     }
     let times = [
@@ -120,17 +134,38 @@ function findPassingStopTimes(stopTimes) {
         let startTime = times.at(-1);
         let endTime = idsToTimes[srt.to];
         if (!startTime) {
-            console.error("ERROR: Start time should not be undefined", startTime, srt);
+            logger.error(`Start time should not be undefined`, {
+                module: "augmentedStopTime",
+                function: "findPassingStopTimes",
+                startTime,
+                srt
+            });
             continue;
         }
         if (!endTime) {
-            console.error("ERROR: End time should not be undefined", endTime, srt.to, srt);
+            logger.error(`End time should not be undefined`, {
+                module: "augmentedStopTime",
+                function: "findPassingStopTimes",
+                endTime,
+                to: srt.to,
+                srt
+            });
             continue;
         }
         if (!startTime.departure_timestamp)
-            console.error("ERROR: Start time should not be undefined", startTime, srt);
+            logger.error(`Start time should not be undefined`, {
+                module: "augmentedStopTime",
+                function: "findPassingStopTimes",
+                startTime,
+                srt
+            });
         if (!endTime.departure_timestamp)
-            console.error("ERROR: End time should not be undefined", endTime, srt);
+            logger.error(`End time should not be undefined`, {
+                module: "augmentedStopTime",
+                function: "findPassingStopTimes",
+                endTime,
+                srt
+            });
         if (!startTime.departure_timestamp || !endTime.departure_timestamp)
             continue;
         let timeDifference = Math.floor((endTime.departure_timestamp - startTime.departure_timestamp) / 60);
@@ -180,7 +215,12 @@ function findPassingStopTimes(stopTimes) {
 export function augmentStopTimes(stopTimes, serviceDates // Dates in the format YYYYMMDD as a number
 ) {
     if (!stopTimes.map((v) => v.trip_id == stopTimes[0].trip_id).every((v) => v))
-        console.error("[ERROR] All stopTimes must belong to the same trip: ", stopTimes[0].trip_id, stopTimes);
+        logger.error(`All stopTimes must belong to the same trip: ${stopTimes[0].trip_id}`, {
+            module: "augmentedStopTime",
+            function: "augmentStopTimes",
+            tripId: stopTimes[0].trip_id,
+            stopTimes
+        });
     let initialScheduledArrivalTimestamp = 0;
     let initialScheduledDepartureTimestamp = 0;
     let initialActualArrivalTimestamp = 0;

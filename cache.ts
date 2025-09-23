@@ -4,6 +4,7 @@ import { AugmentedTrip, augmentTrip, calculateRunSeries, RunSeries } from "./uti
 import { AugmentedStopTime } from "./utils/augmentedStopTime.js";
 import { DEBUG, QRTPlace, TravelTrip } from "./index.js";
 import { getCurrentQRTravelTrains, getPlaces } from "./qr-travel/qr-travel-tracker.js";
+import logger from "./utils/logger.js";
 
 type RawCache = {
     stopTimeUpdates: gtfs.StopTimeUpdate[];
@@ -209,7 +210,7 @@ export function setRunSeries(date: number, runSeries: string, data: RunSeries): 
  * @returns {Promise<void>}
  */
 export async function refreshStaticCache(): Promise<void> {
-    if (DEBUG) console.log("Refreshing static GTFS cache...");
+    logger.debug("Refreshing static GTFS cache...", { module: "cache", function: "refreshStaticCache" });
     // Reset data
     rawCache = {
         stopTimeUpdates: [],
@@ -242,20 +243,23 @@ export async function refreshStaticCache(): Promise<void> {
         runSeriesCache: {},
     };
 
-    if (DEBUG) console.log("Loading QRT places...");
+    logger.debug("Loading QRT places...", { module: "cache", function: "refreshStaticCache" });
     rawCache.qrtPlaces = await getPlaces();
-    if (DEBUG) console.log("Loaded", rawCache.qrtPlaces.length, "QRT places.");
+    logger.debug(`Loaded ${rawCache.qrtPlaces.length} QRT places.`, { module: "cache", function: "refreshStaticCache" });
 
-    if (DEBUG) console.log("Loading stops...");
+    logger.debug("Loading stops...", { module: "cache", function: "refreshStaticCache" });
     rawCache.stops = gtfs.getStops();
-    if (DEBUG) console.log("Loaded", rawCache.stops.length, "stops.");
-    if (DEBUG) console.log("Loading routes...");
+    logger.debug(`Loaded ${rawCache.stops.length} stops.`, { module: "cache", function: "refreshStaticCache" });
+    
+    logger.debug("Loading routes...", { module: "cache", function: "refreshStaticCache" });
     rawCache.routes = gtfs.getRoutes();
-    if (DEBUG) console.log("Loaded", rawCache.routes.length, "routes.");
-    if (DEBUG) console.log("Loading trips...");
+    logger.debug(`Loaded ${rawCache.routes.length} routes.`, { module: "cache", function: "refreshStaticCache" });
+    
+    logger.debug("Loading trips...", { module: "cache", function: "refreshStaticCache" });
     rawCache.trips = gtfs.getTrips().filter((v) => v.trip_id.includes("-QR "));
-    if (DEBUG) console.log("Loaded", rawCache.trips.length, "trips.");
-    if (DEBUG) console.log("Building raw cache records...");
+    logger.debug(`Loaded ${rawCache.trips.length} trips.`, { module: "cache", function: "refreshStaticCache" });
+    
+    logger.debug("Building raw cache records...", { module: "cache", function: "refreshStaticCache" });
     rawCache.tripsRec = {};
     rawCache.stopsRec = {};
     rawCache.routesRec = {};
@@ -270,17 +274,19 @@ export async function refreshStaticCache(): Promise<void> {
         rawCache.routesRec[route.route_id] = route;
     }
 
-    if (DEBUG) console.log("Augmenting trips...");
+    logger.debug("Augmenting trips...", { module: "cache", function: "refreshStaticCache" });
     augmentedCache.trips = rawCache.trips.map(augmentTrip);
-    if (DEBUG) console.log("Augmented", augmentedCache.trips.length, "trips.");
-    if (DEBUG) console.log("Augmenting stops...");
+    logger.debug(`Augmented ${augmentedCache.trips.length} trips.`, { module: "cache", function: "refreshStaticCache" });
+    
+    logger.debug("Augmenting stops...", { module: "cache", function: "refreshStaticCache" });
     augmentedCache.stops = rawCache.stops.map(augmentStop);
-    if (DEBUG) console.log("Augmented", augmentedCache.stops.length, "stops.");
+    logger.debug(`Augmented ${augmentedCache.stops.length} stops.`, { module: "cache", function: "refreshStaticCache" });
+    
     augmentedCache.tripsRec = {};
     augmentedCache.stopsRec = {};
     augmentedCache.serviceDateTrips = {};
 
-    if (DEBUG) console.log("Building augmented cache records...");
+    logger.debug("Building augmented cache records...", { module: "cache", function: "refreshStaticCache" });
     for (const trip of augmentedCache.trips) {
         if (!augmentedCache.stopTimes) augmentedCache.stopTimes = {};
         if (!augmentedCache.baseStopTimes) augmentedCache.baseStopTimes = {};
@@ -301,7 +307,7 @@ export async function refreshStaticCache(): Promise<void> {
         augmentedCache.stopsRec[stop.stop_id] = stop;
     }
 
-    if (DEBUG) console.log("Done. Static GTFS cache refreshed.");
+    logger.info("Static GTFS cache refreshed.", { module: "cache", function: "refreshStaticCache" });
 }
 
 /**
@@ -309,7 +315,7 @@ export async function refreshStaticCache(): Promise<void> {
  * @returns {Promise<void>}
  */
 export async function refreshRealtimeCache(): Promise<void> {
-    if (DEBUG) console.log("Refreshing realtime GTFS cache...");
+    logger.debug("Refreshing realtime GTFS cache...", { module: "cache", function: "refreshRealtimeCache" });
     // Reset realtime cache first
     rawCache.stopTimeUpdates = [];
     rawCache.tripUpdates = [];
@@ -317,26 +323,30 @@ export async function refreshRealtimeCache(): Promise<void> {
     rawCache.qrtTrains = [];
     augmentedCache.trips = [];
 
-    if (DEBUG) console.log("Refreshing qrtTrains cache...");
+    logger.debug("Refreshing qrtTrains cache...", { module: "cache", function: "refreshRealtimeCache" });
     rawCache.qrtTrains = await getCurrentQRTravelTrains();
-    if (DEBUG) console.log("Loaded", rawCache.qrtTrains.length, "QRT trains.");
-    if (DEBUG) console.log("Loading stop time updates...");
+    logger.debug(`Loaded ${rawCache.qrtTrains.length} QRT trains.`, { module: "cache", function: "refreshRealtimeCache" });
+    
+    logger.debug("Loading stop time updates...", { module: "cache", function: "refreshRealtimeCache" });
     rawCache.stopTimeUpdates = gtfs.getStopTimeUpdates();
-    if (DEBUG) console.log("Loaded", rawCache.stopTimeUpdates.length, "stop time updates.");
-    if (DEBUG) console.log("Loading trip updates...");
+    logger.debug(`Loaded ${rawCache.stopTimeUpdates.length} stop time updates.`, { module: "cache", function: "refreshRealtimeCache" });
+    
+    logger.debug("Loading trip updates...", { module: "cache", function: "refreshRealtimeCache" });
     rawCache.tripUpdates = gtfs.getTripUpdates();
-    if (DEBUG) console.log("Loaded", rawCache.tripUpdates.length, "trip updates.");
-    if (DEBUG) console.log("Loading vehicle positions...");
+    logger.debug(`Loaded ${rawCache.tripUpdates.length} trip updates.`, { module: "cache", function: "refreshRealtimeCache" });
+    
+    logger.debug("Loading vehicle positions...", { module: "cache", function: "refreshRealtimeCache" });
     rawCache.vehiclePositions = gtfs.getVehiclePositions();
-    if (DEBUG) console.log("Loaded", rawCache.vehiclePositions.length, "vehicle positions.");
-    // if (DEBUG) console.log("Updating realtime data efficiently...");
+    logger.debug(`Loaded ${rawCache.vehiclePositions.length} vehicle positions.`, { module: "cache", function: "refreshRealtimeCache" });
+    // logger.debug("Updating realtime data efficiently...", { module: "cache", function: "refreshRealtimeCache" });
     // updateRealtimeDataEfficiently();
 
-    if (DEBUG) console.warn("Re-augmenting trips as efficient realtime updates are not implemented yet.");
+    logger.warn("Re-augmenting trips as efficient realtime updates are not implemented yet.", { module: "cache", function: "refreshRealtimeCache" });
     // Re-augment trips to apply realtime updates
     augmentedCache.trips = rawCache.trips.map(augmentTrip);
-    if (DEBUG) console.log("Augmented", augmentedCache.trips.length, "trips.");
-    if (DEBUG) console.log("Building augmented cache records...");
+    logger.debug(`Augmented ${augmentedCache.trips.length} trips.`, { module: "cache", function: "refreshRealtimeCache" });
+    
+    logger.debug("Building augmented cache records...", { module: "cache", function: "refreshRealtimeCache" });
     augmentedCache.tripsRec = {};
     augmentedCache.serviceDateTrips = {};
     augmentedCache.baseStopTimes = {};
@@ -358,5 +368,5 @@ export async function refreshRealtimeCache(): Promise<void> {
             augmentedCache.serviceDateTrips[serviceDate].push(trip._trip.trip_id);
         }
     }
-    if (DEBUG) console.log("Done. Realtime GTFS cache refreshed.");
+    logger.info("Realtime GTFS cache refreshed.", { module: "cache", function: "refreshRealtimeCache" });
 }

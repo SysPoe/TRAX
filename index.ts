@@ -6,8 +6,16 @@ import * as stations from "./stations.js";
 import * as express from "./utils/express.js";
 import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 import * as augmentedStopTime from "./utils/augmentedStopTime.js";
+import logger, { LogLevel } from "./utils/logger.js";
 
 export const DEBUG = true;
+
+// Configure logger based on DEBUG flag
+if (DEBUG) {
+  logger.setLevel(LogLevel.DEBUG);
+} else {
+  logger.setLevel(LogLevel.INFO);
+}
 
 let config = {
   agencies: [
@@ -27,6 +35,7 @@ let config = {
   sqlitePath: "./.TRAXCACHE.sqlite",
   verbose: DEBUG,
   db: undefined,
+  logFunction: (message: string) => logger.debug(message, { module: "gtfs" }),
 };
 
 let realtimeInterval: NodeJS.Timeout | null = null;
@@ -55,8 +64,8 @@ export async function loadGTFS(
 
   realtimeInterval = setInterval(
     () =>
-      updateRealtime().catch((err) =>
-        console.error("Error refreshing realtime GTFS data:", err)
+      updateRealtime().catch((err: any) =>
+        logger.error("Error refreshing realtime GTFS data", { module: "index", function: "loadGTFS", error: err.message || err })
       ),
     realtimeIntervalMs
   );
@@ -64,8 +73,8 @@ export async function loadGTFS(
     try {
       await gtfs.importGtfs(config);
       await cache.refreshStaticCache();
-    } catch (error) {
-      console.error("Error refreshing static GTFS data:", error);
+    } catch (error: any) {
+      logger.error("Error refreshing static GTFS data", { module: "index", function: "loadGTFS", error: error.message || error });
     }
   }, staticIntervalMs);
 }
@@ -89,8 +98,13 @@ export function formatTimestamp(ts?: number | null): string {
 }
 
 export async function updateRealtime(): Promise<void> {
-  await gtfs.updateGtfsRealtime(config);
-  await cache.refreshRealtimeCache();
+  try {
+    await gtfs.updateGtfsRealtime(config);
+    await cache.refreshRealtimeCache();
+  } catch (error: any) {
+    logger.error("Error updating realtime GTFS data", { module: "index", function: "updateRealtime", error: error.message || error });
+    throw error;
+  }
 }
 
 export function today(): number {
@@ -110,6 +124,7 @@ export default {
   ...stations,
   qrTravel,
   ScheduleRelationship: augmentedStopTime.ScheduleRelationship,
+  logger, // Export the logger
 };
 
 export type {
@@ -149,3 +164,5 @@ export type {
 } from "./utils/express.js";
 
 export type { SRTStop } from "./utils/SectionalRunningTimes/metroSRTTravelTrain.js";
+
+export { Logger, LogLevel } from "./utils/logger.js"; // Export logger types
