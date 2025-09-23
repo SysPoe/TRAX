@@ -327,10 +327,10 @@ export function augmentStopTimes(
       stopTimes
     );
 
-  let initialScheduledArrivalTimestamp;
-  let initialScheduledDepartureTimestamp;
-  let initialActualArrivalTimestamp;
-  let initialActualDepartureTimestamp;
+  let initialScheduledArrivalTimestamp = 0;
+  let initialScheduledDepartureTimestamp = 0;
+  let initialActualArrivalTimestamp = 0;
+  let initialActualDepartureTimestamp = 0;
 
   let realtimeUpdates = cache
     .getStopTimeUpdates()
@@ -502,10 +502,10 @@ export function augmentStopTimes(
     }
 
     if(passingStopTime.stop_sequence == 1) {
-      initialScheduledArrivalTimestamp = scheduledArrivalTimestamp;
-      initialScheduledDepartureTimestamp = scheduledDepartureTimestamp;
-      initialActualArrivalTimestamp = actualArrivalTimestamp;
-      initialActualDepartureTimestamp = actualDepartureTimestamp;
+      initialScheduledArrivalTimestamp = scheduledArrivalTimestamp ?? 0;
+      initialScheduledDepartureTimestamp = scheduledDepartureTimestamp ?? 0;
+      initialActualArrivalTimestamp = actualArrivalTimestamp ?? 0;
+      initialActualDepartureTimestamp = actualDepartureTimestamp ?? 0;
     }
 
     let initial_scheduled_arrival_date_offset = initialScheduledArrivalTimestamp ? Math.floor(initialScheduledArrivalTimestamp / 86400) : 0;

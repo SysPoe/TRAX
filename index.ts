@@ -33,7 +33,7 @@ let realtimeInterval: NodeJS.Timeout | null = null;
 let staticInterval: NodeJS.Timeout | null = null;
 
 export async function loadGTFS(
-  refresh: boolean = false,
+  autoRefresh: boolean = false,
   forceReload: boolean = false,
   realtimeIntervalMs: number = 60 * 1000, // 1 minute
   staticIntervalMs: number = 24 * 60 * 60 * 1000 // 24 hours
@@ -51,7 +51,7 @@ export async function loadGTFS(
     await gtfs.importGtfs(config);
   }
 
-  if (!refresh) return;
+  if (!autoRefresh) return;
 
   realtimeInterval = setInterval(
     () =>

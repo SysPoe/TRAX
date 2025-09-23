@@ -28,7 +28,7 @@ let config = {
 };
 let realtimeInterval = null;
 let staticInterval = null;
-export async function loadGTFS(refresh = false, forceReload = false, realtimeIntervalMs = 60 * 1000, // 1 minute
+export async function loadGTFS(autoRefresh = false, forceReload = false, realtimeIntervalMs = 60 * 1000, // 1 minute
 staticIntervalMs = 24 * 60 * 60 * 1000 // 24 hours
 ) {
     const dbExists = fs.existsSync(config.sqlitePath);
@@ -41,7 +41,7 @@ staticIntervalMs = 24 * 60 * 60 * 1000 // 24 hours
     if (gtfs.getStops().length === 0) {
         await gtfs.importGtfs(config);
     }
-    if (!refresh)
+    if (!autoRefresh)
         return;
     realtimeInterval = setInterval(() => updateRealtime().catch((err) => console.error("Error refreshing realtime GTFS data:", err)), realtimeIntervalMs);
     staticInterval = setInterval(async () => {

@@ -181,10 +181,10 @@ export function augmentStopTimes(stopTimes, serviceDates // Dates in the format 
 ) {
     if (!stopTimes.map((v) => v.trip_id == stopTimes[0].trip_id).every((v) => v))
         console.error("[ERROR] All stopTimes must belong to the same trip: ", stopTimes[0].trip_id, stopTimes);
-    let initialScheduledArrivalTimestamp;
-    let initialScheduledDepartureTimestamp;
-    let initialActualArrivalTimestamp;
-    let initialActualDepartureTimestamp;
+    let initialScheduledArrivalTimestamp = 0;
+    let initialScheduledDepartureTimestamp = 0;
+    let initialActualArrivalTimestamp = 0;
+    let initialActualDepartureTimestamp = 0;
     let realtimeUpdates = cache
         .getStopTimeUpdates()
         .filter((v) => v.trip_id === stopTimes[0].trip_id)
@@ -338,10 +338,10 @@ export function augmentStopTimes(stopTimes, serviceDates // Dates in the format 
             };
         }
         if (passingStopTime.stop_sequence == 1) {
-            initialScheduledArrivalTimestamp = scheduledArrivalTimestamp;
-            initialScheduledDepartureTimestamp = scheduledDepartureTimestamp;
-            initialActualArrivalTimestamp = actualArrivalTimestamp;
-            initialActualDepartureTimestamp = actualDepartureTimestamp;
+            initialScheduledArrivalTimestamp = scheduledArrivalTimestamp ?? 0;
+            initialScheduledDepartureTimestamp = scheduledDepartureTimestamp ?? 0;
+            initialActualArrivalTimestamp = actualArrivalTimestamp ?? 0;
+            initialActualDepartureTimestamp = actualDepartureTimestamp ?? 0;
         }
         let initial_scheduled_arrival_date_offset = initialScheduledArrivalTimestamp ? Math.floor(initialScheduledArrivalTimestamp / 86400) : 0;
         let initial_scheduled_departure_date_offset = initialScheduledDepartureTimestamp ? Math.floor(initialScheduledDepartureTimestamp / 86400) : 0;
