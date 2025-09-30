@@ -41,22 +41,21 @@ export async function loadGTFS(autoRefresh = false, forceReload = false, realtim
 staticIntervalMs = 24 * 60 * 60 * 1000 // 24 hours
 ) {
     const dbExists = fs.existsSync(config.sqlitePath);
-    if (!dbExists || forceReload) {
+    if (!dbExists || forceReload)
         await gtfs.importGtfs(config);
-    }
     await gtfs.updateGtfsRealtime(config);
-    await cache.refreshStaticCache();
+    await cache.refreshStaticCache(true);
     await cache.refreshRealtimeCache();
-    if (gtfs.getStops().length === 0) {
+    if (gtfs.getStops().length === 0)
         await gtfs.importGtfs(config);
-    }
     if (!autoRefresh)
         return;
     realtimeInterval = setInterval(() => updateRealtime().catch((err) => logger.error("Error refreshing realtime GTFS data", { module: "index", function: "loadGTFS", error: err.message || err })), realtimeIntervalMs);
     staticInterval = setInterval(async () => {
         try {
             await gtfs.importGtfs(config);
-            await cache.refreshStaticCache();
+            await cache.refreshStaticCache(true);
+            await cache.refreshRealtimeCache();
         }
         catch (error) {
             logger.error("Error refreshing static GTFS data", { module: "index", function: "loadGTFS", error: error.message || error });

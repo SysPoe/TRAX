@@ -36,7 +36,7 @@ declare const _default: {
     getCachedPassingStops(stopListHash: string): any[] | undefined;
     getRunSeries(date: number, runSeries: string, calcIfNotFound?: boolean): import("./utils/augmentedTrip.js").RunSeries;
     setRunSeries(date: number, runSeries: string, data: import("./utils/augmentedTrip.js").RunSeries): void;
-    refreshStaticCache(): Promise<void>;
+    refreshStaticCache(skipRealtimeOverlap?: boolean): Promise<void>;
     refreshRealtimeCache(): Promise<void>;
     config: {
         agencies: {

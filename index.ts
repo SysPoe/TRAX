@@ -48,17 +48,13 @@ export async function loadGTFS(
   staticIntervalMs: number = 24 * 60 * 60 * 1000 // 24 hours
 ): Promise<void> {
   const dbExists = fs.existsSync(config.sqlitePath);
-  if (!dbExists || forceReload) {
-    await gtfs.importGtfs(config);
-  }
+  if (!dbExists || forceReload) await gtfs.importGtfs(config);
 
   await gtfs.updateGtfsRealtime(config);
-  await cache.refreshStaticCache();
+  await cache.refreshStaticCache(true);
   await cache.refreshRealtimeCache();
 
-  if (gtfs.getStops().length === 0) {
-    await gtfs.importGtfs(config);
-  }
+  if (gtfs.getStops().length === 0) await gtfs.importGtfs(config);
 
   if (!autoRefresh) return;
 
@@ -72,7 +68,8 @@ export async function loadGTFS(
   staticInterval = setInterval(async () => {
     try {
       await gtfs.importGtfs(config);
-      await cache.refreshStaticCache();
+      await cache.refreshStaticCache(true);
+      await cache.refreshRealtimeCache();
     } catch (error: any) {
       logger.error("Error refreshing static GTFS data", { module: "index", function: "loadGTFS", error: error.message || error });
     }
