@@ -106,9 +106,8 @@ export function getAugmentedStops(stop_id) {
     return augmentedCache.stops ?? [];
 }
 export function getAugmentedStopTimes(trip_id) {
-    if (trip_id) {
+    if (trip_id)
         return (augmentedCache.stopTimes?.[trip_id] ?? []);
-    }
     return Object.values(augmentedCache.stopTimes ?? {}).flat();
 }
 export function getBaseStopTimes(trip_id) {

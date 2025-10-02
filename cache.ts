@@ -155,9 +155,7 @@ export function getAugmentedStops(stop_id?: string): AugmentedStop[] {
 }
 
 export function getAugmentedStopTimes(trip_id?: string): AugmentedStopTime[] {
-    if (trip_id) {
-        return (augmentedCache.stopTimes?.[trip_id] ?? []);
-    }
+    if (trip_id) return (augmentedCache.stopTimes?.[trip_id] ?? []);
     return Object.values(augmentedCache.stopTimes ?? {}).flat();
 }
 

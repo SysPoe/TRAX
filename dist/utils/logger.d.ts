@@ -15,6 +15,7 @@ declare class Logger {
     private prefix;
     constructor(level?: LogLevel, prefix?: string);
     setLevel(level: LogLevel): void;
+    private writeLog;
     debug(message: string, context?: LogContext): void;
     info(message: string, context?: LogContext): void;
     warn(message: string, context?: LogContext): void;
