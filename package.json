@@ -10,6 +10,7 @@
         "@types/node": "^24.0.14",
         "@types/readline-sync": "^1.4.8",
         "inquirer": "^12.8.2",
+        "prettier": "3.6.2",
         "tsx": "^3.12.7",
         "typescript": "^5.0.0"
     },

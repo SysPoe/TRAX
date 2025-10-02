@@ -166,68 +166,71 @@ Springfield station,Springfield Central,3
 `;
 
 export type SRTMatrix = {
-  [from: string]: {
-    [to: string]: number;
-  };
+	[from: string]: {
+		[to: string]: number;
+	};
 };
 
 function parseSRTtoMatrix(srtString: string): SRTMatrix {
-  const stations = getStations();
+	const stations = getStations();
 
-  const lines = srtString.trim().split("\n");
-  const startIdx = lines[0].startsWith("From,To,EMU") ? 1 : 0;
-  const matrix: SRTMatrix = {};
+	const lines = srtString.trim().split("\n");
+	const startIdx = lines[0].startsWith("From,To,EMU") ? 1 : 0;
+	const matrix: SRTMatrix = {};
 
-  for (let i = startIdx; i < lines.length; i++) {
-    let [from, to, emu] = lines[i].split(",");
+	for (let i = startIdx; i < lines.length; i++) {
+		let [from, to, emu] = lines[i].split(",");
 
+		if (from === "Exhibition") from = "place_exhsta";
+		else
+			from =
+				stations.find((v) =>
+					v.stop_name?.toLowerCase().startsWith(from.toLowerCase()),
+				)?.stop_id ?? "";
 
-    if (from === "Exhibition") from = "place_exhsta";
-    else from = stations.find((v) =>
-      v.stop_name?.toLowerCase().startsWith(from.toLowerCase())
-    )?.stop_id ?? "";
+		if (to === "Exhibition") to = "place_exhsta";
+		else
+			to =
+				stations.find((v) =>
+					v.stop_name?.toLowerCase().startsWith(to.toLowerCase()),
+				)?.stop_id ?? "";
 
+		if (!from) {
+			logger.error(`Invalid SRT from: ${lines[i]}`, {
+				module: "srt",
+				function: "parseSRTtoMatrix",
+			});
+			continue;
+		}
+		if (!to) {
+			logger.error(`Invalid SRT to: ${lines[i]}`, {
+				module: "srt",
+				function: "parseSRTtoMatrix",
+			});
+			continue;
+		}
 
-    if (to === "Exhibition") to = "place_exhsta";
-    else to = stations.find((v) =>
-      v.stop_name?.toLowerCase().startsWith(to.toLowerCase())
-    )?.stop_id ?? "";
-
-    if (!from) {
-      logger.error(`Invalid SRT from: ${lines[i]}`, { 
-        module: "srt", 
-        function: "parseSRTtoMatrix",
-      });
-      continue;
-    }
-    if (!to) {
-      logger.error(`Invalid SRT to: ${lines[i]}`, { 
-        module: "srt", 
-        function: "parseSRTtoMatrix",
-      });
-      continue;
-    }
-
-    if (!matrix[from]) matrix[from] = {};
-    matrix[from][to] = Number(emu);
-  }
-  return matrix;
+		if (!matrix[from]) matrix[from] = {};
+		matrix[from][to] = Number(emu);
+	}
+	return matrix;
 }
 
 let _matrix: SRTMatrix;
 
 function getSRTMatrix() {
-  if (!_matrix) {
-    _matrix = parseSRTtoMatrix(rawSRT);
-  }
-  return _matrix;
+	if (!_matrix) {
+		_matrix = parseSRTtoMatrix(rawSRT);
+	}
+	return _matrix;
 }
 
-export function getSRT(
-  from: string,
-  to: string
-): number | undefined {
-  let matrix = getSRTMatrix();
-  if(from == "place_exhsta" && to == "place_bowsta" || from == "place_bowsta" && to == "place_exhsta") return 3; // Exhibition to Bowen Hills is 3 minutes, but not in the SRT data
-  return matrix[from]?.[to] || matrix[to]?.[from];
+export function getSRT(from: string, to: string): number | undefined {
+	let matrix = getSRTMatrix();
+	if (
+		(from == "place_exhsta" && to == "place_bowsta") ||
+		(from == "place_bowsta" && to == "place_exhsta")
+	)
+		return 3; // Exhibition to Bowen Hills is 3 minutes, but not in the SRT data
+	return matrix[from]?.[to] || matrix[to]?.[from];
 }

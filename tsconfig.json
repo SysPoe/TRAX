@@ -1,20 +1,15 @@
 {
-    "compilerOptions": {
-        "target": "ESNext",
-        "module": "NodeNext",
-        "moduleResolution": "NodeNext",
-        "declaration": true,
-        "outDir": "dist",
-        "rootDir": "./",
-        "esModuleInterop": true,
-        "forceConsistentCasingInFileNames": true,
-        "strict": true
-    },
-    "include": [
-        "index.ts"
-    ],
-    "exclude": [
-        "node_modules",
-        "dist"
-    ]
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"declaration": true,
+		"outDir": "dist",
+		"rootDir": "./",
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"strict": true
+	},
+	"include": ["index.ts"],
+	"exclude": ["node_modules", "dist"]
 }

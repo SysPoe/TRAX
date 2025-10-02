@@ -220,60 +220,57 @@ export async function getCurrentQRTravelTrains() {
         for (const serviceLine of serviceLines) {
             for (const direction of serviceLine.Directions) {
                 for (const service of direction.Services) {
-                    // Only process services for today
-                    if (service.ServiceDate.slice(0, 10) === today) {
-                        try {
-                            // Get detailed service information
-                            const serviceResponse = await trackTrain(service.ServiceId, service.ServiceDate);
-                            if (serviceResponse.Success) {
-                                // Find the corresponding QRT service for additional metadata
-                                const qrtService = services.find((s) => s.qrt_Direction == direction.DirectionName &&
-                                    s.qrt_ServiceLine.endsWith(serviceLine.ServiceLineName));
-                                if (qrtService) {
-                                    const travelTrip = convertQRTServiceToTravelTrip(qrtService, serviceResponse, direction.DirectionName, serviceLine.ServiceLineName);
-                                    // Add SRT passing stops expansion (SEQ region only)
-                                    // Map TravelStopTime[] to TrainMovementDTO[]
-                                    const trainMovements = travelTrip.stops.map(s => ({
-                                        PlaceCode: s.placeCode,
-                                        PlaceName: s.placeName,
-                                        KStation: s.kStation,
-                                        Status: s.status,
-                                        TrainPosition: s.trainPosition,
-                                        PlannedArrival: s.plannedArrival,
-                                        PlannedDeparture: s.plannedDeparture,
-                                        ActualArrival: s.actualArrival,
-                                        ActualDeparture: s.actualDeparture,
-                                    }));
-                                    // Expand with SRT passing stops
-                                    const expanded = expandWithSRTPassingStops(trainMovements);
-                                    // Attach to the trip
-                                    travelTrips.push({ ...travelTrip, stopsWithPassing: expanded });
-                                    logger.debug(`Successfully processed service ${service.ServiceId}`, {
-                                        module: "qr-travel-tracker",
-                                        function: "getCurrentQRTravelTrains",
-                                    });
-                                }
-                                else {
-                                    logger.warn(`No matching QRT service found for service ${service.ServiceId}`, {
-                                        module: "qr-travel-tracker",
-                                        function: "getCurrentQRTravelTrains",
-                                    });
-                                }
+                    try {
+                        // Get detailed service information
+                        const serviceResponse = await trackTrain(service.ServiceId, service.ServiceDate);
+                        if (serviceResponse.Success) {
+                            // Find the corresponding QRT service for additional metadata
+                            const qrtService = services.find((s) => s.qrt_Direction == direction.DirectionName &&
+                                s.qrt_ServiceLine.endsWith(serviceLine.ServiceLineName));
+                            if (qrtService) {
+                                const travelTrip = convertQRTServiceToTravelTrip(qrtService, serviceResponse, direction.DirectionName, serviceLine.ServiceLineName);
+                                // Add SRT passing stops expansion (SEQ region only)
+                                // Map TravelStopTime[] to TrainMovementDTO[]
+                                const trainMovements = travelTrip.stops.map(s => ({
+                                    PlaceCode: s.placeCode,
+                                    PlaceName: s.placeName,
+                                    KStation: s.kStation,
+                                    Status: s.status,
+                                    TrainPosition: s.trainPosition,
+                                    PlannedArrival: s.plannedArrival,
+                                    PlannedDeparture: s.plannedDeparture,
+                                    ActualArrival: s.actualArrival,
+                                    ActualDeparture: s.actualDeparture,
+                                }));
+                                // Expand with SRT passing stops
+                                const expanded = expandWithSRTPassingStops(trainMovements);
+                                // Attach to the trip
+                                travelTrips.push({ ...travelTrip, stopsWithPassing: expanded });
+                                logger.debug(`Successfully processed service ${service.ServiceId}`, {
+                                    module: "qr-travel-tracker",
+                                    function: "getCurrentQRTravelTrains",
+                                });
                             }
                             else {
-                                logger.warn(`Service response not successful for service ${service.ServiceId}`, {
+                                logger.warn(`No matching QRT service found for service ${service.ServiceId}`, {
                                     module: "qr-travel-tracker",
-                                    function: "getCurrentQRTravelTrains"
+                                    function: "getCurrentQRTravelTrains",
                                 });
                             }
                         }
-                        catch (error) {
-                            logger.warn(`Failed to track service ${service.ServiceId}: ${error.message || error}`, {
+                        else {
+                            logger.warn(`Service response not successful for service ${service.ServiceId}`, {
                                 module: "qr-travel-tracker",
                                 function: "getCurrentQRTravelTrains"
                             });
-                            // Continue processing other services
                         }
+                    }
+                    catch (error) {
+                        logger.warn(`Failed to track service ${service.ServiceId}: ${error.message || error}`, {
+                            module: "qr-travel-tracker",
+                            function: "getCurrentQRTravelTrains"
+                        });
+                        // Continue processing other services
                     }
                 }
             }

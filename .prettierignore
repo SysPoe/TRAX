@@ -1,0 +1,12 @@
+dist
+.idea
+node_modules
+profiler
+.gitignore
+package.json
+package-lock.json
+.vscode
+TRAX.log
+.TRAXCACHE.sqlite
+.TRAXCACHE.sqlite-journal
+.git
