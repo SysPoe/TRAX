@@ -95,6 +95,27 @@ export function augmentStop(stop: gtfs.Stop): AugmentedStop {
 			const validStops = new Set<string>([stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]);
 			const tripCache = new Map<string, ReturnType<typeof getAugmentedTrips>[0]>();
 			const results: { st: AugmentedStopTime; trip: any }[] = [];
+
+			console.log(startSec, endSec);
+
+			let daysForwardStart = Math.floor(startSec / 86400);
+			let daysForwardEnd = Math.floor(endSec / 86400);
+
+			let toDate: (d: number) => Date = (d) => {
+				let dstr = d.toString().padStart(8, "0");
+				return new Date(dstr.slice(0, 4) + "-" + dstr.slice(4, 6) + "-" + dstr.slice(6, 8));
+			};
+
+			let getMatchingTripDate: (tripDates: number[]) => number = (tripDates) => {
+				for (let df = daysForwardStart; df <= daysForwardEnd; df++) {
+					let checkDate = toDate(date);
+					checkDate.setDate(checkDate.getDate() + df);
+					let checkDateNum = Number.parseInt(checkDate.toISOString().slice(0, 10).replace(/-/g, ""));
+					if (tripDates.includes(checkDateNum)) return checkDateNum;
+				}
+				return -1;
+			};
+
 			for (const st of cache.getAugmentedStopTimes()) {
 				if (!st.actual_stop || !validStops.has(st.actual_stop.stop_id)) continue;
 				let trip = tripCache.get(st.trip_id);
@@ -102,8 +123,15 @@ export function augmentStop(stop: gtfs.Stop): AugmentedStop {
 					trip = getAugmentedTrips(st.trip_id)[0];
 					tripCache.set(st.trip_id, trip);
 				}
-				if (!trip?.actualTripDates?.includes(date)) continue;
-				const ts = st.actual_departure_timestamp;
+				let matchingDate = getMatchingTripDate(
+					(st?.actual_departure_dates || []).concat(st?.actual_arrival_dates || []),
+				);
+				if (matchingDate === -1) continue;
+				const ts =
+					(st.actual_departure_timestamp ?? st.actual_arrival_timestamp ?? 0) +
+					(toDate(matchingDate).getTime() - toDate(date).getTime()) / 1000;
+				if (st.trip_id.slice(-4) == "J541")
+					console.log(ts, st.actual_departure_timestamp, st.actual_arrival_timestamp, startSec, endSec);
 				if (ts == null || ts < startSec || ts > endSec) continue;
 				results.push({ st, trip });
 			}
