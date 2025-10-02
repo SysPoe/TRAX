@@ -64,8 +64,8 @@ declare const _default: {
 };
 export default _default;
 export type { AugmentedTrip, SerializableAugmentedTrip, RunSeries } from "./utils/augmentedTrip.js";
-export type { AugmentedStopTime, SerializableAugmentedStopTime, } from "./utils/augmentedStopTime.js";
-export type { AugmentedStop, SerializableAugmentedStop, } from "./utils/augmentedStop.js";
+export type { AugmentedStopTime, SerializableAugmentedStopTime } from "./utils/augmentedStopTime.js";
+export type { AugmentedStop, SerializableAugmentedStop } from "./utils/augmentedStop.js";
 export type { TrainMovementDTO, ServiceDisruption, GetServiceResponse, QRTPlace, Service, Direction, ServiceLine, AllServicesResponse, QRTService, ServiceUpdate, TravelStopTime, TravelTrip, } from "./qr-travel/types.js";
 export type { ExpressInfo } from "./utils/express.js";
 export type { SRTStop } from "./utils/SectionalRunningTimes/metroSRTTravelTrain.js";

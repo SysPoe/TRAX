@@ -23,23 +23,8 @@ const combos = [
         "place_elmsta",
         "place_cabstn",
     ],
-    [
-        "place_cabstn",
-        "place_myesta",
-        "place_bursta",
-        "place_narsta",
-        "place_daksta",
-        "place_petsta",
-    ],
-    [
-        "place_petsta",
-        "place_kalsta",
-        "place_mudsta",
-        "place_mahsta",
-        "place_mhesta",
-        "place_rotsta",
-        "place_kprsta",
-    ],
+    ["place_cabstn", "place_myesta", "place_bursta", "place_narsta", "place_daksta", "place_petsta"],
+    ["place_petsta", "place_kalsta", "place_mudsta", "place_mahsta", "place_mhesta", "place_rotsta", "place_kprsta"],
     [
         "place_petsta",
         "place_lawsta",
@@ -66,13 +51,7 @@ const combos = [
     ],
     ["place_norsta", "place_nunsta", "place_tomsta", "place_egjsta"],
     ["place_egjsta", "place_intsta", "place_domsta"],
-    [
-        "place_egjsta",
-        "place_clasta",
-        "place_hensta",
-        "place_ascsta",
-        "place_dbnsta",
-    ],
+    ["place_egjsta", "place_clasta", "place_hensta", "place_ascsta", "place_dbnsta"],
     ["place_egjsta", "place_wolsta", "place_albsta", "place_bowsta"],
     [
         "place_fersta",
@@ -172,15 +151,7 @@ const combos = [
         "place_thasta",
         "place_rossta",
     ],
-    [
-        "place_beesta",
-        "place_omesta",
-        "place_cmrstn",
-        "place_helsta",
-        "place_nrgsta",
-        "place_rbnsta",
-        "place_varsta",
-    ],
+    ["place_beesta", "place_omesta", "place_cmrstn", "place_helsta", "place_nrgsta", "place_rbnsta", "place_varsta"],
 ];
 function buildTrainGraph(combosData) {
     const graph = new Map();
@@ -215,9 +186,7 @@ function findPathBFS(graph, start, end) {
     if (start === end) {
         return [start];
     }
-    const queue = [
-        { stop: start, path: [start] },
-    ];
+    const queue = [{ stop: start, path: [start] }];
     const visited = new Set();
     visited.add(start);
     while (queue.length > 0) {
@@ -313,7 +282,11 @@ export function findExpressString(expressData, stop_id = null) {
         return "All stops";
     const segments = expressData.reduce((acc, segment, index) => {
         if (index === 0 || segment.from !== acc[acc.length - 1].to) {
-            acc.push({ from: segment.from, to: segment.to, stoppingAt: [] });
+            acc.push({
+                from: segment.from,
+                to: segment.to,
+                stoppingAt: [],
+            });
         }
         else {
             acc[acc.length - 1].stoppingAt.push(segment.from);
@@ -324,20 +297,16 @@ export function findExpressString(expressData, stop_id = null) {
     return ("Running express " +
         segments
             .map((run) => {
-            const startName = cache
-                .getRawStops(run.from)[0]
-                ?.stop_name?.replace(" station", "");
-            const endName = cache
-                .getRawStops(run.to)[0]
-                ?.stop_name?.replace(" station", "");
+            const startName = cache.getRawStops(run.from)[0]?.stop_name?.replace(" station", "");
+            const endName = cache.getRawStops(run.to)[0]?.stop_name?.replace(" station", "");
             const stoppingAtNames = run.stoppingAt.map((stopId) => cache.getRawStops(stopId)[0]?.stop_name?.replace(" station", ""));
             const formattedStoppingAtNames = stoppingAtNames.length <= 1
                 ? stoppingAtNames[0]
                 : stoppingAtNames.length == 2
                     ? `${stoppingAtNames[0]} and ${stoppingAtNames[1]}`
                     : `${stoppingAtNames.slice(0, -1).join(", ")}, and ${stoppingAtNames[stoppingAtNames.length - 1]}`;
-            return stop_id !== null && (run.from == cache.getRawStops(stop_id)[0]?.parent_station ||
-                run.from == stop_id)
+            return stop_id !== null &&
+                (run.from == cache.getRawStops(stop_id)[0]?.parent_station || run.from == stop_id)
                 ? run.stoppingAt.length > 0
                     ? `to ${endName}, stopping only at ${formattedStoppingAtNames}`
                     : `to ${endName}`

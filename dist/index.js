@@ -38,8 +38,7 @@ let config = {
 let realtimeInterval = null;
 let staticInterval = null;
 export async function loadGTFS(autoRefresh = false, forceReload = false, realtimeIntervalMs = 60 * 1000, // 1 minute
-staticIntervalMs = 24 * 60 * 60 * 1000 // 24 hours
-) {
+staticIntervalMs = 24 * 60 * 60 * 1000) {
     const dbExists = fs.existsSync(config.sqlitePath);
     if (!dbExists || forceReload)
         await gtfs.importGtfs(config);
@@ -50,7 +49,11 @@ staticIntervalMs = 24 * 60 * 60 * 1000 // 24 hours
         await gtfs.importGtfs(config);
     if (!autoRefresh)
         return;
-    realtimeInterval = setInterval(() => updateRealtime().catch((err) => logger.error("Error refreshing realtime GTFS data", { module: "index", function: "loadGTFS", error: err.message || err })), realtimeIntervalMs);
+    realtimeInterval = setInterval(() => updateRealtime().catch((err) => logger.error("Error refreshing realtime GTFS data", {
+        module: "index",
+        function: "loadGTFS",
+        error: err.message || err,
+    })), realtimeIntervalMs);
     staticInterval = setInterval(async () => {
         try {
             await gtfs.importGtfs(config);
@@ -58,7 +61,11 @@ staticIntervalMs = 24 * 60 * 60 * 1000 // 24 hours
             await cache.refreshRealtimeCache();
         }
         catch (error) {
-            logger.error("Error refreshing static GTFS data", { module: "index", function: "loadGTFS", error: error.message || error });
+            logger.error("Error refreshing static GTFS data", {
+                module: "index",
+                function: "loadGTFS",
+                error: error.message || error,
+            });
         }
     }, staticIntervalMs);
 }
@@ -85,7 +92,11 @@ export async function updateRealtime() {
         await cache.refreshRealtimeCache();
     }
     catch (error) {
-        logger.error("Error updating realtime GTFS data", { module: "index", function: "updateRealtime", error: error.message || error });
+        logger.error("Error updating realtime GTFS data", {
+            module: "index",
+            function: "updateRealtime",
+            error: error.message || error,
+        });
         throw error;
     }
 }

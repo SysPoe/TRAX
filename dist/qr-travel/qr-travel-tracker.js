@@ -14,7 +14,7 @@ export async function trackTrain(serviceID, serviceDate) {
             url,
             status: response.status,
             statusText: response.statusText,
-            errorText
+            errorText,
         });
         throw new Error(`Failed to fetch: ${response.status} ${response.statusText} ${url}. ${errorText}`);
     }
@@ -46,7 +46,7 @@ export async function getServiceLines() {
             module: "qr-travel-tracker",
             function: "getServiceLines",
             status: res.status,
-            statusText: res.statusText
+            statusText: res.statusText,
         });
         throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
     }
@@ -58,13 +58,7 @@ export async function getAllServices() {
         body: JSON.stringify({
             WebUrl: "https://www.queenslandrailtravel.com.au",
             ListName: "QRT Services",
-            ViewFields: [
-                "Title",
-                "qrt_ServiceLine",
-                "qrt_Direction",
-                "qrt_Destination",
-                "qrt_Origin",
-            ],
+            ViewFields: ["Title", "qrt_ServiceLine", "qrt_Direction", "qrt_Destination", "qrt_Origin"],
         }),
         headers: {
             "Content-Type": "application/json",
@@ -77,7 +71,7 @@ export async function getAllServices() {
     logger.debug(`Successfully fetched ${json.length} services`, {
         module: "qr-travel-tracker",
         function: "getAllServices",
-        count: json.length
+        count: json.length,
     });
     return json;
 }
@@ -132,7 +126,7 @@ export async function getServiceUpdates(startDate, endDate) {
     logger.debug(`Successfully fetched ${json.length} service updates`, {
         module: "qr-travel-tracker",
         function: "getServiceUpdates",
-        count: json.length
+        count: json.length,
     });
     return json;
 }
@@ -148,12 +142,18 @@ function convertQRTServiceToTravelTrip(service, serviceResponse, direction, line
         let departureDelaySeconds = null;
         let delayString = "scheduled";
         let delayClass = "scheduled";
-        if (movement.PlannedArrival && movement.ActualArrival && movement.PlannedArrival !== "0001-01-01T00:00:00" && movement.ActualArrival !== "0001-01-01T00:00:00") {
+        if (movement.PlannedArrival &&
+            movement.ActualArrival &&
+            movement.PlannedArrival !== "0001-01-01T00:00:00" &&
+            movement.ActualArrival !== "0001-01-01T00:00:00") {
             const plannedArr = new Date(movement.PlannedArrival).getTime();
             const actualArr = new Date(movement.ActualArrival).getTime();
             arrivalDelaySeconds = Math.round((actualArr - plannedArr) / 1000);
         }
-        if (movement.PlannedDeparture && movement.ActualDeparture && movement.PlannedDeparture !== "0001-01-01T00:00:00" && movement.ActualDeparture !== "0001-01-01T00:00:00") {
+        if (movement.PlannedDeparture &&
+            movement.ActualDeparture &&
+            movement.PlannedDeparture !== "0001-01-01T00:00:00" &&
+            movement.ActualDeparture !== "0001-01-01T00:00:00") {
             const plannedDep = new Date(movement.PlannedDeparture).getTime();
             const actualDep = new Date(movement.ActualDeparture).getTime();
             departureDelaySeconds = Math.round((actualDep - plannedDep) / 1000);
@@ -187,14 +187,22 @@ function convertQRTServiceToTravelTrip(service, serviceResponse, direction, line
             plannedArrival: movement.PlannedArrival,
             plannedDeparture: movement.PlannedDeparture,
             actualArrival: movement.ActualArrival == "0001-01-01T00:00:00" ? movement.PlannedArrival : movement.ActualArrival,
-            actualDeparture: movement.ActualDeparture == "0001-01-01T00:00:00" ? movement.PlannedDeparture : movement.ActualDeparture,
+            actualDeparture: movement.ActualDeparture == "0001-01-01T00:00:00"
+                ? movement.PlannedDeparture
+                : movement.ActualDeparture,
             arrivalDelaySeconds,
             departureDelaySeconds,
             delayString,
             delayClass,
         };
     });
+    const runChars = {
+        Gulflander: "5",
+    };
     return {
+        run: service.Title.split(" ")[0].length == 4
+            ? service.Title.split(" ")[0]
+            : `${runChars[line] ?? "?"}${serviceMeta.ServiceId.slice(0, 3)}`,
         serviceId: serviceMeta.ServiceId,
         serviceName: service.Title,
         direction,
@@ -207,13 +215,34 @@ function convertQRTServiceToTravelTrip(service, serviceResponse, direction, line
         disruption: serviceMeta.ServiceDisruption,
     };
 }
+function getDelay(delaySecs = null, departureTime) {
+    if (delaySecs === null || departureTime === null)
+        return { delayString: "scheduled", delayClass: "scheduled" };
+    let departsInSecs = Math.round(new Date(departureTime).getTime() - Date.now()) / 1000;
+    departsInSecs = Math.round(departsInSecs / 60) * 60;
+    const roundedDelay = delaySecs ? Math.round(delaySecs / 60) * 60 : null;
+    const delayString = delaySecs != null && roundedDelay != null
+        ? delaySecs == 0
+            ? "on time"
+            : `${Math.floor(roundedDelay / 3600)}h ${Math.floor((Math.abs(roundedDelay) % 3600) / 60)}m ${delaySecs > 0 ? "late" : "early"}`
+                .replace(/^0h/, "")
+                .trim()
+        : "scheduled";
+    const delayClass = delaySecs != null && roundedDelay != null
+        ? roundedDelay > 0
+            ? roundedDelay > 5 * 60
+                ? "very-late"
+                : "late"
+            : roundedDelay < 0
+                ? "early"
+                : "on-time"
+        : "scheduled";
+    return { delayString, delayClass };
+}
 export async function getCurrentQRTravelTrains() {
     try {
         // Get all the required data
-        const [services, serviceLines] = await Promise.all([
-            getAllServices(),
-            getServiceLines()
-        ]);
+        const [services, serviceLines] = await Promise.all([getAllServices(), getServiceLines()]);
         const travelTrips = [];
         const today = new Date().toISOString().slice(0, 10);
         // Process each service line to get current services
@@ -231,21 +260,36 @@ export async function getCurrentQRTravelTrains() {
                                 const travelTrip = convertQRTServiceToTravelTrip(qrtService, serviceResponse, direction.DirectionName, serviceLine.ServiceLineName);
                                 // Add SRT passing stops expansion (SEQ region only)
                                 // Map TravelStopTime[] to TrainMovementDTO[]
-                                const trainMovements = travelTrip.stops.map(s => ({
-                                    PlaceCode: s.placeCode,
-                                    PlaceName: s.placeName,
-                                    KStation: s.kStation,
-                                    Status: s.status,
-                                    TrainPosition: s.trainPosition,
-                                    PlannedArrival: s.plannedArrival,
-                                    PlannedDeparture: s.plannedDeparture,
-                                    ActualArrival: s.actualArrival,
-                                    ActualDeparture: s.actualDeparture,
-                                }));
+                                const trainMovements = travelTrip.stops.map((s) => {
+                                    let arrivalDelayInfo = getDelay(s.arrivalDelaySeconds, s.actualArrival === "0001-01-01T00:00:00" ? s.plannedArrival : s.actualArrival);
+                                    let departureDelayInfo = getDelay(s.departureDelaySeconds, s.actualDeparture === "0001-01-01T00:00:00"
+                                        ? s.plannedDeparture
+                                        : s.actualDeparture);
+                                    return {
+                                        PlaceCode: s.placeCode,
+                                        PlaceName: s.placeName,
+                                        KStation: s.kStation,
+                                        Status: s.status,
+                                        TrainPosition: s.trainPosition,
+                                        PlannedArrival: s.plannedArrival,
+                                        PlannedDeparture: s.plannedDeparture,
+                                        ActualArrival: s.actualArrival,
+                                        ActualDeparture: s.actualDeparture,
+                                        ArrivalDelayClass: arrivalDelayInfo.delayClass,
+                                        ArrivalDelayString: arrivalDelayInfo.delayString,
+                                        ArrivalDelaySeconds: s.arrivalDelaySeconds || 0,
+                                        DepartureDelayClass: departureDelayInfo.delayClass,
+                                        DepartureDelayString: departureDelayInfo.delayString,
+                                        DepartureDelaySeconds: s.departureDelaySeconds || 0,
+                                    };
+                                });
                                 // Expand with SRT passing stops
                                 const expanded = expandWithSRTPassingStops(trainMovements);
                                 // Attach to the trip
-                                travelTrips.push({ ...travelTrip, stopsWithPassing: expanded });
+                                travelTrips.push({
+                                    ...travelTrip,
+                                    stopsWithPassing: expanded,
+                                });
                                 logger.debug(`Successfully processed service ${service.ServiceId}`, {
                                     module: "qr-travel-tracker",
                                     function: "getCurrentQRTravelTrains",
@@ -261,14 +305,14 @@ export async function getCurrentQRTravelTrains() {
                         else {
                             logger.warn(`Service response not successful for service ${service.ServiceId}`, {
                                 module: "qr-travel-tracker",
-                                function: "getCurrentQRTravelTrains"
+                                function: "getCurrentQRTravelTrains",
                             });
                         }
                     }
                     catch (error) {
                         logger.warn(`Failed to track service ${service.ServiceId}: ${error.message || error}`, {
                             module: "qr-travel-tracker",
-                            function: "getCurrentQRTravelTrains"
+                            function: "getCurrentQRTravelTrains",
                         });
                         // Continue processing other services
                     }
@@ -281,7 +325,7 @@ export async function getCurrentQRTravelTrains() {
         logger.error(`Failed to get current QR Travel trains: ${error.message || error}`, {
             module: "qr-travel-tracker",
             function: "getCurrentQRTravelTrains",
-            error: error.message || error
+            error: error.message || error,
         });
         throw error;
     }

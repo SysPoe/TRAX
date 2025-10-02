@@ -184,16 +184,56 @@ SRT_DATA = SRT_DATA.concat(SRT_DATA.map((v) => ({
     to: v.from,
     travelTrain: v.travelTrain,
 })));
+function getDelay(delaySecs = null, departureTime) {
+    if (delaySecs === null || departureTime === null)
+        return { delayString: "scheduled", delayClass: "scheduled" };
+    let departsInSecs = Math.round(new Date(departureTime).getTime() - Date.now()) / 1000;
+    departsInSecs = Math.round(departsInSecs / 60) * 60;
+    const roundedDelay = delaySecs ? Math.round(delaySecs / 60) * 60 : null;
+    const delayString = delaySecs != null && roundedDelay != null
+        ? delaySecs == 0
+            ? "on time"
+            : `${Math.floor(roundedDelay / 3600)}h ${Math.floor((Math.abs(roundedDelay) % 3600) / 60)}m ${delaySecs > 0 ? "late" : "early"}`
+                .replace(/^0h/, "")
+                .trim()
+        : "scheduled";
+    const delayClass = delaySecs != null && roundedDelay != null
+        ? roundedDelay > 0
+            ? roundedDelay > 5 * 60
+                ? "very-late"
+                : "late"
+            : roundedDelay < 0
+                ? "early"
+                : "on-time"
+        : "scheduled";
+    return { delayString, delayClass };
+}
+function pushSRT(arr, stop) {
+    let arrivalDelayInfo = getDelay(stop.arrivalDelaySeconds || null, stop.actualArrival || null);
+    let departureDelayInfo = getDelay(stop.departureDelaySeconds || null, stop.actualDeparture || null);
+    arr.push({
+        ...stop,
+        arrivalDelayClass: stop.actualArrival === "0001-01-01T00:00:00" && stop.plannedArrival === "0001-01-01T00:00:00"
+            ? undefined
+            : arrivalDelayInfo.delayClass,
+        arrivalDelayString: stop.actualArrival === "0001-01-01T00:00:00" && stop.plannedArrival === "0001-01-01T00:00:00"
+            ? undefined
+            : arrivalDelayInfo.delayString,
+        departureDelayClass: stop.actualDeparture === "0001-01-01T00:00:00" && stop.plannedDeparture === "0001-01-01T00:00:00"
+            ? undefined
+            : departureDelayInfo.delayClass,
+        departureDelayString: stop.actualDeparture === "0001-01-01T00:00:00" && stop.plannedDeparture === "0001-01-01T00:00:00"
+            ? undefined
+            : departureDelayInfo.delayString,
+    });
+}
 /**
  * Given an array of TrainMovementDTOs (stopping pattern), return an array of SRTStop including both stops and passing stops with SRT times.
  * For segments not in SRT_DATA, just include the stops as-is.
  */
 export function expandWithSRTPassingStops(stoppingMovements) {
     function calcDelay(actual, planned) {
-        if (!actual ||
-            !planned ||
-            actual === "0001-01-01T00:00:00" ||
-            planned === "0001-01-01T00:00:00")
+        if (!actual || !planned || actual === "0001-01-01T00:00:00" || planned === "0001-01-01T00:00:00")
             return null;
         const a = new Date(actual).getTime();
         const p = new Date(planned).getTime();
@@ -219,7 +259,7 @@ export function expandWithSRTPassingStops(stoppingMovements) {
         const to = stoppingMovements[i + 1];
         // Always add the 'from' stop
         if (i === 0) {
-            result.push({
+            pushSRT(result, {
                 placeName: from.PlaceName,
                 isStop: true,
                 plannedArrival: from.PlannedArrival,
@@ -230,12 +270,10 @@ export function expandWithSRTPassingStops(stoppingMovements) {
                 departureDelaySeconds: calcDelay(from.ActualDeparture, from.PlannedDeparture),
             });
             // Set prevTime to actual/planned departure if available
-            if (from.ActualDeparture &&
-                from.ActualDeparture !== "0001-01-01T00:00:00") {
+            if (from.ActualDeparture && from.ActualDeparture !== "0001-01-01T00:00:00") {
                 prevTime = new Date(from.ActualDeparture);
             }
-            else if (from.PlannedDeparture &&
-                from.PlannedDeparture !== "0001-01-01T00:00:00") {
+            else if (from.PlannedDeparture && from.PlannedDeparture !== "0001-01-01T00:00:00") {
                 prevTime = new Date(from.PlannedDeparture);
             }
             else {
@@ -248,10 +286,8 @@ export function expandWithSRTPassingStops(stoppingMovements) {
         if (seg) {
             // Direct SRT segment, no passing stops
             // Estimate next stop's arrival time
-            let estPass = prevTime && seg.travelTrain
-                ? new Date(prevTime.getTime() + seg.travelTrain * 60000)
-                : undefined;
-            result.push({
+            let estPass = prevTime && seg.travelTrain ? new Date(prevTime.getTime() + seg.travelTrain * 60000) : undefined;
+            pushSRT(result, {
                 placeName: to.PlaceName,
                 isStop: true,
                 plannedArrival: to.PlannedArrival,
@@ -280,12 +316,10 @@ export function expandWithSRTPassingStops(stoppingMovements) {
         }
         // Try to find a chain of SRT segments between from and to (i.e. passing stops)
         // BFS to find shortest SRT path
-        let queue = SRT_DATA.filter((s) => s.from.trim().toLocaleLowerCase() ===
-            from.PlaceName.trim().toLowerCase()).map((s) => ({ path: [s], last: s.to }));
+        let queue = SRT_DATA.filter((s) => s.from.trim().toLocaleLowerCase() === from.PlaceName.trim().toLowerCase()).map((s) => ({ path: [s], last: s.to }));
         queue =
             queue.length == 0
-                ? SRT_DATA.filter((s) => s.to.trim().toLocaleLowerCase() ===
-                    from.PlaceName.trim().toLowerCase()).map((s) => ({ path: [s], last: s.from }))
+                ? SRT_DATA.filter((s) => s.to.trim().toLocaleLowerCase() === from.PlaceName.trim().toLowerCase()).map((s) => ({ path: [s], last: s.from }))
                 : queue;
         let found = null;
         let visited = new Set();
@@ -313,7 +347,7 @@ export function expandWithSRTPassingStops(stoppingMovements) {
                     let estPass = prevTime && foundSeg.travelTrain
                         ? new Date(prevTime.getTime() + foundSeg.travelTrain * 60000)
                         : undefined;
-                    result.push({
+                    pushSRT(result, {
                         placeName: foundSeg.from,
                         isStop: false,
                         plannedArrival: orig?.PlannedArrival || "",
@@ -334,12 +368,8 @@ export function expandWithSRTPassingStops(stoppingMovements) {
                                 ":" +
                                 estPass.getSeconds().toString().padStart(2, "0")
                             : undefined,
-                        arrivalDelaySeconds: calcDelay(orig?.ActualArrival ||
-                            (estPass ? estPass.toISOString() : undefined), orig?.PlannedArrival ||
-                            (estPass ? estPass.toISOString() : undefined)),
-                        departureDelaySeconds: calcDelay(orig?.ActualDeparture ||
-                            (estPass ? estPass.toISOString() : undefined), orig?.PlannedDeparture ||
-                            (estPass ? estPass.toISOString() : undefined)),
+                        arrivalDelaySeconds: calcDelay(orig?.ActualArrival || (estPass ? estPass.toISOString() : undefined), orig?.PlannedArrival || (estPass ? estPass.toISOString() : undefined)),
+                        departureDelaySeconds: calcDelay(orig?.ActualDeparture || (estPass ? estPass.toISOString() : undefined), orig?.PlannedDeparture || (estPass ? estPass.toISOString() : undefined)),
                     });
                     prevTime = estPass ?? null;
                 }
@@ -349,7 +379,7 @@ export function expandWithSRTPassingStops(stoppingMovements) {
             let estArr = prevTime && lastSeg && lastSeg.travelTrain
                 ? new Date(prevTime.getTime() + lastSeg.travelTrain * 60000)
                 : undefined;
-            result.push({
+            pushSRT(result, {
                 placeName: to.PlaceName,
                 isStop: true,
                 plannedArrival: to.PlannedArrival,
@@ -377,7 +407,7 @@ export function expandWithSRTPassingStops(stoppingMovements) {
             continue;
         }
         // else: no SRT path found, include the stop
-        result.push({
+        pushSRT(result, {
             placeName: to.PlaceName,
             isStop: true,
             plannedArrival: to.PlannedArrival,

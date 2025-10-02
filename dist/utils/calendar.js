@@ -3,7 +3,7 @@ import { getRawTrips } from "../cache.js";
 export function getServiceDates(calendars, calendarDates) {
     const serviceDates = {};
     for (const calendar of calendars) {
-        const { service_id, monday, tuesday, wednesday, thursday, friday, saturday, sunday, start_date, end_date, } = calendar;
+        const { service_id, monday, tuesday, wednesday, thursday, friday, saturday, sunday, start_date, end_date } = calendar;
         serviceDates[service_id] = serviceDates[service_id] || [];
         let currentDate = new Date(String(start_date).substring(0, 4) +
             "-" +
@@ -67,12 +67,14 @@ export function getServiceDates(calendars, calendarDates) {
  * @returns {number[]} Array of service dates for the trip.
  */
 export function getServiceDatesByTrip(trip_id) {
-    const trips = getRawTrips().filter(v => v.trip_id === trip_id);
+    const trips = getRawTrips().filter((v) => v.trip_id === trip_id);
     const trip = trips && trips.length > 0 ? trips[0] : undefined;
     if (!trip)
         return [];
     const calendars = gtfs.getCalendars({ service_id: trip.service_id });
-    const calendarDates = gtfs.getCalendarDates({ service_id: trip.service_id });
+    const calendarDates = gtfs.getCalendarDates({
+        service_id: trip.service_id,
+    });
     const serviceDatesMap = getServiceDates(calendars, calendarDates);
     return serviceDatesMap[trip.service_id] || [];
 }

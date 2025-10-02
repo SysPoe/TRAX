@@ -15,7 +15,11 @@ export interface SRTStop {
     srtMinutes?: number;
     estimatedPassingTime?: string;
     arrivalDelaySeconds?: number | null;
+    arrivalDelayClass?: "on-time" | "scheduled" | "late" | "very-late" | "early";
+    arrivalDelayString?: "on time" | string;
     departureDelaySeconds?: number | null;
+    departureDelayClass?: "on-time" | "scheduled" | "late" | "very-late" | "early";
+    departureDelayString?: "on time" | string;
 }
 /**
  * Given an array of TrainMovementDTOs (stopping pattern), return an array of SRTStop including both stops and passing stops with SRT times.

@@ -14,15 +14,14 @@ export function augmentStop(stop) {
     const getChildren = () => {
         if (cachedChildren)
             return cachedChildren;
-        const childStops = cache
-            .getRawStops()
-            .filter((s) => s.parent_station === stop.stop_id);
+        const childStops = cache.getRawStops().filter((s) => s.parent_station === stop.stop_id);
         cachedChildren = childStops.map((s) => cache.getAugmentedStops(s.stop_id)[0] || augmentStop(s));
         return cachedChildren;
     };
     let qrt_Places = cache.getQRTPlaces();
     let trimmedStopName = stop.stop_name?.toLowerCase().replace("station", "").trim();
-    let myPlace = qrt_Places.find((v) => v.Title?.toLowerCase().trim() === trimmedStopName || (trimmedStopName === "roma street" && v.Title?.toLowerCase().trim().includes("roma street")));
+    let myPlace = qrt_Places.find((v) => v.Title?.toLowerCase().trim() === trimmedStopName ||
+        (trimmedStopName === "roma street" && v.Title?.toLowerCase().trim().includes("roma street")));
     const getParent = () => {
         if (!stop.parent_station)
             return null;
@@ -75,8 +74,7 @@ export function augmentStop(stop) {
                 results.push({ st, trip });
             }
             return results
-                .sort((a, b) => (a.st.actual_departure_timestamp ?? 0) -
-                (b.st.actual_departure_timestamp ?? 0))
+                .sort((a, b) => (a.st.actual_departure_timestamp ?? 0) - (b.st.actual_departure_timestamp ?? 0))
                 .map(({ st, trip }) => {
                 const expressString = findExpressString(trip.expressInfo, st.actual_parent_station?.stop_id ||
                     st.actual_stop?.parent_station ||
@@ -110,8 +108,7 @@ export function augmentStop(stop) {
                 results.push({ st, trip });
             }
             return results
-                .sort((a, b) => (a.st.actual_departure_timestamp ?? 0) -
-                (b.st.actual_departure_timestamp ?? 0))
+                .sort((a, b) => (a.st.actual_departure_timestamp ?? 0) - (b.st.actual_departure_timestamp ?? 0))
                 .map(({ st, trip }) => {
                 const expressString = findExpressString(trip.expressInfo, st.actual_parent_station?.stop_id ||
                     st.actual_stop?.parent_station ||

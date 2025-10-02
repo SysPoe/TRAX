@@ -206,7 +206,7 @@ function getSRTMatrix() {
 }
 export function getSRT(from, to) {
     let matrix = getSRTMatrix();
-    if (from == "place_exhsta" && to == "place_bowsta" || from == "place_bowsta" && to == "place_exhsta")
+    if ((from == "place_exhsta" && to == "place_bowsta") || (from == "place_bowsta" && to == "place_exhsta"))
         return 3; // Exhibition to Bowen Hills is 3 minutes, but not in the SRT data
     return matrix[from]?.[to] || matrix[to]?.[from];
 }
