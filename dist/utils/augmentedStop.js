@@ -58,7 +58,6 @@ export function augmentStop(stop) {
             const validStops = new Set([stop.stop_id, parentId, ...childIds].filter(Boolean));
             const tripCache = new Map();
             const results = [];
-            console.log(startSec, endSec);
             let daysForwardStart = Math.floor(startSec / 86400);
             let daysForwardEnd = Math.floor(endSec / 86400);
             let toDate = (d) => {
@@ -88,8 +87,6 @@ export function augmentStop(stop) {
                     continue;
                 const ts = (st.actual_departure_timestamp ?? st.actual_arrival_timestamp ?? 0) +
                     (toDate(matchingDate).getTime() - toDate(date).getTime()) / 1000;
-                if (st.trip_id.slice(-4) == "J541")
-                    console.log(ts, st.actual_departure_timestamp, st.actual_arrival_timestamp, startSec, endSec);
                 if (ts == null || ts < startSec || ts > endSec)
                     continue;
                 results.push({ st, trip });

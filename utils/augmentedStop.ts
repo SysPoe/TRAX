@@ -96,8 +96,6 @@ export function augmentStop(stop: gtfs.Stop): AugmentedStop {
 			const tripCache = new Map<string, ReturnType<typeof getAugmentedTrips>[0]>();
 			const results: { st: AugmentedStopTime; trip: any }[] = [];
 
-			console.log(startSec, endSec);
-
 			let daysForwardStart = Math.floor(startSec / 86400);
 			let daysForwardEnd = Math.floor(endSec / 86400);
 
@@ -130,8 +128,6 @@ export function augmentStop(stop: gtfs.Stop): AugmentedStop {
 				const ts =
 					(st.actual_departure_timestamp ?? st.actual_arrival_timestamp ?? 0) +
 					(toDate(matchingDate).getTime() - toDate(date).getTime()) / 1000;
-				if (st.trip_id.slice(-4) == "J541")
-					console.log(ts, st.actual_departure_timestamp, st.actual_arrival_timestamp, startSec, endSec);
 				if (ts == null || ts < startSec || ts > endSec) continue;
 				results.push({ st, trip });
 			}
