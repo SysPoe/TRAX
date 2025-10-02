@@ -6,6 +6,7 @@ import * as stations from "./stations.js";
 import * as express from "./utils/express.js";
 import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 import * as augmentedStopTime from "./utils/augmentedStopTime.js";
+import * as timeUtils from "./utils/time.js";
 import logger, { LogLevel } from "./utils/logger.js";
 
 export const DEBUG = true;
@@ -134,6 +135,9 @@ export default {
 	qrTravel,
 	ScheduleRelationship: augmentedStopTime.ScheduleRelationship,
 	logger, // Export the logger
+	utils: {
+		time: timeUtils,
+	}
 };
 
 export type { AugmentedTrip, SerializableAugmentedTrip, RunSeries } from "./utils/augmentedTrip.js";

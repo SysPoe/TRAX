@@ -178,7 +178,11 @@ function convertQRTServiceToTravelTrip(service, serviceResponse, direction, line
                 }
             }
         }
-        return {
+        let actualArrival = movement.ActualArrival == "0001-01-01T00:00:00" ? movement.PlannedArrival : movement.ActualArrival;
+        let actualDeparture = movement.ActualDeparture == "0001-01-01T00:00:00" ? movement.PlannedDeparture : movement.ActualDeparture;
+        let arrivalDelayInfo = getDelay(arrivalDelaySeconds, actualArrival === "0001-01-01T00:00:00" ? movement.PlannedArrival : actualArrival);
+        let departureDelayInfo = getDelay(departureDelaySeconds, actualDeparture === "0001-01-01T00:00:00" ? movement.PlannedDeparture : actualDeparture);
+        let toRet = {
             placeCode: movement.PlaceCode,
             placeName: movement.PlaceName,
             kStation: movement.KStation,
@@ -186,15 +190,16 @@ function convertQRTServiceToTravelTrip(service, serviceResponse, direction, line
             trainPosition: movement.TrainPosition,
             plannedArrival: movement.PlannedArrival,
             plannedDeparture: movement.PlannedDeparture,
-            actualArrival: movement.ActualArrival == "0001-01-01T00:00:00" ? movement.PlannedArrival : movement.ActualArrival,
-            actualDeparture: movement.ActualDeparture == "0001-01-01T00:00:00"
-                ? movement.PlannedDeparture
-                : movement.ActualDeparture,
+            actualArrival,
+            actualDeparture,
             arrivalDelaySeconds,
             departureDelaySeconds,
-            delayString,
-            delayClass,
+            arrivalDelayClass: actualArrival === "0001-01-01T00:00:00" ? arrivalDelayInfo.delayClass : undefined,
+            arrivalDelayString: actualArrival === "0001-01-01T00:00:00" ? arrivalDelayInfo.delayString : undefined,
+            departureDelayClass: actualDeparture === "0001-01-01T00:00:00" ? departureDelayInfo.delayClass : undefined,
+            departureDelayString: actualDeparture === "0001-01-01T00:00:00" ? departureDelayInfo.delayString : undefined,
         };
+        return toRet;
     });
     const runChars = {
         Gulflander: "5",
@@ -261,10 +266,6 @@ export async function getCurrentQRTravelTrains() {
                                 // Add SRT passing stops expansion (SEQ region only)
                                 // Map TravelStopTime[] to TrainMovementDTO[]
                                 const trainMovements = travelTrip.stops.map((s) => {
-                                    let arrivalDelayInfo = getDelay(s.arrivalDelaySeconds, s.actualArrival === "0001-01-01T00:00:00" ? s.plannedArrival : s.actualArrival);
-                                    let departureDelayInfo = getDelay(s.departureDelaySeconds, s.actualDeparture === "0001-01-01T00:00:00"
-                                        ? s.plannedDeparture
-                                        : s.actualDeparture);
                                     return {
                                         PlaceCode: s.placeCode,
                                         PlaceName: s.placeName,
@@ -275,11 +276,7 @@ export async function getCurrentQRTravelTrains() {
                                         PlannedDeparture: s.plannedDeparture,
                                         ActualArrival: s.actualArrival,
                                         ActualDeparture: s.actualDeparture,
-                                        ArrivalDelayClass: arrivalDelayInfo.delayClass,
-                                        ArrivalDelayString: arrivalDelayInfo.delayString,
                                         ArrivalDelaySeconds: s.arrivalDelaySeconds || 0,
-                                        DepartureDelayClass: departureDelayInfo.delayClass,
-                                        DepartureDelayString: departureDelayInfo.delayString,
                                         DepartureDelaySeconds: s.departureDelaySeconds || 0,
                                     };
                                 });

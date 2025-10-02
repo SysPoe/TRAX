@@ -8,12 +8,6 @@ export interface TrainMovementDTO {
 	PlannedDeparture: "0001-01-01T00:00:00" | string;
 	ActualArrival: "0001-01-01T00:00:00" | string;
 	ActualDeparture: "0001-01-01T00:00:00" | string;
-	ArrivalDelayClass: "on-time" | "scheduled" | "late" | "very-late" | "early";
-	ArrivalDelayString: "on time" | string;
-	ArrivalDelaySeconds: number;
-	DepartureDelayClass: "on-time" | "scheduled" | "late" | "very-late" | "early";
-	DepartureDelayString: "on time" | string;
-	DepartureDelaySeconds: number;
 }
 
 export interface ServiceDisruption {
@@ -103,8 +97,10 @@ export interface TravelStopTime {
 	actualDeparture: string;
 	arrivalDelaySeconds: number | null;
 	departureDelaySeconds: number | null;
-	delayString: string;
-	delayClass: "on-time" | "scheduled" | "late" | "very-late" | "early";
+	arrivalDelayClass?: "on-time" | "scheduled" | "late" | "very-late" | "early";
+	arrivalDelayString?: "on time" | string;
+	departureDelayClass?: "on-time" | "scheduled" | "late" | "very-late" | "early";
+	departureDelayString?: "on time" | string;
 }
 
 import type { SRTStop } from "../utils/SectionalRunningTimes/metroSRTTravelTrain.js";

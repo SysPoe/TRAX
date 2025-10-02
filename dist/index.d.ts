@@ -3,6 +3,7 @@ import * as calendar from "./utils/calendar.js";
 import * as express from "./utils/express.js";
 import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 import * as augmentedStopTime from "./utils/augmentedStopTime.js";
+import * as timeUtils from "./utils/time.js";
 export declare const DEBUG = true;
 export declare function loadGTFS(autoRefresh?: boolean, forceReload?: boolean, realtimeIntervalMs?: number, // 1 minute
 staticIntervalMs?: number): Promise<void>;
@@ -14,6 +15,9 @@ declare const _default: {
     qrTravel: typeof qrTravel;
     ScheduleRelationship: typeof augmentedStopTime.ScheduleRelationship;
     logger: import("./utils/logger.js").Logger;
+    utils: {
+        time: typeof timeUtils;
+    };
     getStations(): import("./utils/augmentedStop.js").AugmentedStop[];
     express: typeof express;
     calendar: typeof calendar;
