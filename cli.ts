@@ -1,102 +1,99 @@
 import inquirer from "inquirer";
 import chalk from "chalk";
-import { getServiceLines, trackTrain } from "./qr-travel/qr-travel-tracker.js";
-import TRAX, { AugmentedStopTime } from "./index.js";
+import { getCurrentQRTravelTrains } from "./qr-travel/qr-travel-tracker.js";
+import TRAX, { AugmentedStopTime, LogLevel, TravelTrip } from "./index.js";
 import * as gtfs from "gtfs";
 
 async function qrTravelFlow() {
+	TRAX.logger.setLevel(LogLevel.WARN);
 	console.log(chalk.bold.magenta("🚄 QR Travel Interactive CLI"));
 	console.log(chalk.gray("Queensland Rail real-time tracking\n"));
 
-	// Step 1: Select Service Line
-	console.log(chalk.yellow("📡 Fetching service lines..."));
-	const serviceLines = await getServiceLines();
-	const lineChoices = serviceLines.map((line) => ({
-		name: chalk.cyan(line.ServiceLineName),
-		value: line,
+	// Step 1: Select Service
+	console.log(chalk.yellow("📡 Fetching services..."));
+	const services = await getCurrentQRTravelTrains();
+	const serviceChoice = services.map((train) => ({
+		name: chalk.cyan(train.serviceId + " - " + train.direction + " " + train.line),
+		value: train,
 	}));
 
-	const { selectedLine } = await inquirer.prompt([
-		{
-			type: "list",
-			name: "selectedLine",
-			message: chalk.bold("🛤 Select a service line:"),
-			choices: lineChoices,
-		},
-	]);
-
-	// Step 2: Select Direction
-	const directionChoices = selectedLine.Directions.map((dir) => ({
-		name: chalk.green(dir.DirectionName),
-		value: dir,
-	}));
-
-	const { selectedDirection } = await inquirer.prompt([
-		{
-			type: "list",
-			name: "selectedDirection",
-			message: chalk.bold("🧭 Select a direction:"),
-			choices: directionChoices,
-		},
-	]);
-
-	// Step 3: Select Service (for today)
-	let todayServices = selectedDirection.Services;
-
-	if (todayServices.length === 0) {
-		console.log(chalk.red("No services found at all for this direction."));
-		setImmediate(() => main(false));
-		return;
-	}
-
-	const serviceChoices = todayServices.map((svc) => ({
-		name: `${chalk.bold(svc.ServiceName)} ${chalk.gray(
-			`(${svc.ServiceId})`,
-		)} ${chalk.blue(`departs ${svc.DepartureDate}`)}`,
-		value: svc,
-	}));
-
-	const { selectedService } = await inquirer.prompt([
+	const { selectedService }: { selectedService: TravelTrip } = await inquirer.prompt([
 		{
 			type: "list",
 			name: "selectedService",
-			message: chalk.bold("🚆 Select a service:"),
-			choices: serviceChoices,
+			message: chalk.bold("🛤 Select a service:"),
+			choices: serviceChoice,
 		},
 	]);
 
-	// Step 4: Fetch and display stop times
-	const serviceResp = await trackTrain(selectedService.ServiceId, selectedService.ServiceDate);
-	if (!serviceResp || !serviceResp.TrainMovements || serviceResp.TrainMovements.length === 0) {
-		console.log(chalk.red("No stop times found for this service."));
-		return;
-	}
-	console.log(chalk.bold(`\nStops for ${selectedService.ServiceName} (${selectedService.ServiceId}):`));
-	for (const stop of serviceResp.TrainMovements) {
-		// Format times
-		const arrTime =
-			stop.ActualArrival && stop.ActualArrival !== "0001-01-01T00:00:00"
-				? new Date(stop.ActualArrival).toTimeString().slice(0, 5)
-				: stop.PlannedArrival && stop.PlannedArrival !== "0001-01-01T00:00:00"
-					? new Date(stop.PlannedArrival).toTimeString().slice(0, 5)
-					: "--:--";
-		const depTime =
-			stop.ActualDeparture && stop.ActualDeparture !== "0001-01-01T00:00:00"
-				? new Date(stop.ActualDeparture).toTimeString().slice(0, 5)
-				: stop.PlannedDeparture && stop.PlannedDeparture !== "0001-01-01T00:00:00"
-					? new Date(stop.PlannedDeparture).toTimeString().slice(0, 5)
-					: "--:--";
-		// Request stop
-		let reqStop = "";
-		if (stop.KStation === true || stop.KStation === "True" || stop.KStation === "true") {
-			reqStop = chalk.yellow(" [stops on request] ");
+	for (const stop of selectedService.stopsWithPassing ?? []) {
+		// Determine status
+		const isPassing =
+			stop.estimatedPassingTime !== undefined &&
+			stop.estimatedPassingTime !== "0001-01-01T00:00:00Z" &&
+			(stop.actualArrival ?? stop.actualDeparture) === undefined;
+
+		// Time info
+		const arr = stop.actualArrival || stop.plannedArrival || "";
+		const dep = stop.actualDeparture || stop.plannedDeparture || "";
+		const pass = stop.estimatedPassingTime || "";
+		let timeStr = "";
+		if (isPassing) {
+			timeStr = chalk.gray(pass ? `Pass: ${pass}` : "");
+		} else {
+			if (arr && dep && arr !== dep) {
+				timeStr = `${chalk.green("Arr:")} ${chalk.white(arr)}  ${chalk.yellow("Dep:")} ${chalk.white(dep)}`;
+			} else if (arr) {
+				timeStr = `${chalk.green("Arr:")} ${chalk.white(arr)}`;
+			} else if (dep) {
+				timeStr = `${chalk.yellow("Dep:")} ${chalk.white(dep)}`;
+			} else {
+				timeStr = chalk.gray("No time info");
+			}
 		}
-		// Display
-		console.log(
-			`  ${chalk.bold(stop.PlaceName)} (${chalk.blue(
-				stop.PlaceCode,
-			)}) - arrives at ${chalk.cyan(arrTime)}, departs ${chalk.magenta(depTime)}${reqStop}`,
-		);
+
+		// Status
+		let status = "";
+		if (isPassing) {
+			status = chalk.gray("(Passing)");
+		} else if (stop.actualArrival || stop.actualDeparture) {
+			status = chalk.green("(Actual)");
+		} else {
+			status = chalk.gray("(Scheduled)");
+		}
+
+		// Delay info (use delay class/string)
+		let delayStr = "";
+		if (!isPassing) {
+			let delayClass = stop.departureDelayClass || stop.arrivalDelayClass;
+			let delayString = stop.departureDelayString || stop.arrivalDelayString;
+			if (delayClass && delayString) {
+				switch (delayClass) {
+					case "on-time":
+						delayStr = chalk.green(delayString);
+						break;
+					case "scheduled":
+						delayStr = chalk.gray(delayString);
+						break;
+					case "late":
+						delayStr = chalk.yellow(delayString);
+						break;
+					case "very-late":
+						delayStr = chalk.red(delayString);
+						break;
+					case "early":
+						delayStr = chalk.cyan(delayString);
+						break;
+					default:
+						delayStr = chalk.gray(delayString);
+				}
+			}
+		}
+
+		// Build fancy line
+		const line = ["    ", timeStr, status, delayStr].filter(Boolean).join("  ");
+		console.log(chalk.bold.cyan(stop.placeName), chalk.gray(selectedService.stops.find(v => v.placeName.trim().toLowerCase() == stop.placeName.trim().toLowerCase())?.placeCode ?? ""));
+		console.log(line);
 	}
 }
 

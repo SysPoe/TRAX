@@ -1,6 +1,7 @@
 // Hardcoded SRT data from metro-srt-travel-train.csv (modified slightly)
 export type SRTEntry = { from: string; to: string; travelTrain: number };
 export let SRT_DATA: SRTEntry[] = [
+	// BSA
 	{ from: "Roma Street", to: "Normanby", travelTrain: 2 },
 	{ from: "Brisbane - Roma Street", to: "Normanby", travelTrain: 2 },
 	{ from: "Normanby", to: "Exhibition", travelTrain: 1 },
@@ -180,6 +181,325 @@ export let SRT_DATA: SRTEntry[] = [
 	{ from: "Darra", to: "Richlands", travelTrain: 3 },
 	{ from: "Richlands", to: "Springfield", travelTrain: 5 },
 	{ from: "Springfield", to: "Springfield Central", travelTrain: 3 },
+	// NCL
+	{ from: "Rockhampton", to: "Glenmore Junction", travelTrain: 14 },
+	{ from: "Glenmore Junction", to: "Rockhampton", travelTrain: 12 },
+	{ from: "Glenmore Junction", to: "Parkhurst", travelTrain: 8 },
+	{ from: "Parkhurst", to: "Glenmore Junction", travelTrain: 7 },
+	{ from: "Parkhurst", to: "The Caves", travelTrain: 14 },
+	{ from: "The Caves", to: "Parkhurst", travelTrain: 12 },
+	{ from: "The Caves", to: "Yaamba", travelTrain: 10 },
+	{ from: "Yaamba", to: "The Caves", travelTrain: 12 },
+	{ from: "Yaamba", to: "Glen Geddes", travelTrain: 15 },
+	{ from: "Glen Geddes", to: "Yaamba", travelTrain: 17 },
+	{ from: "Glen Geddes", to: "Kunwarara", travelTrain: 17 },
+	{ from: "Kunwarara", to: "Glen Geddes", travelTrain: 15 },
+	{ from: "Kunwarara", to: "Princhester", travelTrain: 20 },
+	{ from: "Princhester", to: "Kunwarara", travelTrain: 17 },
+	{ from: "Princhester", to: "Marlborough", travelTrain: 14 },
+	{ from: "Marlborough", to: "Princhester", travelTrain: 10 },
+	{ from: "Marlborough", to: "Kooltandra", travelTrain: 16 },
+	{ from: "Kooltandra", to: "Marlborough", travelTrain: 15 },
+	{ from: "Kooltandra", to: "Ogmore", travelTrain: 13 },
+	{ from: "Ogmore", to: "Kooltandra", travelTrain: 14 },
+	{ from: "Ogmore", to: "Wumalgi", travelTrain: 15 },
+	{ from: "Wumalgi", to: "Ogmore", travelTrain: 15 },
+	{ from: "Wumalgi", to: "St. Lawrence", travelTrain: 15 },
+	{ from: "St. Lawrence", to: "Wumalgi", travelTrain: 17 },
+	{ from: "St. Lawrence", to: "Kalarka", travelTrain: 18 },
+	{ from: "Kalarka", to: "St. Lawrence", travelTrain: 20 },
+	{ from: "Wumalgi", to: "St Lawrence", travelTrain: 15 }, // ADDED
+	{ from: "St Lawrence", to: "Wumalgi", travelTrain: 17 }, // ADDED
+	{ from: "St Lawrence", to: "Kalarka", travelTrain: 18 }, // ADDED
+	{ from: "Kalarka", to: "St Lawrence", travelTrain: 20 }, // ADDED
+	{ from: "Kalarka", to: "Elalie", travelTrain: 13 },
+	{ from: "Elalie", to: "Kalarka", travelTrain: 15 },
+	{ from: "Elalie", to: "Carmila", travelTrain: 15 },
+	{ from: "Carmila", to: "Elalie", travelTrain: 14 },
+	{ from: "Carmila", to: "Orkabie", travelTrain: 10 },
+	{ from: "Orkabie", to: "Carmila", travelTrain: 9 },
+	{ from: "Orkabie", to: "Ilbilbie", travelTrain: 14 },
+	{ from: "Ilbilbie", to: "Orkabie", travelTrain: 14 },
+	{ from: "Ilbilbie", to: "Koumala", travelTrain: 14 },
+	{ from: "Koumala", to: "Ilbilbie", travelTrain: 14 },
+	{ from: "Koumala", to: "Yukan QR", travelTrain: 8 },
+	{ from: "Yukan QR", to: "Koumala", travelTrain: 11 },
+	{ from: "Yukan QR", to: "Sarina", travelTrain: 11 },
+	{ from: "Sarina", to: "Yukan QR", travelTrain: 14 },
+	{ from: "Sarina", to: "Dawlish", travelTrain: 10 },
+	{ from: "Dawlish", to: "Sarina", travelTrain: 9 },
+	{ from: "Dawlish", to: "Balberra", travelTrain: 6 },
+	{ from: "Balberra", to: "Dawlish", travelTrain: 6 },
+	{ from: "Balberra", to: "Rosella", travelTrain: 8 },
+	{ from: "Rosella", to: "Balberra", travelTrain: 6 },
+	{ from: "Rosella", to: "Mackay", travelTrain: 15 },
+	{ from: "Mackay", to: "Rosella", travelTrain: 14 },
+	{ from: "Mackay", to: "Erakala", travelTrain: 7 },
+	{ from: "Erakala", to: "Mackay", travelTrain: 6 },
+	{ from: "Erakala", to: "Farleigh", travelTrain: 7 },
+	{ from: "Farleigh", to: "Erakala", travelTrain: 7 },
+	{ from: "Farleigh", to: "Aminungo", travelTrain: 13 },
+	{ from: "Aminungo", to: "Farleigh", travelTrain: 11 },
+	{ from: "Aminungo", to: "Kuttabul", travelTrain: 10 },
+	{ from: "Kuttabul", to: "Aminungo", travelTrain: 9 },
+	{ from: "Kuttabul", to: "Mt. Ossa", travelTrain: 9 },
+	{ from: "Mt. Ossa", to: "Kuttabul", travelTrain: 12 },
+	{ from: "Mt. Ossa", to: "Calen", travelTrain: 10 },
+	{ from: "Calen", to: "Mt. Ossa", travelTrain: 10 },
+	{ from: "Calen", to: "Yalboroo", travelTrain: 13 },
+	{ from: "Yalboroo", to: "Calen", travelTrain: 13 },
+	{ from: "Yalboroo", to: "Bloomsbury", travelTrain: 15 },
+	{ from: "Bloomsbury", to: "Yalboroo", travelTrain: 18 },
+	{ from: "Bloomsbury", to: "Thoopara", travelTrain: 16 },
+	{ from: "Thoopara", to: "Bloomsbury", travelTrain: 16 },
+	{ from: "Thoopara", to: "Proserpine", travelTrain: 15 },
+	{ from: "Proserpine", to: "Thoopara", travelTrain: 17 },
+	{ from: "Proserpine", to: "Bubialo", travelTrain: 17 },
+	{ from: "Bubialo", to: "Proserpine", travelTrain: 20 },
+	{ from: "Bubialo", to: "Longford Creek", travelTrain: 12 },
+	{ from: "Longford Creek", to: "Bubialo", travelTrain: 12 },
+	{ from: "Longford Creek", to: "Mookarra", travelTrain: 16 },
+	{ from: "Mookarra", to: "Longford Creek", travelTrain: 13 },
+	{ from: "Mookarra", to: "Bowen Junction", travelTrain: 13 },
+	{ from: "Mookarra", to: "Bowen", travelTrain: 13 }, // ADDED
+	{ from: "Bowen Junction", to: "Mookarra", travelTrain: 10 },
+	{ from: "Bowen Junction", to: "Merinda", travelTrain: 7 },
+	{ from: "Bowen", to: "Mookarra", travelTrain: 10 }, // ADDED
+	{ from: "Bowen", to: "Merinda", travelTrain: 7 }, // ADDED
+	{ from: "Merinda", to: "Bowen Junction", travelTrain: 5 },
+	{ from: "Merinda", to: "Bowen", travelTrain: 5 }, // ADDED
+	{ from: "Merinda", to: "QNIP02", travelTrain: 4 },
+	{ from: "QNIP02", to: "Merinda", travelTrain: 1 },
+	{ from: "QNIP02", to: "Durroburra", travelTrain: 1 },
+	{ from: "Durroburra", to: "QNIP02", travelTrain: 1 },
+	{ from: "Durroburra", to: "Kaili", travelTrain: 8 },
+	{ from: "Kaili", to: "Durroburra", travelTrain: 7 },
+	{ from: "Kaili", to: "QNIP01", travelTrain: 2 },
+	{ from: "QNIP01", to: "Kaili", travelTrain: 2 },
+	{ from: "QNIP01", to: "Wathana", travelTrain: 1 },
+	{ from: "Wathana", to: "QNIP01", travelTrain: 1 },
+	{ from: "Wathana", to: "Wilmington", travelTrain: 9 },
+	{ from: "Wilmington", to: "Wathana", travelTrain: 9 },
+	{ from: "Wilmington", to: "Guthalungra", travelTrain: 14 },
+	{ from: "Guthalungra", to: "Wilmington", travelTrain: 14 },
+	{ from: "Guthalungra", to: "Gumlu", travelTrain: 13 },
+	{ from: "Gumlu", to: "Guthalungra", travelTrain: 13 },
+	{ from: "Gumlu", to: "Bobawaba", travelTrain: 10 },
+	{ from: "Bobawaba", to: "Gumlu", travelTrain: 10 },
+	{ from: "Bobawaba", to: "Inkerman", travelTrain: 9 },
+	{ from: "Inkerman", to: "Bobawaba", travelTrain: 9 },
+	{ from: "Inkerman", to: "Home Hill", travelTrain: 10 },
+	{ from: "Home Hill", to: "Inkerman", travelTrain: 10 },
+	{ from: "Home Hill", to: "Ayr", travelTrain: 11 },
+	{ from: "Ayr", to: "Home Hill", travelTrain: 13 },
+	{ from: "Ayr", to: "Pioneer", travelTrain: 9 },
+	{ from: "Pioneer", to: "Ayr", travelTrain: 11 },
+	{ from: "Pioneer", to: "Barratta", travelTrain: 10 },
+	{ from: "Barratta", to: "Pioneer", travelTrain: 10 },
+	{ from: "Barratta", to: "Giru", travelTrain: 11 },
+	{ from: "Giru", to: "Barratta", travelTrain: 8 },
+	{ from: "Giru", to: "Cromarty", travelTrain: 6 },
+	{ from: "Cromarty", to: "Giru", travelTrain: 7 },
+	{ from: "Cromarty", to: "Storth", travelTrain: 6 },
+	{ from: "Storth", to: "Cromarty", travelTrain: 7 },
+	{ from: "Storth", to: "Nome", travelTrain: 10 },
+	{ from: "Nome", to: "Storth", travelTrain: 13 },
+	{ from: "Nome", to: "Julago", travelTrain: 5 },
+	{ from: "Julago", to: "Nome", travelTrain: 6 },
+	{ from: "Julago", to: "Sun Metals Junction", travelTrain: 1 },
+	{ from: "Sun Metals Junction", to: "Julago", travelTrain: 1 },
+	{ from: "Sun Metals Junction", to: "Partington", travelTrain: 2 },
+	{ from: "Partington", to: "Sun Metals Junction", travelTrain: 3 },
+	{ from: "Partington", to: "Stuart", travelTrain: 3 },
+	{ from: "Stuart", to: "Partington", travelTrain: 3 },
+	{ from: "Stuart", to: "Stuart Yard", travelTrain: 5 },
+	{ from: "Stuart Yard", to: "Stuart", travelTrain: 5 },
+	{ from: "Stuart Yard", to: "Cluden", travelTrain: 7 },
+	{ from: "Cluden", to: "Stuart Yard", travelTrain: 6 },
+	{ from: "Cluden", to: "Oonoonba", travelTrain: 2 },
+	{ from: "Oonoonba", to: "Cluden", travelTrain: 2 },
+	{ from: "Oonoonba", to: "`Townsville` Fork Points", travelTrain: 1 },
+	{ from: "Townsville Fork Points", to: "Oonoonba", travelTrain: 2 },
+	{ from: "Townsville Fork Points", to: "Townsville New Station", travelTrain: 6 },
+	{ from: "Townsville New Station", to: "Townsville Fork Points", travelTrain: 6 },
+	{ from: "Townsville New Station", to: "Garbutt", travelTrain: 15 },
+	{ from: "Garbutt", to: "Townsville New Station", travelTrain: 15 },
+	{ from: "Townsville Fork Points", to: "Townsville - Charters Towers Road", travelTrain: 6 }, // ADDED
+	{ from: "Townsville - Charters Towers Road", to: "Townsville Fork Points", travelTrain: 6 }, // ADDED
+	{ from: "Townsville - Charters Towers Road", to: "Garbutt", travelTrain: 15 }, // ADDED
+	{ from: "Garbutt", to: "Townsville - Charters Towers Road", travelTrain: 15 }, // ADDED
+	{ from: "Garbutt", to: "Bohle Industrial Siding", travelTrain: 8 },
+	{ from: "Bohle Industrial Siding", to: "Garbutt", travelTrain: 8 },
+	{ from: "Bohle Industrial Siding", to: "Nightjar", travelTrain: 1 },
+	{ from: "Nightjar", to: "Bohle Industrial Siding", travelTrain: 1 },
+	{ from: "Nightjar", to: "Deeragun", travelTrain: 3 },
+	{ from: "Deeragun", to: "Nightjar", travelTrain: 3 },
+	{ from: "Deeragun", to: "Cobarra New Leg", travelTrain: 8 },
+	{ from: "Cobarra New Leg", to: "Deeragun", travelTrain: 8 },
+	{ from: "Cobarra New Leg", to: "Cobarra Old Leg", travelTrain: 1 },
+	{ from: "Cobarra Old Leg", to: "Cobarra New Leg", travelTrain: 1 },
+	{ from: "Cobarra Old Leg", to: "Purono", travelTrain: 3 },
+	{ from: "Purono", to: "Cobarra Old Leg", travelTrain: 3 },
+	{ from: "Purono", to: "Kurukan", travelTrain: 14 },
+	{ from: "Kurukan", to: "Purono", travelTrain: 12 },
+	{ from: "Kurukan", to: "Rollingstone", travelTrain: 16 },
+	{ from: "Rollingstone", to: "Kurukan", travelTrain: 14 },
+	{ from: "Rollingstone", to: "Mutarnee", travelTrain: 11 },
+	{ from: "Mutarnee", to: "Rollingstone", travelTrain: 16 },
+	{ from: "Mutarnee", to: "Bambaroo", travelTrain: 11 },
+	{ from: "Bambaroo", to: "Mutarnee", travelTrain: 14 },
+	{ from: "Bambaroo", to: "Pombel", travelTrain: 11 },
+	{ from: "Pombel", to: "Bambaroo", travelTrain: 11 },
+	{ from: "Pombel", to: "Ingham", travelTrain: 12 },
+	{ from: "Ingham", to: "Pombel", travelTrain: 15 },
+	{ from: "Ingham", to: "Hinchinbrook", travelTrain: 20 },
+	{ from: "Hinchinbrook", to: "Ingham", travelTrain: 20 },
+	{ from: "Hinchinbrook", to: "Conn", travelTrain: 14 },
+	{ from: "Conn", to: "Hinchinbrook", travelTrain: 15 },
+	{ from: "Conn", to: "Cardwell", travelTrain: 18 },
+	{ from: "Cardwell", to: "Conn", travelTrain: 19 },
+	{ from: "Cardwell", to: "Kennedy", travelTrain: 12 },
+	{ from: "Kennedy", to: "Cardwell", travelTrain: 12 },
+	{ from: "Kennedy", to: "Bilyana", travelTrain: 10 },
+	{ from: "Bilyana", to: "Kennedy", travelTrain: 10 },
+	{ from: "Bilyana", to: "Hewitt", travelTrain: 17 },
+	{ from: "Hewitt", to: "Bilyana", travelTrain: 20 },
+	{ from: "Hewitt", to: "Tully", travelTrain: 5 },
+	{ from: "Tully", to: "Hewitt", travelTrain: 5 },
+	{ from: "Tully", to: "El Arish", travelTrain: 18 },
+	{ from: "El Arish", to: "Tully", travelTrain: 19 },
+	{ from: "El Arish", to: "Silkwood", travelTrain: 8 },
+	{ from: "Silkwood", to: "El Arish", travelTrain: 8 },
+	{ from: "Silkwood", to: "Boogan", travelTrain: 17 },
+	{ from: "Boogan", to: "Silkwood", travelTrain: 19 },
+	{ from: "Boogan", to: "Mundoo", travelTrain: 9 },
+	{ from: "Mundoo", to: "Boogan", travelTrain: 9 },
+	{ from: "Mundoo", to: "Innisfail", travelTrain: 8 },
+	{ from: "Innisfail", to: "Mundoo", travelTrain: 11 },
+	{ from: "Innisfail", to: "Waugh", travelTrain: 21 },
+	{ from: "Waugh", to: "Innisfail", travelTrain: 21 },
+	{ from: "Waugh", to: "Babinda", travelTrain: 17 },
+	{ from: "Babinda", to: "Waugh", travelTrain: 18 },
+	{ from: "Babinda", to: "Deeral", travelTrain: 16 },
+	{ from: "Deeral", to: "Babinda", travelTrain: 17 },
+	{ from: "Deeral", to: "Aloomba", travelTrain: 13 },
+	{ from: "Aloomba", to: "Deeral", travelTrain: 15 },
+	{ from: "Aloomba", to: "Gordonvale", travelTrain: 7 },
+	{ from: "Gordonvale", to: "Aloomba", travelTrain: 8 },
+	{ from: "Gordonvale", to: "Kamma", travelTrain: 10 },
+	{ from: "Kamma", to: "Gordonvale", travelTrain: 7 },
+	{ from: "Kamma", to: "Woree QRX SDG", travelTrain: 12 },
+	{ from: "Woree QRX SDG", to: "Kamma", travelTrain: 10 },
+	{ from: "Woree QRX SDG", to: "Portsmith", travelTrain: 7 },
+	{ from: "Portsmith", to: "Woree QRX SDG", travelTrain: 8 },
+	{ from: "Portsmith", to: "Cairns", travelTrain: 1 },
+	{ from: "Cairns", to: "Portsmith", travelTrain: 1 },
+	{ from: "Townsville Fork Points", to: "Townsville", travelTrain: 5 },
+	{ from: "Townsville", to: "Townsville Fork Points", travelTrain: 5 },
+	{ from: "Townsville", to: "Townsville Jetty", travelTrain: 5 },
+	{ from: "Townsville Jetty", to: "Townsville", travelTrain: 5 },
+	{ from: "Townsville New Station", to: "Townsville", travelTrain: 2 },
+	{ from: "Townsville", to: "Townsville New Station", travelTrain: 2 },
+	{ from: "Townsville - Charters Towers Road", to: "Townsville", travelTrain: 2 }, // ADDED
+	{ from: "Townsville", to: "Townsville - Charters Towers Road", travelTrain: 2 }, // ADDED
+	{ from: "Nambour", to: "Yandina", travelTrain: 9 },
+	{ from: "Yandina", to: "Nambour", travelTrain: 9 },
+	{ from: "Yandina", to: "North Arm", travelTrain: 5 },
+	{ from: "North Arm", to: "Yandina", travelTrain: 6 },
+	{ from: "North Arm", to: "Eumundi", travelTrain: 6 },
+	{ from: "Eumundi", to: "North Arm", travelTrain: 4 },
+	{ from: "Eumundi", to: "Sunrise", travelTrain: 2 },
+	{ from: "Sunrise", to: "Eumundi", travelTrain: 2 },
+	{ from: "Sunrise", to: "Cooroy", travelTrain: 7 },
+	{ from: "Cooroy", to: "Sunrise", travelTrain: 6 },
+	{ from: "Cooroy", to: "Pomona", travelTrain: 8 },
+	{ from: "Pomona", to: "Cooroy", travelTrain: 9 },
+	{ from: "Pomona", to: "Cooran", travelTrain: 7 },
+	{ from: "Cooran", to: "Pomona", travelTrain: 7 },
+	{ from: "Cooran", to: "Traveston", travelTrain: 6 },
+	{ from: "Traveston", to: "Cooran", travelTrain: 6 },
+	{ from: "Traveston", to: "Woondum", travelTrain: 7 },
+	{ from: "Woondum", to: "Traveston", travelTrain: 7 },
+	{ from: "Woondum", to: "Glanmire", travelTrain: 8 },
+	{ from: "Glanmire", to: "Woondum", travelTrain: 8 },
+	{ from: "Glanmire", to: "Gympie North", travelTrain: 4 },
+	{ from: "Gympie North", to: "Glanmire", travelTrain: 4 },
+	{ from: "Gympie North", to: "Tamaree", travelTrain: 5 },
+	{ from: "Tamaree", to: "Gympie North", travelTrain: 3 },
+	{ from: "Tamaree", to: "Harvey's Siding", travelTrain: 9 },
+	{ from: "Harvey's Siding", to: "Tamaree", travelTrain: 6 },
+	{ from: "Harvey's Siding", to: "Curra", travelTrain: 5 },
+	{ from: "Curra", to: "Harvey's Siding", travelTrain: 5 },
+	{ from: "Curra", to: "Theebine", travelTrain: 9 },
+	{ from: "Theebine", to: "Curra", travelTrain: 9 },
+	{ from: "Theebine", to: "Paterson", travelTrain: 6 },
+	{ from: "Paterson", to: "Theebine", travelTrain: 6 },
+	{ from: "Paterson", to: "Gundiah", travelTrain: 7 },
+	{ from: "Gundiah", to: "Paterson", travelTrain: 6 },
+	{ from: "Gundiah", to: "Netherby", travelTrain: 5 },
+	{ from: "Netherby", to: "Gundiah", travelTrain: 4 },
+	{ from: "Netherby", to: "Tiaro", travelTrain: 6 },
+	{ from: "Tiaro", to: "Netherby", travelTrain: 7 },
+	{ from: "Tiaro", to: "Owanyilla", travelTrain: 7 },
+	{ from: "Owanyilla", to: "Tiaro", travelTrain: 10 },
+	{ from: "Owanyilla", to: "Mungar", travelTrain: 9 },
+	{ from: "Mungar", to: "Owanyilla", travelTrain: 11 },
+	{ from: "Mungar", to: "Yengarie", travelTrain: 6 },
+	{ from: "Yengarie", to: "Mungar", travelTrain: 6 },
+	{ from: "Yengarie", to: "Maryborough West", travelTrain: 9 },
+	{ from: "Maryborough West", to: "Yengarie", travelTrain: 9 },
+	{ from: "Maryborough West", to: "Colton", travelTrain: 10 },
+	{ from: "Colton", to: "Maryborough West", travelTrain: 9 },
+	{ from: "Colton", to: "Torbanlea", travelTrain: 7 },
+	{ from: "Torbanlea", to: "Colton", travelTrain: 7 },
+	{ from: "Torbanlea", to: "Howard", travelTrain: 4 },
+	{ from: "Howard", to: "Torbanlea", travelTrain: 4 },
+	{ from: "Howard", to: "Wokka", travelTrain: 7 },
+	{ from: "Wokka", to: "Howard", travelTrain: 7 },
+	{ from: "Wokka", to: "Isis Junction", travelTrain: 5 },
+	{ from: "Isis Junction", to: "Wokka", travelTrain: 5 },
+	{ from: "Isis Junction", to: "Goodwood", travelTrain: 7 },
+	{ from: "Goodwood", to: "Isis Junction", travelTrain: 7 },
+	{ from: "Goodwood", to: "Kinkuna", travelTrain: 7 },
+	{ from: "Kinkuna", to: "Goodwood", travelTrain: 7 },
+	{ from: "Kinkuna", to: "Elliott", travelTrain: 6 },
+	{ from: "Elliott", to: "Kinkuna", travelTrain: 7 },
+	{ from: "Elliott", to: "Bundaberg", travelTrain: 14 },
+	{ from: "Bundaberg", to: "Elliott", travelTrain: 12 },
+	{ from: "Bundaberg", to: "Meadowvale", travelTrain: 17 },
+	{ from: "Meadowvale", to: "Bundaberg", travelTrain: 16 },
+	{ from: "Meadowvale", to: "Avondale", travelTrain: 11 },
+	{ from: "Avondale", to: "Meadowvale", travelTrain: 13 },
+	{ from: "Avondale", to: "Littabella", travelTrain: 8 },
+	{ from: "Littabella", to: "Avondale", travelTrain: 8 },
+	{ from: "Littabella", to: "Flinders", travelTrain: 17 },
+	{ from: "Flinders", to: "Littabella", travelTrain: 15 },
+	{ from: "Flinders", to: "Berajondo", travelTrain: 13 },
+	{ from: "Berajondo", to: "Flinders", travelTrain: 10 },
+	{ from: "Berajondo", to: "Baffle", travelTrain: 10 },
+	{ from: "Baffle", to: "Berajondo", travelTrain: 9 },
+	{ from: "Baffle", to: "Irkanda", travelTrain: 6 },
+	{ from: "Irkanda", to: "Baffle", travelTrain: 7 },
+	{ from: "Irkanda", to: "Netley", travelTrain: 8 },
+	{ from: "Netley", to: "Irkanda", travelTrain: 11 },
+	{ from: "Netley", to: "Miriam Vale", travelTrain: 9 },
+	{ from: "Miriam Vale", to: "Netley", travelTrain: 11 },
+	{ from: "Miriam Vale", to: "Bororen", travelTrain: 8 },
+	{ from: "Bororen", to: "Miriam Vale", travelTrain: 8 },
+	{ from: "Bororen", to: "Iveragh", travelTrain: 12 },
+	{ from: "Iveragh", to: "Bororen", travelTrain: 13 },
+	{ from: "Iveragh", to: "Benaraby", travelTrain: 15 },
+	{ from: "Benaraby", to: "Iveragh", travelTrain: 16 },
+	{ from: "Benaraby", to: "Parana", travelTrain: 10 },
+	{ from: "Parana", to: "Benaraby", travelTrain: 9 },
+	{ from: "Parana", to: "Gladstone", travelTrain: 9 },
+	{ from: "Gladstone", to: "Parana", travelTrain: 11 },
+	{ from: "Rocklands", to: "Rockhampton", travelTrain: 11 },
+	{ from: "Rockhampton", to: "Rocklands", travelTrain: 10 },
+	{ from: "Gympie North", to: "Gympie", travelTrain: 10 },
+	{ from: "Gympie", to: "Gympie North", travelTrain: 10 },
+	{ from: "Maryborough West", to: "Maryborough", travelTrain: 10 },
+	{ from: "Maryborough", to: "Maryborough West", travelTrain: 10 },
 ];
 
 SRT_DATA = SRT_DATA.concat(
@@ -383,21 +703,62 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 					s.from.trim().toLowerCase() === last.trim().toLowerCase() ||
 					s.to.trim().toLowerCase() === last.trim().toLowerCase(),
 			)) {
-				if (!visited.has(next.to)) queue.push({ path: [...path, next], last: next.to });
+				// Determine the next stop based on which end matches 'last'
+				const nextStop = next.from.trim().toLowerCase() === last.trim().toLowerCase() ? next.to : next.from;
+				if (!visited.has(nextStop)) queue.push({ path: [...path, next], last: nextStop });
 			}
 		}
 		if (found) {
-			// Only add true passing stops (all except the last segment)
-			for (let j = 1; j < found.length - 1; ++j) {
-				const foundSeg = found[j];
+			// Build a list of stops in order by traversing the path
+			let stops: string[] = [from.PlaceName];
+			let current = from.PlaceName;
+			for (let seg of found) {
+				// Determine which end of the segment we're going to
+				if (seg.from.trim().toLowerCase() === current.trim().toLowerCase()) {
+					current = seg.to;
+				} else {
+					current = seg.from;
+				}
+				stops.push(current);
+			}
+
+			// Calculate total SRT time for the entire segment
+			let totalSRT = found.reduce((sum, seg) => sum + seg.travelTrain, 0);
+			
+			// Calculate actual time between from and to stations
+			let fromTime = prevTime;
+			let toTime: Date | null = null;
+			if (to.ActualArrival && to.ActualArrival !== "0001-01-01T00:00:00") {
+				toTime = new Date(to.ActualArrival);
+			} else if (to.PlannedArrival && to.PlannedArrival !== "0001-01-01T00:00:00") {
+				toTime = new Date(to.PlannedArrival);
+			}
+			
+			// Calculate scaling factor: actualTime / srtTime
+			let scaleFactor = 1.0;
+			if (fromTime && toTime && totalSRT > 0) {
+				let actualMinutes = (toTime.getTime() - fromTime.getTime()) / 60000;
+				scaleFactor = actualMinutes / totalSRT;
+			}
+
+			// Only add true passing stops (all stops except first and last)
+			let cumulativeSRT = 0;
+			for (let j = 1; j < stops.length - 1; ++j) {
+				const stopName = stops[j];
+				const foundSeg = found[j - 1]; // The segment that leads TO this stop
 				if (foundSeg) {
-					const orig = stoppingMovements.find((m) => m.PlaceName === foundSeg.from);
-					let estPass: Date | undefined =
-						prevTime && foundSeg.travelTrain
-							? new Date(prevTime.getTime() + foundSeg.travelTrain * 60000)
-							: undefined;
+					cumulativeSRT += foundSeg.travelTrain;
+					const orig = stoppingMovements.find((m) => m.PlaceName === stopName);
+					
+					// Calculate scaled time based on actual travel time
+					let estPass: Date | undefined = undefined;
+					if (fromTime) {
+						let scaledMinutes = cumulativeSRT * scaleFactor;
+						estPass = new Date(fromTime.getTime() + scaledMinutes * 60000);
+					}
+					
 					pushSRT(result, {
-						placeName: foundSeg.from,
+						placeName: stopName,
 						isStop: false,
 						plannedArrival: orig?.PlannedArrival || "",
 						plannedDeparture: orig?.PlannedDeparture || "",
@@ -430,11 +791,7 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 				}
 			}
 			// Add the final stop (not as a passing stop)
-			let lastSeg = found[found.length - 1];
-			let estArr: Date | undefined =
-				prevTime && lastSeg && lastSeg.travelTrain
-					? new Date(prevTime.getTime() + lastSeg.travelTrain * 60000)
-					: undefined;
+			// Use actual arrival time for the destination, don't estimate it
 			pushSRT(result, {
 				placeName: to.PlaceName,
 				isStop: true,
@@ -442,24 +799,18 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 				plannedDeparture: to.PlannedDeparture,
 				actualArrival: to.ActualArrival,
 				actualDeparture: to.ActualDeparture,
-				srtMinutes: lastSeg?.travelTrain,
-				estimatedPassingTime: estArr
-					? estArr.getFullYear().toString().padStart(4, "0") +
-						"-" +
-						(estArr.getMonth() + 1).toString().padStart(2, "0") +
-						"-" +
-						estArr.getDate().toString().padStart(2, "0") +
-						"T" +
-						estArr.getHours().toString().padStart(2, "0") +
-						":" +
-						estArr.getMinutes().toString().padStart(2, "0") +
-						":" +
-						estArr.getSeconds().toString().padStart(2, "0")
-					: undefined,
+				srtMinutes: totalSRT,
 				arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
 				departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
 			});
-			prevTime = estArr ?? null;
+			// Update prevTime to the actual departure of this stop
+			if (to.ActualDeparture && to.ActualDeparture !== "0001-01-01T00:00:00") {
+				prevTime = new Date(to.ActualDeparture);
+			} else if (to.PlannedDeparture && to.PlannedDeparture !== "0001-01-01T00:00:00") {
+				prevTime = new Date(to.PlannedDeparture);
+			} else {
+				prevTime = toTime;
+			}
 			continue;
 		}
 		// else: no SRT path found, include the stop
