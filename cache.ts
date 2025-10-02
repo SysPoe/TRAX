@@ -1,17 +1,9 @@
 import * as gtfs from "gtfs";
 import { AugmentedStop, augmentStop } from "./utils/augmentedStop.js";
-import {
-	AugmentedTrip,
-	augmentTrip,
-	calculateRunSeries,
-	RunSeries,
-} from "./utils/augmentedTrip.js";
+import { AugmentedTrip, augmentTrip, calculateRunSeries, RunSeries } from "./utils/augmentedTrip.js";
 import { AugmentedStopTime } from "./utils/augmentedStopTime.js";
 import { DEBUG, QRTPlace, TravelTrip } from "./index.js";
-import {
-	getCurrentQRTravelTrains,
-	getPlaces,
-} from "./qr-travel/qr-travel-tracker.js";
+import { getCurrentQRTravelTrains, getPlaces } from "./qr-travel/qr-travel-tracker.js";
 import logger from "./utils/logger.js";
 
 type RawCache = {
@@ -81,40 +73,32 @@ let augmentedCache: AugmentedCache = {
 };
 
 export function getRawTrips(trip_id?: string): gtfs.Trip[] {
-	if (trip_id)
-		return rawCache.tripsRec[trip_id] ? [rawCache.tripsRec[trip_id]] : [];
+	if (trip_id) return rawCache.tripsRec[trip_id] ? [rawCache.tripsRec[trip_id]] : [];
 	return rawCache.trips;
 }
 
 export function getRawStops(stop_id?: string): gtfs.Stop[] {
-	if (stop_id)
-		return rawCache.stopsRec[stop_id] ? [rawCache.stopsRec[stop_id]] : [];
+	if (stop_id) return rawCache.stopsRec[stop_id] ? [rawCache.stopsRec[stop_id]] : [];
 	return rawCache.stops;
 }
 
 export function getRawRoutes(route_id?: string): gtfs.Route[] {
-	if (route_id)
-		return rawCache.routesRec[route_id]
-			? [rawCache.routesRec[route_id]]
-			: [];
+	if (route_id) return rawCache.routesRec[route_id] ? [rawCache.routesRec[route_id]] : [];
 	return rawCache.routes;
 }
 
 export function getStopTimeUpdates(): gtfs.StopTimeUpdate[] {
-	if (rawCache.stopTimeUpdates.length === 0)
-		rawCache.stopTimeUpdates = gtfs.getStopTimeUpdates();
+	if (rawCache.stopTimeUpdates.length === 0) rawCache.stopTimeUpdates = gtfs.getStopTimeUpdates();
 	return rawCache.stopTimeUpdates;
 }
 
 export function getTripUpdates(): gtfs.TripUpdate[] {
-	if (rawCache.tripUpdates.length === 0)
-		rawCache.tripUpdates = gtfs.getTripUpdates();
+	if (rawCache.tripUpdates.length === 0) rawCache.tripUpdates = gtfs.getTripUpdates();
 	return rawCache.tripUpdates;
 }
 
 export function getVehiclePositions(): gtfs.VehiclePosition[] {
-	if (rawCache.vehiclePositions.length === 0)
-		rawCache.vehiclePositions = gtfs.getVehiclePositions();
+	if (rawCache.vehiclePositions.length === 0) rawCache.vehiclePositions = gtfs.getVehiclePositions();
 	return rawCache.vehiclePositions;
 }
 
@@ -136,8 +120,7 @@ export function getRawStopTimes(trip_id: string | undefined): gtfs.StopTime[] {
 
 export function getAugmentedTrips(trip_id?: string): AugmentedTrip[] {
 	if (trip_id) {
-		if (augmentedCache.tripsRec && augmentedCache.tripsRec[trip_id])
-			return [augmentedCache.tripsRec[trip_id]!];
+		if (augmentedCache.tripsRec && augmentedCache.tripsRec[trip_id]) return [augmentedCache.tripsRec[trip_id]!];
 		if (rawCache.tripsRec[trip_id]) {
 			const trip = rawCache.tripsRec[trip_id];
 			const augmentedTrip = augmentTrip(trip);
@@ -152,8 +135,7 @@ export function getAugmentedTrips(trip_id?: string): AugmentedTrip[] {
 
 export function getAugmentedStops(stop_id?: string): AugmentedStop[] {
 	if (stop_id) {
-		if (augmentedCache.stopsRec && augmentedCache.stopsRec[stop_id])
-			return [augmentedCache.stopsRec[stop_id]!];
+		if (augmentedCache.stopsRec && augmentedCache.stopsRec[stop_id]) return [augmentedCache.stopsRec[stop_id]!];
 		if (rawCache.stopsRec[stop_id]) {
 			const stop = rawCache.stopsRec[stop_id];
 			const augmentedStop = augmentStop(stop);
@@ -185,8 +167,7 @@ export function getCachedExpressInfo(stopListHash: string): any[] | undefined {
 }
 
 export function cachePassingStops(stopListHash: string, passingStops: any[]) {
-	if (!augmentedCache.passingStopsCache)
-		augmentedCache.passingStopsCache = {};
+	if (!augmentedCache.passingStopsCache) augmentedCache.passingStopsCache = {};
 	augmentedCache.passingStopsCache[stopListHash] = passingStops;
 }
 
@@ -194,27 +175,16 @@ export function getCachedPassingStops(stopListHash: string): any[] | undefined {
 	return augmentedCache.passingStopsCache?.[stopListHash];
 }
 
-export function getRunSeries(
-	date: number,
-	runSeries: string,
-	calcIfNotFound: boolean = true,
-): RunSeries {
+export function getRunSeries(date: number, runSeries: string, calcIfNotFound: boolean = true): RunSeries {
 	if (!augmentedCache.runSeriesCache) augmentedCache.runSeriesCache = {};
-	if (!augmentedCache.runSeriesCache[date])
-		augmentedCache.runSeriesCache[date] = {};
+	if (!augmentedCache.runSeriesCache[date]) augmentedCache.runSeriesCache[date] = {};
 	if (
 		!augmentedCache.runSeriesCache[date][runSeries] &&
 		calcIfNotFound &&
-		Object.keys(augmentedCache.serviceDateTrips[date]).find((v) =>
-			v.endsWith(runSeries),
-		)
+		Object.keys(augmentedCache.serviceDateTrips[date]).find((v) => v.endsWith(runSeries))
 	) {
 		calculateRunSeries(
-			getAugmentedTrips(
-				Object.keys(augmentedCache.serviceDateTrips[date]).find((v) =>
-					v.endsWith(runSeries),
-				),
-			)[0],
+			getAugmentedTrips(Object.keys(augmentedCache.serviceDateTrips[date]).find((v) => v.endsWith(runSeries)))[0],
 		);
 	} else if (!augmentedCache.runSeriesCache[date][runSeries])
 		augmentedCache.runSeriesCache[date][runSeries] = {
@@ -226,14 +196,9 @@ export function getRunSeries(
 	return augmentedCache.runSeriesCache?.[date]?.[runSeries];
 }
 
-export function setRunSeries(
-	date: number,
-	runSeries: string,
-	data: RunSeries,
-): void {
+export function setRunSeries(date: number, runSeries: string, data: RunSeries): void {
 	if (!augmentedCache.runSeriesCache) augmentedCache.runSeriesCache = {};
-	if (!augmentedCache.runSeriesCache[date])
-		augmentedCache.runSeriesCache[date] = {};
+	if (!augmentedCache.runSeriesCache[date]) augmentedCache.runSeriesCache[date] = {};
 	augmentedCache.runSeriesCache[date][runSeries] = data;
 }
 
@@ -282,9 +247,7 @@ function resetRealtimeCache(): void {
 	augmentedCache.stopTimes = {};
 }
 
-export async function refreshStaticCache(
-	skipRealtimeOverlap: boolean = false,
-): Promise<void> {
+export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): Promise<void> {
 	logger.debug("Refreshing static GTFS cache...", {
 		module: "cache",
 		function: "refreshStaticCache",
@@ -338,8 +301,7 @@ export async function refreshStaticCache(
 
 	for (const trip of rawCache.trips) rawCache.tripsRec[trip.trip_id] = trip;
 	for (const stop of rawCache.stops) rawCache.stopsRec[stop.stop_id] = stop;
-	for (const route of rawCache.routes)
-		rawCache.routesRec[route.route_id] = route;
+	for (const route of rawCache.routes) rawCache.routesRec[route.route_id] = route;
 
 	if (skipRealtimeOverlap)
 		logger.debug("Skipping augmenting trips.", {
@@ -384,20 +346,14 @@ export async function refreshStaticCache(
 
 			// Store both current stop times and base stop times (without realtime)
 			augmentedCache.stopTimes[trip._trip.trip_id] = trip.stopTimes;
-			augmentedCache.baseStopTimes[trip._trip.trip_id] = [
-				...trip.stopTimes,
-			]; // Deep copy for base
+			augmentedCache.baseStopTimes[trip._trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
 
 			for (const serviceDate of trip.actualTripDates) {
-				if (!augmentedCache.serviceDateTrips[serviceDate])
-					augmentedCache.serviceDateTrips[serviceDate] = [];
-				augmentedCache.serviceDateTrips[serviceDate].push(
-					trip._trip.trip_id,
-				);
+				if (!augmentedCache.serviceDateTrips[serviceDate]) augmentedCache.serviceDateTrips[serviceDate] = [];
+				augmentedCache.serviceDateTrips[serviceDate].push(trip._trip.trip_id);
 			}
 		}
-	for (const stop of augmentedCache.stops)
-		augmentedCache.stopsRec[stop.stop_id] = stop;
+	for (const stop of augmentedCache.stops) augmentedCache.stopsRec[stop.stop_id] = stop;
 
 	logger.info("Static GTFS cache refreshed.", {
 		module: "cache",
@@ -429,23 +385,23 @@ export async function refreshRealtimeCache(): Promise<void> {
 	rawCache.stopTimeUpdates = gtfs.getStopTimeUpdates();
 	rawCache.tripUpdates = gtfs.getTripUpdates();
 	rawCache.vehiclePositions = gtfs.getVehiclePositions();
-	logger.debug(
-		`Loaded ${rawCache.stopTimeUpdates.length} stop time updates.`,
-		{ module: "cache", function: "refreshRealtimeCache" },
-	);
+	logger.debug(`Loaded ${rawCache.stopTimeUpdates.length} stop time updates.`, {
+		module: "cache",
+		function: "refreshRealtimeCache",
+	});
 	logger.debug(`Loaded ${rawCache.tripUpdates.length} trip updates.`, {
 		module: "cache",
 		function: "refreshRealtimeCache",
 	});
-	logger.debug(
-		`Loaded ${rawCache.vehiclePositions.length} vehicle positions.`,
-		{ module: "cache", function: "refreshRealtimeCache" },
-	);
+	logger.debug(`Loaded ${rawCache.vehiclePositions.length} vehicle positions.`, {
+		module: "cache",
+		function: "refreshRealtimeCache",
+	});
 
-	logger.warn(
-		"Re-augmenting trips as efficient realtime updates are not implemented yet.",
-		{ module: "cache", function: "refreshRealtimeCache" },
-	); // TODO fix this, ensuring you build the cache if you fix it
+	logger.warn("Re-augmenting trips as efficient realtime updates are not implemented yet.", {
+		module: "cache",
+		function: "refreshRealtimeCache",
+	}); // TODO fix this, ensuring you build the cache if you fix it
 	// Re-augment trips to apply realtime updates
 	augmentedCache.trips = rawCache.trips.map(augmentTrip);
 	logger.debug(`Augmented ${augmentedCache.trips.length} trips.`, {
@@ -466,11 +422,8 @@ export async function refreshRealtimeCache(): Promise<void> {
 		augmentedCache.baseStopTimes[trip._trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
 
 		for (const serviceDate of trip.actualTripDates) {
-			if (!augmentedCache.serviceDateTrips[serviceDate])
-				augmentedCache.serviceDateTrips[serviceDate] = [];
-			augmentedCache.serviceDateTrips[serviceDate].push(
-				trip._trip.trip_id,
-			);
+			if (!augmentedCache.serviceDateTrips[serviceDate]) augmentedCache.serviceDateTrips[serviceDate] = [];
+			augmentedCache.serviceDateTrips[serviceDate].push(trip._trip.trip_id);
 		}
 	}
 	logger.info("Realtime GTFS cache refreshed.", {

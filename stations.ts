@@ -6,7 +6,5 @@ let qr_stations: string[] = JSON.parse(
 );
 
 export function getStations(): AugmentedStop[] {
-	return qr_stations
-		.map((stop_id) => getAugmentedStops(stop_id)[0])
-		.filter((v) => v);
+	return qr_stations.map((stop_id) => getAugmentedStops(stop_id)[0]).filter((v) => v);
 }

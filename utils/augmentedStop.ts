@@ -30,10 +30,7 @@ export type SerializableAugmentedStop = gtfs.Stop & {
 };
 
 export function toSerializableAugmentedStop(
-	stop: Omit<
-		AugmentedStop,
-		"toSerializable" | "getDepartures" | "_getSDDepartures"
-	>,
+	stop: Omit<AugmentedStop, "toSerializable" | "getDepartures" | "_getSDDepartures">,
 ): SerializableAugmentedStop {
 	return {
 		...stop,
@@ -49,25 +46,17 @@ export function augmentStop(stop: gtfs.Stop): AugmentedStop {
 	const getChildren = (): AugmentedStop[] => {
 		if (cachedChildren) return cachedChildren;
 
-		const childStops = cache
-			.getRawStops()
-			.filter((s) => s.parent_station === stop.stop_id);
-		cachedChildren = childStops.map(
-			(s) => cache.getAugmentedStops(s.stop_id)[0] || augmentStop(s),
-		);
+		const childStops = cache.getRawStops().filter((s) => s.parent_station === stop.stop_id);
+		cachedChildren = childStops.map((s) => cache.getAugmentedStops(s.stop_id)[0] || augmentStop(s));
 		return cachedChildren;
 	};
 
 	let qrt_Places = cache.getQRTPlaces();
-	let trimmedStopName = stop.stop_name
-		?.toLowerCase()
-		.replace("station", "")
-		.trim();
+	let trimmedStopName = stop.stop_name?.toLowerCase().replace("station", "").trim();
 	let myPlace = qrt_Places.find(
 		(v) =>
 			v.Title?.toLowerCase().trim() === trimmedStopName ||
-			(trimmedStopName === "roma street" &&
-				v.Title?.toLowerCase().trim().includes("roma street")),
+			(trimmedStopName === "roma street" && v.Title?.toLowerCase().trim().includes("roma street")),
 	);
 
 	const getParent = (): AugmentedStop | null => {
@@ -103,19 +92,11 @@ export function augmentStop(stop: gtfs.Stop): AugmentedStop {
 			const endSec = timeSeconds(end_time);
 			const parentId = getParent()?.stop_id;
 			const childIds = getChildren().map((c) => c.stop_id);
-			const validStops = new Set<string>(
-				[stop.stop_id, parentId, ...childIds].filter(
-					Boolean,
-				) as string[],
-			);
-			const tripCache = new Map<
-				string,
-				ReturnType<typeof getAugmentedTrips>[0]
-			>();
+			const validStops = new Set<string>([stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]);
+			const tripCache = new Map<string, ReturnType<typeof getAugmentedTrips>[0]>();
 			const results: { st: AugmentedStopTime; trip: any }[] = [];
 			for (const st of cache.getAugmentedStopTimes()) {
-				if (!st.actual_stop || !validStops.has(st.actual_stop.stop_id))
-					continue;
+				if (!st.actual_stop || !validStops.has(st.actual_stop.stop_id)) continue;
 				let trip = tripCache.get(st.trip_id);
 				if (!trip) {
 					trip = getAugmentedTrips(st.trip_id)[0];
@@ -127,11 +108,7 @@ export function augmentStop(stop: gtfs.Stop): AugmentedStop {
 				results.push({ st, trip });
 			}
 			return results
-				.sort(
-					(a, b) =>
-						(a.st.actual_departure_timestamp ?? 0) -
-						(b.st.actual_departure_timestamp ?? 0),
-				)
+				.sort((a, b) => (a.st.actual_departure_timestamp ?? 0) - (b.st.actual_departure_timestamp ?? 0))
 				.map(({ st, trip }) => {
 					const expressString = findExpressString(
 						trip.expressInfo,
@@ -146,44 +123,26 @@ export function augmentStop(stop: gtfs.Stop): AugmentedStop {
 					};
 				});
 		},
-		_getSDDepartures: (
-			serviceDate: number,
-			start_time_secs: number,
-			end_time_secs: number,
-		) => {
+		_getSDDepartures: (serviceDate: number, start_time_secs: number, end_time_secs: number) => {
 			const parentId = getParent()?.stop_id;
 			const childIds = getChildren().map((c) => c.stop_id);
-			const validStops = new Set<string>(
-				[stop.stop_id, parentId, ...childIds].filter(
-					Boolean,
-				) as string[],
-			);
-			const tripCache = new Map<
-				string,
-				ReturnType<typeof getAugmentedTrips>[0]
-			>();
+			const validStops = new Set<string>([stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]);
+			const tripCache = new Map<string, ReturnType<typeof getAugmentedTrips>[0]>();
 			const results: { st: AugmentedStopTime; trip: any }[] = [];
 			for (const st of cache.getAugmentedStopTimes()) {
-				if (!st.actual_stop || !validStops.has(st.actual_stop.stop_id))
-					continue;
+				if (!st.actual_stop || !validStops.has(st.actual_stop.stop_id)) continue;
 				let trip = tripCache.get(st.trip_id);
 				if (!trip) {
 					trip = getAugmentedTrips(st.trip_id)[0];
 					tripCache.set(st.trip_id, trip);
 				}
-				if (!trip?.scheduledStartServiceDates?.includes(serviceDate))
-					continue;
+				if (!trip?.scheduledStartServiceDates?.includes(serviceDate)) continue;
 				const ts = st.actual_departure_timestamp;
-				if (ts == null || ts < start_time_secs || ts > end_time_secs)
-					continue;
+				if (ts == null || ts < start_time_secs || ts > end_time_secs) continue;
 				results.push({ st, trip });
 			}
 			return results
-				.sort(
-					(a, b) =>
-						(a.st.actual_departure_timestamp ?? 0) -
-						(b.st.actual_departure_timestamp ?? 0),
-				)
+				.sort((a, b) => (a.st.actual_departure_timestamp ?? 0) - (b.st.actual_departure_timestamp ?? 0))
 				.map(({ st, trip }) => {
 					const expressString = findExpressString(
 						trip.expressInfo,

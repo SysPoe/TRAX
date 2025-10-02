@@ -13,10 +13,7 @@ import type {
 } from "./types.js";
 
 // Main function to fetch and parse the XML file
-export async function trackTrain(
-	serviceID: string,
-	serviceDate: string,
-): Promise<GetServiceResponse> {
+export async function trackTrain(serviceID: string, serviceDate: string): Promise<GetServiceResponse> {
 	const url = `https://www.queenslandrailtravel.com.au/SPWebApp/api/ServiceUpdates/GetService?serviceId=${serviceID}&serivceDate=${serviceDate}${
 		serviceDate.includes("T") ? "" : "T00:00:00.000Z"
 	}`;
@@ -24,64 +21,49 @@ export async function trackTrain(
 	const response = await fetch(url);
 	if (!response.ok) {
 		const errorText = await response.text();
-		logger.error(
-			`Failed to fetch service data: ${response.status} ${response.statusText}`,
-			{
-				module: "qr-travel-tracker",
-				function: "trackTrain",
-				serviceID,
-				url,
-				status: response.status,
-				statusText: response.statusText,
-				errorText,
-			},
-		);
-		throw new Error(
-			`Failed to fetch: ${response.status} ${
-				response.statusText
-			} ${url}. ${errorText}`,
-		);
+		logger.error(`Failed to fetch service data: ${response.status} ${response.statusText}`, {
+			module: "qr-travel-tracker",
+			function: "trackTrain",
+			serviceID,
+			url,
+			status: response.status,
+			statusText: response.statusText,
+			errorText,
+		});
+		throw new Error(`Failed to fetch: ${response.status} ${response.statusText} ${url}. ${errorText}`);
 	}
 	const jsonObj = await response.json();
 	return jsonObj as GetServiceResponse;
 }
 
 export async function getPlaces() {
-	let res = await fetch(
-		"https://www.queenslandrailtravel.com.au/SPWebApp/api/ContentQuery/GetItems",
-		{
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				WebUrl: "https://www.queenslandrailtravel.com.au",
-				ListName: "QRT Places",
-				ViewFields: ["Title", "qrt_PlaceCode"],
-				Filters: [],
-				OrderByClauses: [{ Field: "Title", Direction: "Asc" }],
-			}),
+	let res = await fetch("https://www.queenslandrailtravel.com.au/SPWebApp/api/ContentQuery/GetItems", {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
 		},
-	);
+		body: JSON.stringify({
+			WebUrl: "https://www.queenslandrailtravel.com.au",
+			ListName: "QRT Places",
+			ViewFields: ["Title", "qrt_PlaceCode"],
+			Filters: [],
+			OrderByClauses: [{ Field: "Title", Direction: "Asc" }],
+		}),
+	});
 	// This returns a string containing more json for some reason, so we parse it twice.
 	let json = JSON.parse(await res.json());
 	return json as QRTPlace[];
 }
 
 export async function getServiceLines() {
-	let res = await fetch(
-		"https://www.queenslandrailtravel.com.au/SPWebApp/api/ServiceUpdates/AllServices",
-	);
+	let res = await fetch("https://www.queenslandrailtravel.com.au/SPWebApp/api/ServiceUpdates/AllServices");
 	if (!res.ok) {
-		logger.error(
-			`Failed to fetch service lines: ${res.status} ${res.statusText}`,
-			{
-				module: "qr-travel-tracker",
-				function: "getServiceLines",
-				status: res.status,
-				statusText: res.statusText,
-			},
-		);
+		logger.error(`Failed to fetch service lines: ${res.status} ${res.statusText}`, {
+			module: "qr-travel-tracker",
+			function: "getServiceLines",
+			status: res.status,
+			statusText: res.statusText,
+		});
 		throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
 	}
 	let json = await res.json();
@@ -89,26 +71,17 @@ export async function getServiceLines() {
 }
 
 export async function getAllServices() {
-	let res = await fetch(
-		"https://www.queenslandrailtravel.com.au/SPWebApp/api/ContentQuery/GetItems",
-		{
-			body: JSON.stringify({
-				WebUrl: "https://www.queenslandrailtravel.com.au",
-				ListName: "QRT Services",
-				ViewFields: [
-					"Title",
-					"qrt_ServiceLine",
-					"qrt_Direction",
-					"qrt_Destination",
-					"qrt_Origin",
-				],
-			}),
-			headers: {
-				"Content-Type": "application/json",
-			},
-			method: "POST",
+	let res = await fetch("https://www.queenslandrailtravel.com.au/SPWebApp/api/ContentQuery/GetItems", {
+		body: JSON.stringify({
+			WebUrl: "https://www.queenslandrailtravel.com.au",
+			ListName: "QRT Services",
+			ViewFields: ["Title", "qrt_ServiceLine", "qrt_Direction", "qrt_Destination", "qrt_Origin"],
+		}),
+		headers: {
+			"Content-Type": "application/json",
 		},
-	);
+		method: "POST",
+	});
 	// Return double-parsed JSON because the response is a string containing JSON.
 	const responseText = await res.json();
 	const json = JSON.parse(responseText);
@@ -120,10 +93,7 @@ export async function getAllServices() {
 	return json as QRTService[];
 }
 
-export async function getServiceUpdates(
-	startDate?: string,
-	endDate?: string,
-): Promise<ServiceUpdate[]> {
+export async function getServiceUpdates(startDate?: string, endDate?: string): Promise<ServiceUpdate[]> {
 	// Default startDate: first day of current month
 	// Default endDate: one year after startDate
 	const now = new Date();
@@ -134,46 +104,43 @@ export async function getServiceUpdates(
 	const start = startDate || defaultStart.toISOString().slice(0, 10);
 	const end = endDate || defaultEnd.toISOString().slice(0, 10);
 
-	let res = await fetch(
-		"https://www.queenslandrailtravel.com.au/SPWebApp/api/ContentQuery/GetItems",
-		{
-			body: JSON.stringify({
-				WebUrl: "https://www.queenslandrailtravel.com.au/ServiceUpdates",
-				ListName: "Pages",
-				ViewFields: [
-					"Title",
-					"qrt_StartServiceDate",
-					"qrt_EndServiceDate",
-					"qrt_Status",
-					"qrt_ServiceIds",
-					"ContentType",
-					"FileRef",
-					"qrt_CoachReplacement",
-					"qrt_SummaryMessage",
-				],
-				Filters: [
-					{
-						Field: "qrt_EndServiceDate",
-						Operand: "Geq",
-						FieldType: "DateTime",
-						IncludeTimeValue: false,
-						Values: [start + "T00:00:00+10:00"],
-						NextJoin: "And",
-					},
-					{
-						Field: "qrt_StartServiceDate",
-						Operand: "Leq",
-						FieldType: "DateTime",
-						IncludeTimeValue: false,
-						Values: [end + "T00:00:00+10:00"],
-						NextJoin: "And",
-					},
-				],
-				OrderByClauses: [{ Field: "qrt_Status", Direction: "Asc" }],
-			}),
-			method: "POST",
-		},
-	);
+	let res = await fetch("https://www.queenslandrailtravel.com.au/SPWebApp/api/ContentQuery/GetItems", {
+		body: JSON.stringify({
+			WebUrl: "https://www.queenslandrailtravel.com.au/ServiceUpdates",
+			ListName: "Pages",
+			ViewFields: [
+				"Title",
+				"qrt_StartServiceDate",
+				"qrt_EndServiceDate",
+				"qrt_Status",
+				"qrt_ServiceIds",
+				"ContentType",
+				"FileRef",
+				"qrt_CoachReplacement",
+				"qrt_SummaryMessage",
+			],
+			Filters: [
+				{
+					Field: "qrt_EndServiceDate",
+					Operand: "Geq",
+					FieldType: "DateTime",
+					IncludeTimeValue: false,
+					Values: [start + "T00:00:00+10:00"],
+					NextJoin: "And",
+				},
+				{
+					Field: "qrt_StartServiceDate",
+					Operand: "Leq",
+					FieldType: "DateTime",
+					IncludeTimeValue: false,
+					Values: [end + "T00:00:00+10:00"],
+					NextJoin: "And",
+				},
+			],
+			OrderByClauses: [{ Field: "qrt_Status", Direction: "Asc" }],
+		}),
+		method: "POST",
+	});
 	const responseText = await res.json();
 	const json = JSON.parse(responseText);
 	logger.debug(`Successfully fetched ${json.length} service updates`, {
@@ -196,19 +163,12 @@ function convertQRTServiceToTravelTrip(
 ): TravelTrip {
 	// Find the Service object for more info
 	const serviceMeta = serviceResponse;
-	const stops: TravelStopTime[] = (
-		serviceResponse.TrainMovements as TrainMovementDTO[]
-	).map((movement) => {
+	const stops: TravelStopTime[] = (serviceResponse.TrainMovements as TrainMovementDTO[]).map((movement) => {
 		// Calculate arrival and departure delays
 		let arrivalDelaySeconds: number | null = null;
 		let departureDelaySeconds: number | null = null;
 		let delayString = "scheduled";
-		let delayClass:
-			| "on-time"
-			| "scheduled"
-			| "late"
-			| "very-late"
-			| "early" = "scheduled";
+		let delayClass: "on-time" | "scheduled" | "late" | "very-late" | "early" = "scheduled";
 
 		if (
 			movement.PlannedArrival &&
@@ -256,9 +216,7 @@ function convertQRTServiceToTravelTrip(
 			plannedArrival: movement.PlannedArrival,
 			plannedDeparture: movement.PlannedDeparture,
 			actualArrival:
-				movement.ActualArrival == "0001-01-01T00:00:00"
-					? movement.PlannedArrival
-					: movement.ActualArrival,
+				movement.ActualArrival == "0001-01-01T00:00:00" ? movement.PlannedArrival : movement.ActualArrival,
 			actualDeparture:
 				movement.ActualDeparture == "0001-01-01T00:00:00"
 					? movement.PlannedDeparture
@@ -292,15 +250,10 @@ function convertQRTServiceToTravelTrip(
 	};
 }
 
-function getDelay(
-	delaySecs: number | null = null,
-	departureTime: string | null,
-) {
-	if (delaySecs === null || departureTime === null)
-		return { delayString: "scheduled", delayClass: "scheduled" };
+function getDelay(delaySecs: number | null = null, departureTime: string | null) {
+	if (delaySecs === null || departureTime === null) return { delayString: "scheduled", delayClass: "scheduled" };
 
-	let departsInSecs =
-		Math.round(new Date(departureTime).getTime() - Date.now()) / 1000;
+	let departsInSecs = Math.round(new Date(departureTime).getTime() - Date.now()) / 1000;
 	departsInSecs = Math.round(departsInSecs / 60) * 60;
 	const roundedDelay = delaySecs ? Math.round(delaySecs / 60) * 60 : null;
 	const delayString =
@@ -329,10 +282,7 @@ function getDelay(
 export async function getCurrentQRTravelTrains(): Promise<TravelTrip[]> {
 	try {
 		// Get all the required data
-		const [services, serviceLines] = await Promise.all([
-			getAllServices(),
-			getServiceLines(),
-		]);
+		const [services, serviceLines] = await Promise.all([getAllServices(), getServiceLines()]);
 
 		const travelTrips: TravelTrip[] = [];
 		const today = new Date().toISOString().slice(0, 10);
@@ -343,90 +293,84 @@ export async function getCurrentQRTravelTrains(): Promise<TravelTrip[]> {
 				for (const service of direction.Services) {
 					try {
 						// Get detailed service information
-						const serviceResponse = await trackTrain(
-							service.ServiceId,
-							service.ServiceDate,
-						);
+						const serviceResponse = await trackTrain(service.ServiceId, service.ServiceDate);
 
 						if (serviceResponse.Success) {
 							// Find the corresponding QRT service for additional metadata
 							const qrtService = services.find(
 								(s) =>
-									s.qrt_Direction ==
-										direction.DirectionName &&
-									s.qrt_ServiceLine.endsWith(
-										serviceLine.ServiceLineName,
-									),
+									s.qrt_Direction == direction.DirectionName &&
+									s.qrt_ServiceLine.endsWith(serviceLine.ServiceLineName),
 							);
 
 							if (qrtService) {
-								const travelTrip =
-									convertQRTServiceToTravelTrip(
-										qrtService,
-										serviceResponse,
-										direction.DirectionName,
-										serviceLine.ServiceLineName,
-									);
+								const travelTrip = convertQRTServiceToTravelTrip(
+									qrtService,
+									serviceResponse,
+									direction.DirectionName,
+									serviceLine.ServiceLineName,
+								);
 								// Add SRT passing stops expansion (SEQ region only)
 								// Map TravelStopTime[] to TrainMovementDTO[]
-								const trainMovements = travelTrip.stops.map(
-									(s) => {
-										return {
-											PlaceCode: s.placeCode,
-											PlaceName: s.placeName,
-											KStation: s.kStation,
-											Status: s.status,
-											TrainPosition: s.trainPosition,
-											PlannedArrival: s.plannedArrival,
-											PlannedDeparture:
-												s.plannedDeparture,
-											ActualArrival: s.actualArrival,
-											ActualDeparture: s.actualDeparture,
-										};
-									},
-								);
+								const trainMovements = travelTrip.stops.map((s) => {
+									let arrivalDelayInfo = getDelay(
+										s.arrivalDelaySeconds,
+										s.actualArrival === "0001-01-01T00:00:00" ? s.plannedArrival : s.actualArrival,
+									);
+									let departureDelayInfo = getDelay(
+										s.departureDelaySeconds,
+										s.actualDeparture === "0001-01-01T00:00:00"
+											? s.plannedDeparture
+											: s.actualDeparture,
+									);
+									type DelayClass = "on-time" | "scheduled" | "late" | "very-late" | "early";
+									return {
+										PlaceCode: s.placeCode,
+										PlaceName: s.placeName,
+										KStation: s.kStation,
+										Status: s.status,
+										TrainPosition: s.trainPosition,
+										PlannedArrival: s.plannedArrival,
+										PlannedDeparture: s.plannedDeparture,
+										ActualArrival: s.actualArrival,
+										ActualDeparture: s.actualDeparture,
+										ArrivalDelayClass: arrivalDelayInfo.delayClass as DelayClass,
+										ArrivalDelayString: arrivalDelayInfo.delayString,
+										ArrivalDelaySeconds: s.arrivalDelaySeconds || 0,
+										DepartureDelayClass: departureDelayInfo.delayClass as DelayClass,
+										DepartureDelayString: departureDelayInfo.delayString,
+										DepartureDelaySeconds: s.departureDelaySeconds || 0,
+									};
+								});
 								// Expand with SRT passing stops
-								const expanded =
-									expandWithSRTPassingStops(trainMovements);
+								const expanded = expandWithSRTPassingStops(trainMovements);
 								// Attach to the trip
 								travelTrips.push({
 									...travelTrip,
 									stopsWithPassing: expanded,
 								});
 
-								logger.debug(
-									`Successfully processed service ${service.ServiceId}`,
-									{
-										module: "qr-travel-tracker",
-										function: "getCurrentQRTravelTrains",
-									},
-								);
-							} else {
-								logger.warn(
-									`No matching QRT service found for service ${service.ServiceId}`,
-									{
-										module: "qr-travel-tracker",
-										function: "getCurrentQRTravelTrains",
-									},
-								);
-							}
-						} else {
-							logger.warn(
-								`Service response not successful for service ${service.ServiceId}`,
-								{
+								logger.debug(`Successfully processed service ${service.ServiceId}`, {
 									module: "qr-travel-tracker",
 									function: "getCurrentQRTravelTrains",
-								},
-							);
-						}
-					} catch (error: any) {
-						logger.warn(
-							`Failed to track service ${service.ServiceId}: ${error.message || error}`,
-							{
+								});
+							} else {
+								logger.warn(`No matching QRT service found for service ${service.ServiceId}`, {
+									module: "qr-travel-tracker",
+									function: "getCurrentQRTravelTrains",
+								});
+							}
+						} else {
+							logger.warn(`Service response not successful for service ${service.ServiceId}`, {
 								module: "qr-travel-tracker",
 								function: "getCurrentQRTravelTrains",
-							},
-						);
+							});
+						}
+					} catch (error: any) {
+						logger.warn(`Failed to track service ${service.ServiceId}: ${error.message || error}`, {
+							module: "qr-travel-tracker",
+							function: "getCurrentQRTravelTrains",
+						});
 						// Continue processing other services
 					}
 				}
@@ -435,14 +379,11 @@ export async function getCurrentQRTravelTrains(): Promise<TravelTrip[]> {
 
 		return travelTrips;
 	} catch (error: any) {
-		logger.error(
-			`Failed to get current QR Travel trains: ${error.message || error}`,
-			{
-				module: "qr-travel-tracker",
-				function: "getCurrentQRTravelTrains",
-				error: error.message || error,
-			},
-		);
+		logger.error(`Failed to get current QR Travel trains: ${error.message || error}`, {
+			module: "qr-travel-tracker",
+			function: "getCurrentQRTravelTrains",
+			error: error.message || error,
+		});
 		throw error;
 	}
 }

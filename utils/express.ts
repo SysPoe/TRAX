@@ -24,23 +24,8 @@ const combos: string[][] = [
 		"place_elmsta",
 		"place_cabstn",
 	],
-	[
-		"place_cabstn",
-		"place_myesta",
-		"place_bursta",
-		"place_narsta",
-		"place_daksta",
-		"place_petsta",
-	],
-	[
-		"place_petsta",
-		"place_kalsta",
-		"place_mudsta",
-		"place_mahsta",
-		"place_mhesta",
-		"place_rotsta",
-		"place_kprsta",
-	],
+	["place_cabstn", "place_myesta", "place_bursta", "place_narsta", "place_daksta", "place_petsta"],
+	["place_petsta", "place_kalsta", "place_mudsta", "place_mahsta", "place_mhesta", "place_rotsta", "place_kprsta"],
 	[
 		"place_petsta",
 		"place_lawsta",
@@ -67,13 +52,7 @@ const combos: string[][] = [
 	],
 	["place_norsta", "place_nunsta", "place_tomsta", "place_egjsta"],
 	["place_egjsta", "place_intsta", "place_domsta"],
-	[
-		"place_egjsta",
-		"place_clasta",
-		"place_hensta",
-		"place_ascsta",
-		"place_dbnsta",
-	],
+	["place_egjsta", "place_clasta", "place_hensta", "place_ascsta", "place_dbnsta"],
 	["place_egjsta", "place_wolsta", "place_albsta", "place_bowsta"],
 	[
 		"place_fersta",
@@ -173,15 +152,7 @@ const combos: string[][] = [
 		"place_thasta",
 		"place_rossta",
 	],
-	[
-		"place_beesta",
-		"place_omesta",
-		"place_cmrstn",
-		"place_helsta",
-		"place_nrgsta",
-		"place_rbnsta",
-		"place_varsta",
-	],
+	["place_beesta", "place_omesta", "place_cmrstn", "place_helsta", "place_nrgsta", "place_rbnsta", "place_varsta"],
 ];
 
 interface GraphNode {
@@ -226,11 +197,7 @@ function buildTrainGraph(combosData: string[][]): Map<string, GraphNode[]> {
 	return graph;
 }
 
-function findPathBFS(
-	graph: Map<string, GraphNode[]>,
-	start: string,
-	end: string,
-): string[] | null {
+function findPathBFS(graph: Map<string, GraphNode[]>, start: string, end: string): string[] | null {
 	if (!graph.has(start) || !graph.has(end)) {
 		return null;
 	}
@@ -238,9 +205,7 @@ function findPathBFS(
 		return [start];
 	}
 
-	const queue: { stop: string; path: string[] }[] = [
-		{ stop: start, path: [start] },
-	];
+	const queue: { stop: string; path: string[] }[] = [{ stop: start, path: [start] }];
 	const visited = new Set<string>();
 	visited.add(start);
 
@@ -265,10 +230,7 @@ function findPathBFS(
 	return null;
 }
 
-export function findExpress(
-	givenStops: string[],
-	combosData: string[][] = combos,
-): ExpressInfo[] {
+export function findExpress(givenStops: string[], combosData: string[][] = combos): ExpressInfo[] {
 	const graph = buildTrainGraph(combosData);
 	const result: ExpressInfo[] = [];
 
@@ -287,14 +249,9 @@ export function findExpress(
 				if (startIndex !== -1 && endIndex !== -1) {
 					let intermediateStops: string[] = [];
 					if (startIndex < endIndex) {
-						intermediateStops = combo.slice(
-							startIndex + 1,
-							endIndex,
-						);
+						intermediateStops = combo.slice(startIndex + 1, endIndex);
 					} else if (startIndex > endIndex) {
-						intermediateStops = combo
-							.slice(endIndex + 1, startIndex)
-							.reverse();
+						intermediateStops = combo.slice(endIndex + 1, startIndex).reverse();
 					}
 
 					if (intermediateStops.length > 0) {
@@ -317,10 +274,7 @@ export function findExpress(
 			}
 
 			if (!foundDirectSegment && actualPathBetween.length > 2) {
-				const interchangeStops = actualPathBetween.slice(
-					1,
-					actualPathBetween.length - 1,
-				);
+				const interchangeStops = actualPathBetween.slice(1, actualPathBetween.length - 1);
 				result.push({
 					type: "express",
 					from: startStop,
@@ -346,18 +300,10 @@ export function findExpress(
 	return result;
 }
 
-export function findExpressString(
-	expressData: ExpressInfo[],
-	stop_id: string | null = null,
-): string {
+export function findExpressString(expressData: ExpressInfo[], stop_id: string | null = null): string {
 	if (stop_id != null)
 		expressData = expressData.slice(
-			expressData.findIndex(
-				(v) =>
-					v.from === stop_id ||
-					v.skipping?.includes(stop_id) ||
-					v.to === stop_id,
-			),
+			expressData.findIndex((v) => v.from === stop_id || v.skipping?.includes(stop_id) || v.to === stop_id),
 		);
 	expressData = expressData.filter((v) => v.type !== "local");
 
@@ -384,16 +330,10 @@ export function findExpressString(
 		"Running express " +
 		segments
 			.map((run) => {
-				const startName = cache
-					.getRawStops(run.from)[0]
-					?.stop_name?.replace(" station", "");
-				const endName = cache
-					.getRawStops(run.to)[0]
-					?.stop_name?.replace(" station", "");
+				const startName = cache.getRawStops(run.from)[0]?.stop_name?.replace(" station", "");
+				const endName = cache.getRawStops(run.to)[0]?.stop_name?.replace(" station", "");
 				const stoppingAtNames = run.stoppingAt.map((stopId) =>
-					cache
-						.getRawStops(stopId)[0]
-						?.stop_name?.replace(" station", ""),
+					cache.getRawStops(stopId)[0]?.stop_name?.replace(" station", ""),
 				);
 				const formattedStoppingAtNames =
 					stoppingAtNames.length <= 1
@@ -404,9 +344,7 @@ export function findExpressString(
 									stoppingAtNames[stoppingAtNames.length - 1]
 								}`;
 				return stop_id !== null &&
-					(run.from ==
-						cache.getRawStops(stop_id)[0]?.parent_station ||
-						run.from == stop_id)
+					(run.from == cache.getRawStops(stop_id)[0]?.parent_station || run.from == stop_id)
 					? run.stoppingAt.length > 0
 						? `to ${endName}, stopping only at ${formattedStoppingAtNames}`
 						: `to ${endName}`

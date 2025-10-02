@@ -17,9 +17,7 @@ async function main() {
 
 	while (true) {
 		try {
-			const tripId = await askQuestion(
-				"Enter a trip ID (or 'quit' to exit): ",
-			);
+			const tripId = await askQuestion("Enter a trip ID (or 'quit' to exit): ");
 
 			if (tripId.toLowerCase() === "quit") {
 				console.log("Goodbye!");
@@ -55,30 +53,19 @@ async function main() {
 
 			// Display run series information
 			console.log("\n=== RunSeries Information ===");
-			for (const [serviceDate, runSeries] of Object.entries(
-				trip.runSeries,
-			)) {
+			for (const [serviceDate, runSeries] of Object.entries(trip.runSeries)) {
 				console.log(`\nService Date: ${serviceDate}`);
 				console.log(`Run Series ID: ${runSeries || "Not calculated"}`);
 
 				if (runSeries) {
-					const rsData = TRAX.getRunSeries(
-						Number(serviceDate),
-						runSeries,
-					);
+					const rsData = TRAX.getRunSeries(Number(serviceDate), runSeries);
 					if (rsData && rsData.trips.length > 0) {
 						console.log("Trips in this RunSeries:");
 						rsData.trips
-							.sort(
-								(a, b) => a.trip_start_time - b.trip_start_time,
-							)
+							.sort((a, b) => a.trip_start_time - b.trip_start_time)
 							.forEach((t, index) => {
-								const time = TRAX.formatTimestamp(
-									t.trip_start_time,
-								);
-								console.log(
-									`  ${index + 1}. ${time} - ${t.trip_id} (Run: ${t.run})`,
-								);
+								const time = TRAX.formatTimestamp(t.trip_start_time);
+								console.log(`  ${index + 1}. ${time} - ${t.trip_id} (Run: ${t.run})`);
 							});
 					}
 				}

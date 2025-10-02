@@ -33,19 +33,13 @@ class Logger {
 		const logFilePath = "./TRAX.log";
 		if (!fs.existsSync(logFilePath)) fs.writeFileSync(logFilePath, "");
 		// Dangerous!!! Clear the log file if it exceeds 10 MB. Disable when debug is done.
-		if (fs.statSync(logFilePath).size > 10 * 1024 * 1024)
-			fs.truncateSync(logFilePath, 0);
+		if (fs.statSync(logFilePath).size > 10 * 1024 * 1024) fs.truncateSync(logFilePath, 0);
 		fs.writeFileSync(logFilePath, message + "\n", { flag: "a" });
 	}
 
 	debug(message: string, context?: LogContext): void {
 		if (this.level >= LogLevel.DEBUG) {
-			const logMessage = this.formatLog(
-				"DEBUG",
-				chalk.blue,
-				message,
-				context,
-			);
+			const logMessage = this.formatLog("DEBUG", chalk.blue, message, context);
 			this.writeLog(stripAnsi(logMessage));
 			console.debug(logMessage);
 		}
@@ -53,12 +47,7 @@ class Logger {
 
 	info(message: string, context?: LogContext): void {
 		if (this.level >= LogLevel.INFO) {
-			const logMessage = this.formatLog(
-				"INFO",
-				chalk.green,
-				message,
-				context,
-			);
+			const logMessage = this.formatLog("INFO", chalk.green, message, context);
 			this.writeLog(stripAnsi(logMessage));
 			console.log(logMessage);
 		}
@@ -66,12 +55,7 @@ class Logger {
 
 	warn(message: string, context?: LogContext): void {
 		if (this.level >= LogLevel.WARN) {
-			const logMessage = this.formatLog(
-				"WARN",
-				chalk.yellow,
-				message,
-				context,
-			);
+			const logMessage = this.formatLog("WARN", chalk.yellow, message, context);
 			this.writeLog(stripAnsi(logMessage));
 			console.warn(logMessage);
 		}
@@ -79,12 +63,7 @@ class Logger {
 
 	error(message: string, context?: LogContext): void {
 		if (this.level >= LogLevel.ERROR) {
-			const logMessage = this.formatLog(
-				"ERROR",
-				chalk.red,
-				message,
-				context,
-			);
+			const logMessage = this.formatLog("ERROR", chalk.red, message, context);
 			this.writeLog(stripAnsi(logMessage));
 			console.error(logMessage);
 		}
@@ -98,9 +77,7 @@ class Logger {
 		colorize: boolean = true,
 	): string {
 		const timestamp = new Date().toISOString();
-		const levelStr = colorize
-			? color(`[${level}]`.padStart(7))
-			: `[${level}]`.padStart(7);
+		const levelStr = colorize ? color(`[${level}]`.padStart(7)) : `[${level}]`.padStart(7);
 
 		let contextStr = "";
 		if (context) {
@@ -118,9 +95,7 @@ class Logger {
 			}
 		}
 
-		const prefixStr = colorize
-			? chalk.magenta(`[${this.prefix}]`)
-			: `[${this.prefix}]`;
+		const prefixStr = colorize ? chalk.magenta(`[${this.prefix}]`) : `[${this.prefix}]`;
 		const moduleStr = context?.module
 			? colorize
 				? chalk.gray(`[m:${context.module}]`)

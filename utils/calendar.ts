@@ -8,18 +8,8 @@ export function getServiceDates(
 	const serviceDates: Record<string, number[]> = {};
 
 	for (const calendar of calendars) {
-		const {
-			service_id,
-			monday,
-			tuesday,
-			wednesday,
-			thursday,
-			friday,
-			saturday,
-			sunday,
-			start_date,
-			end_date,
-		} = calendar;
+		const { service_id, monday, tuesday, wednesday, thursday, friday, saturday, sunday, start_date, end_date } =
+			calendar;
 
 		serviceDates[service_id] = serviceDates[service_id] || [];
 
@@ -40,10 +30,7 @@ export function getServiceDates(
 
 		while (currentDate <= endDate) {
 			const dayOfWeek = currentDate.getDay(); // 0 for Sunday, 1 for Monday, etc.
-			const dateAsNumber = parseInt(
-				currentDate.toISOString().slice(0, 10).replace(/-/g, ""),
-				10,
-			);
+			const dateAsNumber = parseInt(currentDate.toISOString().slice(0, 10).replace(/-/g, ""), 10);
 
 			let serviceRuns = false;
 			if (dayOfWeek === 1 && monday === 1) serviceRuns = true;

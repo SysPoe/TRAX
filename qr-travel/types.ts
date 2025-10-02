@@ -8,6 +8,12 @@ export interface TrainMovementDTO {
 	PlannedDeparture: "0001-01-01T00:00:00" | string;
 	ActualArrival: "0001-01-01T00:00:00" | string;
 	ActualDeparture: "0001-01-01T00:00:00" | string;
+	ArrivalDelayClass: "on-time" | "scheduled" | "late" | "very-late" | "early";
+	ArrivalDelayString: "on time" | string;
+	ArrivalDelaySeconds: number;
+	DepartureDelayClass: "on-time" | "scheduled" | "late" | "very-late" | "early";
+	DepartureDelayString: "on time" | string;
+	DepartureDelaySeconds: number;
 }
 
 export interface ServiceDisruption {

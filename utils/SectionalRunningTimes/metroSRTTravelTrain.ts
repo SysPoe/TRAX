@@ -203,24 +203,77 @@ export interface SRTStop {
 	srtMinutes?: number; // SRT minutes for this segment (if available)
 	estimatedPassingTime?: string; // ISO string if available
 	arrivalDelaySeconds?: number | null;
+	arrivalDelayClass?: "on-time" | "scheduled" | "late" | "very-late" | "early";
+	arrivalDelayString?: "on time" | string;
 	departureDelaySeconds?: number | null;
+	departureDelayClass?: "on-time" | "scheduled" | "late" | "very-late" | "early";
+	departureDelayString?: "on time" | string;
+}
+
+function getDelay(delaySecs: number | null = null, departureTime: string | null) {
+	if (delaySecs === null || departureTime === null) return { delayString: "scheduled", delayClass: "scheduled" };
+
+	let departsInSecs = Math.round(new Date(departureTime).getTime() - Date.now()) / 1000;
+	departsInSecs = Math.round(departsInSecs / 60) * 60;
+	const roundedDelay = delaySecs ? Math.round(delaySecs / 60) * 60 : null;
+	const delayString =
+		delaySecs != null && roundedDelay != null
+			? delaySecs == 0
+				? "on time"
+				: `${Math.floor(roundedDelay / 3600)}h ${Math.floor(
+						(Math.abs(roundedDelay) % 3600) / 60,
+					)}m ${delaySecs > 0 ? "late" : "early"}`
+						.replace(/^0h/, "")
+						.trim()
+			: "scheduled";
+	const delayClass: "very-late" | "late" | "early" | "on-time" | "scheduled" =
+		delaySecs != null && roundedDelay != null
+			? roundedDelay > 0
+				? roundedDelay > 5 * 60
+					? "very-late"
+					: "late"
+				: roundedDelay < 0
+					? "early"
+					: "on-time"
+			: "scheduled";
+	return { delayString, delayClass };
+}
+
+function pushSRT(
+	arr: SRTStop[],
+	stop: Exclude<SRTStop, "departureDelayClass" | "departureDelayString" | "arrivalDelayClass" | "arrivalDelayString">,
+) {
+	let arrivalDelayInfo = getDelay(stop.arrivalDelaySeconds || null, stop.actualArrival || null);
+	let departureDelayInfo = getDelay(stop.departureDelaySeconds || null, stop.actualDeparture || null);
+	type delayClass = "on-time" | "scheduled" | "late" | "very-late" | "early";
+	arr.push({
+		...stop,
+		arrivalDelayClass:
+			stop.actualArrival === "0001-01-01T00:00:00" && stop.plannedArrival === "0001-01-01T00:00:00"
+				? undefined
+				: (arrivalDelayInfo.delayClass as delayClass),
+		arrivalDelayString:
+			stop.actualArrival === "0001-01-01T00:00:00" && stop.plannedArrival === "0001-01-01T00:00:00"
+				? undefined
+				: arrivalDelayInfo.delayString,
+		departureDelayClass:
+			stop.actualDeparture === "0001-01-01T00:00:00" && stop.plannedDeparture === "0001-01-01T00:00:00"
+				? undefined
+				: (departureDelayInfo.delayClass as delayClass),
+		departureDelayString:
+			stop.actualDeparture === "0001-01-01T00:00:00" && stop.plannedDeparture === "0001-01-01T00:00:00"
+				? undefined
+				: departureDelayInfo.delayString,
+	});
 }
 
 /**
  * Given an array of TrainMovementDTOs (stopping pattern), return an array of SRTStop including both stops and passing stops with SRT times.
  * For segments not in SRT_DATA, just include the stops as-is.
  */
-export function expandWithSRTPassingStops(
-	stoppingMovements: TrainMovementDTO[],
-): SRTStop[] {
+export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[]): SRTStop[] {
 	function calcDelay(actual?: string, planned?: string): number | null {
-		if (
-			!actual ||
-			!planned ||
-			actual === "0001-01-01T00:00:00" ||
-			planned === "0001-01-01T00:00:00"
-		)
-			return null;
+		if (!actual || !planned || actual === "0001-01-01T00:00:00" || planned === "0001-01-01T00:00:00") return null;
 		const a = new Date(actual).getTime();
 		const p = new Date(planned).getTime();
 		if (isNaN(a) || isNaN(p)) return null;
@@ -235,10 +288,7 @@ export function expandWithSRTPassingStops(
 			actualArrival: m.ActualArrival,
 			actualDeparture: m.ActualDeparture,
 			arrivalDelaySeconds: calcDelay(m.ActualArrival, m.PlannedArrival),
-			departureDelaySeconds: calcDelay(
-				m.ActualDeparture,
-				m.PlannedDeparture,
-			),
+			departureDelaySeconds: calcDelay(m.ActualDeparture, m.PlannedDeparture),
 		}));
 
 	const result: SRTStop[] = [];
@@ -248,32 +298,20 @@ export function expandWithSRTPassingStops(
 		const to = stoppingMovements[i + 1];
 		// Always add the 'from' stop
 		if (i === 0) {
-			result.push({
+			pushSRT(result, {
 				placeName: from.PlaceName,
 				isStop: true,
 				plannedArrival: from.PlannedArrival,
 				plannedDeparture: from.PlannedDeparture,
 				actualArrival: from.ActualArrival,
 				actualDeparture: from.ActualDeparture,
-				arrivalDelaySeconds: calcDelay(
-					from.ActualArrival,
-					from.PlannedArrival,
-				),
-				departureDelaySeconds: calcDelay(
-					from.ActualDeparture,
-					from.PlannedDeparture,
-				),
+				arrivalDelaySeconds: calcDelay(from.ActualArrival, from.PlannedArrival),
+				departureDelaySeconds: calcDelay(from.ActualDeparture, from.PlannedDeparture),
 			});
 			// Set prevTime to actual/planned departure if available
-			if (
-				from.ActualDeparture &&
-				from.ActualDeparture !== "0001-01-01T00:00:00"
-			) {
+			if (from.ActualDeparture && from.ActualDeparture !== "0001-01-01T00:00:00") {
 				prevTime = new Date(from.ActualDeparture);
-			} else if (
-				from.PlannedDeparture &&
-				from.PlannedDeparture !== "0001-01-01T00:00:00"
-			) {
+			} else if (from.PlannedDeparture && from.PlannedDeparture !== "0001-01-01T00:00:00") {
 				prevTime = new Date(from.PlannedDeparture);
 			} else {
 				prevTime = null;
@@ -289,10 +327,8 @@ export function expandWithSRTPassingStops(
 			// Direct SRT segment, no passing stops
 			// Estimate next stop's arrival time
 			let estPass: Date | undefined =
-				prevTime && seg.travelTrain
-					? new Date(prevTime.getTime() + seg.travelTrain * 60000)
-					: undefined;
-			result.push({
+				prevTime && seg.travelTrain ? new Date(prevTime.getTime() + seg.travelTrain * 60000) : undefined;
+			pushSRT(result, {
 				placeName: to.PlaceName,
 				isStop: true,
 				plannedArrival: to.PlannedArrival,
@@ -313,14 +349,8 @@ export function expandWithSRTPassingStops(
 						":" +
 						estPass.getSeconds().toString().padStart(2, "0")
 					: undefined,
-				arrivalDelaySeconds: calcDelay(
-					to.ActualArrival,
-					to.PlannedArrival,
-				),
-				departureDelaySeconds: calcDelay(
-					to.ActualDeparture,
-					to.PlannedDeparture,
-				),
+				arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
+				departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
 			});
 			prevTime = estPass ?? null;
 			continue;
@@ -328,17 +358,13 @@ export function expandWithSRTPassingStops(
 		// Try to find a chain of SRT segments between from and to (i.e. passing stops)
 		// BFS to find shortest SRT path
 		let queue: { path: SRTEntry[]; last: string }[] = SRT_DATA.filter(
-			(s) =>
-				s.from.trim().toLocaleLowerCase() ===
-				from.PlaceName.trim().toLowerCase(),
+			(s) => s.from.trim().toLocaleLowerCase() === from.PlaceName.trim().toLowerCase(),
 		).map((s) => ({ path: [s], last: s.to }));
 		queue =
 			queue.length == 0
-				? SRT_DATA.filter(
-						(s) =>
-							s.to.trim().toLocaleLowerCase() ===
-							from.PlaceName.trim().toLowerCase(),
-					).map((s) => ({ path: [s], last: s.from }))
+				? SRT_DATA.filter((s) => s.to.trim().toLocaleLowerCase() === from.PlaceName.trim().toLowerCase()).map(
+						(s) => ({ path: [s], last: s.from }),
+					)
 				: queue;
 		let found: SRTEntry[] | null = null;
 		let visited = new Set<string>();
@@ -357,8 +383,7 @@ export function expandWithSRTPassingStops(
 					s.from.trim().toLowerCase() === last.trim().toLowerCase() ||
 					s.to.trim().toLowerCase() === last.trim().toLowerCase(),
 			)) {
-				if (!visited.has(next.to))
-					queue.push({ path: [...path, next], last: next.to });
+				if (!visited.has(next.to)) queue.push({ path: [...path, next], last: next.to });
 			}
 		}
 		if (found) {
@@ -366,17 +391,12 @@ export function expandWithSRTPassingStops(
 			for (let j = 1; j < found.length - 1; ++j) {
 				const foundSeg = found[j];
 				if (foundSeg) {
-					const orig = stoppingMovements.find(
-						(m) => m.PlaceName === foundSeg.from,
-					);
+					const orig = stoppingMovements.find((m) => m.PlaceName === foundSeg.from);
 					let estPass: Date | undefined =
 						prevTime && foundSeg.travelTrain
-							? new Date(
-									prevTime.getTime() +
-										foundSeg.travelTrain * 60000,
-								)
+							? new Date(prevTime.getTime() + foundSeg.travelTrain * 60000)
 							: undefined;
-					result.push({
+					pushSRT(result, {
 						placeName: foundSeg.from,
 						isStop: false,
 						plannedArrival: orig?.PlannedArrival || "",
@@ -385,37 +405,25 @@ export function expandWithSRTPassingStops(
 						actualDeparture: orig?.ActualDeparture,
 						srtMinutes: foundSeg.travelTrain,
 						estimatedPassingTime: estPass
-							? estPass
-									.getFullYear()
-									.toString()
-									.padStart(4, "0") +
+							? estPass.getFullYear().toString().padStart(4, "0") +
 								"-" +
-								(estPass.getMonth() + 1)
-									.toString()
-									.padStart(2, "0") +
+								(estPass.getMonth() + 1).toString().padStart(2, "0") +
 								"-" +
 								estPass.getDate().toString().padStart(2, "0") +
 								"T" +
 								estPass.getHours().toString().padStart(2, "0") +
 								":" +
-								estPass
-									.getMinutes()
-									.toString()
-									.padStart(2, "0") +
+								estPass.getMinutes().toString().padStart(2, "0") +
 								":" +
 								estPass.getSeconds().toString().padStart(2, "0")
 							: undefined,
 						arrivalDelaySeconds: calcDelay(
-							orig?.ActualArrival ||
-								(estPass ? estPass.toISOString() : undefined),
-							orig?.PlannedArrival ||
-								(estPass ? estPass.toISOString() : undefined),
+							orig?.ActualArrival || (estPass ? estPass.toISOString() : undefined),
+							orig?.PlannedArrival || (estPass ? estPass.toISOString() : undefined),
 						),
 						departureDelaySeconds: calcDelay(
-							orig?.ActualDeparture ||
-								(estPass ? estPass.toISOString() : undefined),
-							orig?.PlannedDeparture ||
-								(estPass ? estPass.toISOString() : undefined),
+							orig?.ActualDeparture || (estPass ? estPass.toISOString() : undefined),
+							orig?.PlannedDeparture || (estPass ? estPass.toISOString() : undefined),
 						),
 					});
 					prevTime = estPass ?? null;
@@ -427,7 +435,7 @@ export function expandWithSRTPassingStops(
 				prevTime && lastSeg && lastSeg.travelTrain
 					? new Date(prevTime.getTime() + lastSeg.travelTrain * 60000)
 					: undefined;
-			result.push({
+			pushSRT(result, {
 				placeName: to.PlaceName,
 				isStop: true,
 				plannedArrival: to.PlannedArrival,
@@ -448,20 +456,14 @@ export function expandWithSRTPassingStops(
 						":" +
 						estArr.getSeconds().toString().padStart(2, "0")
 					: undefined,
-				arrivalDelaySeconds: calcDelay(
-					to.ActualArrival,
-					to.PlannedArrival,
-				),
-				departureDelaySeconds: calcDelay(
-					to.ActualDeparture,
-					to.PlannedDeparture,
-				),
+				arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
+				departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
 			});
 			prevTime = estArr ?? null;
 			continue;
 		}
 		// else: no SRT path found, include the stop
-		result.push({
+		pushSRT(result, {
 			placeName: to.PlaceName,
 			isStop: true,
 			plannedArrival: to.PlannedArrival,
@@ -469,21 +471,12 @@ export function expandWithSRTPassingStops(
 			actualArrival: to.ActualArrival,
 			actualDeparture: to.ActualDeparture,
 			arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
-			departureDelaySeconds: calcDelay(
-				to.ActualDeparture,
-				to.PlannedDeparture,
-			),
+			departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
 		});
 		// Update prevTime for next segments
-		if (
-			to.ActualDeparture &&
-			to.ActualDeparture !== "0001-01-01T00:00:00"
-		) {
+		if (to.ActualDeparture && to.ActualDeparture !== "0001-01-01T00:00:00") {
 			prevTime = new Date(to.ActualDeparture);
-		} else if (
-			to.PlannedDeparture &&
-			to.PlannedDeparture !== "0001-01-01T00:00:00"
-		) {
+		} else if (to.PlannedDeparture && to.PlannedDeparture !== "0001-01-01T00:00:00") {
 			prevTime = new Date(to.PlannedDeparture);
 		}
 	}

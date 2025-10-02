@@ -117,12 +117,7 @@ export async function updateRealtime(): Promise<void> {
 }
 
 export function today(): number {
-	return Number.parseInt(
-		new Date(Date.now() + 3600 * 10 * 1000)
-			.toISOString()
-			.slice(0, 10)
-			.replace(/-/g, ""),
-	);
+	return Number.parseInt(new Date(Date.now() + 3600 * 10 * 1000).toISOString().slice(0, 10).replace(/-/g, ""));
 }
 
 export default {
@@ -141,21 +136,11 @@ export default {
 	logger, // Export the logger
 };
 
-export type {
-	AugmentedTrip,
-	SerializableAugmentedTrip,
-	RunSeries,
-} from "./utils/augmentedTrip.js";
+export type { AugmentedTrip, SerializableAugmentedTrip, RunSeries } from "./utils/augmentedTrip.js";
 
-export type {
-	AugmentedStopTime,
-	SerializableAugmentedStopTime,
-} from "./utils/augmentedStopTime.js";
+export type { AugmentedStopTime, SerializableAugmentedStopTime } from "./utils/augmentedStopTime.js";
 
-export type {
-	AugmentedStop,
-	SerializableAugmentedStop,
-} from "./utils/augmentedStop.js";
+export type { AugmentedStop, SerializableAugmentedStop } from "./utils/augmentedStop.js";
 
 export type {
 	TrainMovementDTO,

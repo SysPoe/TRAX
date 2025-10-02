@@ -98,16 +98,14 @@ The `TRAX` object provides the following main functions and modules:
 
     ```typescript
     const allTrips: Trax.AugmentedTrip[] = TRAX.getAugmentedTrips();
-    const specificTrip: TRAX.AugmentedTrip? =
-    	TRAX.getAugmentedTrips("trip_id")[0];
+    const specificTrip: TRAX.AugmentedTrip? = TRAX.getAugmentedTrips("trip_id")[0];
     ```
 
 - `getAugmentedStops(stop_id?)`: Returns an array of augmented stops, optionally filtered by `stop_id`.
 
     ```typescript
     const allStops: Trax.AugmentedStop[] = TRAX.getAugmentedStops();
-    const station: Trax.AugmentedStop? =
-    	TRAX.getAugmentedStops("place_romsta")[0];
+    const station: Trax.AugmentedStop? = TRAX.getAugmentedStops("place_romsta")[0];
     ```
 
 - `getStations()`: Returns a list of all train stations in SEQ.
