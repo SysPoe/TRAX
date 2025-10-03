@@ -1083,7 +1083,7 @@ export const platformData: PlatformData = {
 			exitSide: "left",
 		},
 	],
-	place_nambsta: [
+	place_namsta: [
 		{
 			platform_code: 1,
 			trackName: "Nambour P1",
@@ -1104,7 +1104,7 @@ export const platformData: PlatformData = {
 			platform_code: 1,
 			trackName: "Yandina P1",
 			trackCode: "YANDP1",
-			next: ["place_nambsta"],
+			next: ["place_namsta"],
 			exitSide: "right",
 		},
 	],
@@ -1161,10 +1161,185 @@ export const platformData: PlatformData = {
             next: ["place_trvsta"],
             exitSide: "left",
         },
-    ]
+    ],
+	place_winsta: [
+		{
+			platform_code: 1,
+			trackName: "Up - Ferny Grove Line",
+			trackCode: "UFG",
+			next: ["place_bowsta"],
+			exitSide: "right",
+		},
+		{
+			platform_code: 2,
+			trackName: "Down - Ferny Grove Line",
+			trackCode: "DFG",
+			next: ["place_wilsta"],
+			exitSide: "right",
+		},
+	],
+	place_wilsta: [
+		{
+			platform_code: 1,
+			trackName: "Up - Ferny Grove Line",
+			trackCode: "UFG",
+			next: ["place_winsta"],
+			exitSide: "right",
+		},
+		{
+			platform_code: 2,
+			trackName: "Down - Ferny Grove Line",
+			trackCode: "DFG",
+			next: ["place_newsta"],
+			exitSide: "right",
+		},
+	],
+	place_newsta: [
+		{
+			platform_code: 1,
+			trackName: "Up - Ferny Grove Line",
+			trackCode: "UFG",
+			next: ["place_wilsta"],
+			exitSide: "right",
+		},
+		{
+			platform_code: 2,
+			trackName: "Down - Ferny Grove Line",
+			trackCode: "DFG",
+			next: ["place_aldsta"],
+			exitSide: "right",
+		},
+	],
+	place_aldsta: [
+		{
+			platform_code: 1,
+			trackName: "Up - Ferny Grove Line",
+			trackCode: "UFG",
+			next: ["place_newsta"],
+			exitSide: "left",
+		},
+		{
+			platform_code: 2,
+			trackName: "Down - Ferny Grove Line",
+			trackCode: "DFG",
+			next: ["place_enosta"],
+			exitSide: "left",
+		},
+	],
+	place_enosta: [
+		{
+			platform_code: 1,
+			trackName: "Up - Ferny Grove Line",
+			trackCode: "UFG",
+			next: ["place_aldsta"],
+			exitSide: "right",
+		},
+		{
+			platform_code: 2,
+			trackName: "Down - Ferny Grove Line",
+			trackCode: "DFG",
+			next: ["place_gaysta"],
+			exitSide: "right",
+		},
+	],
+	place_gaysta: [
+		{
+			platform_code: 1,
+			trackName: "Up - Ferny Grove Line",
+			trackCode: "UFG",
+			next: ["place_enosta"],
+			exitSide: "left",
+		},
+		{
+			platform_code: 2,
+			trackName: "Down - Ferny Grove Line",
+			trackCode: "DFG",
+			next: ["place_mitsta"],
+			exitSide: "left",
+		},
+	],
+	place_mitsta: [
+		{
+			platform_code: 1,
+			trackName: "Up - Ferny Grove Line",
+			trackCode: "UFG",
+			next: ["place_gaysta"],
+			exitSide: "right",
+		},
+		{
+			platform_code: 2,
+			trackName: "Down - Ferny Grove Line",
+			trackCode: "DFG",
+			next: ["place_oxfsta"],
+			exitSide: "right",
+		},
+	],
+	place_oxfsta: [
+		{
+			platform_code: 1,
+			trackName: "Up - Ferny Grove Line",
+			trackCode: "UFG",
+			next: ["place_mitsta"],
+			exitSide: "right",
+		},
+		{
+			platform_code: 2,
+			trackName: "Down - Ferny Grove Line",
+			trackCode: "DFG",
+			next: ["place_grosta"],
+			exitSide: "right",
+		},
+	],
+	place_grosta: [
+		{
+			platform_code: 1,
+			trackName: "Up - Ferny Grove Line",
+			trackCode: "UFG",
+			next: ["place_oxfsta"],
+			exitSide: "left",
+		},
+		{
+			platform_code: 2,
+			trackName: "Down - Ferny Grove Line",
+			trackCode: "DFG",
+			next: ["place_kepsta"],
+			exitSide: "left",
+		},
+	],
+	place_kepsta: [
+		{
+			platform_code: 1,
+			trackName: "Up - Ferny Grove Line",
+			trackCode: "UFG",
+			next: ["place_grosta"],
+			exitSide: "right",
+		},
+		{
+			platform_code: 2,
+			trackName: "Down - Ferny Grove Line",
+			trackCode: "DFG",
+			next: ["place_ferstn"],
+			exitSide: "right",
+		},
+	],
+	place_ferstn: [
+		{
+			platform_code: 1,
+			trackName: "Ferny Grove P1",
+			trackCode: "FERGP1",
+			next: ["place_kepsta"],
+			exitSide: "right",
+		},
+		{
+			platform_code: 2,
+			trackName: "Ferny Grove P2",
+			trackCode: "FERGP2",
+			next: ["place_kepsta"],
+			exitSide: "left",
+		},
+	],
     /*
         TODO:
-        - Ferny Grove
         - Cleveland
         - Beenleigh / Gold Coast
         - Ipswich / Rosewood
