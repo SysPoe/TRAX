@@ -193,16 +193,15 @@ function trackBackwards(trip: AugmentedTrip, serviceDate: number): string {
 	for (const prevTrip of prevTrips) {
 		prevTrip._runSeries[serviceDate] = run;
 		if (!rs.trips.some((v) => v.trip_id === prevTrip._trip.trip_id))
-			rs?.trips.push({
+			rs.trips = [{
 				trip_id: prevTrip._trip.trip_id,
 				trip_start_time:
 					prevTrip.stopTimes[0].scheduled_departure_timestamp ||
 					prevTrip.stopTimes[0].scheduled_arrival_timestamp ||
 					0,
 				run: prevTrip.run,
-			});
+			}, ... rs.trips];
 	}
-	rs.trips = rs.trips.sort((a, b) => a.trip_start_time - b.trip_start_time);
 	cache.setRunSeries(serviceDate, run, rs);
 	return run;
 }
@@ -259,7 +258,6 @@ function trackForwards(trip: AugmentedTrip, serviceDate: number, runSeries: stri
 			});
 		trip = newTrip;
 	}
-	rs.trips = rs.trips.sort((a, b) => a.trip_start_time - b.trip_start_time);
 	cache.setRunSeries(serviceDate, runSeries, rs);
 }
 
