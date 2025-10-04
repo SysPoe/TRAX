@@ -1340,6 +1340,7 @@ export const platformData: PlatformData = {
 	],
     /*
         TODO:
+		- Add lawnton station!!!!!
         - Cleveland
         - Beenleigh / Gold Coast
         - Ipswich / Rosewood
