@@ -2,6 +2,7 @@ import * as cache from "../cache.js";
 import { findExpress } from "./express.js";
 import { getSRT } from "./srt.js";
 import { today } from "../index.js";
+import platformData from "./platformData/data.js";
 import logger from "./logger.js";
 // Simple hash function for stop lists
 function hashStopList(stops) {
@@ -202,6 +203,53 @@ function findPassingStopTimes(stopTimes) {
     if (times.at(-1) && stopTimes.at(-1) && times.at(-1).stop_sequence != stopTimes.at(-1).stop_sequence)
         times.push({ ...stopTimes.at(-1), _passing: false });
     return times;
+}
+function intermediateAToAST(st) {
+    let intA = [];
+    for (let i = 0; i < st.length; i++) {
+        if (st[i].passing) {
+            intA.push({
+                ...st[i],
+                actual_exit_side: null,
+                scheduled_exit_side: null,
+            });
+            continue;
+        }
+        let actualExitData = platformData[st[i].actual_parent_station?.stop_id ?? ""] ?? platformData[st[i].actual_stop?.stop_id ?? ""];
+        let actualPlatform = actualExitData
+            ? (actualExitData.find((v) => v.platform_code == Number.parseInt(st[i].actual_platform_code ?? "0")) ??
+                null)
+            : null;
+        let scheduledExitData = platformData[st[i].scheduled_parent_station?.stop_id ?? ""] ??
+            platformData[st[i].scheduled_stop?.stop_id ?? ""];
+        let scheduledPlatform = scheduledExitData
+            ? (scheduledExitData.find((v) => v.platform_code == Number.parseInt(st[i].scheduled_platform_code ?? "0")) ?? null)
+            : null;
+        const swap = {
+            left: "right",
+            right: "left",
+            both: "both",
+        };
+        intA.push({
+            ...st[i],
+            actual_exit_side: (actualPlatform
+                ? actualPlatform.next.includes(st[i + 1]?.actual_stop?.stop_id ?? "") ||
+                    actualPlatform.next.includes(st[i + 1]?.actual_parent_station?.stop_id ?? "")
+                    ? actualPlatform.exitSide
+                    : swap[actualPlatform.exitSide]
+                : null),
+            scheduled_exit_side: (scheduledPlatform
+                ? scheduledPlatform.next.includes(st[i + 1]?.scheduled_stop?.stop_id ?? "") ||
+                    scheduledPlatform.next.includes(st[i + 1]?.scheduled_parent_station?.stop_id ?? "")
+                    ? scheduledPlatform.exitSide
+                    : swap[scheduledPlatform.exitSide]
+                : null),
+        });
+    }
+    return intA.map((v) => ({
+        ...v,
+        toSerializable: () => toSerializableAugmentedStopTime(v),
+    }));
 }
 export function augmentStopTimes(stopTimes, serviceDates) {
     if (!stopTimes.map((v) => v.trip_id == stopTimes[0].trip_id).every((v) => v))
@@ -429,10 +477,7 @@ export function augmentStopTimes(stopTimes, serviceDates) {
                 stopTimeUpdates: realtimeUpdates,
             },
         };
-        augmentedStopTimes.push({
-            ...partialAugmentedStopTime,
-            toSerializable: () => toSerializableAugmentedStopTime(partialAugmentedStopTime),
-        });
+        augmentedStopTimes.push(partialAugmentedStopTime);
     }
-    return augmentedStopTimes;
+    return intermediateAToAST(augmentedStopTimes);
 }

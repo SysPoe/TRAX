@@ -3,7 +3,8 @@ import { AugmentedStop } from "./augmentedStop.js";
 import * as cache from "../cache.js";
 import { findExpress } from "./express.js";
 import { getSRT } from "./srt.js";
-import TRAX, { DEBUG, today } from "../index.js";
+import { today } from "../index.js";
+import platformData from "./platformData/data.js";
 import logger from "./logger.js";
 
 // Simple hash function for stop lists
@@ -29,6 +30,9 @@ export type AugmentedStopTime = {
 	trip_id: string;
 
 	passing: boolean;
+
+	actual_exit_side: "left" | "right" | "both" | null;
+	scheduled_exit_side: "left" | "right" | "both" | null;
 
 	// The actual ones, which are either realtime if availble, or scheduled otherwise
 
@@ -81,6 +85,9 @@ export type AugmentedStopTime = {
 		propagated: boolean;
 	} | null;
 };
+
+type IntermediateAST_A = Omit<AugmentedStopTime, "actual_exit_side" | "scheduled_exit_side" | "toSerializable">;
+type IntermediateAST_B = Omit<AugmentedStopTime, "toSerializable">;
 
 export type SerializableAugmentedStopTime = Omit<
 	AugmentedStopTime,
@@ -301,6 +308,61 @@ function findPassingStopTimes(stopTimes: gtfs.StopTime[]): PassingStopTime[] {
 	return times;
 }
 
+function intermediateAToAST(st: IntermediateAST_A[]): AugmentedStopTime[] {
+	let intA: IntermediateAST_B[] = [];
+
+	for (let i = 0; i < st.length; i++) {
+		if (st[i].passing) {
+			intA.push({
+				...st[i],
+				actual_exit_side: null,
+				scheduled_exit_side: null,
+			});
+			continue;
+		}
+		let actualExitData =
+			platformData[st[i].actual_parent_station?.stop_id ?? ""] ?? platformData[st[i].actual_stop?.stop_id ?? ""];
+		let actualPlatform = actualExitData
+			? (actualExitData.find((v) => v.platform_code == Number.parseInt(st[i].actual_platform_code ?? "0")) ??
+				null)
+			: null;
+		let scheduledExitData =
+			platformData[st[i].scheduled_parent_station?.stop_id ?? ""] ??
+			platformData[st[i].scheduled_stop?.stop_id ?? ""];
+		let scheduledPlatform = scheduledExitData
+			? (scheduledExitData.find(
+					(v) => v.platform_code == Number.parseInt(st[i].scheduled_platform_code ?? "0"),
+				) ?? null)
+			: null;
+		const swap = {
+			left: "right",
+			right: "left",
+			both: "both",
+		};
+
+		intA.push({
+			...st[i],
+			actual_exit_side: (actualPlatform
+				? actualPlatform.next.includes(st[i + 1]?.actual_stop?.stop_id ?? "") ||
+					actualPlatform.next.includes(st[i + 1]?.actual_parent_station?.stop_id ?? "")
+					? actualPlatform.exitSide
+					: swap[actualPlatform.exitSide as keyof typeof swap]
+				: null) as "left" | "right" | "both" | null,
+			scheduled_exit_side: (scheduledPlatform
+				? scheduledPlatform.next.includes(st[i + 1]?.scheduled_stop?.stop_id ?? "") ||
+					scheduledPlatform.next.includes(st[i + 1]?.scheduled_parent_station?.stop_id ?? "")
+					? scheduledPlatform.exitSide
+					: swap[scheduledPlatform.exitSide as keyof typeof swap]
+				: null) as "left" | "right" | "both" | null,
+		});
+	}
+
+	return intA.map((v) => ({
+		...v,
+		toSerializable: () => toSerializableAugmentedStopTime(v),
+	}));
+}
+
 export function augmentStopTimes(
 	stopTimes: gtfs.StopTime[],
 	serviceDates: number[], // Dates in the format YYYYMMDD as a number
@@ -327,7 +389,7 @@ export function augmentStopTimes(
 
 	let passingStopTimes = findPassingStopTimes(stopTimes);
 
-	let augmentedStopTimes: AugmentedStopTime[] = [];
+	let augmentedStopTimes: IntermediateAST_A[] = [];
 
 	// Propagation state
 	let lastDelay = 0;
@@ -520,7 +582,7 @@ export function augmentStopTimes(
 		scheduled_departure_date_offset -= initial_scheduled_departure_date_offset;
 		actual_departure_date_offset -= initial_actual_departure_date_offset;
 
-		let partialAugmentedStopTime: Omit<AugmentedStopTime, "toSerializable"> = {
+		let partialAugmentedStopTime: IntermediateAST_A = {
 			_stopTime: passingStopTime._passing ? null : passingStopTime,
 			trip_id: stopTimes[0].trip_id,
 			passing: passingStopTime._passing,
@@ -559,11 +621,8 @@ export function augmentStopTimes(
 			},
 		};
 
-		augmentedStopTimes.push({
-			...partialAugmentedStopTime,
-			toSerializable: () => toSerializableAugmentedStopTime(partialAugmentedStopTime),
-		});
+		augmentedStopTimes.push(partialAugmentedStopTime);
 	}
 
-	return augmentedStopTimes;
+	return intermediateAToAST(augmentedStopTimes);
 }

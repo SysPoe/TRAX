@@ -117,7 +117,7 @@ export const platformData: PlatformData = {
 			trackName: "Down Main - Central Line",
 			trackCode: "DMC",
 			next: ["place_forsta"],
-			exitSide: "left",
+			exitSide: "right",
 		},
 	],
 	place_forsta: [
@@ -940,11 +940,11 @@ export const platformData: PlatformData = {
 			platform_code: 2,
 			trackName: "Down Main - Northern Line",
 			trackCode: "DMN",
-			next: ["place_cabsta"],
+			next: ["place_cabstn"],
 			exitSide: "left",
 		},
 	],
-	place_cabsta: [
+	place_cabstn: [
 		{
 			platform_code: 1,
 			trackName: "Down Main - Northern Line",
@@ -972,7 +972,7 @@ export const platformData: PlatformData = {
 			platform_code: 1,
 			trackName: "Up Main - Northern Line",
 			trackCode: "UMN",
-			next: ["place_cabsta"],
+			next: ["place_cabstn"],
 			exitSide: "left",
 		},
 		{

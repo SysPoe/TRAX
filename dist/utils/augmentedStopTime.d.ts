@@ -15,6 +15,8 @@ export type AugmentedStopTime = {
     _stopTime: gtfs.StopTime | null;
     trip_id: string;
     passing: boolean;
+    actual_exit_side: "left" | "right" | "both" | null;
+    scheduled_exit_side: "left" | "right" | "both" | null;
     actual_arrival_timestamp: number | null;
     actual_departure_timestamp: number | null;
     actual_stop: AugmentedStop | null;

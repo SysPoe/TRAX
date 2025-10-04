@@ -501,7 +501,7 @@ async function viewTripFromDeparture(departure: any) {
 			const stopNumber = chalk.dim(`${(index + 1).toString().padStart(2, "0")}.`);
 			let displayName = `${stopNumber} ${timeDisplay} ${platform} ${chalk.bold(
 				name,
-			)}${rtInfo}${firstStop}${lastStop}`;
+			)}${rtInfo}${firstStop}${lastStop} ${st.actual_exit_side}`;
 			if (st.passing) {
 				displayName = chalk.gray(
 					`${stopNumber} ${
