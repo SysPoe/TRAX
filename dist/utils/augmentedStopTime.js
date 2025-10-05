@@ -234,13 +234,17 @@ function intermediateAToAST(st) {
             ...st[i],
             actual_exit_side: (actualPlatform
                 ? actualPlatform.next.includes(st[i + 1]?.actual_stop?.stop_id ?? "") ||
-                    actualPlatform.next.includes(st[i + 1]?.actual_parent_station?.stop_id ?? "")
+                    actualPlatform.next.includes(st[i + 1]?.actual_parent_station?.stop_id ?? "") ||
+                    actualPlatform.from.includes(st[i + 1]?.actual_stop?.stop_id ?? "") ||
+                    actualPlatform.from.includes(st[i + 1]?.actual_parent_station?.stop_id ?? "")
                     ? actualPlatform.exitSide
                     : swap[actualPlatform.exitSide]
                 : null),
             scheduled_exit_side: (scheduledPlatform
                 ? scheduledPlatform.next.includes(st[i + 1]?.scheduled_stop?.stop_id ?? "") ||
-                    scheduledPlatform.next.includes(st[i + 1]?.scheduled_parent_station?.stop_id ?? "")
+                    scheduledPlatform.next.includes(st[i + 1]?.scheduled_parent_station?.stop_id ?? "") ||
+                    scheduledPlatform.from.includes(st[i + 1]?.scheduled_stop?.stop_id ?? "") ||
+                    scheduledPlatform.from.includes(st[i + 1]?.scheduled_parent_station?.stop_id ?? "")
                     ? scheduledPlatform.exitSide
                     : swap[scheduledPlatform.exitSide]
                 : null),
