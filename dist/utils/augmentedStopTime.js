@@ -206,12 +206,42 @@ function findPassingStopTimes(stopTimes) {
 }
 function intermediateAToAST(st) {
     let intA = [];
+    let intA_AltS = [];
+    let intA_AltA = [];
+    let intA_AltB = [];
+    let prevActualTrackCode = "";
+    let prevScheduledTrackCode = "";
     for (let i = 0; i < st.length; i++) {
         if (st[i].passing) {
             intA.push({
                 ...st[i],
                 actual_exit_side: null,
                 scheduled_exit_side: null,
+            });
+            let actualExitData = platformData[st[i].actual_parent_station?.stop_id ?? ""] ??
+                platformData[st[i].actual_stop?.stop_id ?? ""];
+            let scheduledExitData = platformData[st[i].scheduled_parent_station?.stop_id ?? ""] ??
+                platformData[st[i].scheduled_stop?.stop_id ?? ""];
+            let actualPlatform = actualExitData?.find((v) => v.trackCode == prevActualTrackCode) ?? null;
+            let scheduledPlatform = scheduledExitData?.find((v) => v.trackCode == prevScheduledTrackCode) ?? null;
+            intA_AltB.push({
+                ...st[i],
+                actual_exit_side: null,
+                scheduled_exit_side: null,
+                actual_platform_code: actualPlatform?.platform_code?.toString() ?? null,
+                scheduled_platform_code: scheduledPlatform?.platform_code?.toString() ?? null,
+            });
+            intA_AltA.push({
+                ...st[i],
+                actual_exit_side: null,
+                scheduled_exit_side: null,
+                actual_platform_code: actualPlatform?.platform_code?.toString() ?? null,
+            });
+            intA_AltS.push({
+                ...st[i],
+                actual_exit_side: null,
+                scheduled_exit_side: null,
+                scheduled_platform_code: scheduledPlatform?.platform_code?.toString() ?? null,
             });
             continue;
         }
@@ -230,6 +260,12 @@ function intermediateAToAST(st) {
             right: "left",
             both: "both",
         };
+        if (actualPlatform?.trackCode == prevActualTrackCode && scheduledPlatform?.trackCode == prevScheduledTrackCode)
+            intA = intA_AltB;
+        else if (actualPlatform?.trackCode == prevActualTrackCode)
+            intA = intA_AltA;
+        else if (scheduledPlatform?.trackCode == prevScheduledTrackCode)
+            intA = intA_AltS;
         intA.push({
             ...st[i],
             actual_exit_side: (actualPlatform
@@ -249,6 +285,11 @@ function intermediateAToAST(st) {
                     : swap[scheduledPlatform.exitSide]
                 : null),
         });
+        intA_AltB = intA.slice();
+        intA_AltS = intA.slice();
+        intA_AltA = intA.slice();
+        prevActualTrackCode = actualPlatform?.trackCode ?? "";
+        prevScheduledTrackCode = scheduledPlatform?.trackCode ?? "";
     }
     return intA.map((v) => ({
         ...v,
