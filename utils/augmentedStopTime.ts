@@ -335,6 +335,9 @@ function intermediateAToAST(st: IntermediateAST_A[]): AugmentedStopTime[] {
 			let actualPlatform = actualExitData?.find((v) => v.trackCode == prevActualTrackCode) ?? null;
 			let scheduledPlatform = scheduledExitData?.find((v) => v.trackCode == prevScheduledTrackCode) ?? null;
 
+			if (!actualPlatform) prevActualTrackCode = "";
+			if (!scheduledPlatform) prevScheduledTrackCode = "";
+
 			intA_AltB.push({
 				...st[i],
 				actual_exit_side: null,

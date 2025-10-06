@@ -224,6 +224,10 @@ function intermediateAToAST(st) {
                 platformData[st[i].scheduled_stop?.stop_id ?? ""];
             let actualPlatform = actualExitData?.find((v) => v.trackCode == prevActualTrackCode) ?? null;
             let scheduledPlatform = scheduledExitData?.find((v) => v.trackCode == prevScheduledTrackCode) ?? null;
+            if (!actualPlatform)
+                prevActualTrackCode = "";
+            if (!scheduledPlatform)
+                prevScheduledTrackCode = "";
             intA_AltB.push({
                 ...st[i],
                 actual_exit_side: null,
