@@ -500,6 +500,101 @@ export let SRT_DATA: SRTEntry[] = [
 	{ from: "Gympie", to: "Gympie North", travelTrain: 10 },
 	{ from: "Maryborough West", to: "Maryborough", travelTrain: 10 },
 	{ from: "Maryborough", to: "Maryborough West", travelTrain: 10 },
+	// West Moreton
+	{ from: "Ebenezer", to: "Yarrowlea", travelTrain: 1 },
+	{ from: "Yarrowlea", to: "Ebenezer", travelTrain: 1 },
+	{ from: "Helidon", to: "Grantham", travelTrain: 11.5 },
+	{ from: "Grantham", to: "Helidon", travelTrain: 11.5 },
+	{ from: "Grantham", to: "Gatton", travelTrain: 11.5 },
+	{ from: "Gatton", to: "Grantham", travelTrain: 11.5 },
+	{ from: "Gatton", to: "Forest Hill", travelTrain: 9.5 },
+	{ from: "Forest Hill", to: "Gatton", travelTrain: 9.5 },
+	{ from: "Forest Hill", to: "Laidley", travelTrain: 7.5 },
+	{ from: "Laidley", to: "Forest Hill", travelTrain: 7.5 },
+	{ from: "Laidley", to: "Yarongmulu", travelTrain: 19.5 },
+	{ from: "Yarongmulu", to: "Laidley", travelTrain: 19.5 },
+	{ from: "Yarongmulu", to: "Grandchester", travelTrain: 17.5 },
+	{ from: "Grandchester", to: "Yarongmulu", travelTrain: 17.5 },
+	{ from: "Grandchester", to: "Rosewood", travelTrain: 13.5 },
+	{ from: "Rosewood", to: "Grandchester", travelTrain: 13.5 },
+	{ from: "Helidon", to: "Lockyer", travelTrain: 14.5 },
+	{ from: "Lockyer", to: "Helidon", travelTrain: 14.5 },
+	{ from: "Lockyer", to: "Murphys Creek", travelTrain: 18.5 },
+	{ from: "Murphys Creek", to: "Lockyer", travelTrain: 18.5 },
+	{ from: "Murphys Creek", to: "Holmes", travelTrain: 22.5 },
+	{ from: "Holmes", to: "Murphys Creek", travelTrain: 22.5 },
+	{ from: "Holmes", to: "Spring Bluff", travelTrain: 19.5 },
+	{ from: "Spring Bluff", to: "Holmes", travelTrain: 19.5 },
+	{ from: "Spring Bluff", to: "Rangeview", travelTrain: 24.5 },
+	{ from: "Rangeview", to: "Spring Bluff", travelTrain: 24.5 },
+	{ from: "Rangeview", to: "Harlaxton", travelTrain: 6.5 },
+	{ from: "Harlaxton", to: "Rangeview", travelTrain: 6.5 },
+	{ from: "Harlaxton", to: "Toowoomba", travelTrain: 9.5 },
+	{ from: "Toowoomba", to: "Harlaxton", travelTrain: 9.5 },
+	{ from: "Rosewood", to: "Grandchester", travelTrain: 14.5 },
+	{ from: "Grandchester", to: "Rosewood", travelTrain: 14.5 },
+	{ from: "Grandchester", to: "Yarongmulu", travelTrain: 17.5 },
+	{ from: "Yarongmulu", to: "Grandchester", travelTrain: 17.5 },
+	{ from: "Yarongmulu", to: "Laidley", travelTrain: 9.5 },
+	{ from: "Laidley", to: "Yarongmulu", travelTrain: 9.5 },
+	{ from: "Laidley", to: "Forest Hill", travelTrain: 7.5 },
+	{ from: "Forest Hill", to: "Laidley", travelTrain: 7.5 },
+	{ from: "Forest Hill", to: "Gatton", travelTrain: 9.5 },
+	{ from: "Gatton", to: "Forest Hill", travelTrain: 9.5 },
+	{ from: "Gatton", to: "Grantham", travelTrain: 11.5 },
+	{ from: "Grantham", to: "Gatton", travelTrain: 11.5 },
+	{ from: "Grantham", to: "Helidon", travelTrain: 11.5 },
+	{ from: "Helidon", to: "Grantham", travelTrain: 11.5 },
+	{ from: "Rosewood", to: "Yarrowlea", travelTrain: 4 },
+	{ from: "Yarrowlea", to: "Rosewood", travelTrain: 4 },
+	{ from: "Toowoomba", to: "Harlaxton", travelTrain: 8.5 },
+	{ from: "Harlaxton", to: "Toowoomba", travelTrain: 8.5 },
+	{ from: "Harlaxton", to: "Rangeview", travelTrain: 6.5 },
+	{ from: "Rangeview", to: "Harlaxton", travelTrain: 6.5 },
+	{ from: "Rangeview", to: "Spring Bluff", travelTrain: 23.5 },
+	{ from: "Spring Bluff", to: "Rangeview", travelTrain: 23.5 },
+	{ from: "Spring Bluff", to: "Holmes", travelTrain: 18.5 },
+	{ from: "Holmes", to: "Spring Bluff", travelTrain: 18.5 },
+	{ from: "Holmes", to: "Murphys Creek", travelTrain: 22.5 },
+	{ from: "Murphys Creek", to: "Holmes", travelTrain: 22.5 },
+	{ from: "Murphys Creek", to: "Lockyer", travelTrain: 17.5 },
+	{ from: "Lockyer", to: "Murphys Creek", travelTrain: 17.5 },
+	{ from: "Lockyer", to: "Helidon", travelTrain: 13.5 },
+	{ from: "Helidon", to: "Lockyer", travelTrain: 13.5 },
+	{ from: "Toowoomba", to: "Toowoomba Marshalling Yard", travelTrain: 5 },
+	{ from: "Toowoomba Marshalling Yard", to: "Toowoomba", travelTrain: 5 },
+	{ from: "Toowoomba Marshalling Yard", to: "Willowburn", travelTrain: 5 },
+	{ from: "Willowburn", to: "Toowoomba Marshalling Yard", travelTrain: 5 },
+	{ from: "Toowoomba", to: "Toowoomba Passenger Station", travelTrain: 3 },
+	{ from: "Toowoomba Passenger Station", to: "Toowoomba", travelTrain: 3 },
+	{ from: "Toowoomba Passenger Station", to: "Harristown", travelTrain: 1 },
+	{ from: "Harristown", to: "Toowoomba Passenger Station", travelTrain: 1 },
+	{ from: "Harristown", to: "Wyreema", travelTrain: 1 },
+	{ from: "Wyreema", to: "Harristown", travelTrain: 1 },
+	{ from: "Willowburn", to: "Toowoomba Marshalling Yard", travelTrain: 10 },
+	{ from: "Toowoomba Marshalling Yard", to: "Willowburn", travelTrain: 10 },
+	{ from: "Toowoomba Marshalling Yard", to: "Toowoomba", travelTrain: 5 },
+	{ from: "Toowoomba", to: "Toowoomba Marshalling Yard", travelTrain: 5 },
+	{ from: "Wulkuraka", to: "Karrabin", travelTrain: 3 },
+	{ from: "Karrabin", to: "Wulkuraka", travelTrain: 3 },
+	{ from: "Karrabin", to: "Walloon", travelTrain: 6 },
+	{ from: "Walloon", to: "Karrabin", travelTrain: 6 },
+	{ from: "Walloon", to: "Thagoona", travelTrain: 5 },
+	{ from: "Thagoona", to: "Walloon", travelTrain: 5 },
+	{ from: "Thagoona", to: "Yarrowlea", travelTrain: 2 },
+	{ from: "Yarrowlea", to: "Thagoona", travelTrain: 2 },
+	{ from: "Yarrowlea", to: "Ebenezer", travelTrain: 1 },
+	{ from: "Ebenezer", to: "Yarrowlea", travelTrain: 1 },
+	{ from: "Yarrowlea", to: "Rosewood", travelTrain: 4 },
+	{ from: "Rosewood", to: "Yarrowlea", travelTrain: 4 },
+	{ from: "Yarrowlea", to: "Thagoona", travelTrain: 2 },
+	{ from: "Thagoona", to: "Yarrowlea", travelTrain: 2 },
+	{ from: "Thagoona", to: "Walloon", travelTrain: 5 },
+	{ from: "Walloon", to: "Thagoona", travelTrain: 5 },
+	{ from: "Walloon", to: "Karrabin", travelTrain: 6 },
+	{ from: "Karrabin", to: "Walloon", travelTrain: 6 },
+	{ from: "Karrabin", to: "Wulkuraka", travelTrain: 3 },
+	{ from: "Wulkuraka", to: "Karrabin", travelTrain: 3 },
 ];
 
 SRT_DATA = SRT_DATA.concat(
@@ -724,7 +819,7 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 
 			// Calculate total SRT time for the entire segment
 			let totalSRT = found.reduce((sum, seg) => sum + seg.travelTrain, 0);
-			
+
 			// Calculate actual time between from and to stations
 			let fromTime = prevTime;
 			let toTime: Date | null = null;
@@ -733,7 +828,7 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 			} else if (to.PlannedArrival && to.PlannedArrival !== "0001-01-01T00:00:00") {
 				toTime = new Date(to.PlannedArrival);
 			}
-			
+
 			// Calculate scaling factor: actualTime / srtTime
 			let scaleFactor = 1.0;
 			if (fromTime && toTime && totalSRT > 0) {
@@ -749,14 +844,14 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 				if (foundSeg) {
 					cumulativeSRT += foundSeg.travelTrain;
 					const orig = stoppingMovements.find((m) => m.PlaceName === stopName);
-					
+
 					// Calculate scaled time based on actual travel time
 					let estPass: Date | undefined = undefined;
 					if (fromTime) {
 						let scaledMinutes = cumulativeSRT * scaleFactor;
 						estPass = new Date(fromTime.getTime() + scaledMinutes * 60000);
 					}
-					
+
 					pushSRT(result, {
 						placeName: stopName,
 						isStop: false,
