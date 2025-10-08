@@ -127,26 +127,52 @@ export function today(): number {
 	return Number.parseInt(new Date(Date.now() + 3600 * 10 * 1000).toISOString().slice(0, 10).replace(/-/g, ""));
 }
 
-export default {
-	config,
+const TRAX = {
+	// Core functions
 	loadGTFS,
 	updateRealtime,
 	clearIntervals,
-	formatTimestamp,
 	today,
-	...cache,
-	express,
-	calendar,
-	...stations,
-	qrTravel,
-	ScheduleRelationship: augmentedStopTime.ScheduleRelationship,
-	logger, // Export the logger
-	utils: {
-		time: timeUtils,
-	},
+	formatTimestamp,
+
+	// Data access functions
+	getAugmentedTrips: cache.getAugmentedTrips,
+	getAugmentedStops: cache.getAugmentedStops,
+	getAugmentedStopTimes: cache.getAugmentedStopTimes,
+	getBaseStopTimes: cache.getBaseStopTimes,
+	getRunSeries: cache.getRunSeries,
+	getStations: stations.getStations,
+	getRawTrips: cache.getRawTrips,
+	getRawStops: cache.getRawStops,
+	getRawRoutes: cache.getRawRoutes,
+	getStopTimeUpdates: cache.getStopTimeUpdates,
+	getTripUpdates: cache.getTripUpdates,
+	getVehiclePositions: cache.getVehiclePositions,
+	getQRTPlaces: cache.getQRTPlaces,
+	getQRTTrains: cache.getQRTTrains,
+
+	// Event handling
 	on: (event: string, listener: (...args: any[]) => void) => traxEmitter.on(event, listener),
 	off: (event: string, listener: (...args: any[]) => void) => traxEmitter.off(event, listener),
+
+	// Namespaced modules
+	cache,
+	stations,
+	calendar,
+	express,
+	qrTravel,
+
+	// Utilities and config
+	utils: {
+		time: timeUtils,
+		formatTimestamp,
+	},
+	config,
+	logger,
+	ScheduleRelationship: augmentedStopTime.ScheduleRelationship,
 };
+
+export default TRAX;
 
 export type { AugmentedTrip, SerializableAugmentedTrip, RunSeries } from "./utils/augmentedTrip.js";
 

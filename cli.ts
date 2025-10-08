@@ -1,7 +1,7 @@
 import inquirer from "inquirer";
 import chalk from "chalk";
 import { getCurrentQRTravelTrains } from "./qr-travel/qr-travel-tracker.js";
-import TRAX, { AugmentedStopTime, LogLevel, TravelTrip } from "./index.js";
+import TRAX, { AugmentedStopTime, AugmentedTrip, LogLevel, TravelTrip } from "./index.js";
 import * as gtfs from "gtfs";
 
 async function qrTravelFlow() {
@@ -407,14 +407,14 @@ async function viewDepartures(stationId?: string, timeOffset: number = 0) {
 	}
 }
 
-async function viewTripFromDeparture(departure: any) {
-	const trips = TRAX.getAugmentedTrips(departure.trip_id);
+async function viewTripFromDeparture(departure: AugmentedStopTime) {
+	const trips: AugmentedTrip[] = TRAX.getAugmentedTrips(departure.trip_id);
 	if (trips.length === 0) {
 		console.log(chalk.red("No trip found with that ID."));
 		return;
 	}
 
-	const trip = trips[0];
+	const trip: AugmentedTrip = trips[0];
 	let showPassing = false;
 
 	while (true) {
@@ -569,13 +569,13 @@ async function viewTrip() {
 		},
 	]);
 
-	const trips = TRAX.getAugmentedTrips(tripId);
+	const trips: AugmentedTrip[] = TRAX.getAugmentedTrips(tripId);
 	if (trips.length === 0) {
 		console.log(chalk.red("No trip found with that ID."));
 		return;
 	}
 
-	const trip = trips[0];
+	const trip: AugmentedTrip = trips[0];
 	console.log(chalk.bold(`\nTrip: ${trip._trip.trip_id}`));
 	console.log(`Route: ${gtfs.getRoutes({ route_id: trip._trip.route_id })[0].route_short_name}`);
 	console.log(`Headsign: ${trip._trip.trip_headsign}`);

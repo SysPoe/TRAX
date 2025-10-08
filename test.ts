@@ -1,4 +1,4 @@
-import TRAX from ".";
+import TRAX, { AugmentedTrip, RunSeries } from "./index.js";
 import * as readline from "readline";
 
 async function main() {
@@ -30,17 +30,19 @@ async function main() {
 				continue;
 			}
 
-			const trips = TRAX.getAugmentedTrips(tripId);
+			const trips: AugmentedTrip[] = TRAX.getAugmentedTrips(tripId);
 			if (!trips || trips.length === 0) {
 				console.log(`No trip found with ID: ${tripId}\n`);
 				continue;
 			}
 
-			const trip = trips[0];
+			const trip: AugmentedTrip = trips[0];
+			const firstKey = Object.keys(trip.runSeries)[0];
+			const serviceDate = Number.parseInt(firstKey);
 			console.log(
 				TRAX.getRunSeries(
-					Number.parseInt(Object.keys(trip.runSeries)[0]),
-					trip.runSeries[Object.keys(trip.runSeries)[0]],
+					serviceDate,
+					trip.runSeries[serviceDate],
 				),
 			);
 			continue;
@@ -53,12 +55,13 @@ async function main() {
 
 			// Display run series information
 			console.log("\n=== RunSeries Information ===");
-			for (const [serviceDate, runSeries] of Object.entries(trip.runSeries)) {
+			for (const [serviceDateStr, runSeries] of Object.entries(trip.runSeries)) {
+				const serviceDate = Number(serviceDateStr);
 				console.log(`\nService Date: ${serviceDate}`);
 				console.log(`Run Series ID: ${runSeries || "Not calculated"}`);
 
 				if (runSeries) {
-					const rsData = TRAX.getRunSeries(Number(serviceDate), runSeries);
+					const rsData: RunSeries = TRAX.getRunSeries(serviceDate, runSeries);
 					if (rsData && rsData.trips.length > 0) {
 						console.log("Trips in this RunSeries:");
 						rsData.trips
