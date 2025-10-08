@@ -8,8 +8,11 @@ import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 import * as augmentedStopTime from "./utils/augmentedStopTime.js";
 import * as timeUtils from "./utils/time.js";
 import logger, { LogLevel } from "./utils/logger.js";
+import { EventEmitter } from "events";
 
 export const DEBUG = true;
+
+const traxEmitter = new EventEmitter();
 
 // Configure logger based on DEBUG flag
 if (DEBUG) {
@@ -104,6 +107,7 @@ export function formatTimestamp(ts?: number | null): string {
 }
 
 export async function updateRealtime(): Promise<void> {
+	traxEmitter.emit("update-realtime-start");
 	try {
 		await gtfs.updateGtfsRealtime(config);
 		await cache.refreshRealtimeCache();
@@ -114,6 +118,8 @@ export async function updateRealtime(): Promise<void> {
 			error: error.message || error,
 		});
 		throw error;
+	} finally {
+		traxEmitter.emit("update-realtime-end");
 	}
 }
 
@@ -137,7 +143,9 @@ export default {
 	logger, // Export the logger
 	utils: {
 		time: timeUtils,
-	}
+	},
+	on: (event: string, listener: (...args: any[]) => void) => traxEmitter.on(event, listener),
+	off: (event: string, listener: (...args: any[]) => void) => traxEmitter.off(event, listener),
 };
 
 export type { AugmentedTrip, SerializableAugmentedTrip, RunSeries } from "./utils/augmentedTrip.js";

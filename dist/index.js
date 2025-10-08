@@ -8,7 +8,9 @@ import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 import * as augmentedStopTime from "./utils/augmentedStopTime.js";
 import * as timeUtils from "./utils/time.js";
 import logger, { LogLevel } from "./utils/logger.js";
+import { EventEmitter } from "events";
 export const DEBUG = true;
+const traxEmitter = new EventEmitter();
 // Configure logger based on DEBUG flag
 if (DEBUG) {
     logger.setLevel(LogLevel.DEBUG);
@@ -88,6 +90,7 @@ export function formatTimestamp(ts) {
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }
 export async function updateRealtime() {
+    traxEmitter.emit("update-realtime-start");
     try {
         await gtfs.updateGtfsRealtime(config);
         await cache.refreshRealtimeCache();
@@ -99,6 +102,9 @@ export async function updateRealtime() {
             error: error.message || error,
         });
         throw error;
+    }
+    finally {
+        traxEmitter.emit("update-realtime-end");
     }
 }
 export function today() {
@@ -120,6 +126,8 @@ export default {
     logger, // Export the logger
     utils: {
         time: timeUtils,
-    }
+    },
+    on: (event, listener) => traxEmitter.on(event, listener),
+    off: (event, listener) => traxEmitter.off(event, listener),
 };
 export { Logger, LogLevel } from "./utils/logger.js"; // Export logger types

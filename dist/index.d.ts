@@ -4,6 +4,7 @@ import * as express from "./utils/express.js";
 import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 import * as augmentedStopTime from "./utils/augmentedStopTime.js";
 import * as timeUtils from "./utils/time.js";
+import { EventEmitter } from "events";
 export declare const DEBUG = true;
 export declare function loadGTFS(autoRefresh?: boolean, forceReload?: boolean, realtimeIntervalMs?: number, // 1 minute
 staticIntervalMs?: number): Promise<void>;
@@ -18,6 +19,8 @@ declare const _default: {
     utils: {
         time: typeof timeUtils;
     };
+    on: (event: string, listener: (...args: any[]) => void) => EventEmitter<[never]>;
+    off: (event: string, listener: (...args: any[]) => void) => EventEmitter<[never]>;
     getStations(): import("./utils/augmentedStop.js").AugmentedStop[];
     express: typeof express;
     calendar: typeof calendar;
