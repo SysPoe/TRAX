@@ -452,7 +452,6 @@ export function augmentStopTimes(
 	// Propagation state
 	let lastDelay = 0;
 	let lastScheduleRelationship = ScheduleRelationship.SCHEDULED;
-	let lastPlatformCode = null;
 
 	let propagateOnTime = tripUpdate && tripUpdate.schedule_relationship === "SCHEDULED";
 
@@ -494,7 +493,7 @@ export function augmentStopTimes(
 		let propagated = false;
 
 		let delaySecs = lastDelay;
-		let platformCode: string | null = lastPlatformCode;
+		let platformCode: string | null = null;
 		let scheduleRelationship: ScheduleRelationship = lastScheduleRelationship;
 
 		if (realtimeUpdate) {
@@ -528,7 +527,6 @@ export function augmentStopTimes(
 			}
 			if (cache.getRawStops(realtimeUpdate.stop_id)[0]?.platform_code) {
 				platformCode = cache.getRawStops(realtimeUpdate.stop_id)[0]?.platform_code ?? null;
-				lastPlatformCode = platformCode;
 				rtPlatformCodeUpdated = true;
 			}
 			if (realtimeUpdate.schedule_relationship) {
