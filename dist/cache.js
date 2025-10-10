@@ -8,6 +8,8 @@ let rawCache = {
     tripUpdates: [],
     vehiclePositions: [],
     stopTimes: [],
+    calendars: [],
+    calendarDates: [],
     trips: [],
     stops: [],
     routes: [],
@@ -29,6 +31,35 @@ let augmentedCache = {
     passingStopsCache: {},
     runSeriesCache: {},
 };
+export function getCalendars(filter) {
+    if (!rawCache.calendars || rawCache.calendars.length === 0)
+        rawCache.calendars = gtfs.getCalendars();
+    if (!filter)
+        return rawCache.calendars;
+    // simple filter implementation
+    return rawCache.calendars.filter((c) => {
+        for (const key of Object.keys(filter)) {
+            // @ts-ignore
+            if (c[key] !== filter[key])
+                return false;
+        }
+        return true;
+    });
+}
+export function getCalendarDates(filter) {
+    if (!rawCache.calendarDates || rawCache.calendarDates.length === 0)
+        rawCache.calendarDates = gtfs.getCalendarDates();
+    if (!filter)
+        return rawCache.calendarDates;
+    return rawCache.calendarDates.filter((c) => {
+        for (const key of Object.keys(filter)) {
+            // @ts-ignore
+            if (c[key] !== filter[key])
+                return false;
+        }
+        return true;
+    });
+}
 export function getRawTrips(trip_id) {
     if (trip_id)
         return rawCache.tripsRec[trip_id] ? [rawCache.tripsRec[trip_id]] : [];
@@ -161,6 +192,8 @@ function resetStaticCache() {
         tripUpdates: [],
         vehiclePositions: [],
         stopTimes: [],
+        calendars: [],
+        calendarDates: [],
         trips: [],
         stops: [],
         routes: [],
@@ -215,6 +248,24 @@ export async function refreshStaticCache(skipRealtimeOverlap = false) {
     });
     rawCache.stops = gtfs.getStops();
     logger.debug(`Loaded ${rawCache.stops.length} stops.`, {
+        module: "cache",
+        function: "refreshStaticCache",
+    });
+    logger.debug("Loading calendars...", {
+        module: "cache",
+        function: "refreshStaticCache",
+    });
+    rawCache.calendars = gtfs.getCalendars();
+    logger.debug(`Loaded ${rawCache.calendars.length} calendars.`, {
+        module: "cache",
+        function: "refreshStaticCache",
+    });
+    logger.debug("Loading calendar dates...", {
+        module: "cache",
+        function: "refreshStaticCache",
+    });
+    rawCache.calendarDates = gtfs.getCalendarDates();
+    logger.debug(`Loaded ${rawCache.calendarDates.length} calendar dates.`, {
         module: "cache",
         function: "refreshStaticCache",
     });

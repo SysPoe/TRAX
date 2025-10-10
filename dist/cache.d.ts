@@ -3,6 +3,8 @@ import { AugmentedStop } from "./utils/augmentedStop.js";
 import { AugmentedTrip, RunSeries } from "./utils/augmentedTrip.js";
 import { AugmentedStopTime } from "./utils/augmentedStopTime.js";
 import { QRTPlace, TravelTrip } from "./index.js";
+export declare function getCalendars(filter?: Partial<gtfs.Calendar>): gtfs.Calendar[];
+export declare function getCalendarDates(filter?: Partial<gtfs.CalendarDate>): gtfs.CalendarDate[];
 export declare function getRawTrips(trip_id?: string): gtfs.Trip[];
 export declare function getRawStops(stop_id?: string): gtfs.Stop[];
 export declare function getRawRoutes(route_id?: string): gtfs.Route[];

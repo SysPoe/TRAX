@@ -1,5 +1,5 @@
-import * as gtfs from "gtfs";
-import { getRawTrips } from "../cache.js";
+import type * as gtfs from "gtfs";
+import { getRawTrips, getCalendars, getCalendarDates } from "../cache.js";
 
 export function getServiceDates(
 	calendars: gtfs.Calendar[],
@@ -83,10 +83,8 @@ export function getServiceDatesByTrip(trip_id: string): number[] {
 	const trips = getRawTrips().filter((v) => v.trip_id === trip_id);
 	const trip = trips && trips.length > 0 ? trips[0] : undefined;
 	if (!trip) return [];
-	const calendars = gtfs.getCalendars({ service_id: trip.service_id });
-	const calendarDates = gtfs.getCalendarDates({
-		service_id: trip.service_id,
-	});
+	const calendars = getCalendars({ service_id: trip.service_id });
+	const calendarDates = getCalendarDates({ service_id: trip.service_id });
 	const serviceDatesMap = getServiceDates(calendars, calendarDates);
 	return serviceDatesMap[trip.service_id] || [];
 }
