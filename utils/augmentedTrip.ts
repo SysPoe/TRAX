@@ -1,6 +1,11 @@
 import * as gtfs from "gtfs";
 import { getServiceDatesByTrip } from "./calendar.js";
-import { AugmentedStopTime, augmentStopTimes, SerializableAugmentedStopTime } from "./augmentedStopTime.js";
+import {
+	AugmentedStopTime,
+	augmentStopTimes,
+	fromSerializableAugmentedStopTime,
+	SerializableAugmentedStopTime,
+} from "./augmentedStopTime.js";
 import { ExpressInfo, findExpress } from "./express.js";
 import * as cache from "../cache.js";
 import { formatTimestamp } from "../index.js";
@@ -57,7 +62,7 @@ export function augmentTrip(trip: gtfs.Trip): AugmentedTrip {
 	let expressInfo = findExpress(parentStops.filter((id): id is string => !!id));
 
 	// Pre-calculate stop times during trip creation instead of on-demand
-	let cachedStopTimes: AugmentedStopTime[] | null = null;
+	let cachedStopTimes: AugmentedStopTime[] = augmentStopTimes(rawStopTimes, serviceDates);
 
 	let _runSeries: { [serviceDate: number]: string | null } = {};
 	for (const serviceDate of serviceDates) {
@@ -69,37 +74,27 @@ export function augmentTrip(trip: gtfs.Trip): AugmentedTrip {
 		scheduledStartServiceDates: serviceDates,
 		get scheduledTripDates() {
 			let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
-			let stopTimesToUse: AugmentedStopTime[];
-			if (stopTimes.length > 0) stopTimesToUse = stopTimes;
-			else {
-				if (!cachedStopTimes) cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
-				stopTimesToUse = cachedStopTimes;
-			}
+			let stopTimesToUse = stopTimes.length > 0 ? stopTimes : cachedStopTimes;
 
 			let dates = [
 				...new Set(
 					stopTimesToUse
 						.map((st) => [...(st.scheduled_arrival_dates || []), ...(st.scheduled_departure_dates || [])])
 						.flat(),
-				),
+					),
 			];
 			return dates.sort((a, b) => a - b);
 		},
 		get actualTripDates() {
 			let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
-			let stopTimesToUse: AugmentedStopTime[];
-			if (stopTimes.length > 0) stopTimesToUse = stopTimes;
-			else {
-				if (!cachedStopTimes) cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
-				stopTimesToUse = cachedStopTimes;
-			}
+			let stopTimesToUse = stopTimes.length > 0 ? stopTimes : cachedStopTimes;
 
 			let dates = [
 				...new Set(
 					stopTimesToUse
 						.map((st) => [...(st.actual_arrival_dates || []), ...(st.actual_departure_dates || [])])
 						.flat(),
-				),
+					),
 			];
 			return dates.sort((a, b) => a - b);
 		},
@@ -107,7 +102,6 @@ export function augmentTrip(trip: gtfs.Trip): AugmentedTrip {
 			let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
 			if (stopTimes.length > 0) return stopTimes;
 
-			if (!cachedStopTimes) cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
 			return cachedStopTimes;
 		},
 		expressInfo,
@@ -122,7 +116,6 @@ export function augmentTrip(trip: gtfs.Trip): AugmentedTrip {
 		toSerializable: function () {
 			let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
 			if (stopTimes.length === 0) {
-				if (!cachedStopTimes) cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
 				stopTimes = cachedStopTimes;
 			}
 			return toSerializableAugmentedTrip({
@@ -136,6 +129,41 @@ export function augmentTrip(trip: gtfs.Trip): AugmentedTrip {
 				run: trip.trip_id.slice(-4),
 			});
 		},
+	};
+}
+
+export function fromSerializableAugmentedTrip(
+	trip: SerializableAugmentedTrip,
+	stopTimes: AugmentedStopTime[],
+): AugmentedTrip {
+	const scheduledTripDates = [...trip.scheduledTripDates];
+	const actualTripDates = [...trip.actualTripDates];
+	const runSeries = { ...trip.runSeries };
+	const _runSeries: { [serviceDate: number]: string | null } = {};
+	for (const key of Object.keys(runSeries)) {
+		_runSeries[Number.parseInt(key, 10)] = runSeries[Number.parseInt(key, 10)] ?? null;
+	}
+	for (const serviceDate of trip.scheduledStartServiceDates) {
+		if (!Object.prototype.hasOwnProperty.call(_runSeries, serviceDate)) _runSeries[serviceDate] = null;
+	}
+
+	return {
+		_trip: trip._trip,
+		scheduledStartServiceDates: [...trip.scheduledStartServiceDates],
+		get scheduledTripDates() {
+			return [...scheduledTripDates];
+		},
+		get actualTripDates() {
+			return [...actualTripDates];
+		},
+		stopTimes,
+		expressInfo: [...trip.expressInfo],
+		_runSeries,
+		get runSeries() {
+			return runSeries;
+		},
+		run: trip.run,
+		toSerializable: () => trip,
 	};
 }
 

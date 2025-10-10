@@ -28,6 +28,18 @@ export function toSerializableAugmentedStopTime(st) {
         scheduled_parent_station: st.scheduled_parent_station?.stop_id ?? null,
     };
 }
+export function fromSerializableAugmentedStopTime(st, resolveStop) {
+    const { actual_stop, actual_parent_station, scheduled_stop, scheduled_parent_station, ...rest } = st;
+    const hydrated = {
+        ...rest,
+        actual_stop: resolveStop(actual_stop),
+        actual_parent_station: resolveStop(actual_parent_station),
+        scheduled_stop: resolveStop(scheduled_stop),
+        scheduled_parent_station: resolveStop(scheduled_parent_station),
+        toSerializable: () => st,
+    };
+    return hydrated;
+}
 function findPassingStops(stops) {
     const stopListHash = hashStopList(stops);
     // Check cache first

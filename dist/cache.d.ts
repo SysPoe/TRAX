@@ -1,8 +1,49 @@
 import * as gtfs from "gtfs";
-import { AugmentedStop } from "./utils/augmentedStop.js";
-import { AugmentedTrip, RunSeries } from "./utils/augmentedTrip.js";
-import { AugmentedStopTime } from "./utils/augmentedStopTime.js";
+import { AugmentedStop, SerializableAugmentedStop } from "./utils/augmentedStop.js";
+import { AugmentedTrip, RunSeries, SerializableAugmentedTrip } from "./utils/augmentedTrip.js";
+import { AugmentedStopTime, SerializableAugmentedStopTime } from "./utils/augmentedStopTime.js";
 import { QRTPlace, TravelTrip } from "./index.js";
+type RawCacheSnapshot = {
+    stopTimeUpdates: gtfs.StopTimeUpdate[];
+    tripUpdates: gtfs.TripUpdate[];
+    vehiclePositions: gtfs.VehiclePosition[];
+    stopTimes: gtfs.StopTime[];
+    calendars: gtfs.Calendar[];
+    calendarDates: gtfs.CalendarDate[];
+    trips: gtfs.Trip[];
+    stops: gtfs.Stop[];
+    routes: gtfs.Route[];
+    qrtPlaces: QRTPlace[];
+    qrtTrains: TravelTrip[];
+};
+type AugmentedCacheSnapshot = {
+    trips: SerializableAugmentedTrip[];
+    stops: SerializableAugmentedStop[];
+    stopTimes: {
+        [trip_id: string]: SerializableAugmentedStopTime[];
+    };
+    baseStopTimes: {
+        [trip_id: string]: SerializableAugmentedStopTime[];
+    };
+    serviceDateTrips: {
+        [service_date: number]: string[];
+    };
+    expressInfoCache: {
+        [stopListHash: string]: any[];
+    };
+    passingStopsCache: {
+        [stopListHash: string]: any[];
+    };
+    runSeriesCache: {
+        [date: number]: {
+            [runSeries: string]: RunSeries;
+        };
+    };
+};
+type CacheSnapshot = {
+    raw: RawCacheSnapshot;
+    augmented: AugmentedCacheSnapshot;
+};
 export declare function getCalendars(filter?: Partial<gtfs.Calendar>): gtfs.Calendar[];
 export declare function getCalendarDates(filter?: Partial<gtfs.CalendarDate>): gtfs.CalendarDate[];
 export declare function getRawTrips(trip_id?: string): gtfs.Trip[];
@@ -27,5 +68,7 @@ export declare function cachePassingStops(stopListHash: string, passingStops: an
 export declare function getCachedPassingStops(stopListHash: string): any[] | undefined;
 export declare function getRunSeries(date: number, runSeries: string, calcIfNotFound?: boolean): RunSeries;
 export declare function setRunSeries(date: number, runSeries: string, data: RunSeries): void;
-export declare function refreshStaticCache(skipRealtimeOverlap?: boolean): Promise<void>;
+export declare function buildRealtimeCacheSnapshot(): Promise<CacheSnapshot>;
+export declare function refreshStaticCache(_skipRealtimeOverlap?: boolean): Promise<void>;
 export declare function refreshRealtimeCache(): Promise<void>;
+export {};

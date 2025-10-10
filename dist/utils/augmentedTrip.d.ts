@@ -32,4 +32,5 @@ export type SerializableAugmentedTrip = Omit<AugmentedTrip, "stopTimes" | "toSer
 };
 export declare function toSerializableAugmentedTrip(trip: AugmentedTrip | Omit<AugmentedTrip, "toSerializable" | "toSerializable" | "_runSeries">): SerializableAugmentedTrip;
 export declare function augmentTrip(trip: gtfs.Trip): AugmentedTrip;
+export declare function fromSerializableAugmentedTrip(trip: SerializableAugmentedTrip, stopTimes: AugmentedStopTime[]): AugmentedTrip;
 export declare function calculateRunSeries(trip: AugmentedTrip): void;
