@@ -20,5 +20,4 @@ export type SerializableAugmentedStop = gtfs.Stop & {
     children: string[];
 };
 export declare function toSerializableAugmentedStop(stop: Omit<AugmentedStop, "toSerializable" | "getDepartures" | "_getSDDepartures">): SerializableAugmentedStop;
-export declare function fromSerializableAugmentedStop(serialized: SerializableAugmentedStop, resolveStop: (stopId: string | null) => AugmentedStop | null): AugmentedStop;
 export declare function augmentStop(stop: gtfs.Stop): AugmentedStop;

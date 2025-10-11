@@ -61,5 +61,4 @@ export type SerializableAugmentedStopTime = Omit<AugmentedStopTime, "actual_stop
     scheduled_parent_station: string | null;
 };
 export declare function toSerializableAugmentedStopTime(st: Omit<AugmentedStopTime, "toSerializable">): SerializableAugmentedStopTime;
-export declare function fromSerializableAugmentedStopTime(st: SerializableAugmentedStopTime, resolveStop: (stopId: string | null) => AugmentedStop | null): AugmentedStopTime;
 export declare function augmentStopTimes(stopTimes: gtfs.StopTime[], serviceDates: number[]): AugmentedStopTime[];

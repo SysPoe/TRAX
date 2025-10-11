@@ -111,30 +111,6 @@ export function toSerializableAugmentedStopTime(
 	};
 }
 
-export function fromSerializableAugmentedStopTime(
-	st: SerializableAugmentedStopTime,
-	resolveStop: (stopId: string | null) => AugmentedStop | null,
-): AugmentedStopTime {
-	const {
-		actual_stop,
-		actual_parent_station,
-		scheduled_stop,
-		scheduled_parent_station,
-		...rest
-	} = st;
-
-	const hydrated: AugmentedStopTime = {
-		...rest,
-		actual_stop: resolveStop(actual_stop),
-		actual_parent_station: resolveStop(actual_parent_station),
-		scheduled_stop: resolveStop(scheduled_stop),
-		scheduled_parent_station: resolveStop(scheduled_parent_station),
-		toSerializable: () => st,
-	};
-
-	return hydrated;
-}
-
 type PassingStopSRT = {
 	from: string;
 	to: string;
