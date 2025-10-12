@@ -494,10 +494,16 @@ export async function refreshRealtimeCache(): Promise<void> {
 		module: "cache",
 		function: "refreshRealtimeCache",
 	});
-	rawCache.qrtTrains = await getCurrentQRTravelTrains();
-	logger.debug(`Loaded ${rawCache.qrtTrains.length} QRT trains.`, {
-		module: "cache",
-		function: "refreshRealtimeCache",
+
+	let qrt_promise: Promise<void> = new Promise((rs) => {
+		getCurrentQRTravelTrains().then((trains) => {
+			rawCache.qrtTrains = trains;
+			logger.debug(`Loaded ${rawCache.qrtTrains.length} QRT trains.`, {
+				module: "cache",
+				function: "refreshRealtimeCache",
+			});
+			rs();
+		});
 	});
 
 	logger.debug("Loading realtime updates...", {
@@ -590,6 +596,8 @@ export async function refreshRealtimeCache(): Promise<void> {
 			tripIds.push(trip._trip.trip_id);
 		}
 	}
+
+	await qrt_promise;
 
 	logger.info("Realtime GTFS cache refreshed incrementally.", {
 		module: "cache",

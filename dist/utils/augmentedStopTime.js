@@ -42,9 +42,6 @@ function findPassingStops(stops) {
             logger.error(`Unknown segment between ${e.from} and ${e.to}: ${e.message}`, {
                 module: "augmentedStopTime",
                 function: "findPassingStops",
-                from: e.from,
-                to: e.to,
-                message: e.message,
             });
             continue;
         }
@@ -68,16 +65,21 @@ function findPassingStops(stops) {
     cache.cachePassingStops(stopListHash, allStops);
     return allStops;
 }
+let logged = {};
 function findPassingStopSRTs(stops) {
     let allStops = findPassingStops(stops);
     let allStopSRTs = [];
     for (let i = 0; i < allStops.length - 1; i++) {
         let srt = getSRT(allStops[i].stop_id, allStops[i + 1].stop_id);
         if (srt === undefined) {
-            logger.error(`No SRT found between ${allStops[i].stop_id} and ${allStops[i + 1].stop_id}`, {
-                module: "augmentedStopTime",
-                function: "findPassingStopSRTs",
-            });
+            if (!logged[allStops[i].stop_id]?.[allStops[i + 1].stop_id]) {
+                logger.error(`No SRT found between ${allStops[i].stop_id} and ${allStops[i + 1].stop_id}`, {
+                    module: "augmentedStopTime",
+                    function: "findPassingStopSRTs",
+                });
+            }
+            logged[allStops[i].stop_id] = logged[allStops[i].stop_id] || {};
+            logged[allStops[i].stop_id][allStops[i + 1].stop_id] = true;
             allStopSRTs.push({
                 from: allStops[i].stop_id,
                 to: allStops[i + 1].stop_id,

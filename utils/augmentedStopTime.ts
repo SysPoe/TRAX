@@ -137,9 +137,6 @@ function findPassingStops(stops: string[]): { stop_id: string; passing: boolean 
 			logger.error(`Unknown segment between ${e.from} and ${e.to}: ${e.message}`, {
 				module: "augmentedStopTime",
 				function: "findPassingStops",
-				from: e.from,
-				to: e.to,
-				message: e.message,
 			});
 			continue;
 		}
@@ -162,6 +159,8 @@ function findPassingStops(stops: string[]): { stop_id: string; passing: boolean 
 	return allStops;
 }
 
+let logged: { [key: string]: { [key: string]: boolean } } = {};
+
 function findPassingStopSRTs(stops: string[]): PassingStopSRT[] {
 	let allStops = findPassingStops(stops);
 
@@ -169,10 +168,14 @@ function findPassingStopSRTs(stops: string[]): PassingStopSRT[] {
 	for (let i = 0; i < allStops.length - 1; i++) {
 		let srt = getSRT(allStops[i].stop_id, allStops[i + 1].stop_id);
 		if (srt === undefined) {
-			logger.error(`No SRT found between ${allStops[i].stop_id} and ${allStops[i + 1].stop_id}`, {
-				module: "augmentedStopTime",
-				function: "findPassingStopSRTs",
-			});
+			if (!logged[allStops[i].stop_id]?.[allStops[i + 1].stop_id]) {
+				logger.error(`No SRT found between ${allStops[i].stop_id} and ${allStops[i + 1].stop_id}`, {
+					module: "augmentedStopTime",
+					function: "findPassingStopSRTs",
+				});
+			}
+			logged[allStops[i].stop_id] = logged[allStops[i].stop_id] || {};
+			logged[allStops[i].stop_id][allStops[i + 1].stop_id] = true;
 
 			allStopSRTs.push({
 				from: allStops[i].stop_id,
