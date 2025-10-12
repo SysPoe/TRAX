@@ -254,17 +254,6 @@ function resetStaticCache() {
         runSeriesCache: new Map(),
     };
 }
-function resetRealtimeCache() {
-    rawCache.stopTimeUpdates = [];
-    rawCache.tripUpdates = [];
-    rawCache.vehiclePositions = [];
-    rawCache.qrtTrains = [];
-    augmentedCache.trips = [];
-    augmentedCache.tripsRec.clear();
-    augmentedCache.serviceDateTrips.clear();
-    augmentedCache.baseStopTimes = {};
-    augmentedCache.stopTimes = {};
-}
 function resetRealtimeCacheIncremental(updatedTripIds) {
     rawCache.stopTimeUpdates = [];
     rawCache.tripUpdates = [];
@@ -366,6 +355,22 @@ export async function refreshStaticCache(skipRealtimeOverlap = false) {
         module: "cache",
         function: "refreshStaticCache",
     });
+    logger.debug("Augmenting trips...", {
+        module: "cache",
+        function: "refreshStaticCache",
+    });
+    for (const tripId of rawCache.tripsRec.keys()) {
+        const rawTrip = rawCache.tripsRec.get(tripId);
+        if (rawTrip) {
+            const augmentedTrip = augmentTrip(rawTrip);
+            augmentedCache.tripsRec.set(tripId, augmentedTrip);
+        }
+    }
+    logger.debug(`Augmented ${augmentedCache.tripsRec.size} trips.`, {
+        module: "cache",
+        function: "refreshStaticCache",
+    });
+    augmentedCache.trips = Array.from(augmentedCache.tripsRec.values());
     logger.debug("Building augmented cache records...", {
         module: "cache",
         function: "refreshStaticCache",
@@ -458,6 +463,7 @@ export async function refreshRealtimeCache() {
             augmentedCache.tripsRec.set(tripId, augmentedTrip);
         }
     }
+    augmentedCache.trips = Array.from(augmentedCache.tripsRec.values());
     logger.debug(`Re-augmented ${updatedTripIds.size} trips.`, {
         module: "cache",
         function: "refreshRealtimeCache",
