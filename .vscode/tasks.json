@@ -1,0 +1,13 @@
+{
+  "tasks": [
+    {
+      "type": "shell",
+      "label": "build",
+      "command": "npm",
+      "args": [
+        "run",
+        "build"
+      ]
+    }
+  ]
+}

@@ -3,7 +3,7 @@ import * as readline from "readline";
 
 async function main() {
 	console.log("Loading GTFS data...");
-	await TRAX.loadGTFS();
+	await TRAX.loadGTFS(false);
 	console.log("GTFS data loaded successfully.\n");
 
 	const rl = readline.createInterface({
@@ -15,32 +15,35 @@ async function main() {
 		return new Promise((resolve) => rl.question(query, resolve));
 	};
 
+	// await askQuestion("Press Enter to continue...");
+
 	while (true) {
 		try {
-			const tripId = await askQuestion("Enter a trip ID (or 'quit' to exit): ");
+			// const tripId = await askQuestion("Enter a trip ID (or 'quit' to exit): ");
+			const tripId = `34329547-QR 25_26-40551-TL17`;
 
-			if (tripId.toLowerCase() === "quit") {
-				console.log("Goodbye!");
-				rl.close();
-				return;
-			}
+			// if (tripId.toLowerCase() === "quit") {
+			// 	console.log("Goodbye!");
+			// 	rl.close();
+			// 	return;
+			// }
 
-			if (!tripId) {
-				console.log("Please enter a valid trip ID.\n");
-				continue;
-			}
+			// if (!tripId) {
+			// 	console.log("Please enter a valid trip ID.\n");
+			// 	continue;
+			// }
 
 			const trips: AugmentedTrip[] = TRAX.getAugmentedTrips(tripId);
 			if (!trips || trips.length === 0) {
 				console.log(`No trip found with ID: ${tripId}\n`);
-				continue;
+				return;
 			}
 
 			const trip: AugmentedTrip = trips[0];
 			const firstKey = Object.keys(trip.runSeries)[0];
 			const serviceDate = Number.parseInt(firstKey);
 			console.log(TRAX.getRunSeries(serviceDate, trip.runSeries[serviceDate]));
-			continue;
+			return;
 			console.log(`\nTrip ID: ${trip._trip.trip_id}`);
 			console.log(`Route: ${trip._trip.route_id}`);
 			console.log(`Headsign: ${trip._trip.trip_headsign}`);
