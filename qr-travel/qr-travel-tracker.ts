@@ -236,10 +236,13 @@ function convertQRTServiceToTravelTrip(
 			actualDeparture,
 			arrivalDelaySeconds,
 			departureDelaySeconds,
-			arrivalDelayClass: actualArrival === "0001-01-01T00:00:00" ? arrivalDelayInfo.delayClass as DelayClass : undefined,
+			arrivalDelayClass:
+				actualArrival === "0001-01-01T00:00:00" ? (arrivalDelayInfo.delayClass as DelayClass) : undefined,
 			arrivalDelayString: actualArrival === "0001-01-01T00:00:00" ? arrivalDelayInfo.delayString : undefined,
-			departureDelayClass: actualDeparture === "0001-01-01T00:00:00" ? departureDelayInfo.delayClass as DelayClass : undefined,
-			departureDelayString: actualDeparture === "0001-01-01T00:00:00" ? departureDelayInfo.delayString : undefined,
+			departureDelayClass:
+				actualDeparture === "0001-01-01T00:00:00" ? (departureDelayInfo.delayClass as DelayClass) : undefined,
+			departureDelayString:
+				actualDeparture === "0001-01-01T00:00:00" ? departureDelayInfo.delayString : undefined,
 		};
 		return toRet;
 	});

@@ -2342,7 +2342,7 @@ export const platformData: PlatformData = {
 			from: [],
 			next: ["place_thasta"],
 			exitSide: "right",
-		}
+		},
 	],
 
 	/*

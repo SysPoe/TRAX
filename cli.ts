@@ -92,7 +92,14 @@ async function qrTravelFlow() {
 
 		// Build fancy line
 		const line = ["    ", timeStr, status, delayStr].filter(Boolean).join("  ");
-		console.log(chalk.bold.cyan(stop.placeName), chalk.gray(selectedService.stops.find(v => v.placeName.trim().toLowerCase() == stop.placeName.trim().toLowerCase())?.placeCode ?? ""));
+		console.log(
+			chalk.bold.cyan(stop.placeName),
+			chalk.gray(
+				selectedService.stops.find(
+					(v) => v.placeName.trim().toLowerCase() == stop.placeName.trim().toLowerCase(),
+				)?.placeCode ?? "",
+			),
+		);
 		console.log(line);
 	}
 }

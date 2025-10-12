@@ -27,5 +27,5 @@ export declare function cachePassingStops(stopListHash: string, passingStops: an
 export declare function getCachedPassingStops(stopListHash: string): any[] | undefined;
 export declare function getRunSeries(date: number, runSeries: string, calcIfNotFound?: boolean): RunSeries;
 export declare function setRunSeries(date: number, runSeries: string, data: RunSeries): void;
-export declare function refreshStaticCache(skipRealtimeOverlap?: boolean): Promise<void>;
+export declare function refreshStaticCache(): Promise<void>;
 export declare function refreshRealtimeCache(): Promise<void>;

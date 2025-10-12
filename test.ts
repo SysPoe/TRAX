@@ -39,12 +39,7 @@ async function main() {
 			const trip: AugmentedTrip = trips[0];
 			const firstKey = Object.keys(trip.runSeries)[0];
 			const serviceDate = Number.parseInt(firstKey);
-			console.log(
-				TRAX.getRunSeries(
-					serviceDate,
-					trip.runSeries[serviceDate],
-				),
-			);
+			console.log(TRAX.getRunSeries(serviceDate, trip.runSeries[serviceDate]));
 			continue;
 			console.log(`\nTrip ID: ${trip._trip.trip_id}`);
 			console.log(`Route: ${trip._trip.route_id}`);
