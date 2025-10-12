@@ -21,7 +21,8 @@
         "strip-ansi": "^7.1.2"
     },
     "scripts": {
-        "build": "tsc"
+        "build": "tsc",
+        "format": "prettier . --write --config .prettierrc"
     },
     "files": [
         "dist"
