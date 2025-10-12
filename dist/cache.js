@@ -3,6 +3,41 @@ import { augmentStop } from "./utils/augmentedStop.js";
 import { augmentTrip, calculateRunSeries } from "./utils/augmentedTrip.js";
 import { getCurrentQRTravelTrains, getPlaces } from "./qr-travel/qr-travel-tracker.js";
 import logger from "./utils/logger.js";
+class LRUCache {
+    cache = new Map();
+    maxSize;
+    constructor(maxSize) {
+        this.maxSize = maxSize;
+    }
+    get(key) {
+        const value = this.cache.get(key);
+        if (value !== undefined) {
+            // Move to end (most recently used)
+            this.cache.delete(key);
+            this.cache.set(key, value);
+        }
+        return value;
+    }
+    set(key, value) {
+        if (this.cache.has(key)) {
+            this.cache.delete(key);
+        }
+        this.cache.set(key, value);
+        // Evict oldest entries if over max size
+        while (this.cache.size > this.maxSize) {
+            const firstKey = this.cache.keys().next().value;
+            if (firstKey !== undefined) {
+                this.cache.delete(firstKey);
+            }
+        }
+    }
+    clear() {
+        this.cache.clear();
+    }
+    get size() {
+        return this.cache.size;
+    }
+}
 let rawCache = {
     stopTimeUpdates: [],
     tripUpdates: [],
@@ -27,8 +62,8 @@ let augmentedCache = {
     tripsRec: new Map(),
     stopsRec: new Map(),
     serviceDateTrips: new Map(),
-    expressInfoCache: new Map(),
-    passingStopsCache: new Map(),
+    expressInfoCache: new LRUCache(1000), // Max 1000 express info entries
+    passingStopsCache: new LRUCache(5000), // Max 5000 passing stops entries
     runSeriesCache: new Map(),
 };
 export function getCalendars(filter) {
@@ -214,8 +249,8 @@ function resetStaticCache() {
         tripsRec: new Map(),
         stopsRec: new Map(),
         serviceDateTrips: new Map(),
-        expressInfoCache: new Map(),
-        passingStopsCache: new Map(),
+        expressInfoCache: new LRUCache(1000),
+        passingStopsCache: new LRUCache(5000),
         runSeriesCache: new Map(),
     };
 }
@@ -252,7 +287,7 @@ function resetRealtimeCacheIncremental(updatedTripIds) {
         }
     }
 }
-export async function refreshStaticCache() {
+export async function refreshStaticCache(skipRealtimeOverlap = false) {
     logger.debug("Refreshing static GTFS cache...", {
         module: "cache",
         function: "refreshStaticCache",

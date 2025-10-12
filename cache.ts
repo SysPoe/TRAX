@@ -2,9 +2,51 @@ import * as gtfs from "gtfs";
 import { AugmentedStop, augmentStop } from "./utils/augmentedStop.js";
 import { AugmentedTrip, augmentTrip, calculateRunSeries, RunSeries } from "./utils/augmentedTrip.js";
 import { AugmentedStopTime } from "./utils/augmentedStopTime.js";
-import { DEBUG, QRTPlace, TravelTrip } from "./index.js";
+import { QRTPlace, TravelTrip } from "./index.js";
 import { getCurrentQRTravelTrains, getPlaces } from "./qr-travel/qr-travel-tracker.js";
 import logger from "./utils/logger.js";
+
+class LRUCache<K, V> {
+	private cache = new Map<K, V>();
+	private maxSize: number;
+
+	constructor(maxSize: number) {
+		this.maxSize = maxSize;
+	}
+
+	get(key: K): V | undefined {
+		const value = this.cache.get(key);
+		if (value !== undefined) {
+			// Move to end (most recently used)
+			this.cache.delete(key);
+			this.cache.set(key, value);
+		}
+		return value;
+	}
+
+	set(key: K, value: V): void {
+		if (this.cache.has(key)) {
+			this.cache.delete(key);
+		}
+		this.cache.set(key, value);
+
+		// Evict oldest entries if over max size
+		while (this.cache.size > this.maxSize) {
+			const firstKey = this.cache.keys().next().value;
+			if (firstKey !== undefined) {
+				this.cache.delete(firstKey);
+			}
+		}
+	}
+
+	clear(): void {
+		this.cache.clear();
+	}
+
+	get size(): number {
+		return this.cache.size;
+	}
+}
 
 type RawCache = {
 	stopTimeUpdates: gtfs.StopTimeUpdate[];
@@ -38,9 +80,9 @@ type AugmentedCache = {
 
 	serviceDateTrips: Map<number, string[]>; // Maps serviceDate to trip IDs
 
-	// Performance caches
-	expressInfoCache: Map<string, any[]>;
-	passingStopsCache: Map<string, any[]>;
+	// Performance caches with LRU eviction
+	expressInfoCache: LRUCache<string, any[]>;
+	passingStopsCache: LRUCache<string, any[]>;
 	runSeriesCache: Map<number, Map<string, RunSeries>>;
 };
 
@@ -73,8 +115,8 @@ let augmentedCache: AugmentedCache = {
 	tripsRec: new Map(),
 	stopsRec: new Map(),
 	serviceDateTrips: new Map(),
-	expressInfoCache: new Map(),
-	passingStopsCache: new Map(),
+	expressInfoCache: new LRUCache<string, any[]>(1000), // Max 1000 express info entries
+	passingStopsCache: new LRUCache<string, any[]>(5000), // Max 5000 passing stops entries
 	runSeriesCache: new Map(),
 };
 
@@ -278,8 +320,8 @@ function resetStaticCache(): void {
 		tripsRec: new Map(),
 		stopsRec: new Map(),
 		serviceDateTrips: new Map(),
-		expressInfoCache: new Map(),
-		passingStopsCache: new Map(),
+		expressInfoCache: new LRUCache<string, any[]>(1000),
+		passingStopsCache: new LRUCache<string, any[]>(5000),
 		runSeriesCache: new Map(),
 	};
 }
@@ -320,7 +362,7 @@ function resetRealtimeCacheIncremental(updatedTripIds: Set<string>): void {
 	}
 }
 
-export async function refreshStaticCache(): Promise<void> {
+export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): Promise<void> {
 	logger.debug("Refreshing static GTFS cache...", {
 		module: "cache",
 		function: "refreshStaticCache",
