@@ -152,7 +152,7 @@ const combos: string[][] = [
 		"place_thasta",
 		"place_rossta",
 	],
-	["place_beesta", "place_omesta", "place_cmrstn", "place_helsta", "place_nrgsta", "place_rbnsta", "place_varsta"],
+	["place_beesta", "place_omesta", "place_pimsta", "place_cmrstn", "place_helsta", "place_nrgsta", "place_rbnsta", "place_varsta"],
 ];
 
 interface GraphNode {

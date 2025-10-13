@@ -120,7 +120,8 @@ Bethania,Edens Landing,1
 Edens Landing,Holmview,1
 Holmview,Beenleigh,2
 Beenleigh,Ormeau,7
-Ormeau,Coomera,5
+Ormeau,Pimpama,2
+Pimpama,Coomera,4
 Coomera,Helensvale,5
 Helensvale,Nerang,5
 Nerang,Robina,5
@@ -177,14 +178,14 @@ function parseSRTtoMatrix(srtString) {
             to = "place_exhsta";
         else
             to = stations.find((v) => v.stop_name?.toLowerCase().startsWith(to.toLowerCase()))?.stop_id ?? "";
-        if (!from) {
+        if (!from || from.length === 0) {
             logger.error(`Invalid SRT from: ${lines[i]}`, {
                 module: "srt",
                 function: "parseSRTtoMatrix",
             });
             continue;
         }
-        if (!to) {
+        if (!to || to.length === 0) {
             logger.error(`Invalid SRT to: ${lines[i]}`, {
                 module: "srt",
                 function: "parseSRTtoMatrix",
