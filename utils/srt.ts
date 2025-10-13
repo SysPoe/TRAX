@@ -122,8 +122,8 @@ Bethania,Edens Landing,1
 Edens Landing,Holmview,1
 Holmview,Beenleigh,2
 Beenleigh,Ormeau,7
-Ormeau,Pimpama,2
-Pimpama,Coomera,4
+Ormeau,Pimpama,3
+Pimpama,Coomera,3
 Coomera,Helensvale,5
 Helensvale,Nerang,5
 Nerang,Robina,5
