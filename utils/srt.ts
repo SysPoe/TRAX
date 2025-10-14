@@ -1,6 +1,6 @@
 // Sectional Running Times data for QR's rail network
 
-import { getStations } from "../stations.js";
+import { getStations } from "./stations.js";
 import logger from "./logger.js";
 
 let rawSRT = `From,To,EMU

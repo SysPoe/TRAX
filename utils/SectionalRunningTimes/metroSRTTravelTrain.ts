@@ -971,6 +971,8 @@ import type { TrainMovementDTO } from "../../qr-travel/types.js";
 // Output type for each stop (stopping or passing)
 export interface SRTStop {
 	placeName: string;
+	placeCode: string;
+	gtfsStopId: string | null;
 	isStop: boolean; // true if train stops, false if passing
 	plannedArrival: string;
 	plannedDeparture: string;
@@ -1019,8 +1021,8 @@ function pushSRT(
 	arr: SRTStop[],
 	stop: Exclude<SRTStop, "departureDelayClass" | "departureDelayString" | "arrivalDelayClass" | "arrivalDelayString">,
 ) {
-	let arrivalDelayInfo = getDelay(stop.arrivalDelaySeconds || null, stop.actualArrival || null);
-	let departureDelayInfo = getDelay(stop.departureDelaySeconds || null, stop.actualDeparture || null);
+	let arrivalDelayInfo = getDelay(stop.arrivalDelaySeconds ?? null, stop.actualArrival ?? null);
+	let departureDelayInfo = getDelay(stop.departureDelaySeconds ?? null, stop.actualDeparture ?? null);
 	type delayClass = "on-time" | "scheduled" | "late" | "very-late" | "early";
 	arr.push({
 		...stop,
@@ -1057,6 +1059,8 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 	}
 	if (stoppingMovements.length < 2)
 		return stoppingMovements.map((m) => ({
+			placeCode: m.PlaceCode,
+			gtfsStopId: m.gtfsStopId ?? null,
 			placeName: m.PlaceName,
 			isStop: true,
 			plannedArrival: m.PlannedArrival,
@@ -1075,6 +1079,8 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 		// Always add the 'from' stop
 		if (i === 0) {
 			pushSRT(result, {
+				placeCode: from.PlaceCode,
+				gtfsStopId: from.gtfsStopId ?? null,
 				placeName: from.PlaceName,
 				isStop: true,
 				plannedArrival: from.PlannedArrival,
@@ -1105,6 +1111,8 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 			let estPass: Date | undefined =
 				prevTime && seg.travelTrain ? new Date(prevTime.getTime() + seg.travelTrain * 60000) : undefined;
 			pushSRT(result, {
+				placeCode: to.PlaceCode,
+				gtfsStopId: to.gtfsStopId ?? null,
 				placeName: to.PlaceName,
 				isStop: true,
 				plannedArrival: to.PlannedArrival,
@@ -1214,6 +1222,8 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 					}
 
 					pushSRT(result, {
+						placeCode: orig?.PlaceCode || "",
+						gtfsStopId: orig?.gtfsStopId ?? null,
 						placeName: stopName,
 						isStop: false,
 						plannedArrival: orig?.PlannedArrival || "",
@@ -1235,12 +1245,12 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 								estPass.getSeconds().toString().padStart(2, "0")
 							: undefined,
 						arrivalDelaySeconds: calcDelay(
-							orig?.ActualArrival || (estPass ? estPass.toISOString() : undefined),
-							orig?.PlannedArrival || (estPass ? estPass.toISOString() : undefined),
+							orig?.ActualArrival ?? (estPass ? estPass.toISOString() : undefined),
+							orig?.PlannedArrival ?? (estPass ? estPass.toISOString() : undefined),
 						),
 						departureDelaySeconds: calcDelay(
-							orig?.ActualDeparture || (estPass ? estPass.toISOString() : undefined),
-							orig?.PlannedDeparture || (estPass ? estPass.toISOString() : undefined),
+							orig?.ActualDeparture ?? (estPass ? estPass.toISOString() : undefined),
+							orig?.PlannedDeparture ?? (estPass ? estPass.toISOString() : undefined),
 						),
 					});
 					prevTime = estPass ?? null;
@@ -1249,6 +1259,8 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 			// Add the final stop (not as a passing stop)
 			// Use actual arrival time for the destination, don't estimate it
 			pushSRT(result, {
+				placeCode: to.PlaceCode,
+				gtfsStopId: to.gtfsStopId ?? null,
 				placeName: to.PlaceName,
 				isStop: true,
 				plannedArrival: to.PlannedArrival,
@@ -1271,6 +1283,8 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 		}
 		// else: no SRT path found, include the stop
 		pushSRT(result, {
+			placeCode: to.PlaceCode,
+			gtfsStopId: to.gtfsStopId ?? null,
 			placeName: to.PlaceName,
 			isStop: true,
 			plannedArrival: to.PlannedArrival,

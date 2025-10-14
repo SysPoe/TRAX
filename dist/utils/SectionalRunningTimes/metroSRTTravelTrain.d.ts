@@ -7,6 +7,8 @@ export declare let SRT_DATA: SRTEntry[];
 import type { TrainMovementDTO } from "../../qr-travel/types.js";
 export interface SRTStop {
     placeName: string;
+    placeCode: string;
+    gtfsStopId: string | null;
     isStop: boolean;
     plannedArrival: string;
     plannedDeparture: string;

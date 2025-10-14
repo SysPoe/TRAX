@@ -1,6 +1,7 @@
 export interface TrainMovementDTO {
     PlaceCode: string;
     PlaceName: string;
+    gtfsStopId: string | null;
     KStation: string | boolean;
     Status: string;
     TrainPosition: "Passed" | "Departed" | "NotArrived" | string;
@@ -78,6 +79,7 @@ export interface ServiceUpdate {
 export interface TravelStopTime {
     placeCode: string;
     placeName: string;
+    gtfsStopId: string | null;
     kStation: string | boolean;
     status: string;
     trainPosition: string;

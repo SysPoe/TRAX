@@ -1,6 +1,7 @@
 // For SRT passing stop expansion
 import { expandWithSRTPassingStops } from "../utils/SectionalRunningTimes/metroSRTTravelTrain.js";
 import logger from "../utils/logger.js";
+import { getGtfsStations } from "../utils/stations.js";
 // Main function to fetch and parse the XML file
 export async function trackTrain(serviceID, serviceDate) {
     const url = `https://www.queenslandrailtravel.com.au/SPWebApp/api/ServiceUpdates/GetService?serviceId=${serviceID}&serivceDate=${serviceDate}${serviceDate.includes("T") ? "" : "T00:00:00.000Z"}`;
@@ -136,6 +137,7 @@ export async function getServiceUpdates(startDate, endDate) {
 function convertQRTServiceToTravelTrip(service, serviceResponse, direction, line) {
     // Find the Service object for more info
     const serviceMeta = serviceResponse;
+    const gtfsStops = getGtfsStations();
     const stops = serviceResponse.TrainMovements.map((movement) => {
         // Calculate arrival and departure delays
         let arrivalDelaySeconds = null;
@@ -182,9 +184,15 @@ function convertQRTServiceToTravelTrip(service, serviceResponse, direction, line
         let actualDeparture = movement.ActualDeparture == "0001-01-01T00:00:00" ? movement.PlannedDeparture : movement.ActualDeparture;
         let arrivalDelayInfo = getDelay(arrivalDelaySeconds, actualArrival === "0001-01-01T00:00:00" ? movement.PlannedArrival : actualArrival);
         let departureDelayInfo = getDelay(departureDelaySeconds, actualDeparture === "0001-01-01T00:00:00" ? movement.PlannedDeparture : actualDeparture);
+        let gtfsStopId = null;
+        let findRes = gtfsStops.find((v) => v.stop_name?.toLowerCase().replace("station", "").trim() ===
+            movement.PlaceName.toLowerCase().replace("station", "").trim());
+        if (findRes)
+            gtfsStopId = findRes.stop_id;
         let toRet = {
             placeCode: movement.PlaceCode,
             placeName: movement.PlaceName,
+            gtfsStopId,
             kStation: movement.KStation,
             status: movement.Status,
             trainPosition: movement.TrainPosition,
@@ -249,18 +257,25 @@ async function processService(serviceLine, direction, service, services) {
     try {
         // Get detailed service information
         const serviceResponse = await trackTrain(service.ServiceId, service.ServiceDate);
+        const gtfsStops = getGtfsStations();
         if (serviceResponse.Success) {
             // Find the corresponding QRT service for additional metadata
             const qrtService = services.find((s) => s.qrt_Direction == direction.DirectionName &&
                 s.qrt_ServiceLine.endsWith(serviceLine.ServiceLineName));
             if (qrtService) {
                 const travelTrip = convertQRTServiceToTravelTrip(qrtService, serviceResponse, direction.DirectionName, serviceLine.ServiceLineName);
-                // Add SRT passing stops expansion (SEQ region only)
+                // Add SRT passing stops expansion
                 // Map TravelStopTime[] to TrainMovementDTO[]
                 const trainMovements = travelTrip.stops.map((s) => {
+                    let gtfsStopId = null;
+                    let findRes = gtfsStops.find((v) => v.stop_name?.toLowerCase().replace("station", "").trim() ===
+                        s.placeName.toLowerCase().replace("station", "").trim());
+                    if (findRes)
+                        gtfsStopId = findRes.stop_id;
                     return {
                         PlaceCode: s.placeCode,
                         PlaceName: s.placeName,
+                        gtfsStopId,
                         KStation: s.kStation,
                         Status: s.status,
                         TrainPosition: s.trainPosition,

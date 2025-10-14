@@ -985,8 +985,8 @@ function getDelay(delaySecs = null, departureTime) {
     return { delayString, delayClass };
 }
 function pushSRT(arr, stop) {
-    let arrivalDelayInfo = getDelay(stop.arrivalDelaySeconds || null, stop.actualArrival || null);
-    let departureDelayInfo = getDelay(stop.departureDelaySeconds || null, stop.actualDeparture || null);
+    let arrivalDelayInfo = getDelay(stop.arrivalDelaySeconds ?? null, stop.actualArrival ?? null);
+    let departureDelayInfo = getDelay(stop.departureDelaySeconds ?? null, stop.actualDeparture ?? null);
     arr.push({
         ...stop,
         arrivalDelayClass: stop.actualArrival === "0001-01-01T00:00:00" && stop.plannedArrival === "0001-01-01T00:00:00"
@@ -1019,6 +1019,8 @@ export function expandWithSRTPassingStops(stoppingMovements) {
     }
     if (stoppingMovements.length < 2)
         return stoppingMovements.map((m) => ({
+            placeCode: m.PlaceCode,
+            gtfsStopId: m.gtfsStopId ?? null,
             placeName: m.PlaceName,
             isStop: true,
             plannedArrival: m.PlannedArrival,
@@ -1036,6 +1038,8 @@ export function expandWithSRTPassingStops(stoppingMovements) {
         // Always add the 'from' stop
         if (i === 0) {
             pushSRT(result, {
+                placeCode: from.PlaceCode,
+                gtfsStopId: from.gtfsStopId ?? null,
                 placeName: from.PlaceName,
                 isStop: true,
                 plannedArrival: from.PlannedArrival,
@@ -1064,6 +1068,8 @@ export function expandWithSRTPassingStops(stoppingMovements) {
             // Estimate next stop's arrival time
             let estPass = prevTime && seg.travelTrain ? new Date(prevTime.getTime() + seg.travelTrain * 60000) : undefined;
             pushSRT(result, {
+                placeCode: to.PlaceCode,
+                gtfsStopId: to.gtfsStopId ?? null,
                 placeName: to.PlaceName,
                 isStop: true,
                 plannedArrival: to.PlannedArrival,
@@ -1162,6 +1168,8 @@ export function expandWithSRTPassingStops(stoppingMovements) {
                         estPass = new Date(fromTime.getTime() + scaledMinutes * 60000);
                     }
                     pushSRT(result, {
+                        placeCode: orig?.PlaceCode || "",
+                        gtfsStopId: orig?.gtfsStopId ?? null,
                         placeName: stopName,
                         isStop: false,
                         plannedArrival: orig?.PlannedArrival || "",
@@ -1182,8 +1190,8 @@ export function expandWithSRTPassingStops(stoppingMovements) {
                                 ":" +
                                 estPass.getSeconds().toString().padStart(2, "0")
                             : undefined,
-                        arrivalDelaySeconds: calcDelay(orig?.ActualArrival || (estPass ? estPass.toISOString() : undefined), orig?.PlannedArrival || (estPass ? estPass.toISOString() : undefined)),
-                        departureDelaySeconds: calcDelay(orig?.ActualDeparture || (estPass ? estPass.toISOString() : undefined), orig?.PlannedDeparture || (estPass ? estPass.toISOString() : undefined)),
+                        arrivalDelaySeconds: calcDelay(orig?.ActualArrival ?? (estPass ? estPass.toISOString() : undefined), orig?.PlannedArrival ?? (estPass ? estPass.toISOString() : undefined)),
+                        departureDelaySeconds: calcDelay(orig?.ActualDeparture ?? (estPass ? estPass.toISOString() : undefined), orig?.PlannedDeparture ?? (estPass ? estPass.toISOString() : undefined)),
                     });
                     prevTime = estPass ?? null;
                 }
@@ -1191,6 +1199,8 @@ export function expandWithSRTPassingStops(stoppingMovements) {
             // Add the final stop (not as a passing stop)
             // Use actual arrival time for the destination, don't estimate it
             pushSRT(result, {
+                placeCode: to.PlaceCode,
+                gtfsStopId: to.gtfsStopId ?? null,
                 placeName: to.PlaceName,
                 isStop: true,
                 plannedArrival: to.PlannedArrival,
@@ -1215,6 +1225,8 @@ export function expandWithSRTPassingStops(stoppingMovements) {
         }
         // else: no SRT path found, include the stop
         pushSRT(result, {
+            placeCode: to.PlaceCode,
+            gtfsStopId: to.gtfsStopId ?? null,
             placeName: to.PlaceName,
             isStop: true,
             plannedArrival: to.PlannedArrival,

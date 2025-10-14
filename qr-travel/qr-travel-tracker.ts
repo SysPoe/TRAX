@@ -1,6 +1,7 @@
 // For SRT passing stop expansion
 import { expandWithSRTPassingStops } from "../utils/SectionalRunningTimes/metroSRTTravelTrain.js";
 import logger from "../utils/logger.js";
+import { getGtfsStations } from "../utils/stations.js";
 import type {
 	GetServiceResponse,
 	QRTPlace,
@@ -163,6 +164,7 @@ function convertQRTServiceToTravelTrip(
 ): TravelTrip {
 	// Find the Service object for more info
 	const serviceMeta = serviceResponse;
+	const gtfsStops = getGtfsStations();
 	const stops: TravelStopTime[] = (serviceResponse.TrainMovements as TrainMovementDTO[]).map((movement) => {
 		// Calculate arrival and departure delays
 		let arrivalDelaySeconds: number | null = null;
@@ -224,9 +226,18 @@ function convertQRTServiceToTravelTrip(
 
 		type DelayClass = "on-time" | "scheduled" | "late" | "very-late" | "early";
 
+		let gtfsStopId: string | null = null;
+		let findRes = gtfsStops.find(
+			(v) =>
+				v.stop_name?.toLowerCase().replace("station", "").trim() ===
+				movement.PlaceName.toLowerCase().replace("station", "").trim(),
+		);
+		if (findRes) gtfsStopId = findRes.stop_id;
+
 		let toRet: TravelStopTime = {
 			placeCode: movement.PlaceCode,
 			placeName: movement.PlaceName,
+			gtfsStopId,
 			kStation: movement.KStation,
 			status: movement.Status,
 			trainPosition: movement.TrainPosition,
@@ -308,6 +319,7 @@ async function processService(
 	try {
 		// Get detailed service information
 		const serviceResponse = await trackTrain(service.ServiceId, service.ServiceDate);
+		const gtfsStops = getGtfsStations();
 
 		if (serviceResponse.Success) {
 			// Find the corresponding QRT service for additional metadata
@@ -325,12 +337,20 @@ async function processService(
 					serviceLine.ServiceLineName,
 				);
 
-				// Add SRT passing stops expansion (SEQ region only)
+				// Add SRT passing stops expansion
 				// Map TravelStopTime[] to TrainMovementDTO[]
 				const trainMovements: TrainMovementDTO[] = travelTrip.stops.map((s) => {
+					let gtfsStopId: string | null = null;
+					let findRes = gtfsStops.find(
+						(v) =>
+							v.stop_name?.toLowerCase().replace("station", "").trim() ===
+							s.placeName.toLowerCase().replace("station", "").trim(),
+					);
+					if (findRes) gtfsStopId = findRes.stop_id;
 					return {
 						PlaceCode: s.placeCode,
 						PlaceName: s.placeName,
+						gtfsStopId,
 						KStation: s.kStation,
 						Status: s.status,
 						TrainPosition: s.trainPosition,

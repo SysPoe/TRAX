@@ -2,7 +2,7 @@ import * as gtfs from "gtfs";
 import fs from "fs";
 import * as cache from "./cache.js";
 import * as calendar from "./utils/calendar.js";
-import * as stations from "./stations.js";
+import * as stations from "./utils/stations.js";
 import * as express from "./utils/express.js";
 import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 import * as augmentedStopTime from "./utils/augmentedStopTime.js";
