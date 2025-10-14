@@ -189,6 +189,8 @@ function convertQRTServiceToTravelTrip(service, serviceResponse, direction, line
             movement.PlaceName.toLowerCase().replace("station", "").trim());
         if (findRes)
             gtfsStopId = findRes.stop_id;
+        if (movement.PlaceName.toLowerCase().includes("roma st"))
+            gtfsStopId = "place_romsta";
         let toRet = {
             placeCode: movement.PlaceCode,
             placeName: movement.PlaceName,
@@ -272,6 +274,8 @@ async function processService(serviceLine, direction, service, services) {
                         s.placeName.toLowerCase().replace("station", "").trim());
                     if (findRes)
                         gtfsStopId = findRes.stop_id;
+                    if (s.placeName.toLowerCase().includes("roma st"))
+                        gtfsStopId = "place_romsta";
                     return {
                         PlaceCode: s.placeCode,
                         PlaceName: s.placeName,
