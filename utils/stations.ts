@@ -1,4 +1,4 @@
-import { getAugmentedStops } from "../cache.js";
+import { cacheLoaded, getAugmentedStops, getRawStops } from "../cache.js";
 import { AugmentedStop } from "./augmentedStop.js";
 import * as gtfs from "gtfs";
 
@@ -7,8 +7,9 @@ let qr_stations: string[] = JSON.parse(
 );
 
 export function getGtfsStations(): gtfs.Stop[] {
-	return qr_stations.flatMap((stop_id) => gtfs.getStops({stop_id}));
-} 
+	if (cacheLoaded()) return qr_stations.flatMap((stop_id) => getRawStops(stop_id)).filter((v) => v);
+	return qr_stations.flatMap((stop_id) => gtfs.getStops({ stop_id }));
+}
 
 export function getStations(): AugmentedStop[] {
 	return qr_stations.map((stop_id) => getAugmentedStops(stop_id)[0]).filter((v) => v);
