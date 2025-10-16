@@ -120,6 +120,11 @@ let augmentedCache: AugmentedCache = {
 	runSeriesCache: new Map(),
 };
 
+let _cacheLoaded = false;
+export function cacheLoaded(): boolean {
+	return _cacheLoaded;
+}
+
 export function getCalendars(filter?: Partial<gtfs.Calendar>): gtfs.Calendar[] {
 	if (!rawCache.calendars || rawCache.calendars.length === 0) rawCache.calendars = gtfs.getCalendars();
 	if (!filter) return rawCache.calendars;
@@ -351,6 +356,7 @@ function resetRealtimeCacheIncremental(updatedTripIds: Set<string>): void {
 }
 
 export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): Promise<void> {
+	_cacheLoaded = false;
 	logger.debug("Refreshing static GTFS cache...", {
 		module: "cache",
 		function: "refreshStaticCache",
@@ -482,9 +488,11 @@ export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): 
 		module: "cache",
 		function: "refreshStaticCache",
 	});
+	_cacheLoaded = true;
 }
 
 export async function refreshRealtimeCache(): Promise<void> {
+	_cacheLoaded = false;
 	logger.debug("Refreshing realtime GTFS cache...", {
 		module: "cache",
 		function: "refreshRealtimeCache",
@@ -603,4 +611,5 @@ export async function refreshRealtimeCache(): Promise<void> {
 		module: "cache",
 		function: "refreshRealtimeCache",
 	});
+	_cacheLoaded = true;
 }

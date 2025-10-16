@@ -66,6 +66,10 @@ let augmentedCache = {
     passingStopsCache: new LRUCache(5000), // Max 5000 passing stops entries
     runSeriesCache: new Map(),
 };
+let _cacheLoaded = false;
+export function cacheLoaded() {
+    return _cacheLoaded;
+}
 export function getCalendars(filter) {
     if (!rawCache.calendars || rawCache.calendars.length === 0)
         rawCache.calendars = gtfs.getCalendars();
@@ -277,6 +281,7 @@ function resetRealtimeCacheIncremental(updatedTripIds) {
     }
 }
 export async function refreshStaticCache(skipRealtimeOverlap = false) {
+    _cacheLoaded = false;
     logger.debug("Refreshing static GTFS cache...", {
         module: "cache",
         function: "refreshStaticCache",
@@ -395,8 +400,10 @@ export async function refreshStaticCache(skipRealtimeOverlap = false) {
         module: "cache",
         function: "refreshStaticCache",
     });
+    _cacheLoaded = true;
 }
 export async function refreshRealtimeCache() {
+    _cacheLoaded = false;
     logger.debug("Refreshing realtime GTFS cache...", {
         module: "cache",
         function: "refreshRealtimeCache",
@@ -499,4 +506,5 @@ export async function refreshRealtimeCache() {
         module: "cache",
         function: "refreshRealtimeCache",
     });
+    _cacheLoaded = true;
 }
