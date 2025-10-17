@@ -80,7 +80,7 @@ export function getServiceDates(
  * @returns {number[]} Array of service dates for the trip.
  */
 export function getServiceDatesByTrip(trip_id: string): number[] {
-	const trips = getRawTrips().filter((v) => v.trip_id === trip_id);
+	const trips = getRawTrips(trip_id);
 	const trip = trips && trips.length > 0 ? trips[0] : undefined;
 	if (!trip) return [];
 	const calendars = getCalendars({ service_id: trip.service_id });
