@@ -152,10 +152,6 @@ export async function getServiceUpdates(startDate?: string, endDate?: string): P
 	return json as ServiceUpdate[];
 }
 
-/**
- * Convert QR Travel service data to AugmentedTrip format
- */
-
 function convertQRTServiceToTravelTrip(
 	service: QRTService,
 	serviceResponse: GetServiceResponse,

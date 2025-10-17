@@ -131,9 +131,6 @@ export async function getServiceUpdates(startDate, endDate) {
     });
     return json;
 }
-/**
- * Convert QR Travel service data to AugmentedTrip format
- */
 function convertQRTServiceToTravelTrip(service, serviceResponse, direction, line) {
     // Find the Service object for more info
     const serviceMeta = serviceResponse;

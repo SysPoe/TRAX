@@ -141,9 +141,6 @@ export function augmentTrip(trip: gtfs.Trip): AugmentedTrip {
 
 const RS_TOLLERATE_SECS = 30 * 60;
 
-/**
- * @returns Run series
- */
 function trackBackwards(trip: AugmentedTrip, serviceDate: number): string {
 	let run = trip.run;
 	let prevTrips = [trip];

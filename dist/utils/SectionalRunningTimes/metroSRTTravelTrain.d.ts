@@ -23,8 +23,4 @@ export interface SRTStop {
     departureDelayClass?: "on-time" | "scheduled" | "late" | "very-late" | "early";
     departureDelayString?: "on time" | string;
 }
-/**
- * Given an array of TrainMovementDTOs (stopping pattern), return an array of SRTStop including both stops and passing stops with SRT times.
- * For segments not in SRT_DATA, just include the stops as-is.
- */
 export declare function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[]): SRTStop[];

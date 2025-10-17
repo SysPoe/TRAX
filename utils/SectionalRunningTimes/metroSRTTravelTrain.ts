@@ -1045,10 +1045,6 @@ function pushSRT(
 	});
 }
 
-/**
- * Given an array of TrainMovementDTOs (stopping pattern), return an array of SRTStop including both stops and passing stops with SRT times.
- * For segments not in SRT_DATA, just include the stops as-is.
- */
 export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[]): SRTStop[] {
 	function calcDelay(actual?: string, planned?: string): number | null {
 		if (!actual || !planned || actual === "0001-01-01T00:00:00" || planned === "0001-01-01T00:00:00") return null;

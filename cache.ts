@@ -198,9 +198,6 @@ export function getQRTTrains(): TravelTrip[] {
 	return rawCache.qrtTrains;
 }
 
-/**
- * Retrieve stopTimes, optionally filtered by trip id, lazily loading from GTFS.
- */
 export function getRawStopTimes(trip_id: string | undefined): gtfs.StopTime[] {
 	if (trip_id) return gtfs.getStoptimes({ trip_id });
 	return gtfs.getStoptimes();

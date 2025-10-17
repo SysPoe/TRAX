@@ -141,9 +141,6 @@ export function getQRTPlaces() {
 export function getQRTTrains() {
     return rawCache.qrtTrains;
 }
-/**
- * Retrieve stopTimes, optionally filtered by trip id, lazily loading from GTFS.
- */
 export function getRawStopTimes(trip_id) {
     if (trip_id)
         return gtfs.getStoptimes({ trip_id });

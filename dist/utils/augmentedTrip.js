@@ -102,9 +102,6 @@ export function augmentTrip(trip) {
     };
 }
 const RS_TOLLERATE_SECS = 30 * 60;
-/**
- * @returns Run series
- */
 function trackBackwards(trip, serviceDate) {
     let run = trip.run;
     let prevTrips = [trip];
