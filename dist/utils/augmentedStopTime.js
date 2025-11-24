@@ -324,6 +324,14 @@ export function augmentStopTimes(stopTimes, serviceDates) {
     // Propagation state
     let lastDelay = 0;
     let lastScheduleRelationship = ScheduleRelationship.SCHEDULED;
+    if (tripUpdate)
+        tripUpdate.schedule_relationship =
+            tripUpdate.schedule_relationship == "CANCELED" ? "CANCELLED" : tripUpdate.schedule_relationship;
+    lastScheduleRelationship = tripUpdate?.schedule_relationship
+        ? tripUpdate.schedule_relationship in ScheduleRelationship
+            ? ScheduleRelationship[tripUpdate.schedule_relationship]
+            : ScheduleRelationship.SCHEDULED
+        : ScheduleRelationship.SCHEDULED;
     let propagateOnTime = tripUpdate && tripUpdate.schedule_relationship === "SCHEDULED";
     for (let passingStopTime of passingStopTimes) {
         let stopId = passingStopTime.stop_id;
@@ -393,7 +401,7 @@ export function augmentStopTimes(stopTimes, serviceDates) {
             if (realtimeUpdate.schedule_relationship) {
                 scheduleRelationship =
                     ScheduleRelationship[realtimeUpdate.schedule_relationship] ??
-                        ScheduleRelationship.SCHEDULED;
+                        lastScheduleRelationship;
                 lastScheduleRelationship = scheduleRelationship;
             }
             if (realtimeUpdate.stop_id && realtimeUpdate.stop_id !== stopId) {
@@ -421,7 +429,7 @@ export function augmentStopTimes(stopTimes, serviceDates) {
         }
         // Calculate realtime info
         let realtimeInfo = null;
-        let hasRealtime = !!realtimeUpdate || propagated;
+        let hasRealtime = !!realtimeUpdate || propagated || !!tripUpdate;
         if (hasRealtime) {
             let delayString;
             let delayClass;
