@@ -8,7 +8,8 @@ export declare enum ScheduleRelationship {
     "REPLACEMENT" = 4,// 4
     "DUPLICATED" = 5,// 5
     "NEW" = 6,// 6
-    "DELETED" = 7
+    "DELETED" = 7,// 7
+    "SKIPPED" = 8
 }
 export type AugmentedStopTime = {
     toSerializable: () => SerializableAugmentedStopTime;

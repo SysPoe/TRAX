@@ -21,6 +21,7 @@ export enum ScheduleRelationship {
 	"DUPLICATED", // 5
 	"NEW", // 6
 	"DELETED", // 7
+	"SKIPPED", // 8
 }
 
 export type AugmentedStopTime = {
