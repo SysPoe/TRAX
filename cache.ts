@@ -188,7 +188,7 @@ export function getTripUpdates(trip_id?: string): RealtimeTripUpdate[] {
 export function getVehiclePositions(trip_id?: string): RealtimeVehiclePosition[] {
 	const gtfs = getGtfs();
 	if (rawCache.vehiclePositions.length === 0) rawCache.vehiclePositions = gtfs.getRealtimeVehiclePositions();
-	if(trip_id) return rawCache.vehiclePositions.filter(v => v.trip.trip_id == trip_id); // TODO make better
+	if (trip_id) return rawCache.vehiclePositions.filter(v => v.trip.trip_id == trip_id); // TODO make better
 	return rawCache.vehiclePositions;
 }
 
@@ -522,11 +522,11 @@ export async function refreshRealtimeCache(): Promise<void> {
 		module: "cache",
 		function: "refreshRealtimeCache",
 	});
-	
+
 	rawCache.tripUpdates = gtfs.getRealtimeTripUpdates();
 	rawCache.vehiclePositions = gtfs.getRealtimeVehiclePositions();
-	
-	logger.debug(`Loaded ${rawCache.tripUpdates.length} trip updates with ${rawCache.tripUpdates.flatMap(v=>v.stop_time_updates).length} stop time updates.`, {
+
+	logger.debug(`Loaded ${rawCache.tripUpdates.length} trip updates with ${rawCache.tripUpdates.flatMap(v => v.stop_time_updates).length} stop time updates.`, {
 		module: "cache",
 		function: "refreshRealtimeCache",
 	});

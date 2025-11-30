@@ -6,17 +6,6 @@ import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 import * as timeUtils from "./utils/time.js";
 import { EventEmitter } from "events";
 import { getGtfs, hasGtfs } from "./gtfsInterfaceLayer.js";
-export declare const DEBUG = true;
-export declare const TRAX_CONFIG: {
-    url: string;
-    realtimeAlerts: string;
-    realtimeTripUpdates: string;
-    realtimeVehiclePositions: string;
-    sqlitePath: string;
-    verbose: boolean;
-    db: undefined;
-    logFunction: (message: string) => void;
-};
 export declare function loadGTFS(autoRefresh?: boolean, forceReload?: boolean, realtimeIntervalMs?: number, // 1 minute
 staticIntervalMs?: number): Promise<void>;
 export declare function clearIntervals(): void;

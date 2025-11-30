@@ -4,28 +4,11 @@ import * as stations from "./utils/stations.js";
 import * as express from "./utils/express.js";
 import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 import * as timeUtils from "./utils/time.js";
-import logger, { LogLevel } from "./utils/logger.js";
 import { EventEmitter } from "events";
 import { createGtfs, getGtfs, hasGtfs } from "./gtfsInterfaceLayer.js";
-export const DEBUG = true;
+import logger from "./utils/logger.js";
+import { TRAX_CONFIG } from "./config.js";
 const traxEmitter = new EventEmitter();
-// Configure logger based on DEBUG flag
-if (DEBUG) {
-    logger.setLevel(LogLevel.DEBUG);
-}
-else {
-    logger.setLevel(LogLevel.INFO);
-}
-export const TRAX_CONFIG = {
-    url: "https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip",
-    realtimeAlerts: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts",
-    realtimeTripUpdates: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates",
-    realtimeVehiclePositions: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions",
-    sqlitePath: "./.TRAXCACHE.sqlite",
-    verbose: DEBUG,
-    db: undefined,
-    logFunction: (message) => logger.debug(message, { module: "gtfs" }),
-};
 let realtimeInterval = null;
 let staticInterval = null;
 export async function loadGTFS(autoRefresh = false, forceReload = false, realtimeIntervalMs = 60 * 1000, // 1 minute
