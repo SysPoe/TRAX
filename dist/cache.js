@@ -1,8 +1,8 @@
-import * as gtfs from "gtfs";
 import { augmentStop } from "./utils/augmentedStop.js";
 import { augmentTrip, calculateRunSeries } from "./utils/augmentedTrip.js";
 import { getCurrentQRTravelTrains, getPlaces } from "./qr-travel/qr-travel-tracker.js";
 import logger from "./utils/logger.js";
+import { getGtfs } from "./gtfsInterfaceLayer.js";
 class LRUCache {
     cache = new Map();
     maxSize;
@@ -71,6 +71,7 @@ export function cacheLoaded() {
     return _cacheLoaded;
 }
 export function getCalendars(filter) {
+    const gtfs = getGtfs();
     if (!rawCache.calendars || rawCache.calendars.length === 0)
         rawCache.calendars = gtfs.getCalendars();
     if (!filter)
@@ -86,6 +87,7 @@ export function getCalendars(filter) {
     });
 }
 export function getCalendarDates(filter) {
+    const gtfs = getGtfs();
     if (!rawCache.calendarDates || rawCache.calendarDates.length === 0)
         rawCache.calendarDates = gtfs.getCalendarDates();
     if (!filter)
@@ -121,16 +123,19 @@ export function getRawRoutes(route_id) {
     return rawCache.routes;
 }
 export function getStopTimeUpdates() {
+    const gtfs = getGtfs();
     if (rawCache.stopTimeUpdates.length === 0)
         rawCache.stopTimeUpdates = gtfs.getStopTimeUpdates();
     return rawCache.stopTimeUpdates;
 }
 export function getTripUpdates() {
+    const gtfs = getGtfs();
     if (rawCache.tripUpdates.length === 0)
         rawCache.tripUpdates = gtfs.getTripUpdates();
     return rawCache.tripUpdates;
 }
 export function getVehiclePositions() {
+    const gtfs = getGtfs();
     if (rawCache.vehiclePositions.length === 0)
         rawCache.vehiclePositions = gtfs.getVehiclePositions();
     return rawCache.vehiclePositions;
@@ -142,9 +147,7 @@ export function getQRTTrains() {
     return rawCache.qrtTrains;
 }
 export function getRawStopTimes(trip_id) {
-    if (trip_id)
-        return gtfs.getStoptimes({ trip_id });
-    return gtfs.getStoptimes();
+    return getGtfs().getStopTimesForTrip(trip_id);
 }
 export function getAugmentedTrips(trip_id) {
     if (trip_id) {
@@ -278,6 +281,7 @@ function resetRealtimeCacheIncremental(updatedTripIds) {
     }
 }
 export async function refreshStaticCache(skipRealtimeOverlap = false) {
+    const gtfs = getGtfs();
     _cacheLoaded = false;
     logger.debug("Refreshing static GTFS cache...", {
         module: "cache",
@@ -400,6 +404,7 @@ export async function refreshStaticCache(skipRealtimeOverlap = false) {
     _cacheLoaded = true;
 }
 export async function refreshRealtimeCache() {
+    const gtfs = getGtfs();
     _cacheLoaded = false;
     logger.debug("Refreshing realtime GTFS cache...", {
         module: "cache",

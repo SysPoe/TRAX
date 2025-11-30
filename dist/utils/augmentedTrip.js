@@ -1,9 +1,8 @@
-import * as gtfs from "gtfs";
 import { getServiceDatesByTrip } from "./calendar.js";
 import { augmentStopTimes } from "./augmentedStopTime.js";
 import { findExpress } from "./express.js";
 import * as cache from "../cache.js";
-import { formatTimestamp } from "../index.js";
+import { getGtfs } from "../gtfsInterfaceLayer.js";
 export function toSerializableAugmentedTrip(trip) {
     return {
         _trip: trip._trip,
@@ -45,7 +44,7 @@ export function augmentTrip(trip) {
                     .map((st) => [...(st.scheduled_arrival_dates || []), ...(st.scheduled_departure_dates || [])])
                     .flat()),
             ];
-            return dates.sort((a, b) => a - b);
+            return dates.sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
         },
         get actualTripDates() {
             let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
@@ -62,7 +61,7 @@ export function augmentTrip(trip) {
                     .map((st) => [...(st.actual_arrival_dates || []), ...(st.actual_departure_dates || [])])
                     .flat()),
             ];
-            return dates.sort((a, b) => a - b);
+            return dates.sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
         },
         get stopTimes() {
             let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
@@ -103,20 +102,21 @@ export function augmentTrip(trip) {
 }
 const RS_TOLLERATE_SECS = 30 * 60;
 function trackBackwards(trip, serviceDate) {
+    const gtfs = getGtfs();
     let run = trip.run;
     let prevTrips = [trip];
     for (let _break = 0; _break < 100; _break++) {
         let st = trip.stopTimes[0];
-        if ((st.scheduled_departure_timestamp || st.scheduled_arrival_timestamp) === null)
+        if ((st.scheduled_departure_time || st.scheduled_arrival_time) === null)
             break;
-        if ((st.scheduled_departure_timestamp || st.scheduled_arrival_timestamp || 0) < RS_TOLLERATE_SECS)
+        if ((st.scheduled_departure_time || st.scheduled_arrival_time || 0) < RS_TOLLERATE_SECS)
             break;
         // Get departures for previous 30 mins
-        let deps_ids = gtfs.getStoptimes({
+        let deps_ids = gtfs.queryStopTimes({
             stop_id: st.scheduled_stop?.stop_id,
-            date: serviceDate,
-            start_time: formatTimestamp((st.scheduled_departure_timestamp || st.scheduled_arrival_timestamp || 0) - RS_TOLLERATE_SECS) + ":00",
-            end_time: formatTimestamp(st.scheduled_departure_timestamp || st.scheduled_arrival_timestamp || 0) + ":00",
+            date: serviceDate.toString(),
+            start_time: (st.scheduled_departure_time || st.scheduled_arrival_time || 0) - RS_TOLLERATE_SECS,
+            end_time: (st.scheduled_departure_time || st.scheduled_arrival_time || 0),
         });
         let deps = deps_ids
             .map((v) => cache
@@ -125,8 +125,8 @@ function trackBackwards(trip, serviceDate) {
             .filter((v) => !!v);
         // Get next previous arrival before the current trip departs
         deps = deps.filter((v) => v._stopTime?.trip_id.slice(-4)[0] == run[0] && v._stopTime?.trip_id.slice(-4) != run);
-        deps = deps.sort((a, b) => (a.scheduled_departure_timestamp || a.scheduled_arrival_timestamp || Infinity) -
-            (b.scheduled_departure_timestamp || b.scheduled_arrival_timestamp || Infinity));
+        deps = deps.sort((a, b) => (a.scheduled_departure_time || a.scheduled_arrival_time || Infinity) -
+            (b.scheduled_departure_time || b.scheduled_arrival_time || Infinity));
         if (deps.length === 0)
             break;
         let newTrip = cache.getAugmentedTrips(deps.at(-1)?.trip_id)[0];
@@ -145,8 +145,8 @@ function trackBackwards(trip, serviceDate) {
             rs.trips = [
                 {
                     trip_id: prevTrip._trip.trip_id,
-                    trip_start_time: prevTrip.stopTimes[0].scheduled_departure_timestamp ||
-                        prevTrip.stopTimes[0].scheduled_arrival_timestamp ||
+                    trip_start_time: prevTrip.stopTimes[0].scheduled_departure_time ||
+                        prevTrip.stopTimes[0].scheduled_arrival_time ||
                         0,
                     run: prevTrip.run,
                 },
@@ -157,19 +157,20 @@ function trackBackwards(trip, serviceDate) {
     return run;
 }
 function trackForwards(trip, serviceDate, runSeries) {
+    const gtfs = getGtfs();
     let run = trip.run;
     let rs = cache.getRunSeries(serviceDate, runSeries, false);
     // Track forwards, setting the runSeries
     for (let _break = 0; _break < 100; _break++) {
         let st = trip.stopTimes.at(-1);
-        if ((st.scheduled_departure_timestamp || st.scheduled_arrival_timestamp) === null)
+        if ((st.scheduled_departure_time || st.scheduled_arrival_time) === null)
             break;
         // Get departures for next 30 mins
-        let deps_ids = gtfs.getStoptimes({
+        let deps_ids = gtfs.queryStopTimes({
             stop_id: st.scheduled_stop?.stop_id,
-            date: serviceDate,
-            start_time: formatTimestamp(st.scheduled_departure_timestamp || st.scheduled_arrival_timestamp || 0) + ":00",
-            end_time: formatTimestamp((st.scheduled_departure_timestamp || st.scheduled_arrival_timestamp || 0) + RS_TOLLERATE_SECS) + ":00",
+            date: serviceDate.toString(),
+            start_time: st.scheduled_departure_time || st.scheduled_arrival_time || 0,
+            end_time: (st.scheduled_departure_time || st.scheduled_arrival_time || 0) + RS_TOLLERATE_SECS,
         });
         let deps = deps_ids
             .map((v) => cache
@@ -177,8 +178,8 @@ function trackForwards(trip, serviceDate, runSeries) {
             .stopTimes.find((v) => v.scheduled_stop?.stop_id == st.scheduled_stop?.stop_id))
             .filter((v) => !!v);
         deps = deps.filter((v) => v._stopTime?.trip_id.slice(-4)[0] == run[0] && v._stopTime?.trip_id.slice(-4) != run);
-        deps = deps.sort((a, b) => (a.scheduled_departure_timestamp || a.scheduled_arrival_timestamp || Infinity) -
-            (b.scheduled_departure_timestamp || b.scheduled_arrival_timestamp || Infinity));
+        deps = deps.sort((a, b) => (a.scheduled_departure_time || a.scheduled_arrival_time || Infinity) -
+            (b.scheduled_departure_time || b.scheduled_arrival_time || Infinity));
         if (deps.length === 0)
             break;
         let newTrip = cache.getAugmentedTrips(deps[0].trip_id)[0];
@@ -191,8 +192,8 @@ function trackForwards(trip, serviceDate, runSeries) {
         if (!rs.trips.some((v) => v.trip_id === newTrip._trip.trip_id))
             rs.trips.push({
                 trip_id: newTrip._trip.trip_id,
-                trip_start_time: newTrip.stopTimes[0].scheduled_departure_timestamp ||
-                    newTrip.stopTimes[0].scheduled_arrival_timestamp ||
+                trip_start_time: newTrip.stopTimes[0].scheduled_departure_time ||
+                    newTrip.stopTimes[0].scheduled_arrival_time ||
                     0,
                 run,
             });

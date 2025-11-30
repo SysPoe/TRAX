@@ -6,13 +6,24 @@ import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 import * as augmentedStopTime from "./utils/augmentedStopTime.js";
 import * as timeUtils from "./utils/time.js";
 import { EventEmitter } from "events";
+import { getGtfs, hasGtfs } from "./gtfsInterfaceLayer.js";
 export declare const DEBUG = true;
+export declare const TRAX_CONFIG: {
+    url: string;
+    realtimeAlerts: string;
+    realtimeTripUpdates: string;
+    realtimeVehiclePositions: string;
+    sqlitePath: string;
+    verbose: boolean;
+    db: undefined;
+    logFunction: (message: string) => void;
+};
 export declare function loadGTFS(autoRefresh?: boolean, forceReload?: boolean, realtimeIntervalMs?: number, // 1 minute
 staticIntervalMs?: number): Promise<void>;
 export declare function clearIntervals(): void;
 export declare function formatTimestamp(ts?: number | null): string;
 export declare function updateRealtime(): Promise<void>;
-export declare function today(): number;
+export declare function today(): string;
 declare const TRAX: {
     loadGTFS: typeof loadGTFS;
     updateRealtime: typeof updateRealtime;
@@ -43,20 +54,14 @@ declare const TRAX: {
     utils: {
         time: typeof timeUtils;
         formatTimestamp: typeof formatTimestamp;
+        hasGtfs: typeof hasGtfs;
+        getGtfs: typeof getGtfs;
     };
-    config: {
-        agencies: {
-            url: string;
-            realtimeAlerts: {
-                url: string;
-            };
-            realtimeTripUpdates: {
-                url: string;
-            };
-            realtimeVehiclePositions: {
-                url: string;
-            };
-        }[];
+    TRAX_CONFIG: {
+        url: string;
+        realtimeAlerts: string;
+        realtimeTripUpdates: string;
+        realtimeVehiclePositions: string;
         sqlitePath: string;
         verbose: boolean;
         db: undefined;

@@ -16,7 +16,7 @@
     },
     "dependencies": {
         "chalk": "^5.4.1",
-        "gtfs": "^4.17.5",
+        "qdf-gtfs": "github:SysPoe/QDF-GTFS",
         "readline-sync": "^1.4.10",
         "strip-ansi": "^7.1.2"
     },

@@ -151,23 +151,23 @@ function findPassingStopTimes(stopTimes) {
             });
             continue;
         }
-        if (!startTime.departure_timestamp)
+        if (!startTime.departure_time)
             logger.error(`Start time should not be undefined`, {
                 module: "augmentedStopTime",
                 function: "findPassingStopTimes",
                 startTime,
                 srt,
             });
-        if (!endTime.departure_timestamp)
+        if (!endTime.departure_time)
             logger.error(`End time should not be undefined`, {
                 module: "augmentedStopTime",
                 function: "findPassingStopTimes",
                 endTime,
                 srt,
             });
-        if (!startTime.departure_timestamp || !endTime.departure_timestamp)
+        if (!startTime.departure_time || !endTime.departure_time)
             continue;
-        let timeDifference = Math.floor((endTime.departure_timestamp - startTime.departure_timestamp) / 60);
+        let timeDifference = Math.floor((endTime.departure_time - startTime.departure_time) / 60);
         let totalTimePass = passingRun.reduce((acc, curr) => acc + curr.emu, 0);
         let rescaledAccumulatedPassingRuns = passingRun
             .map((v) => ({
@@ -196,8 +196,13 @@ function findPassingStopTimes(stopTimes) {
                 stop_id: run.to,
                 trip_id: stopTimes[0].trip_id,
                 stop_sequence: stopTimes[0].stop_sequence + i / rescaledAccumulatedPassingRuns.length,
-                departure_timestamp: startTime.departure_timestamp + run.emu * 60,
-                arrival_timestamp: (startTime.arrival_timestamp || startTime.departure_timestamp) + run.emu * 60,
+                departure_time: startTime.departure_time + run.emu * 60,
+                arrival_time: (startTime.arrival_time || startTime.departure_time) + run.emu * 60,
+                drop_off_type: -1,
+                pickup_type: -1,
+                shape_dist_traveled: -1,
+                stop_headsign: "",
+                timepoint: -1
             });
         }
         times.push({ ...endTime, _passing: false });
@@ -311,10 +316,10 @@ export function augmentStopTimes(stopTimes, serviceDates) {
             tripId: stopTimes[0].trip_id,
             stopTimes,
         });
-    let initialScheduledArrivalTimestamp = 0;
-    let initialScheduledDepartureTimestamp = 0;
-    let initialActualArrivalTimestamp = 0;
-    let initialActualDepartureTimestamp = 0;
+    let initialScheduledArrivalTime = 0;
+    let initialScheduledDepartureTime = 0;
+    let initialActualArrivalTime = 0;
+    let initialActualDepartureTime = 0;
     let realtimeUpdates = cache
         .getStopTimeUpdates()
         .filter((v) => v.trip_id === stopTimes[0].trip_id)
@@ -349,11 +354,11 @@ export function augmentStopTimes(stopTimes, serviceDates) {
         let scheduledParentStation = scheduledStop?.parent_station
             ? cache.getAugmentedStops(scheduledStop.parent_station)[0]
             : null;
-        // Calculate timestamps
-        let scheduledArrivalTimestamp = passingStopTime.arrival_timestamp;
-        let scheduledDepartureTimestamp = passingStopTime.departure_timestamp;
-        let actualArrivalTimestamp = scheduledArrivalTimestamp;
-        let actualDepartureTimestamp = scheduledDepartureTimestamp;
+        // Calculate times
+        let scheduledArrivalTime = passingStopTime.arrival_time;
+        let scheduledDepartureTime = passingStopTime.departure_time;
+        let actualArrivalTime = scheduledArrivalTime;
+        let actualDepartureTime = scheduledDepartureTime;
         // Propagation logic
         let rtArrivalUpdated = false;
         let rtDepartureUpdated = false;
@@ -366,9 +371,9 @@ export function augmentStopTimes(stopTimes, serviceDates) {
         let scheduleRelationship = lastScheduleRelationship;
         if (realtimeUpdate) {
             if (realtimeUpdate.departure_delay !== undefined) {
-                actualDepartureTimestamp =
-                    scheduledDepartureTimestamp !== undefined
-                        ? scheduledDepartureTimestamp + realtimeUpdate.departure_delay
+                actualDepartureTime =
+                    scheduledDepartureTime !== undefined
+                        ? scheduledDepartureTime + realtimeUpdate.departure_delay
                         : undefined;
                 rtDepartureUpdated = true;
                 delaySecs = realtimeUpdate.departure_delay;
@@ -376,14 +381,14 @@ export function augmentStopTimes(stopTimes, serviceDates) {
                 propagated = false;
             }
             else if (lastDelay) {
-                actualDepartureTimestamp =
-                    scheduledDepartureTimestamp !== undefined ? scheduledDepartureTimestamp + lastDelay : undefined;
+                actualDepartureTime =
+                    scheduledDepartureTime !== undefined ? scheduledDepartureTime + lastDelay : undefined;
                 propagated = true;
             }
             if (realtimeUpdate.arrival_delay !== undefined) {
-                actualArrivalTimestamp =
-                    scheduledArrivalTimestamp !== undefined
-                        ? scheduledArrivalTimestamp + realtimeUpdate.arrival_delay
+                actualArrivalTime =
+                    scheduledArrivalTime !== undefined
+                        ? scheduledArrivalTime + realtimeUpdate.arrival_delay
                         : undefined;
                 rtArrivalUpdated = true;
                 delaySecs = realtimeUpdate.arrival_delay;
@@ -391,8 +396,8 @@ export function augmentStopTimes(stopTimes, serviceDates) {
                 propagated = false;
             }
             else if (lastDelay) {
-                actualArrivalTimestamp =
-                    scheduledArrivalTimestamp !== undefined ? scheduledArrivalTimestamp + lastDelay : undefined;
+                actualArrivalTime =
+                    scheduledArrivalTime !== undefined ? scheduledArrivalTime + lastDelay : undefined;
                 propagated = true;
             }
             if (cache.getRawStops(realtimeUpdate.stop_id)[0]?.platform_code) {
@@ -416,10 +421,10 @@ export function augmentStopTimes(stopTimes, serviceDates) {
         }
         else if (lastDelay) {
             // Propagate previous delay if no explicit update
-            actualArrivalTimestamp =
-                scheduledArrivalTimestamp !== undefined ? scheduledArrivalTimestamp + lastDelay : undefined;
-            actualDepartureTimestamp =
-                scheduledDepartureTimestamp !== undefined ? scheduledDepartureTimestamp + lastDelay : undefined;
+            actualArrivalTime =
+                scheduledArrivalTime !== undefined ? scheduledArrivalTime + lastDelay : undefined;
+            actualDepartureTime =
+                scheduledDepartureTime !== undefined ? scheduledDepartureTime + lastDelay : undefined;
             propagated = true;
         }
         else if (propagateOnTime) {
@@ -464,32 +469,32 @@ export function augmentStopTimes(stopTimes, serviceDates) {
             };
         }
         if (passingStopTime.stop_sequence == 1) {
-            initialScheduledArrivalTimestamp = scheduledArrivalTimestamp ?? 0;
-            initialScheduledDepartureTimestamp = scheduledDepartureTimestamp ?? 0;
-            initialActualArrivalTimestamp = actualArrivalTimestamp ?? 0;
-            initialActualDepartureTimestamp = actualDepartureTimestamp ?? 0;
+            initialScheduledArrivalTime = scheduledArrivalTime ?? 0;
+            initialScheduledDepartureTime = scheduledDepartureTime ?? 0;
+            initialActualArrivalTime = actualArrivalTime ?? 0;
+            initialActualDepartureTime = actualDepartureTime ?? 0;
         }
-        let initial_scheduled_arrival_date_offset = initialScheduledArrivalTimestamp
-            ? Math.floor(initialScheduledArrivalTimestamp / 86400)
+        let initial_scheduled_arrival_date_offset = initialScheduledArrivalTime
+            ? Math.floor(initialScheduledArrivalTime / 86400)
             : 0;
-        let initial_scheduled_departure_date_offset = initialScheduledDepartureTimestamp
-            ? Math.floor(initialScheduledDepartureTimestamp / 86400)
+        let initial_scheduled_departure_date_offset = initialScheduledDepartureTime
+            ? Math.floor(initialScheduledDepartureTime / 86400)
             : 0;
-        let initial_actual_arrival_date_offset = initialActualArrivalTimestamp
-            ? Math.floor(initialActualArrivalTimestamp / 86400)
+        let initial_actual_arrival_date_offset = initialActualArrivalTime
+            ? Math.floor(initialActualArrivalTime / 86400)
             : 0;
-        let initial_actual_departure_date_offset = initialActualDepartureTimestamp
-            ? Math.floor(initialActualDepartureTimestamp / 86400)
+        let initial_actual_departure_date_offset = initialActualDepartureTime
+            ? Math.floor(initialActualDepartureTime / 86400)
             : 0;
         // Calculate arrival/departure date offsets
-        let scheduled_arrival_date_offset = scheduledArrivalTimestamp
-            ? Math.floor(scheduledArrivalTimestamp / 86400)
+        let scheduled_arrival_date_offset = scheduledArrivalTime
+            ? Math.floor(scheduledArrivalTime / 86400)
             : 0;
-        let actual_arrival_date_offset = actualArrivalTimestamp ? Math.floor(actualArrivalTimestamp / 86400) : 0;
-        let scheduled_departure_date_offset = scheduledDepartureTimestamp
-            ? Math.floor(scheduledDepartureTimestamp / 86400)
+        let actual_arrival_date_offset = actualArrivalTime ? Math.floor(actualArrivalTime / 86400) : 0;
+        let scheduled_departure_date_offset = scheduledDepartureTime
+            ? Math.floor(scheduledDepartureTime / 86400)
             : 0;
-        let actual_departure_date_offset = actualDepartureTimestamp ? Math.floor(actualDepartureTimestamp / 86400) : 0;
+        let actual_departure_date_offset = actualDepartureTime ? Math.floor(actualDepartureTime / 86400) : 0;
         let scheduled_arrival_dates = serviceDates.map((d) => d + scheduled_arrival_date_offset);
         let scheduled_departure_dates = serviceDates.map((d) => d + scheduled_departure_date_offset);
         let actual_arrival_dates = serviceDates.map((d) => d == today() ? d + actual_arrival_date_offset : d + scheduled_arrival_date_offset);
@@ -502,8 +507,8 @@ export function augmentStopTimes(stopTimes, serviceDates) {
             _stopTime: passingStopTime._passing ? null : passingStopTime,
             trip_id: stopTimes[0].trip_id,
             passing: passingStopTime._passing,
-            actual_arrival_timestamp: actualArrivalTimestamp ? actualArrivalTimestamp % 86400 : null,
-            actual_departure_timestamp: actualDepartureTimestamp ? actualDepartureTimestamp % 86400 : null,
+            actual_arrival_time: actualArrivalTime ? actualArrivalTime % 86400 : null,
+            actual_departure_time: actualDepartureTime ? actualDepartureTime % 86400 : null,
             actual_stop: actualStop,
             actual_parent_station: actualParentStation,
             actual_platform_code: passingStopTime._passing
@@ -514,8 +519,8 @@ export function augmentStopTimes(stopTimes, serviceDates) {
             rt_platform_code_updated: rtPlatformCodeUpdated,
             rt_arrival_updated: rtArrivalUpdated,
             rt_departure_updated: rtDepartureUpdated,
-            scheduled_arrival_timestamp: scheduledArrivalTimestamp ? scheduledArrivalTimestamp % 86400 : null,
-            scheduled_departure_timestamp: scheduledDepartureTimestamp ? scheduledDepartureTimestamp % 86400 : null,
+            scheduled_arrival_time: scheduledArrivalTime ? scheduledArrivalTime % 86400 : null,
+            scheduled_departure_time: scheduledDepartureTime ? scheduledDepartureTime % 86400 : null,
             scheduled_stop: scheduledStop,
             scheduled_parent_station: scheduledParentStation,
             scheduled_platform_code: passingStopTime._passing ? null : (scheduledStop.platform_code ?? null),

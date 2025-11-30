@@ -61,18 +61,18 @@ export function augmentStop(stop) {
             let daysForwardStart = Math.floor(startSec / 86400);
             let daysForwardEnd = Math.floor(endSec / 86400);
             let toDate = (d) => {
-                let dstr = d.toString().padStart(8, "0");
+                let dstr = d.padStart(8, "0");
                 return new Date(dstr.slice(0, 4) + "-" + dstr.slice(4, 6) + "-" + dstr.slice(6, 8));
             };
             let getMatchingTripDate = (tripDates) => {
                 for (let df = daysForwardStart; df <= daysForwardEnd; df++) {
                     let checkDate = toDate(date);
                     checkDate.setDate(checkDate.getDate() + df);
-                    let checkDateNum = Number.parseInt(checkDate.toISOString().slice(0, 10).replace(/-/g, ""));
+                    let checkDateNum = checkDate.toISOString().slice(0, 10).replace(/-/g, "");
                     if (tripDates.includes(checkDateNum))
                         return checkDateNum;
                 }
-                return -1;
+                return null;
             };
             for (const st of cache.getAugmentedStopTimes()) {
                 if (!st.actual_stop || !validStops.has(st.actual_stop.stop_id))
@@ -83,16 +83,16 @@ export function augmentStop(stop) {
                     tripCache.set(st.trip_id, trip);
                 }
                 let matchingDate = getMatchingTripDate((st?.actual_departure_dates || []).concat(st?.actual_arrival_dates || []));
-                if (matchingDate === -1)
+                if (matchingDate === null)
                     continue;
-                const ts = (st.actual_departure_timestamp ?? st.actual_arrival_timestamp ?? 0) +
+                const ts = (st.actual_departure_time ?? st.actual_arrival_time ?? 0) +
                     (toDate(matchingDate).getTime() - toDate(date).getTime()) / 1000;
                 if (ts == null || ts < startSec || ts > endSec)
                     continue;
                 results.push({ st, trip });
             }
             return results
-                .sort((a, b) => (a.st.actual_departure_timestamp ?? 0) - (b.st.actual_departure_timestamp ?? 0))
+                .sort((a, b) => (a.st.actual_departure_time ?? 0) - (b.st.actual_departure_time ?? 0))
                 .map(({ st, trip }) => {
                 const expressString = findExpressString(trip.expressInfo, st.actual_parent_station?.stop_id ||
                     st.actual_stop?.parent_station ||
@@ -120,13 +120,13 @@ export function augmentStop(stop) {
                 }
                 if (!trip?.scheduledStartServiceDates?.includes(serviceDate))
                     continue;
-                const ts = st.actual_departure_timestamp;
+                const ts = st.actual_departure_time;
                 if (ts == null || ts < start_time_secs || ts > end_time_secs)
                     continue;
                 results.push({ st, trip });
             }
             return results
-                .sort((a, b) => (a.st.actual_departure_timestamp ?? 0) - (b.st.actual_departure_timestamp ?? 0))
+                .sort((a, b) => (a.st.actual_departure_time ?? 0) - (b.st.actual_departure_time ?? 0))
                 .map(({ st, trip }) => {
                 const expressString = findExpressString(trip.expressInfo, st.actual_parent_station?.stop_id ||
                     st.actual_stop?.parent_station ||

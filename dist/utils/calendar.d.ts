@@ -1,3 +1,3 @@
-import type * as gtfs from "gtfs";
-export declare function getServiceDates(calendars: gtfs.Calendar[], calendarDates: gtfs.CalendarDate[]): Record<string, number[]>;
-export declare function getServiceDatesByTrip(trip_id: string): number[];
+import type * as gtfsTypes from "qdf-gtfs";
+export declare function getServiceDates(calendars: gtfsTypes.Calendar[], calendarDates: gtfsTypes.CalendarDate[]): Record<string, string[]>;
+export declare function getServiceDatesByTrip(trip_id: string): string[];
