@@ -33,7 +33,7 @@ export type AugmentedStopTime = {
     realtime: boolean;
     realtime_info: {
         delay_secs: number;
-        delay_string: "on time" | "scheduled" | string;
+        delay_string: string;
         delay_class: "on-time" | "scheduled" | "late" | "very-late" | "early";
         schedule_relationship: qdf.StopTimeScheduleRelationship;
         propagated: boolean;
