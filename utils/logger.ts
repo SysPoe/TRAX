@@ -79,6 +79,8 @@ class Logger {
 		const timestamp = new Date().toISOString();
 		const levelStr = colorize ? color(`[${level}]`.padStart(7)) : `[${level}]`.padStart(7);
 
+		context = {}; // TODO proper fix
+
 		let contextStr = "";
 		if (context) {
 			const contextParts: string[] = [];

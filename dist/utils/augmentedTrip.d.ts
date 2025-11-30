@@ -1,8 +1,8 @@
-import type * as gtfsTypes from "qdf-gtfs";
+import type * as qdf from "qdf-gtfs";
 import { AugmentedStopTime, SerializableAugmentedStopTime } from "./augmentedStopTime.js";
 import { ExpressInfo } from "./express.js";
 export type AugmentedTrip = {
-    _trip: gtfsTypes.Trip;
+    _trip: qdf.Trip;
     scheduledStartServiceDates: string[];
     scheduledTripDates: string[];
     actualTripDates: string[];
@@ -15,6 +15,7 @@ export type AugmentedTrip = {
     stopTimes: AugmentedStopTime[];
     expressInfo: ExpressInfo[];
     run: string;
+    scheduleRelationship: qdf.TripScheduleRelationship | null;
     toSerializable: () => SerializableAugmentedTrip;
 };
 export type RunSeries = {
@@ -31,5 +32,5 @@ export type SerializableAugmentedTrip = Omit<AugmentedTrip, "stopTimes" | "toSer
     stopTimes: SerializableAugmentedStopTime[];
 };
 export declare function toSerializableAugmentedTrip(trip: AugmentedTrip | Omit<AugmentedTrip, "toSerializable" | "toSerializable" | "_runSeries">): SerializableAugmentedTrip;
-export declare function augmentTrip(trip: gtfsTypes.Trip): AugmentedTrip;
+export declare function augmentTrip(trip: qdf.Trip): AugmentedTrip;
 export declare function calculateRunSeries(trip: AugmentedTrip): void;

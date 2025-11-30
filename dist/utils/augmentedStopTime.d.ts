@@ -1,19 +1,8 @@
-import type * as gtfsTypes from "qdf-gtfs";
+import * as qdf from "qdf-gtfs";
 import { AugmentedStop } from "./augmentedStop.js";
-export declare enum ScheduleRelationship {
-    "SCHEDULED" = 0,// 0
-    "ADDED" = 1,// 1
-    "UNSCHEDULED" = 2,// 2
-    "CANCELLED" = 3,// 3
-    "REPLACEMENT" = 4,// 4
-    "DUPLICATED" = 5,// 5
-    "NEW" = 6,// 6
-    "DELETED" = 7,// 7
-    "SKIPPED" = 8
-}
 export type AugmentedStopTime = {
     toSerializable: () => SerializableAugmentedStopTime;
-    _stopTime: gtfsTypes.StopTime | null;
+    _stopTime: qdf.StopTime | null;
     trip_id: string;
     passing: boolean;
     actual_exit_side: "left" | "right" | "both" | null;
@@ -41,17 +30,12 @@ export type AugmentedStopTime = {
     actual_departure_dates: string[];
     scheduled_departure_date_offset: number;
     actual_departure_date_offset: number;
-    _DEBUG: {
-        lastUpdated: string;
-        tripUpdate: gtfsTypes.TripUpdate | null;
-        stopTimeUpdates: gtfsTypes.StopTimeUpdate[];
-    };
     realtime: boolean;
     realtime_info: {
         delay_secs: number;
         delay_string: "on time" | "scheduled" | string;
         delay_class: "on-time" | "scheduled" | "late" | "very-late" | "early";
-        schedule_relationship: ScheduleRelationship;
+        schedule_relationship: qdf.StopTimeScheduleRelationship;
         propagated: boolean;
     } | null;
 };
@@ -62,4 +46,4 @@ export type SerializableAugmentedStopTime = Omit<AugmentedStopTime, "actual_stop
     scheduled_parent_station: string | null;
 };
 export declare function toSerializableAugmentedStopTime(st: Omit<AugmentedStopTime, "toSerializable">): SerializableAugmentedStopTime;
-export declare function augmentStopTimes(stopTimes: gtfsTypes.StopTime[], serviceDates: string[]): AugmentedStopTime[];
+export declare function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string[]): AugmentedStopTime[];

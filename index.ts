@@ -90,8 +90,9 @@ export function formatTimestamp(ts?: number | null): string {
 
 export async function updateRealtime(): Promise<void> {
 	traxEmitter.emit("update-realtime-start");
+	const gtfs = getGtfs();
 	try {
-		await gtfs.updateGtfsRealtime(config);
+		await gtfs.updateRealtimeFromUrl(TRAX_CONFIG.realtimeAlerts, TRAX_CONFIG.realtimeTripUpdates, TRAX_CONFIG.realtimeVehiclePositions);
 		await cache.refreshRealtimeCache();
 	} catch (error: any) {
 		logger.error("Error updating realtime GTFS data", {
@@ -153,7 +154,6 @@ const TRAX = {
 	},
 	TRAX_CONFIG,
 	logger,
-	ScheduleRelationship: augmentedStopTime.ScheduleRelationship,
 };
 
 export default TRAX;

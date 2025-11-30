@@ -1,9 +1,9 @@
-import type * as gtfsTypes from "qdf-gtfs";
+import type * as qdf from "qdf-gtfs";
 import { getRawTrips, getCalendars, getCalendarDates } from "../cache.js";
 
 export function getServiceDates(
-	calendars: gtfsTypes.Calendar[],
-	calendarDates: gtfsTypes.CalendarDate[],
+	calendars: qdf.Calendar[],
+	calendarDates: qdf.CalendarDate[],
 ): Record<string, string[]> {
 	const serviceDates: Record<string, string[]> = {};
 

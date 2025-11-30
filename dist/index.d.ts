@@ -3,7 +3,6 @@ import * as calendar from "./utils/calendar.js";
 import * as stations from "./utils/stations.js";
 import * as express from "./utils/express.js";
 import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
-import * as augmentedStopTime from "./utils/augmentedStopTime.js";
 import * as timeUtils from "./utils/time.js";
 import { EventEmitter } from "events";
 import { getGtfs, hasGtfs } from "./gtfsInterfaceLayer.js";
@@ -68,7 +67,6 @@ declare const TRAX: {
         logFunction: (message: string) => void;
     };
     logger: import("./utils/logger.js").Logger;
-    ScheduleRelationship: typeof augmentedStopTime.ScheduleRelationship;
 };
 export default TRAX;
 export type { AugmentedTrip, SerializableAugmentedTrip, RunSeries } from "./utils/augmentedTrip.js";

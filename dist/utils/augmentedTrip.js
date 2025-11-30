@@ -13,6 +13,7 @@ export function toSerializableAugmentedTrip(trip) {
         stopTimes: Array.isArray(trip.stopTimes) ? trip.stopTimes.map((st) => st.toSerializable()) : [],
         expressInfo: trip.expressInfo,
         run: trip.run,
+        scheduleRelationship: trip.scheduleRelationship,
     };
 }
 export function augmentTrip(trip) {
@@ -26,6 +27,7 @@ export function augmentTrip(trip) {
     for (const serviceDate of serviceDates) {
         _runSeries[serviceDate] = null;
     }
+    let scheduleRelationship = cache.getTripUpdates(trip.trip_id)[0]?.trip.schedule_relationship ?? null;
     return {
         _trip: trip,
         scheduledStartServiceDates: serviceDates,
@@ -96,8 +98,10 @@ export function augmentTrip(trip) {
                 expressInfo,
                 runSeries: this.runSeries,
                 run: trip.trip_id.slice(-4),
+                scheduleRelationship
             });
         },
+        scheduleRelationship
     };
 }
 const RS_TOLLERATE_SECS = 30 * 60;

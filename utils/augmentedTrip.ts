@@ -1,4 +1,4 @@
-import type * as gtfsTypes from "qdf-gtfs";
+import type * as qdf from "qdf-gtfs";
 import { getServiceDatesByTrip } from "./calendar.js";
 import { AugmentedStopTime, augmentStopTimes, SerializableAugmentedStopTime } from "./augmentedStopTime.js";
 import { ExpressInfo, findExpress } from "./express.js";
@@ -7,7 +7,7 @@ import { formatTimestamp } from "../index.js";
 import { getGtfs } from "../gtfsInterfaceLayer.js";
 
 export type AugmentedTrip = {
-	_trip: gtfsTypes.Trip;
+	_trip: qdf.Trip;
 	scheduledStartServiceDates: string[]; // Days on which the trip is scheduled to start
 	scheduledTripDates: string[]; // Days on which the trip is scheduled to have stops
 	actualTripDates: string[]; // Days on which the trip actually has stops (with real-time updates)
@@ -16,6 +16,7 @@ export type AugmentedTrip = {
 	stopTimes: AugmentedStopTime[];
 	expressInfo: ExpressInfo[];
 	run: string;
+	scheduleRelationship: qdf.TripScheduleRelationship | null;
 	toSerializable: () => SerializableAugmentedTrip;
 };
 
@@ -46,10 +47,11 @@ export function toSerializableAugmentedTrip(
 		stopTimes: Array.isArray(trip.stopTimes) ? trip.stopTimes.map((st) => st.toSerializable()) : [],
 		expressInfo: trip.expressInfo,
 		run: trip.run,
+		scheduleRelationship: trip.scheduleRelationship,
 	};
 }
 
-export function augmentTrip(trip: gtfsTypes.Trip): AugmentedTrip {
+export function augmentTrip(trip: qdf.Trip): AugmentedTrip {
 	const serviceDates = getServiceDatesByTrip(trip.trip_id);
 
 	let rawStopTimes = cache.getRawStopTimes(trip.trip_id).sort((a, b) => a.stop_sequence - b.stop_sequence);
@@ -64,6 +66,8 @@ export function augmentTrip(trip: gtfsTypes.Trip): AugmentedTrip {
 	for (const serviceDate of serviceDates) {
 		_runSeries[serviceDate] = null;
 	}
+
+	let scheduleRelationship = cache.getTripUpdates(trip.trip_id)[0]?.trip.schedule_relationship ?? null;
 
 	return {
 		_trip: trip,
@@ -135,8 +139,10 @@ export function augmentTrip(trip: gtfsTypes.Trip): AugmentedTrip {
 				expressInfo,
 				runSeries: this.runSeries,
 				run: trip.trip_id.slice(-4),
+				scheduleRelationship
 			});
 		},
+		scheduleRelationship
 	};
 }
 

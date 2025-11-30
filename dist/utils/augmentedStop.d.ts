@@ -1,6 +1,6 @@
-import type * as gtfsTypes from "qdf-gtfs";
+import type * as qdf from "qdf-gtfs";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
-export type AugmentedStop = gtfsTypes.Stop & {
+export type AugmentedStop = qdf.Stop & {
     qrt_Place: boolean;
     qrt_PlaceCode?: string;
     parent: AugmentedStop | null;
@@ -13,11 +13,11 @@ export type AugmentedStop = gtfsTypes.Stop & {
     })[];
     toSerializable: () => SerializableAugmentedStop;
 };
-export type SerializableAugmentedStop = gtfsTypes.Stop & {
+export type SerializableAugmentedStop = qdf.Stop & {
     qrt_Place: boolean;
     qrt_PlaceCode?: string;
     parent: string | null;
     children: string[];
 };
 export declare function toSerializableAugmentedStop(stop: Omit<AugmentedStop, "toSerializable" | "getDepartures" | "_getSDDepartures">): SerializableAugmentedStop;
-export declare function augmentStop(stop: gtfsTypes.Stop): AugmentedStop;
+export declare function augmentStop(stop: qdf.Stop): AugmentedStop;

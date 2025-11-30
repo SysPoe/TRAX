@@ -1,4 +1,4 @@
-import type { Calendar, CalendarDate, Route, Stop, StopTime, Trip } from "qdf-gtfs";
+import type { Calendar, CalendarDate, RealtimeTripUpdate, RealtimeVehiclePosition, RealtimeStopTimeUpdate, Route, Stop, StopTime, Trip } from "qdf-gtfs";
 import { AugmentedStop } from "./utils/augmentedStop.js";
 import { AugmentedTrip, RunSeries } from "./utils/augmentedTrip.js";
 import { AugmentedStopTime } from "./utils/augmentedStopTime.js";
@@ -9,9 +9,9 @@ export declare function getCalendarDates(filter?: Partial<CalendarDate>): Calend
 export declare function getRawTrips(trip_id?: string): Trip[];
 export declare function getRawStops(stop_id?: string): Stop[];
 export declare function getRawRoutes(route_id?: string): Route[];
-export declare function getStopTimeUpdates(): StopTimeUpdate[];
-export declare function getTripUpdates(): TripUpdate[];
-export declare function getVehiclePositions(): VehiclePosition[];
+export declare function getTripUpdates(trip_id?: string): RealtimeTripUpdate[];
+export declare function getVehiclePositions(trip_id?: string): RealtimeVehiclePosition[];
+export declare function getStopTimeUpdates(trip_id: string): RealtimeStopTimeUpdate[];
 export declare function getQRTPlaces(): QRTPlace[];
 export declare function getQRTTrains(): TravelTrip[];
 export declare function getRawStopTimes(trip_id: string): StopTime[];

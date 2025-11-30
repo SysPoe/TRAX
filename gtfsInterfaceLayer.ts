@@ -6,7 +6,7 @@ let currentGtfs: GTFS | null = null;
 export async function createGtfs() {
     let gtfs = new GTFS({ ansi: false, logger: TRAX_CONFIG.logFunction });
     await gtfs.loadFromUrl(TRAX_CONFIG.url);
-    // TODO realtime
+    await gtfs.updateRealtimeFromUrl(TRAX_CONFIG.realtimeAlerts, TRAX_CONFIG.realtimeTripUpdates, TRAX_CONFIG.realtimeVehiclePositions);
     currentGtfs = gtfs;
 }
 

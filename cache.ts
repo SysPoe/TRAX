@@ -1,4 +1,4 @@
-import type { Calendar, CalendarDate, Route, Stop, StopTime, Trip } from "qdf-gtfs";
+import type { Calendar, CalendarDate, RealtimeTripUpdate, RealtimeVehiclePosition, RealtimeStopTimeUpdate, Route, Stop, StopTime, Trip } from "qdf-gtfs";
 import { AugmentedStop, augmentStop } from "./utils/augmentedStop.js";
 import { AugmentedTrip, augmentTrip, calculateRunSeries, RunSeries } from "./utils/augmentedTrip.js";
 import { AugmentedStopTime } from "./utils/augmentedStopTime.js";
@@ -50,9 +50,9 @@ class LRUCache<K, V> {
 }
 
 type RawCache = {
-	stopTimeUpdates: StopTimeUpdate[];
-	tripUpdates: TripUpdate[];
-	vehiclePositions: VehiclePosition[];
+	tripUpdates: RealtimeTripUpdate[],
+	vehiclePositions: RealtimeVehiclePosition[],
+
 	stopTimes: StopTime[];
 
 	calendars: Calendar[];
@@ -88,9 +88,9 @@ type AugmentedCache = {
 };
 
 let rawCache: RawCache = {
-	stopTimeUpdates: [],
 	tripUpdates: [],
 	vehiclePositions: [],
+
 	stopTimes: [],
 
 	calendars: [],
@@ -178,22 +178,22 @@ export function getRawRoutes(route_id?: string): Route[] {
 	return rawCache.routes;
 }
 
-export function getStopTimeUpdates(): StopTimeUpdate[] {
+export function getTripUpdates(trip_id?: string): RealtimeTripUpdate[] {
 	const gtfs = getGtfs();
-	if (rawCache.stopTimeUpdates.length === 0) rawCache.stopTimeUpdates = gtfs.getStopTimeUpdates();
-	return rawCache.stopTimeUpdates;
-}
-
-export function getTripUpdates(): TripUpdate[] {
-	const gtfs = getGtfs();
-	if (rawCache.tripUpdates.length === 0) rawCache.tripUpdates = gtfs.getTripUpdates();
+	if (rawCache.tripUpdates.length === 0) rawCache.tripUpdates = gtfs.getRealtimeTripUpdates();
+	if (trip_id) return rawCache.tripUpdates.filter(v => v.trip.trip_id == trip_id); // TODO make better
 	return rawCache.tripUpdates;
 }
 
-export function getVehiclePositions(): VehiclePosition[] {
+export function getVehiclePositions(trip_id?: string): RealtimeVehiclePosition[] {
 	const gtfs = getGtfs();
-	if (rawCache.vehiclePositions.length === 0) rawCache.vehiclePositions = gtfs.getVehiclePositions();
+	if (rawCache.vehiclePositions.length === 0) rawCache.vehiclePositions = gtfs.getRealtimeVehiclePositions();
+	if(trip_id) return rawCache.vehiclePositions.filter(v => v.trip.trip_id == trip_id); // TODO make better
 	return rawCache.vehiclePositions;
+}
+
+export function getStopTimeUpdates(trip_id: string): RealtimeStopTimeUpdate[] {
+	return getTripUpdates(trip_id)[0]?.stop_time_updates ?? [];
 }
 
 export function getQRTPlaces(): QRTPlace[] {
@@ -299,9 +299,9 @@ export function setRunSeries(date: string, runSeries: string, data: RunSeries): 
 
 function resetStaticCache(): void {
 	rawCache = {
-		stopTimeUpdates: [],
 		tripUpdates: [],
 		vehiclePositions: [],
+
 		stopTimes: [],
 
 		calendars: [],
@@ -334,9 +334,9 @@ function resetStaticCache(): void {
 }
 
 function resetRealtimeCacheIncremental(updatedTripIds: Set<string>): void {
-	rawCache.stopTimeUpdates = [];
 	rawCache.tripUpdates = [];
 	rawCache.vehiclePositions = [];
+
 	rawCache.qrtTrains = [];
 
 	// Clear only affected augmented data
@@ -522,14 +522,11 @@ export async function refreshRealtimeCache(): Promise<void> {
 		module: "cache",
 		function: "refreshRealtimeCache",
 	});
-	rawCache.stopTimeUpdates = gtfs.getStopTimeUpdates();
-	rawCache.tripUpdates = gtfs.getTripUpdates();
-	rawCache.vehiclePositions = gtfs.getVehiclePositions();
-	logger.debug(`Loaded ${rawCache.stopTimeUpdates.length} stop time updates.`, {
-		module: "cache",
-		function: "refreshRealtimeCache",
-	});
-	logger.debug(`Loaded ${rawCache.tripUpdates.length} trip updates.`, {
+	
+	rawCache.tripUpdates = gtfs.getRealtimeTripUpdates();
+	rawCache.vehiclePositions = gtfs.getRealtimeVehiclePositions();
+	
+	logger.debug(`Loaded ${rawCache.tripUpdates.length} trip updates with ${rawCache.tripUpdates.flatMap(v=>v.stop_time_updates).length} stop time updates.`, {
 		module: "cache",
 		function: "refreshRealtimeCache",
 	});
@@ -540,8 +537,7 @@ export async function refreshRealtimeCache(): Promise<void> {
 
 	// Get only trips that have updates for incremental processing
 	const updatedTripIds = new Set([
-		...rawCache.stopTimeUpdates.map((u) => u.trip_id).filter((id) => id !== undefined),
-		...rawCache.tripUpdates.map((u) => u.trip_id).filter((id) => id !== undefined),
+		...rawCache.tripUpdates.map((u) => u.trip.trip_id).filter((id) => id !== undefined),
 	]);
 
 	logger.debug(`Found ${updatedTripIds.size} trips with realtime updates.`, {

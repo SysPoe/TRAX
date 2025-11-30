@@ -3,7 +3,6 @@ import * as calendar from "./utils/calendar.js";
 import * as stations from "./utils/stations.js";
 import * as express from "./utils/express.js";
 import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
-import * as augmentedStopTime from "./utils/augmentedStopTime.js";
 import * as timeUtils from "./utils/time.js";
 import logger, { LogLevel } from "./utils/logger.js";
 import { EventEmitter } from "events";
@@ -73,8 +72,9 @@ export function formatTimestamp(ts) {
 }
 export async function updateRealtime() {
     traxEmitter.emit("update-realtime-start");
+    const gtfs = getGtfs();
     try {
-        await gtfs.updateGtfsRealtime(config);
+        await gtfs.updateRealtimeFromUrl(TRAX_CONFIG.realtimeAlerts, TRAX_CONFIG.realtimeTripUpdates, TRAX_CONFIG.realtimeVehiclePositions);
         await cache.refreshRealtimeCache();
     }
     catch (error) {
@@ -132,7 +132,6 @@ const TRAX = {
     },
     TRAX_CONFIG,
     logger,
-    ScheduleRelationship: augmentedStopTime.ScheduleRelationship,
 };
 export default TRAX;
 export { Logger, LogLevel } from "./utils/logger.js"; // Export logger types

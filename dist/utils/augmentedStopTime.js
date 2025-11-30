@@ -1,3 +1,4 @@
+import * as qdf from "qdf-gtfs";
 import * as cache from "../cache.js";
 import { findExpress } from "./express.js";
 import { getSRT } from "./srt.js";
@@ -8,18 +9,6 @@ import logger from "./logger.js";
 function hashStopList(stops) {
     return stops.join("|");
 }
-export var ScheduleRelationship;
-(function (ScheduleRelationship) {
-    ScheduleRelationship[ScheduleRelationship["SCHEDULED"] = 0] = "SCHEDULED";
-    ScheduleRelationship[ScheduleRelationship["ADDED"] = 1] = "ADDED";
-    ScheduleRelationship[ScheduleRelationship["UNSCHEDULED"] = 2] = "UNSCHEDULED";
-    ScheduleRelationship[ScheduleRelationship["CANCELLED"] = 3] = "CANCELLED";
-    ScheduleRelationship[ScheduleRelationship["REPLACEMENT"] = 4] = "REPLACEMENT";
-    ScheduleRelationship[ScheduleRelationship["DUPLICATED"] = 5] = "DUPLICATED";
-    ScheduleRelationship[ScheduleRelationship["NEW"] = 6] = "NEW";
-    ScheduleRelationship[ScheduleRelationship["DELETED"] = 7] = "DELETED";
-    ScheduleRelationship[ScheduleRelationship["SKIPPED"] = 8] = "SKIPPED";
-})(ScheduleRelationship || (ScheduleRelationship = {}));
 export function toSerializableAugmentedStopTime(st) {
     return {
         ...st,
@@ -197,9 +186,11 @@ function findPassingStopTimes(stopTimes) {
                 trip_id: stopTimes[0].trip_id,
                 stop_sequence: stopTimes[0].stop_sequence + i / rescaledAccumulatedPassingRuns.length,
                 departure_time: startTime.departure_time + run.emu * 60,
-                arrival_time: (startTime.arrival_time || startTime.departure_time) + run.emu * 60,
-                drop_off_type: -1,
-                pickup_type: -1,
+                arrival_time: (startTime.arrival_time ?? startTime.departure_time) + run.emu * 60,
+                drop_off_type: qdf.DropOffType.None,
+                pickup_type: qdf.PickupType.None,
+                continuous_drop_off: qdf.ContinuousDropOff.None,
+                continuous_pickup: qdf.ContinuousPickup.None,
                 shape_dist_traveled: -1,
                 stop_headsign: "",
                 timepoint: -1
@@ -320,25 +311,15 @@ export function augmentStopTimes(stopTimes, serviceDates) {
     let initialScheduledDepartureTime = 0;
     let initialActualArrivalTime = 0;
     let initialActualDepartureTime = 0;
-    let realtimeUpdates = cache
-        .getStopTimeUpdates()
-        .filter((v) => v.trip_id === stopTimes[0].trip_id)
-        .sort((a, b) => (a.stop_sequence ?? 0) - (b.stop_sequence ?? 0));
-    let tripUpdate = cache.getTripUpdates().find((tu) => tu.trip_id === stopTimes[0].trip_id);
+    const trip_id = stopTimes[0].trip_id;
+    let tripUpdate = cache.getTripUpdates(trip_id)[0];
+    let stopTimeUpdates = tripUpdate.stop_time_updates;
     let passingStopTimes = findPassingStopTimes(stopTimes);
     let augmentedStopTimes = [];
     // Propagation state
     let lastDelay = 0;
-    let lastScheduleRelationship = ScheduleRelationship.SCHEDULED;
-    if (tripUpdate)
-        tripUpdate.schedule_relationship =
-            tripUpdate.schedule_relationship == "CANCELED" ? "CANCELLED" : tripUpdate.schedule_relationship;
-    lastScheduleRelationship = tripUpdate?.schedule_relationship
-        ? tripUpdate.schedule_relationship in ScheduleRelationship
-            ? ScheduleRelationship[tripUpdate.schedule_relationship]
-            : ScheduleRelationship.SCHEDULED
-        : ScheduleRelationship.SCHEDULED;
-    let propagateOnTime = tripUpdate && tripUpdate.schedule_relationship === "SCHEDULED";
+    let lastScheduleRelationship = qdf.StopTimeScheduleRelationship.NO_DATA;
+    let propagateOnTime = tripUpdate && tripUpdate.trip.schedule_relationship === qdf.TripScheduleRelationship.SCHEDULED;
     for (let passingStopTime of passingStopTimes) {
         let stopId = passingStopTime.stop_id;
         // Get the actual stop information
@@ -346,7 +327,7 @@ export function augmentStopTimes(stopTimes, serviceDates) {
         let actualParentStation = actualStop?.parent_station
             ? cache.getAugmentedStops(actualStop.parent_station)[0]
             : null;
-        let realtimeUpdate = realtimeUpdates.find((update) => update.stop_id == stopId ||
+        let realtimeUpdate = stopTimeUpdates.find((update) => update.stop_id == stopId ||
             actualParentStation?.stop_id == update.stop_id ||
             cache.getAugmentedStops(stopId)[0].children.some((child) => child.stop_id == update.stop_id));
         // Get scheduled stop information
@@ -405,10 +386,8 @@ export function augmentStopTimes(stopTimes, serviceDates) {
                 rtPlatformCodeUpdated = true;
             }
             if (realtimeUpdate.schedule_relationship) {
-                scheduleRelationship =
-                    ScheduleRelationship[realtimeUpdate.schedule_relationship] ??
-                        lastScheduleRelationship;
-                lastScheduleRelationship = scheduleRelationship;
+                scheduleRelationship = realtimeUpdate.schedule_relationship;
+                lastScheduleRelationship = realtimeUpdate.schedule_relationship;
             }
             if (realtimeUpdate.stop_id && realtimeUpdate.stop_id !== stopId) {
                 actualStop = cache.getAugmentedStops(realtimeUpdate.stop_id)[0];
@@ -431,7 +410,7 @@ export function augmentStopTimes(stopTimes, serviceDates) {
             // No realtime updates, but tripUpdate is SCHEDULED: propagate on time
             delaySecs = 0;
             propagated = true;
-            scheduleRelationship = ScheduleRelationship.SCHEDULED;
+            scheduleRelationship = qdf.StopTimeScheduleRelationship.SCHEDULED;
         }
         // Calculate realtime info
         let realtimeInfo = null;
@@ -534,11 +513,6 @@ export function augmentStopTimes(stopTimes, serviceDates) {
             actual_departure_dates,
             scheduled_departure_date_offset,
             actual_departure_date_offset,
-            _DEBUG: {
-                lastUpdated: new Date().toISOString(),
-                tripUpdate: tripUpdate || null,
-                stopTimeUpdates: realtimeUpdates,
-            },
         };
         augmentedStopTimes.push(partialAugmentedStopTime);
     }

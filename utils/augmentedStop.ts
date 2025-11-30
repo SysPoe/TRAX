@@ -1,10 +1,10 @@
-import type * as gtfsTypes from "qdf-gtfs";
+import type * as qdf from "qdf-gtfs";
 import * as cache from "../cache.js";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { getAugmentedTrips } from "../cache.js";
 import { findExpressString } from "./express.js";
 
-export type AugmentedStop = gtfsTypes.Stop & {
+export type AugmentedStop = qdf.Stop & {
 	qrt_Place: boolean;
 	qrt_PlaceCode?: string;
 	parent: AugmentedStop | null;
@@ -22,7 +22,7 @@ export type AugmentedStop = gtfsTypes.Stop & {
 	toSerializable: () => SerializableAugmentedStop;
 };
 
-export type SerializableAugmentedStop = gtfsTypes.Stop & {
+export type SerializableAugmentedStop = qdf.Stop & {
 	qrt_Place: boolean;
 	qrt_PlaceCode?: string;
 	parent: string | null;
@@ -39,7 +39,7 @@ export function toSerializableAugmentedStop(
 	};
 }
 
-export function augmentStop(stop: gtfsTypes.Stop): AugmentedStop {
+export function augmentStop(stop: qdf.Stop): AugmentedStop {
 	// Cache children lookup to avoid repeated expensive operations
 	let cachedChildren: AugmentedStop[] | null = null;
 
