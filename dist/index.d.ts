@@ -1,3 +1,4 @@
+/// <reference types="node" resolution-mode="require"/>
 import * as cache from "./cache.js";
 import * as calendar from "./utils/calendar.js";
 import * as stations from "./utils/stations.js";
@@ -39,7 +40,7 @@ declare const TRAX: {
     getQRTPlaces: typeof cache.getQRTPlaces;
     getQRTTrains: typeof cache.getQRTTrains;
     on: <K>(eventName: keyof TRAXEvent | K, listener: K extends keyof TRAXEvent ? TRAXEvent[K] extends unknown[] ? (...args: TRAXEvent[K]) => void : never : never) => EventEmitter<TRAXEvent>;
-    off: <K>(eventName: keyof TRAXEvent | K, listener: K extends keyof TRAXEvent ? TRAXEvent[K] extends unknown[] ? (...args: TRAXEvent[K]) => void : never : never) => EventEmitter<TRAXEvent>;
+    off: <K_1>(eventName: keyof TRAXEvent | K_1, listener: K_1 extends keyof TRAXEvent ? TRAXEvent[K_1] extends unknown[] ? (...args: TRAXEvent[K_1]) => void : never : never) => EventEmitter<TRAXEvent>;
     cache: typeof cache;
     stations: typeof stations;
     calendar: typeof calendar;

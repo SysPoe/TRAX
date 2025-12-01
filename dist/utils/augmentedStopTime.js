@@ -175,6 +175,10 @@ function findPassingStopTimes(stopTimes) {
         }
         const totalTimeDiff = Math.floor((endTime.departure_time - startTime.departure_time) / 60);
         const totalEmu = currentPassingRun.reduce((acc, curr) => acc + curr.emu, 0);
+        // Correct sequence interpolation logic
+        const startSeq = startTime.stop_sequence ?? stopTimes[0].stop_sequence ?? 0;
+        const endSeq = endTime.stop_sequence ?? startSeq + 1;
+        const seqDiff = endSeq - startSeq;
         let accumulatedEmu = 0;
         for (let i = 0; i < currentPassingRun.length; i++) {
             const run = currentPassingRun[i];
@@ -188,8 +192,8 @@ function findPassingStopTimes(stopTimes) {
                 _passing: true,
                 stop_id: run.to,
                 trip_id: stopTimes[0].trip_id,
-                // Interpolate sequence
-                stop_sequence: stopTimes[0].stop_sequence + i / currentPassingRun.length,
+                // Interpolate sequence correctly between start and end sequence
+                stop_sequence: startSeq + (seqDiff * (i + 1)) / (currentPassingRun.length + 1),
                 departure_time: interpolatedTime,
                 arrival_time: interpolatedTime, // Arrival = Departure for passing
                 drop_off_type: qdf.DropOffType.None,
@@ -328,11 +332,13 @@ function assignPlatformSides(st) {
     }));
 }
 // --- Main Augmentation Function ---
-export function augmentStopTimes(stopTimes, serviceDates) {
-    if (stopTimes.length === 0)
+export function augmentStopTimes(stopTimes, serviceDates, explicitTripId) {
+    const tripId = explicitTripId ?? stopTimes[0]?.trip_id;
+    if (!tripId) {
+        // If we have no tripId, we can't do anything (no static stops, no ID to lookup RT).
         return [];
-    const tripId = stopTimes[0].trip_id;
-    if (!stopTimes.every((v) => v.trip_id === tripId)) {
+    }
+    if (stopTimes.length > 0 && !stopTimes.every((v) => v.trip_id === tripId)) {
         logger.error(`Mixed trip IDs in stopTimes: ${tripId}`, {
             module: "augmentedStopTime",
             function: "augmentStopTimes",
@@ -340,11 +346,37 @@ export function augmentStopTimes(stopTimes, serviceDates) {
     }
     const tripUpdate = cache.getTripUpdates(tripId)[0];
     const stopTimeUpdates = tripUpdate?.stop_time_updates ?? [];
+    // 1. Generate Static Baseline (with correct passing stops)
     const passingStopTimes = findPassingStopTimes(stopTimes);
-    // Initial offsets (first stop)
-    const firstStop = passingStopTimes[0];
-    const initialScheduledArr = firstStop.arrival_time ?? 0;
-    const initialScheduledDep = firstStop.departure_time ?? 0;
+    // 2. Map Static Stops by Sequence
+    const staticMap = new Map();
+    for (const st of passingStopTimes) {
+        if (st.stop_sequence !== null && st.stop_sequence !== undefined) {
+            staticMap.set(st.stop_sequence, st);
+        }
+    }
+    // 3. Map Realtime Updates by Sequence
+    const rtMap = new Map();
+    for (const update of stopTimeUpdates) {
+        if (update.stop_sequence !== null && update.stop_sequence !== undefined) {
+            rtMap.set(update.stop_sequence, update);
+        }
+    }
+    // 4. Collect and Sort All Sequences
+    const allSequences = new Set([...staticMap.keys(), ...rtMap.keys()]);
+    const sortedSequences = Array.from(allSequences).sort((a, b) => a - b);
+    // Initial offsets (first stop or update)
+    let initialScheduledArr = 0;
+    let initialScheduledDep = 0;
+    if (passingStopTimes.length > 0) {
+        initialScheduledArr = passingStopTimes[0].arrival_time ?? 0;
+        initialScheduledDep = passingStopTimes[0].departure_time ?? 0;
+    }
+    else if (stopTimeUpdates.length > 0) {
+        const firstRT = stopTimeUpdates[0];
+        initialScheduledArr = firstRT.arrival_time ?? 0;
+        initialScheduledDep = firstRT.departure_time ?? 0;
+    }
     // We assume actual starts same as scheduled unless updated immediately
     const initialActualArr = initialScheduledArr;
     const initialActualDep = initialScheduledDep;
@@ -359,22 +391,46 @@ export function augmentStopTimes(stopTimes, serviceDates) {
     let lastScheduleRelationship = qdf.StopTimeScheduleRelationship.NO_DATA;
     let propagateOnTime = tripUpdate?.trip.schedule_relationship === qdf.TripScheduleRelationship.SCHEDULED;
     const intermediateStops = [];
-    for (const passingStopTime of passingStopTimes) {
-        const stopId = passingStopTime.stop_id;
-        const isPassing = passingStopTime._passing;
+    for (const seq of sortedSequences) {
+        const passingStopTime = staticMap.get(seq);
+        const rtUpdate = rtMap.get(seq);
+        // Basic info
+        const isPassing = passingStopTime?._passing ?? false;
+        // Use realtime stop_id if available (to handle platform changes), else static stop_id
+        const stopId = rtUpdate?.stop_id ?? passingStopTime?.stop_id;
+        if (!stopId) {
+            // Should not happen if data is valid
+            continue;
+        }
         // 1. Fetch Stop Info
-        const scheduledStop = cache.getAugmentedStops(stopId)[0];
-        const scheduledParent = scheduledStop?.parent_station
-            ? cache.getAugmentedStops(scheduledStop.parent_station)[0]
+        // Note: If stopId comes from rtUpdate, this will be the "Actual" stop.
+        // We need to fetch the "Scheduled" stop if passingStopTime exists.
+        let scheduledStop = cache.getAugmentedStops(stopId)[0];
+        if (passingStopTime && passingStopTime.stop_id !== stopId) {
+            // Realtime update changed the stop_id (e.g. platform change)
+            // But we still want to know the original scheduled stop for "scheduled_stop" field?
+            // The original code set `actualStop` based on `rtUpdate.stop_id`.
+            // `scheduledStop` variable here is used to populate `scheduled_stop` AND `actual_stop` default.
+            // If we have a platform change, `stopId` (derived from RT) is the NEW stop.
+            // So `scheduledStop` variable currently holds the NEW stop. This is confusing naming.
+            // Let's refactor to be clear.
+        }
+        // Correct logic:
+        // Identify Scheduled Stop ID
+        const scheduledStopId = passingStopTime?.stop_id;
+        const scheduledAugmentedStop = scheduledStopId ? cache.getAugmentedStops(scheduledStopId)[0] : null;
+        const scheduledAugmentedParent = scheduledAugmentedStop?.parent_station
+            ? cache.getAugmentedStops(scheduledAugmentedStop.parent_station)[0]
             : null;
-        // 2. Find Realtime Update
-        // Logic: Match specific stop, parent station, or any child of the augmented stop
-        const rtUpdate = stopTimeUpdates.find((u) => u.stop_id === stopId ||
-            scheduledParent?.stop_id === u.stop_id ||
-            scheduledStop.children.some((child) => child.stop_id === u.stop_id));
+        // Identify Actual Stop ID
+        const actualStopId = rtUpdate?.stop_id ?? scheduledStopId;
+        const actualAugmentedStop = actualStopId ? cache.getAugmentedStops(actualStopId)[0] : null;
+        const actualAugmentedParent = actualAugmentedStop?.parent_station
+            ? cache.getAugmentedStops(actualAugmentedStop.parent_station)[0]
+            : null;
         // 3. Resolve Realtime Values
-        const schedArr = passingStopTime.arrival_time;
-        const schedDep = passingStopTime.departure_time;
+        const schedArr = passingStopTime?.arrival_time ?? null;
+        const schedDep = passingStopTime?.departure_time ?? null;
         let actArr = schedArr;
         let actDep = schedDep;
         let delaySecs = lastDelay;
@@ -388,29 +444,53 @@ export function augmentStopTimes(stopTimes, serviceDates) {
             dep: false,
         };
         let platformCode = null;
-        let actualStop = scheduledStop;
-        let actualParent = scheduledParent;
+        let actualStop = actualAugmentedStop;
+        let actualParent = actualAugmentedParent;
         if (rtUpdate) {
             propagated = false;
             // Update Delay/Times
-            if (rtUpdate.departure_delay !== null) {
+            if (rtUpdate.departure_delay !== null && rtUpdate.departure_delay !== undefined) {
                 if (schedDep !== null)
                     actDep = schedDep + (rtUpdate.departure_delay ?? 0);
                 delaySecs = rtUpdate.departure_delay;
                 lastDelay = delaySecs;
                 rtFlags.dep = true;
             }
+            else if (rtUpdate.departure_time) {
+                const time = rtUpdate.departure_time;
+                if (time) {
+                    actDep = time;
+                    if (rtUpdate.departure_delay !== null && rtUpdate.departure_delay !== undefined)
+                        delaySecs = rtUpdate.departure_delay;
+                    else
+                        delaySecs = 0;
+                    lastDelay = delaySecs;
+                    rtFlags.dep = true;
+                }
+            }
             else if (lastDelay) {
                 if (schedDep !== null)
                     actDep = schedDep + lastDelay;
                 propagated = true;
             }
-            if (rtUpdate.arrival_delay !== null) {
+            if (rtUpdate.arrival_delay !== null && rtUpdate.arrival_delay !== undefined) {
                 if (schedArr !== null)
                     actArr = schedArr + (rtUpdate.arrival_delay ?? 0);
                 delaySecs = rtUpdate.arrival_delay;
                 lastDelay = delaySecs;
                 rtFlags.arr = true;
+            }
+            else if (rtUpdate.arrival_time) {
+                const time = rtUpdate.arrival_time;
+                if (time) {
+                    actArr = time;
+                    if (rtUpdate.arrival_delay !== null && rtUpdate.arrival_delay !== undefined)
+                        delaySecs = rtUpdate.arrival_delay;
+                    else
+                        delaySecs = 0;
+                    lastDelay = delaySecs;
+                    rtFlags.arr = true;
+                }
             }
             else if (lastDelay) {
                 if (schedArr !== null)
@@ -427,11 +507,8 @@ export function augmentStopTimes(stopTimes, serviceDates) {
                 scheduleRelationship = rtUpdate.schedule_relationship;
                 lastScheduleRelationship = scheduleRelationship;
             }
-            if (rtUpdate.stop_id && rtUpdate.stop_id !== stopId) {
-                actualStop = cache.getAugmentedStops(rtUpdate.stop_id)[0];
-                actualParent = actualStop?.parent_station
-                    ? cache.getAugmentedStops(actualStop.parent_station)[0]
-                    : null;
+            if (rtUpdate.stop_id && rtUpdate.stop_id !== scheduledStopId) {
+                // Already handled by actualAugmentedStop resolution above, but setting flags
                 rtFlags.stop = true;
                 rtFlags.parent = true;
             }
@@ -439,9 +516,9 @@ export function augmentStopTimes(stopTimes, serviceDates) {
         else {
             // No direct update
             if (lastDelay !== 0) {
-                if (schedArr !== undefined)
+                if (schedArr !== null && schedArr !== undefined)
                     actArr = schedArr + lastDelay;
-                if (schedDep !== undefined)
+                if (schedDep !== null && schedDep !== undefined)
                     actDep = schedDep + lastDelay;
                 propagated = true;
             }
@@ -482,14 +559,15 @@ export function augmentStopTimes(stopTimes, serviceDates) {
             ? addDaysToDateString(d, currentOffsets.actDep - dateOffsets.actDep)
             : addDaysToDateString(d, currentOffsets.schedDep - dateOffsets.schedDep));
         intermediateStops.push({
-            _stopTime: isPassing ? null : passingStopTime,
+            // Fix: passingStopTime can be undefined. Use null coalescing.
+            _stopTime: isPassing ? null : (passingStopTime ?? null),
             trip_id: tripId,
             passing: isPassing,
             actual_arrival_time: actArr ? actArr % 86400 : null,
             actual_departure_time: actDep ? actDep % 86400 : null,
             actual_stop: actualStop,
             actual_parent_station: actualParent,
-            actual_platform_code: isPassing ? null : (platformCode ?? scheduledStop.platform_code ?? null),
+            actual_platform_code: isPassing ? null : (platformCode ?? scheduledAugmentedStop?.platform_code ?? null),
             rt_stop_updated: rtFlags.stop,
             rt_parent_station_updated: rtFlags.parent,
             rt_platform_code_updated: rtFlags.platform,
@@ -497,9 +575,9 @@ export function augmentStopTimes(stopTimes, serviceDates) {
             rt_departure_updated: rtFlags.dep,
             scheduled_arrival_time: schedArr ? schedArr % 86400 : null,
             scheduled_departure_time: schedDep ? schedDep % 86400 : null,
-            scheduled_stop: scheduledStop,
-            scheduled_parent_station: scheduledParent,
-            scheduled_platform_code: isPassing ? null : (scheduledStop.platform_code ?? null),
+            scheduled_stop: scheduledAugmentedStop,
+            scheduled_parent_station: scheduledAugmentedParent,
+            scheduled_platform_code: isPassing ? null : (scheduledAugmentedStop?.platform_code ?? null),
             realtime: hasRealtime,
             realtime_info: realtimeInfo,
             scheduled_arrival_dates,

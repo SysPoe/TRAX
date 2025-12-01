@@ -38,7 +38,7 @@ export function augmentTrip(trip) {
                 stopTimesToUse = stopTimes;
             else {
                 if (!cachedStopTimes)
-                    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
+                    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, trip.trip_id);
                 stopTimesToUse = cachedStopTimes;
             }
             let dates = [
@@ -55,7 +55,7 @@ export function augmentTrip(trip) {
                 stopTimesToUse = stopTimes;
             else {
                 if (!cachedStopTimes)
-                    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
+                    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, trip.trip_id);
                 stopTimesToUse = cachedStopTimes;
             }
             let dates = [
@@ -70,7 +70,7 @@ export function augmentTrip(trip) {
             if (stopTimes.length > 0)
                 return stopTimes;
             if (!cachedStopTimes)
-                cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
+                cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, trip.trip_id);
             return cachedStopTimes;
         },
         expressInfo,
@@ -86,7 +86,7 @@ export function augmentTrip(trip) {
             let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
             if (stopTimes.length === 0) {
                 if (!cachedStopTimes)
-                    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
+                    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, trip.trip_id);
                 stopTimes = cachedStopTimes;
             }
             return toSerializableAugmentedTrip({
