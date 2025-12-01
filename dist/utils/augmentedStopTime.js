@@ -393,27 +393,27 @@ export function augmentStopTimes(stopTimes, serviceDates) {
         if (rtUpdate) {
             propagated = false;
             // Update Delay/Times
-            if (rtUpdate.departure_delay !== undefined) {
-                if (schedDep !== undefined)
-                    actDep = schedDep + rtUpdate.departure_delay;
+            if (rtUpdate.departure_delay !== null) {
+                if (schedDep !== null)
+                    actDep = schedDep + (rtUpdate.departure_delay ?? 0);
                 delaySecs = rtUpdate.departure_delay;
                 lastDelay = delaySecs;
                 rtFlags.dep = true;
             }
             else if (lastDelay) {
-                if (schedDep !== undefined)
+                if (schedDep !== null)
                     actDep = schedDep + lastDelay;
                 propagated = true;
             }
-            if (rtUpdate.arrival_delay !== undefined) {
-                if (schedArr !== undefined)
-                    actArr = schedArr + rtUpdate.arrival_delay;
+            if (rtUpdate.arrival_delay !== null) {
+                if (schedArr !== null)
+                    actArr = schedArr + (rtUpdate.arrival_delay ?? 0);
                 delaySecs = rtUpdate.arrival_delay;
                 lastDelay = delaySecs;
                 rtFlags.arr = true;
             }
             else if (lastDelay) {
-                if (schedArr !== undefined)
+                if (schedArr !== null)
                     actArr = schedArr + lastDelay;
                 propagated = true;
             }
