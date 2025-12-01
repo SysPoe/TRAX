@@ -18,12 +18,20 @@ staticIntervalMs = 24 * 60 * 60 * 1000) {
     await cache.refreshRealtimeCache();
     if (!autoRefresh)
         return;
-    realtimeInterval = setInterval(() => updateRealtime().catch((err) => logger.error("Error refreshing realtime GTFS data", {
-        module: "index",
-        function: "loadGTFS",
-        error: err.message || err,
-    })), realtimeIntervalMs);
+    realtimeInterval = setInterval(() => {
+        traxEmitter.emit("realtime-update-start");
+        updateRealtime()
+            .catch((err) => logger.error("Error refreshing realtime GTFS data", {
+            module: "index",
+            function: "loadGTFS",
+            error: err.message || err,
+        }))
+            .finally(() => {
+            traxEmitter.emit("realtime-update-complete");
+        });
+    }, realtimeIntervalMs);
     staticInterval = setInterval(async () => {
+        traxEmitter.emit("static-update-start");
         try {
             await createGtfs();
             await cache.refreshStaticCache(true);
@@ -35,6 +43,9 @@ staticIntervalMs = 24 * 60 * 60 * 1000) {
                 function: "loadGTFS",
                 error: error.message || error,
             });
+        }
+        finally {
+            traxEmitter.emit("static-update-complete");
         }
     }, staticIntervalMs);
 }
@@ -56,7 +67,6 @@ export function formatTimestamp(ts) {
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }
 export async function updateRealtime() {
-    traxEmitter.emit("update-realtime-start");
     const gtfs = getGtfs();
     try {
         await gtfs.updateRealtimeFromUrl(TRAX_CONFIG.realtimeAlerts, TRAX_CONFIG.realtimeTripUpdates, TRAX_CONFIG.realtimeVehiclePositions);
@@ -69,9 +79,6 @@ export async function updateRealtime() {
             error: error.message || error,
         });
         throw error;
-    }
-    finally {
-        traxEmitter.emit("update-realtime-end");
     }
 }
 export function today() {
@@ -100,8 +107,8 @@ const TRAX = {
     getQRTPlaces: cache.getQRTPlaces,
     getQRTTrains: cache.getQRTTrains,
     // Event handling
-    on: (event, listener) => traxEmitter.on(event, listener),
-    off: (event, listener) => traxEmitter.off(event, listener),
+    on: traxEmitter.on.bind(traxEmitter),
+    off: traxEmitter.off.bind(traxEmitter),
     // Namespaced modules
     cache,
     stations,
@@ -113,7 +120,7 @@ const TRAX = {
         time: timeUtils,
         formatTimestamp,
         hasGtfs,
-        getGtfs
+        getGtfs,
     },
     TRAX_CONFIG,
     logger,

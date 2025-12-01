@@ -5,11 +5,18 @@ import * as express from "./utils/express.js";
 import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 import * as timeUtils from "./utils/time.js";
 import { EventEmitter } from "events";
-import { createGtfs, getGtfs, hasGtfs } from "./gtfsInterfaceLayer.js"
+import { createGtfs, getGtfs, hasGtfs } from "./gtfsInterfaceLayer.js";
 import logger from "./utils/logger.js";
 import { TRAX_CONFIG } from "./config.js";
 
-const traxEmitter = new EventEmitter();
+interface TRAXEvent {
+	"realtime-update-start": [];
+	"realtime-update-complete": [];
+	"static-update-start": [];
+	"static-update-complete": [];
+}
+
+const traxEmitter: EventEmitter<TRAXEvent> = new EventEmitter();
 
 let realtimeInterval: NodeJS.Timeout | null = null;
 let staticInterval: NodeJS.Timeout | null = null;
@@ -26,18 +33,22 @@ export async function loadGTFS(
 
 	if (!autoRefresh) return;
 
-	realtimeInterval = setInterval(
-		() =>
-			updateRealtime().catch((err: any) =>
+	realtimeInterval = setInterval(() => {
+		traxEmitter.emit("realtime-update-start");
+		updateRealtime()
+			.catch((err: any) =>
 				logger.error("Error refreshing realtime GTFS data", {
 					module: "index",
 					function: "loadGTFS",
 					error: err.message || err,
 				}),
-			),
-		realtimeIntervalMs,
-	);
+			)
+			.finally(() => {
+				traxEmitter.emit("realtime-update-complete");
+			});
+	}, realtimeIntervalMs);
 	staticInterval = setInterval(async () => {
+		traxEmitter.emit("static-update-start");
 		try {
 			await createGtfs();
 			await cache.refreshStaticCache(true);
@@ -48,6 +59,8 @@ export async function loadGTFS(
 				function: "loadGTFS",
 				error: error.message || error,
 			});
+		} finally {
+			traxEmitter.emit("static-update-complete");
 		}
 	}, staticIntervalMs);
 }
@@ -71,10 +84,13 @@ export function formatTimestamp(ts?: number | null): string {
 }
 
 export async function updateRealtime(): Promise<void> {
-	traxEmitter.emit("update-realtime-start");
 	const gtfs = getGtfs();
 	try {
-		await gtfs.updateRealtimeFromUrl(TRAX_CONFIG.realtimeAlerts, TRAX_CONFIG.realtimeTripUpdates, TRAX_CONFIG.realtimeVehiclePositions);
+		await gtfs.updateRealtimeFromUrl(
+			TRAX_CONFIG.realtimeAlerts,
+			TRAX_CONFIG.realtimeTripUpdates,
+			TRAX_CONFIG.realtimeVehiclePositions,
+		);
 		await cache.refreshRealtimeCache();
 	} catch (error: any) {
 		logger.error("Error updating realtime GTFS data", {
@@ -83,8 +99,6 @@ export async function updateRealtime(): Promise<void> {
 			error: error.message || error,
 		});
 		throw error;
-	} finally {
-		traxEmitter.emit("update-realtime-end");
 	}
 }
 
@@ -117,8 +131,8 @@ const TRAX = {
 	getQRTTrains: cache.getQRTTrains,
 
 	// Event handling
-	on: (event: string, listener: (...args: any[]) => void) => traxEmitter.on(event, listener),
-	off: (event: string, listener: (...args: any[]) => void) => traxEmitter.off(event, listener),
+	on: traxEmitter.on.bind(traxEmitter),
+	off: traxEmitter.off.bind(traxEmitter),
 
 	// Namespaced modules
 	cache,
@@ -132,7 +146,7 @@ const TRAX = {
 		time: timeUtils,
 		formatTimestamp,
 		hasGtfs,
-		getGtfs
+		getGtfs,
 	},
 	TRAX_CONFIG,
 	logger,

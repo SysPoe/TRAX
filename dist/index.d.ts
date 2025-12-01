@@ -6,6 +6,12 @@ import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 import * as timeUtils from "./utils/time.js";
 import { EventEmitter } from "events";
 import { getGtfs, hasGtfs } from "./gtfsInterfaceLayer.js";
+interface TRAXEvent {
+    "realtime-update-start": [];
+    "realtime-update-complete": [];
+    "static-update-start": [];
+    "static-update-complete": [];
+}
 export declare function loadGTFS(autoRefresh?: boolean, forceReload?: boolean, realtimeIntervalMs?: number, // 1 minute
 staticIntervalMs?: number): Promise<void>;
 export declare function clearIntervals(): void;
@@ -32,8 +38,8 @@ declare const TRAX: {
     getVehiclePositions: typeof cache.getVehiclePositions;
     getQRTPlaces: typeof cache.getQRTPlaces;
     getQRTTrains: typeof cache.getQRTTrains;
-    on: (event: string, listener: (...args: any[]) => void) => EventEmitter<[never]>;
-    off: (event: string, listener: (...args: any[]) => void) => EventEmitter<[never]>;
+    on: <K>(eventName: keyof TRAXEvent | K, listener: K extends keyof TRAXEvent ? TRAXEvent[K] extends unknown[] ? (...args: TRAXEvent[K]) => void : never : never) => EventEmitter<TRAXEvent>;
+    off: <K>(eventName: keyof TRAXEvent | K, listener: K extends keyof TRAXEvent ? TRAXEvent[K] extends unknown[] ? (...args: TRAXEvent[K]) => void : never : never) => EventEmitter<TRAXEvent>;
     cache: typeof cache;
     stations: typeof stations;
     calendar: typeof calendar;
