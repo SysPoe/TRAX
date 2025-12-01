@@ -425,7 +425,7 @@ export function augmentStopTimes(stopTimes, serviceDates) {
         }
         // 4. Construct Realtime Info Object
         let realtimeInfo = null;
-        const hasRealtime = !!rtUpdate || propagated || !!tripUpdate;
+        const hasRealtime = rtUpdate != undefined || propagated || tripUpdate != undefined;
         if (hasRealtime) {
             const { str, cls } = calculateDelayClass(delaySecs);
             realtimeInfo = {

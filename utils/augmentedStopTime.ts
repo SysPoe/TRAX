@@ -51,16 +51,19 @@ export type AugmentedStopTime = {
 	actual_departure_dates: string[];
 	scheduled_departure_date_offset: number;
 	actual_departure_date_offset: number;
-
-	realtime: boolean;
+} & ({
+	realtime: true;
 	realtime_info: {
 		delay_secs: number;
 		delay_string: string;
 		delay_class: "on-time" | "scheduled" | "late" | "very-late" | "early";
 		schedule_relationship: qdf.StopTimeScheduleRelationship;
 		propagated: boolean;
-	} | null;
-};
+	};
+} | {
+	realtime: false;
+	realtime_info: null;
+});
 
 // Internal type for data before platform/exit side calculation
 type IntermediateAST = Omit<AugmentedStopTime, "actual_exit_side" | "scheduled_exit_side" | "toSerializable">;
@@ -415,7 +418,7 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 			actual_platform_code: actPlat?.platform_code?.toString() ?? item.actual_platform_code,
 			scheduled_platform_code: schPlat?.platform_code?.toString() ?? item.scheduled_platform_code,
 			toSerializable: () => toSerializableAugmentedStopTime(newEntry) // Circular ref handled in closure
-		};
+		} as AugmentedStopTime;
 
 		// Push to buffer
 		pathBuffer.push(newEntry);
@@ -572,7 +575,7 @@ export function augmentStopTimes(
 
 		// 4. Construct Realtime Info Object
 		let realtimeInfo = null;
-		const hasRealtime = !!rtUpdate || propagated || !!tripUpdate;
+		const hasRealtime = rtUpdate != undefined || propagated || tripUpdate != undefined;
 
 		if (hasRealtime) {
 			const { str, cls } = calculateDelayClass(delaySecs);

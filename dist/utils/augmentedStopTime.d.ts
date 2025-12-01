@@ -30,15 +30,19 @@ export type AugmentedStopTime = {
     actual_departure_dates: string[];
     scheduled_departure_date_offset: number;
     actual_departure_date_offset: number;
-    realtime: boolean;
+} & ({
+    realtime: true;
     realtime_info: {
         delay_secs: number;
         delay_string: string;
         delay_class: "on-time" | "scheduled" | "late" | "very-late" | "early";
         schedule_relationship: qdf.StopTimeScheduleRelationship;
         propagated: boolean;
-    } | null;
-};
+    };
+} | {
+    realtime: false;
+    realtime_info: null;
+});
 export type SerializableAugmentedStopTime = Omit<AugmentedStopTime, "actual_stop" | "actual_parent_station" | "scheduled_stop" | "scheduled_parent_station" | "toSerializable"> & {
     actual_stop: string | null;
     actual_parent_station: string | null;
