@@ -37,6 +37,23 @@ function calculateDelayClass(delaySecs) {
         return { str: `${Math.round(delaySecs / 60)}m late`, cls: "very-late" };
     return { str: `${Math.round(Math.abs(delaySecs) / 60)}m early`, cls: "early" };
 }
+/**
+ * Adds days to a YYYYMMDD string correctly.
+ */
+function addDaysToDateString(dateStr, daysToAdd) {
+    if (daysToAdd === 0)
+        return dateStr;
+    const y = parseInt(dateStr.slice(0, 4), 10);
+    const m = parseInt(dateStr.slice(4, 6), 10) - 1; // Month is 0-indexed
+    const d = parseInt(dateStr.slice(6, 8), 10);
+    // Use UTC to avoid daylight saving time issues affecting the date
+    const date = new Date(Date.UTC(y, m, d));
+    date.setUTCDate(date.getUTCDate() + daysToAdd);
+    const ny = date.getUTCFullYear();
+    const nm = (date.getUTCMonth() + 1).toString().padStart(2, "0");
+    const nd = date.getUTCDate().toString().padStart(2, "0");
+    return `${ny}${nm}${nd}`;
+}
 // --- Passing Stop Logic ---
 function findPassingStops(stops) {
     const stopListHash = stops.join("|");
@@ -68,6 +85,7 @@ function findPassingStops(stops) {
                     break;
                 addStop(stops[i], false);
             }
+            // Ensure destination is added
             addStop(segment.to, false);
             continue;
         }
@@ -102,8 +120,6 @@ function findPassingStopSRTs(stops) {
             results.push({ from, to, emu: srt, passing: allStops[i + 1].passing });
         }
     }
-    if (results.length == 0)
-        console.log(stops, allStops);
     return results;
 }
 function findPassingStopTimes(stopTimes) {
@@ -454,16 +470,16 @@ export function augmentStopTimes(stopTimes, serviceDates) {
             actArr: getOffset(actArr),
             actDep: getOffset(actDep),
         };
-        const scheduled_arrival_dates = serviceDates.map((d) => d + (currentOffsets.schedArr - dateOffsets.schedArr));
-        const scheduled_departure_dates = serviceDates.map((d) => d + (currentOffsets.schedDep - dateOffsets.schedDep));
-        // Actual dates logic: if today, use actual offset, otherwise assume scheduled offset relative to that day
         const todayStr = today();
+        // FIX: Use addDaysToDateString instead of adding numbers to strings
+        const scheduled_arrival_dates = serviceDates.map((d) => addDaysToDateString(d, currentOffsets.schedArr - dateOffsets.schedArr));
+        const scheduled_departure_dates = serviceDates.map((d) => addDaysToDateString(d, currentOffsets.schedDep - dateOffsets.schedDep));
         const actual_arrival_dates = serviceDates.map((d) => d === todayStr
-            ? d + (currentOffsets.actArr - dateOffsets.actArr)
-            : d + (currentOffsets.schedArr - dateOffsets.schedArr));
+            ? addDaysToDateString(d, currentOffsets.actArr - dateOffsets.actArr)
+            : addDaysToDateString(d, currentOffsets.schedArr - dateOffsets.schedArr));
         const actual_departure_dates = serviceDates.map((d) => d === todayStr
-            ? d + (currentOffsets.actDep - dateOffsets.actDep)
-            : d + (currentOffsets.schedDep - dateOffsets.schedDep));
+            ? addDaysToDateString(d, currentOffsets.actDep - dateOffsets.actDep)
+            : addDaysToDateString(d, currentOffsets.schedDep - dateOffsets.schedDep));
         intermediateStops.push({
             _stopTime: isPassing ? null : passingStopTime,
             trip_id: tripId,
