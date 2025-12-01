@@ -1,4 +1,14 @@
-import type { Calendar, CalendarDate, RealtimeTripUpdate, RealtimeVehiclePosition, RealtimeStopTimeUpdate, Route, Stop, StopTime, Trip } from "qdf-gtfs";
+import type {
+	Calendar,
+	CalendarDate,
+	RealtimeTripUpdate,
+	RealtimeVehiclePosition,
+	RealtimeStopTimeUpdate,
+	Route,
+	Stop,
+	StopTime,
+	Trip,
+} from "qdf-gtfs";
 import { AugmentedStop, augmentStop } from "./utils/augmentedStop.js";
 import { AugmentedTrip, augmentTrip, calculateRunSeries, RunSeries } from "./utils/augmentedTrip.js";
 import { AugmentedStopTime } from "./utils/augmentedStopTime.js";
@@ -6,6 +16,7 @@ import { QRTPlace, TravelTrip } from "./index.js";
 import { getCurrentQRTravelTrains, getPlaces } from "./qr-travel/qr-travel-tracker.js";
 import logger from "./utils/logger.js";
 import { getGtfs } from "./gtfsInterfaceLayer.js";
+import * as qdf from "qdf-gtfs";
 
 class LRUCache<K, V> {
 	private cache = new Map<K, V>();
@@ -50,8 +61,8 @@ class LRUCache<K, V> {
 }
 
 type RawCache = {
-	tripUpdates: RealtimeTripUpdate[],
-	vehiclePositions: RealtimeVehiclePosition[],
+	tripUpdates: RealtimeTripUpdate[];
+	vehiclePositions: RealtimeVehiclePosition[];
 
 	stopTimes: StopTime[];
 
@@ -181,14 +192,14 @@ export function getRawRoutes(route_id?: string): Route[] {
 export function getTripUpdates(trip_id?: string): RealtimeTripUpdate[] {
 	const gtfs = getGtfs();
 	if (rawCache.tripUpdates.length === 0) rawCache.tripUpdates = gtfs.getRealtimeTripUpdates();
-	if (trip_id) return rawCache.tripUpdates.filter(v => v.trip.trip_id == trip_id); // TODO make better
+	if (trip_id) return rawCache.tripUpdates.filter((v) => v.trip.trip_id == trip_id); // TODO make better
 	return rawCache.tripUpdates;
 }
 
 export function getVehiclePositions(trip_id?: string): RealtimeVehiclePosition[] {
 	const gtfs = getGtfs();
 	if (rawCache.vehiclePositions.length === 0) rawCache.vehiclePositions = gtfs.getRealtimeVehiclePositions();
-	if (trip_id) return rawCache.vehiclePositions.filter(v => v.trip.trip_id == trip_id); // TODO make better
+	if (trip_id) return rawCache.vehiclePositions.filter((v) => v.trip.trip_id == trip_id); // TODO make better
 	return rawCache.vehiclePositions;
 }
 
@@ -242,6 +253,24 @@ export function getAugmentedStops(stop_id?: string): AugmentedStop[] {
 export function getAugmentedStopTimes(trip_id?: string): AugmentedStopTime[] {
 	if (trip_id) return augmentedCache.stopTimes?.[trip_id] ?? [];
 	return Object.values(augmentedCache.stopTimes ?? {}).flat();
+}
+
+export function queryAugmentedStopTimes(query: qdf.StopTimeQuery): AugmentedStopTime[] {
+	const results: AugmentedStopTime[] = [];
+	const gtfs = getGtfs();
+	gtfs.queryStopTimes(query).forEach((st) => {
+		const augmentedTrip = getAugmentedTrips(st.trip_id)[0];
+		if (augmentedTrip) {
+			const augmentedStopTime = augmentedTrip.stopTimes.find(
+				(ast) =>
+					ast._stopTime?.stop_sequence === st.stop_sequence && ast.scheduled_stop?.stop_id === st.stop_id,
+			);
+			if (augmentedStopTime) {
+				results.push(augmentedStopTime);
+			}
+		}
+	});
+	return results;
 }
 
 export function getBaseStopTimes(trip_id: string): AugmentedStopTime[] {
@@ -526,10 +555,13 @@ export async function refreshRealtimeCache(): Promise<void> {
 	rawCache.tripUpdates = gtfs.getRealtimeTripUpdates();
 	rawCache.vehiclePositions = gtfs.getRealtimeVehiclePositions();
 
-	logger.debug(`Loaded ${rawCache.tripUpdates.length} trip updates with ${rawCache.tripUpdates.flatMap(v => v.stop_time_updates).length} stop time updates.`, {
-		module: "cache",
-		function: "refreshRealtimeCache",
-	});
+	logger.debug(
+		`Loaded ${rawCache.tripUpdates.length} trip updates with ${rawCache.tripUpdates.flatMap((v) => v.stop_time_updates).length} stop time updates.`,
+		{
+			module: "cache",
+			function: "refreshRealtimeCache",
+		},
+	);
 	logger.debug(`Loaded ${rawCache.vehiclePositions.length} vehicle positions.`, {
 		module: "cache",
 		function: "refreshRealtimeCache",

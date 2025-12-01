@@ -126,7 +126,7 @@ export function getTripUpdates(trip_id) {
     if (rawCache.tripUpdates.length === 0)
         rawCache.tripUpdates = gtfs.getRealtimeTripUpdates();
     if (trip_id)
-        return rawCache.tripUpdates.filter(v => v.trip.trip_id == trip_id); // TODO make better
+        return rawCache.tripUpdates.filter((v) => v.trip.trip_id == trip_id); // TODO make better
     return rawCache.tripUpdates;
 }
 export function getVehiclePositions(trip_id) {
@@ -134,7 +134,7 @@ export function getVehiclePositions(trip_id) {
     if (rawCache.vehiclePositions.length === 0)
         rawCache.vehiclePositions = gtfs.getRealtimeVehiclePositions();
     if (trip_id)
-        return rawCache.vehiclePositions.filter(v => v.trip.trip_id == trip_id); // TODO make better
+        return rawCache.vehiclePositions.filter((v) => v.trip.trip_id == trip_id); // TODO make better
     return rawCache.vehiclePositions;
 }
 export function getStopTimeUpdates(trip_id) {
@@ -184,6 +184,20 @@ export function getAugmentedStopTimes(trip_id) {
     if (trip_id)
         return augmentedCache.stopTimes?.[trip_id] ?? [];
     return Object.values(augmentedCache.stopTimes ?? {}).flat();
+}
+export function queryAugmentedStopTimes(query) {
+    const results = [];
+    const gtfs = getGtfs();
+    gtfs.queryStopTimes(query).forEach((st) => {
+        const augmentedTrip = getAugmentedTrips(st.trip_id)[0];
+        if (augmentedTrip) {
+            const augmentedStopTime = augmentedTrip.stopTimes.find((ast) => ast._stopTime?.stop_sequence === st.stop_sequence && ast.scheduled_stop?.stop_id === st.stop_id);
+            if (augmentedStopTime) {
+                results.push(augmentedStopTime);
+            }
+        }
+    });
+    return results;
 }
 export function getBaseStopTimes(trip_id) {
     return augmentedCache.baseStopTimes?.[trip_id] ?? [];
@@ -428,7 +442,7 @@ export async function refreshRealtimeCache() {
     });
     rawCache.tripUpdates = gtfs.getRealtimeTripUpdates();
     rawCache.vehiclePositions = gtfs.getRealtimeVehiclePositions();
-    logger.debug(`Loaded ${rawCache.tripUpdates.length} trip updates with ${rawCache.tripUpdates.flatMap(v => v.stop_time_updates).length} stop time updates.`, {
+    logger.debug(`Loaded ${rawCache.tripUpdates.length} trip updates with ${rawCache.tripUpdates.flatMap((v) => v.stop_time_updates).length} stop time updates.`, {
         module: "cache",
         function: "refreshRealtimeCache",
     });
