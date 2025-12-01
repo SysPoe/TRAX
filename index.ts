@@ -1,46 +1,15 @@
-import * as gtfs from "gtfs";
-import fs from "fs";
 import * as cache from "./cache.js";
 import * as calendar from "./utils/calendar.js";
 import * as stations from "./utils/stations.js";
 import * as express from "./utils/express.js";
 import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
-import * as augmentedStopTime from "./utils/augmentedStopTime.js";
 import * as timeUtils from "./utils/time.js";
-import logger, { LogLevel } from "./utils/logger.js";
 import { EventEmitter } from "events";
-
-export const DEBUG = true;
+import { createGtfs, getGtfs, hasGtfs } from "./gtfsInterfaceLayer.js"
+import logger from "./utils/logger.js";
+import { TRAX_CONFIG } from "./config.js";
 
 const traxEmitter = new EventEmitter();
-
-// Configure logger based on DEBUG flag
-if (DEBUG) {
-	logger.setLevel(LogLevel.DEBUG);
-} else {
-	logger.setLevel(LogLevel.INFO);
-}
-
-let config = {
-	agencies: [
-		{
-			url: "https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip",
-			realtimeAlerts: {
-				url: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts",
-			},
-			realtimeTripUpdates: {
-				url: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates",
-			},
-			realtimeVehiclePositions: {
-				url: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions",
-			},
-		},
-	],
-	sqlitePath: "./.TRAXCACHE.sqlite",
-	verbose: DEBUG,
-	db: undefined,
-	logFunction: (message: string) => logger.debug(message, { module: "gtfs" }),
-};
 
 let realtimeInterval: NodeJS.Timeout | null = null;
 let staticInterval: NodeJS.Timeout | null = null;
@@ -51,14 +20,9 @@ export async function loadGTFS(
 	realtimeIntervalMs: number = 60 * 1000, // 1 minute
 	staticIntervalMs: number = 24 * 60 * 60 * 1000, // 24 hours
 ): Promise<void> {
-	const dbExists = fs.existsSync(config.sqlitePath);
-	if (!dbExists || forceReload) await gtfs.importGtfs(config);
-
-	await gtfs.updateGtfsRealtime(config);
+	await createGtfs();
 	await cache.refreshStaticCache(true);
 	await cache.refreshRealtimeCache();
-
-	if (gtfs.getStops().length === 0) await gtfs.importGtfs(config);
 
 	if (!autoRefresh) return;
 
@@ -75,7 +39,7 @@ export async function loadGTFS(
 	);
 	staticInterval = setInterval(async () => {
 		try {
-			await gtfs.importGtfs(config);
+			await createGtfs();
 			await cache.refreshStaticCache(true);
 			await cache.refreshRealtimeCache();
 		} catch (error: any) {
@@ -108,8 +72,9 @@ export function formatTimestamp(ts?: number | null): string {
 
 export async function updateRealtime(): Promise<void> {
 	traxEmitter.emit("update-realtime-start");
+	const gtfs = getGtfs();
 	try {
-		await gtfs.updateGtfsRealtime(config);
+		await gtfs.updateRealtimeFromUrl(TRAX_CONFIG.realtimeAlerts, TRAX_CONFIG.realtimeTripUpdates, TRAX_CONFIG.realtimeVehiclePositions);
 		await cache.refreshRealtimeCache();
 	} catch (error: any) {
 		logger.error("Error updating realtime GTFS data", {
@@ -123,8 +88,8 @@ export async function updateRealtime(): Promise<void> {
 	}
 }
 
-export function today(): number {
-	return Number.parseInt(new Date(Date.now() + 3600 * 10 * 1000).toISOString().slice(0, 10).replace(/-/g, ""));
+export function today(): string {
+	return new Date(Date.now() + 3600 * 10 * 1000).toISOString().slice(0, 10).replace(/-/g, "");
 }
 
 const TRAX = {
@@ -166,10 +131,11 @@ const TRAX = {
 	utils: {
 		time: timeUtils,
 		formatTimestamp,
+		hasGtfs,
+		getGtfs
 	},
-	config,
+	TRAX_CONFIG,
 	logger,
-	ScheduleRelationship: augmentedStopTime.ScheduleRelationship,
 };
 
 export default TRAX;

@@ -1,11 +1,11 @@
-import type * as gtfs from "gtfs";
+import type * as qdf from "qdf-gtfs";
 import { getRawTrips, getCalendars, getCalendarDates } from "../cache.js";
 
 export function getServiceDates(
-	calendars: gtfs.Calendar[],
-	calendarDates: gtfs.CalendarDate[],
-): Record<string, number[]> {
-	const serviceDates: Record<string, number[]> = {};
+	calendars: qdf.Calendar[],
+	calendarDates: qdf.CalendarDate[],
+): Record<string, string[]> {
+	const serviceDates: Record<string, string[]> = {};
 
 	for (const calendar of calendars) {
 		const { service_id, monday, tuesday, wednesday, thursday, friday, saturday, sunday, start_date, end_date } =
@@ -15,31 +15,31 @@ export function getServiceDates(
 
 		let currentDate = new Date(
 			String(start_date).substring(0, 4) +
-				"-" +
-				String(start_date).substring(4, 6) +
-				"-" +
-				String(start_date).substring(6, 8),
+			"-" +
+			String(start_date).substring(4, 6) +
+			"-" +
+			String(start_date).substring(6, 8),
 		);
 		const endDate = new Date(
 			String(end_date).substring(0, 4) +
-				"-" +
-				String(end_date).substring(4, 6) +
-				"-" +
-				String(end_date).substring(6, 8),
+			"-" +
+			String(end_date).substring(4, 6) +
+			"-" +
+			String(end_date).substring(6, 8),
 		);
 
 		while (currentDate <= endDate) {
 			const dayOfWeek = currentDate.getDay(); // 0 for Sunday, 1 for Monday, etc.
-			const dateAsNumber = parseInt(currentDate.toISOString().slice(0, 10).replace(/-/g, ""), 10);
+			const dateAsNumber = currentDate.toISOString().slice(0, 10).replace(/-/g, "");
 
 			let serviceRuns = false;
-			if (dayOfWeek === 1 && monday === 1) serviceRuns = true;
-			if (dayOfWeek === 2 && tuesday === 1) serviceRuns = true;
-			if (dayOfWeek === 3 && wednesday === 1) serviceRuns = true;
-			if (dayOfWeek === 4 && thursday === 1) serviceRuns = true;
-			if (dayOfWeek === 5 && friday === 1) serviceRuns = true;
-			if (dayOfWeek === 6 && saturday === 1) serviceRuns = true;
-			if (dayOfWeek === 0 && sunday === 1) serviceRuns = true;
+			if (dayOfWeek === 1 && monday) serviceRuns = true;
+			if (dayOfWeek === 2 && tuesday) serviceRuns = true;
+			if (dayOfWeek === 3 && wednesday) serviceRuns = true;
+			if (dayOfWeek === 4 && thursday) serviceRuns = true;
+			if (dayOfWeek === 5 && friday) serviceRuns = true;
+			if (dayOfWeek === 6 && saturday) serviceRuns = true;
+			if (dayOfWeek === 0 && sunday) serviceRuns = true;
 
 			if (serviceRuns) {
 				serviceDates[service_id].push(dateAsNumber);
@@ -68,13 +68,13 @@ export function getServiceDates(
 	}
 
 	for (const service_id in serviceDates) {
-		serviceDates[service_id].sort((a, b) => a - b);
+		serviceDates[service_id].sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
 	}
 
 	return serviceDates;
 }
 
-export function getServiceDatesByTrip(trip_id: string): number[] {
+export function getServiceDatesByTrip(trip_id: string): string[] {
 	const trips = getRawTrips(trip_id);
 	const trip = trips && trips.length > 0 ? trips[0] : undefined;
 	if (!trip) return [];

@@ -16,21 +16,21 @@ export function getServiceDates(calendars, calendarDates) {
             String(end_date).substring(6, 8));
         while (currentDate <= endDate) {
             const dayOfWeek = currentDate.getDay(); // 0 for Sunday, 1 for Monday, etc.
-            const dateAsNumber = parseInt(currentDate.toISOString().slice(0, 10).replace(/-/g, ""), 10);
+            const dateAsNumber = currentDate.toISOString().slice(0, 10).replace(/-/g, "");
             let serviceRuns = false;
-            if (dayOfWeek === 1 && monday === 1)
+            if (dayOfWeek === 1 && monday)
                 serviceRuns = true;
-            if (dayOfWeek === 2 && tuesday === 1)
+            if (dayOfWeek === 2 && tuesday)
                 serviceRuns = true;
-            if (dayOfWeek === 3 && wednesday === 1)
+            if (dayOfWeek === 3 && wednesday)
                 serviceRuns = true;
-            if (dayOfWeek === 4 && thursday === 1)
+            if (dayOfWeek === 4 && thursday)
                 serviceRuns = true;
-            if (dayOfWeek === 5 && friday === 1)
+            if (dayOfWeek === 5 && friday)
                 serviceRuns = true;
-            if (dayOfWeek === 6 && saturday === 1)
+            if (dayOfWeek === 6 && saturday)
                 serviceRuns = true;
-            if (dayOfWeek === 0 && sunday === 1)
+            if (dayOfWeek === 0 && sunday)
                 serviceRuns = true;
             if (serviceRuns) {
                 serviceDates[service_id].push(dateAsNumber);
@@ -56,7 +56,7 @@ export function getServiceDates(calendars, calendarDates) {
         }
     }
     for (const service_id in serviceDates) {
-        serviceDates[service_id].sort((a, b) => a - b);
+        serviceDates[service_id].sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
     }
     return serviceDates;
 }

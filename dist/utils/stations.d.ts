@@ -1,4 +1,4 @@
 import { AugmentedStop } from "./augmentedStop.js";
-import * as gtfs from "gtfs";
-export declare function getGtfsStations(): gtfs.Stop[];
+import * as qdf from "qdf-gtfs";
+export declare function getGtfsStations(): qdf.Stop[];
 export declare function getStations(): AugmentedStop[];
