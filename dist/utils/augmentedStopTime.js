@@ -12,6 +12,8 @@ export function toSerializableAugmentedStopTime(st) {
         actual_parent_station: st.actual_parent_station?.stop_id ?? null,
         scheduled_stop: st.scheduled_stop?.stop_id ?? null,
         scheduled_parent_station: st.scheduled_parent_station?.stop_id ?? null,
+        // @ts-expect-error
+        toSerializable: undefined,
     };
 }
 // --- Caching & Logging ---
@@ -471,7 +473,6 @@ export function augmentStopTimes(stopTimes, serviceDates) {
             actDep: getOffset(actDep),
         };
         const todayStr = today();
-        // FIX: Use addDaysToDateString instead of adding numbers to strings
         const scheduled_arrival_dates = serviceDates.map((d) => addDaysToDateString(d, currentOffsets.schedArr - dateOffsets.schedArr));
         const scheduled_departure_dates = serviceDates.map((d) => addDaysToDateString(d, currentOffsets.schedDep - dateOffsets.schedDep));
         const actual_arrival_dates = serviceDates.map((d) => d === todayStr

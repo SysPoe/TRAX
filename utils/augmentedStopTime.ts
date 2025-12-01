@@ -90,6 +90,8 @@ export function toSerializableAugmentedStopTime(
         actual_parent_station: st.actual_parent_station?.stop_id ?? null,
         scheduled_stop: st.scheduled_stop?.stop_id ?? null,
         scheduled_parent_station: st.scheduled_parent_station?.stop_id ?? null,
+		// @ts-expect-error
+		toSerializable: undefined,
     };
 }
 

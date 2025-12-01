@@ -394,7 +394,7 @@ async function processService(
 	}
 }
 
-export async function getCurrentQRTravelTrains(): Promise<TravelTrip[]> {
+export async function getCurrentQRTravelTrains(retries = 5): Promise<TravelTrip[]> {
 	try {
 		// Get all the required data
 		const [services, serviceLines] = await Promise.all([getAllServices(), getServiceLines()]);
@@ -413,11 +413,18 @@ export async function getCurrentQRTravelTrains(): Promise<TravelTrip[]> {
 
 		return travelTrips;
 	} catch (error: any) {
-		logger.error(`Failed to get current QR Travel trains: ${error.message || error}`, {
+		let secs = 5 * (6 - retries);
+		logger.error(`Failed to get current QR Travel trains: ${error.message || error}. Retrying in ${secs} seconds.`, {
 			module: "qr-travel-tracker",
 			function: "getCurrentQRTravelTrains",
 			error: error.message || error,
 		});
-		throw error;
+		retries--;
+		if (retries > 0) {
+			await new Promise((resolve) => setTimeout(resolve, secs * 1000));
+			return getCurrentQRTravelTrains(retries);
+		} else {
+			throw new Error(`Failed to get current QR Travel trains after multiple retries: ${error.message || error}`);
+		}
 	}
 }
