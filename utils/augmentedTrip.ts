@@ -77,7 +77,7 @@ export function augmentTrip(trip: qdf.Trip): AugmentedTrip {
 			let stopTimesToUse: AugmentedStopTime[];
 			if (stopTimes.length > 0) stopTimesToUse = stopTimes;
 			else {
-				if (!cachedStopTimes) cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
+				if (!cachedStopTimes) cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, trip.trip_id);
 				stopTimesToUse = cachedStopTimes;
 			}
 
@@ -95,7 +95,7 @@ export function augmentTrip(trip: qdf.Trip): AugmentedTrip {
 			let stopTimesToUse: AugmentedStopTime[];
 			if (stopTimes.length > 0) stopTimesToUse = stopTimes;
 			else {
-				if (!cachedStopTimes) cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
+				if (!cachedStopTimes) cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, trip.trip_id);
 				stopTimesToUse = cachedStopTimes;
 			}
 
@@ -112,7 +112,7 @@ export function augmentTrip(trip: qdf.Trip): AugmentedTrip {
 			let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
 			if (stopTimes.length > 0) return stopTimes;
 
-			if (!cachedStopTimes) cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
+			if (!cachedStopTimes) cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, trip.trip_id);
 			return cachedStopTimes;
 		},
 		expressInfo,
@@ -127,7 +127,7 @@ export function augmentTrip(trip: qdf.Trip): AugmentedTrip {
 		toSerializable: function () {
 			let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
 			if (stopTimes.length === 0) {
-				if (!cachedStopTimes) cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
+				if (!cachedStopTimes) cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, trip.trip_id);
 				stopTimes = cachedStopTimes;
 			}
 			return toSerializableAugmentedTrip({

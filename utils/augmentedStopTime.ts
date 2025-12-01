@@ -284,6 +284,11 @@ function findPassingStopTimes(stopTimes: qdf.StopTime[]): PassingStopTime[] {
         const totalTimeDiff = Math.floor((endTime.departure_time - startTime.departure_time) / 60);
         const totalEmu = currentPassingRun.reduce((acc, curr) => acc + curr.emu, 0);
 
+        // Correct sequence interpolation logic
+        const startSeq = startTime.stop_sequence ?? stopTimes[0].stop_sequence ?? 0;
+        const endSeq = endTime.stop_sequence ?? startSeq + 1;
+        const seqDiff = endSeq - startSeq;
+
         let accumulatedEmu = 0;
         for (let i = 0; i < currentPassingRun.length; i++) {
             const run = currentPassingRun[i];
@@ -299,8 +304,8 @@ function findPassingStopTimes(stopTimes: qdf.StopTime[]): PassingStopTime[] {
                 _passing: true,
                 stop_id: run.to,
                 trip_id: stopTimes[0].trip_id,
-                // Interpolate sequence
-                stop_sequence: stopTimes[0].stop_sequence + i / currentPassingRun.length,
+                // Interpolate sequence correctly between start and end sequence
+                stop_sequence: startSeq + (seqDiff * (i + 1)) / (currentPassingRun.length + 1),
                 departure_time: interpolatedTime,
                 arrival_time: interpolatedTime, // Arrival = Departure for passing
                 drop_off_type: qdf.DropOffType.None,
@@ -470,11 +475,15 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 
 // --- Main Augmentation Function ---
 
-export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string[]): AugmentedStopTime[] {
-    if (stopTimes.length === 0) return [];
+export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string[], explicitTripId?: string): AugmentedStopTime[] {
+    const tripId = explicitTripId ?? stopTimes[0]?.trip_id;
 
-    const tripId = stopTimes[0].trip_id;
-    if (!stopTimes.every((v) => v.trip_id === tripId)) {
+    if (!tripId) {
+        // If we have no tripId, we can't do anything (no static stops, no ID to lookup RT).
+        return [];
+    }
+
+    if (stopTimes.length > 0 && !stopTimes.every((v) => v.trip_id === tripId)) {
         logger.error(`Mixed trip IDs in stopTimes: ${tripId}`, {
             module: "augmentedStopTime",
             function: "augmentStopTimes",
@@ -483,12 +492,43 @@ export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string
 
     const tripUpdate = cache.getTripUpdates(tripId)[0];
     const stopTimeUpdates = tripUpdate?.stop_time_updates ?? [];
+
+    // 1. Generate Static Baseline (with correct passing stops)
     const passingStopTimes = findPassingStopTimes(stopTimes);
 
-    // Initial offsets (first stop)
-    const firstStop = passingStopTimes[0];
-    const initialScheduledArr = firstStop.arrival_time ?? 0;
-    const initialScheduledDep = firstStop.departure_time ?? 0;
+    // 2. Map Static Stops by Sequence
+    const staticMap = new Map<number, PassingStopTime>();
+    for (const st of passingStopTimes) {
+        if (st.stop_sequence !== null && st.stop_sequence !== undefined) {
+            staticMap.set(st.stop_sequence, st);
+        }
+    }
+
+    // 3. Map Realtime Updates by Sequence
+    const rtMap = new Map<number, qdf.StopTimeUpdate>();
+    for (const update of stopTimeUpdates) {
+        if (update.stop_sequence !== null && update.stop_sequence !== undefined) {
+            rtMap.set(update.stop_sequence, update);
+        }
+    }
+
+    // 4. Collect and Sort All Sequences
+    const allSequences = new Set<number>([...staticMap.keys(), ...rtMap.keys()]);
+    const sortedSequences = Array.from(allSequences).sort((a, b) => a - b);
+
+    // Initial offsets (first stop or update)
+    let initialScheduledArr = 0;
+    let initialScheduledDep = 0;
+
+    if (passingStopTimes.length > 0) {
+        initialScheduledArr = passingStopTimes[0].arrival_time ?? 0;
+        initialScheduledDep = passingStopTimes[0].departure_time ?? 0;
+    } else if (stopTimeUpdates.length > 0) {
+        const firstRT = stopTimeUpdates[0];
+        initialScheduledArr = (firstRT.arrival?.time as unknown as number) ?? 0;
+        initialScheduledDep = (firstRT.departure?.time as unknown as number) ?? 0;
+    }
+
     // We assume actual starts same as scheduled unless updated immediately
     const initialActualArr = initialScheduledArr;
     const initialActualDep = initialScheduledDep;
@@ -507,9 +547,20 @@ export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string
 
     const intermediateStops: IntermediateAST[] = [];
 
-    for (const passingStopTime of passingStopTimes) {
-        const stopId = passingStopTime.stop_id;
-        const isPassing = passingStopTime._passing;
+    for (const seq of sortedSequences) {
+        const passingStopTime = staticMap.get(seq);
+        const rtUpdate = rtMap.get(seq);
+
+        // Basic info
+        const isPassing = passingStopTime?._passing ?? false;
+
+        // Use static stop_id if available, else RT stop_id
+        const stopId = passingStopTime?.stop_id ?? rtUpdate?.stop_id;
+
+        if (!stopId) {
+             // Should not happen if data is valid
+             continue;
+        }
 
         // 1. Fetch Stop Info
         const scheduledStop = cache.getAugmentedStops(stopId)[0];
@@ -517,18 +568,10 @@ export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string
             ? cache.getAugmentedStops(scheduledStop.parent_station)[0]
             : null;
 
-        // 2. Find Realtime Update
-        // Logic: Match specific stop, parent station, or any child of the augmented stop
-        const rtUpdate = stopTimeUpdates.find(
-            (u) =>
-                u.stop_id === stopId ||
-                scheduledParent?.stop_id === u.stop_id ||
-                scheduledStop.children.some((child) => child.stop_id === u.stop_id),
-        );
-
         // 3. Resolve Realtime Values
-        const schedArr = passingStopTime.arrival_time;
-        const schedDep = passingStopTime.departure_time;
+        const schedArr = passingStopTime?.arrival_time ?? null;
+        const schedDep = passingStopTime?.departure_time ?? null;
+
         let actArr = schedArr;
         let actDep = schedDep;
 
@@ -557,6 +600,15 @@ export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string
                 delaySecs = rtUpdate.departure_delay;
                 lastDelay = delaySecs;
                 rtFlags.dep = true;
+            } else if (rtUpdate.departure?.time) {
+                 const time = rtUpdate.departure.time as unknown as number;
+                 if (time) {
+                     actDep = time;
+                     if (rtUpdate.departure_delay !== null) delaySecs = rtUpdate.departure_delay;
+                     else delaySecs = 0;
+                     lastDelay = delaySecs;
+                     rtFlags.dep = true;
+                 }
             } else if (lastDelay) {
                 if (schedDep !== null) actDep = schedDep + lastDelay;
                 propagated = true;
@@ -567,6 +619,15 @@ export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string
                 delaySecs = rtUpdate.arrival_delay;
                 lastDelay = delaySecs;
                 rtFlags.arr = true;
+            } else if (rtUpdate.arrival?.time) {
+                 const time = rtUpdate.arrival.time as unknown as number;
+                 if (time) {
+                     actArr = time;
+                     if (rtUpdate.arrival_delay !== null) delaySecs = rtUpdate.arrival_delay;
+                     else delaySecs = 0;
+                     lastDelay = delaySecs;
+                     rtFlags.arr = true;
+                 }
             } else if (lastDelay) {
                 if (schedArr !== null) actArr = schedArr + lastDelay;
                 propagated = true;
@@ -595,8 +656,8 @@ export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string
         } else {
             // No direct update
             if (lastDelay !== 0) {
-                if (schedArr !== undefined) actArr = schedArr + lastDelay;
-                if (schedDep !== undefined) actDep = schedDep + lastDelay;
+                if (schedArr !== null && schedArr !== undefined) actArr = schedArr + lastDelay;
+                if (schedDep !== null && schedDep !== undefined) actDep = schedDep + lastDelay;
                 propagated = true;
             } else if (propagateOnTime) {
                 delaySecs = 0;
@@ -651,7 +712,8 @@ export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string
         );
 
         intermediateStops.push({
-            _stopTime: isPassing ? null : passingStopTime,
+            // Fix: passingStopTime can be undefined. Use null coalescing.
+            _stopTime: isPassing ? null : (passingStopTime ?? null),
             trip_id: tripId,
             passing: isPassing,
 
@@ -659,7 +721,7 @@ export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string
             actual_departure_time: actDep ? actDep % 86400 : null,
             actual_stop: actualStop,
             actual_parent_station: actualParent,
-            actual_platform_code: isPassing ? null : (platformCode ?? scheduledStop.platform_code ?? null),
+            actual_platform_code: isPassing ? null : (platformCode ?? scheduledStop?.platform_code ?? null),
 
             rt_stop_updated: rtFlags.stop,
             rt_parent_station_updated: rtFlags.parent,
@@ -671,7 +733,7 @@ export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string
             scheduled_departure_time: schedDep ? schedDep % 86400 : null,
             scheduled_stop: scheduledStop,
             scheduled_parent_station: scheduledParent,
-            scheduled_platform_code: isPassing ? null : (scheduledStop.platform_code ?? null),
+            scheduled_platform_code: isPassing ? null : (scheduledStop?.platform_code ?? null),
 
             realtime: hasRealtime,
             realtime_info: realtimeInfo,
