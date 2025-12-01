@@ -3,6 +3,7 @@ import * as cache from "../cache.js";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { getAugmentedTrips } from "../cache.js";
 import { findExpressString } from "./express.js";
+import { getGtfs } from "../gtfsInterfaceLayer.js";
 
 export type AugmentedStop = qdf.Stop & {
 	qrt_Place: boolean;
@@ -114,21 +115,40 @@ export function augmentStop(stop: qdf.Stop): AugmentedStop {
 				return null;
 			};
 
-			for (const st of cache.getAugmentedStopTimes()) {
-				if (!st.actual_stop || !validStops.has(st.actual_stop.stop_id)) continue;
-				let trip = tripCache.get(st.trip_id);
+			// Query static GTFS for stop times at this station (optimized)
+			const rawStopTimes = Array.from(validStops).flatMap((id) => getGtfs().queryStopTimes({ stop_id: id }));
+
+			for (const rawSt of rawStopTimes) {
+				// 1. Resolve Trip
+				let trip = tripCache.get(rawSt.trip_id);
 				if (!trip) {
-					trip = getAugmentedTrips(st.trip_id)[0];
-					tripCache.set(st.trip_id, trip);
+					const trips = getAugmentedTrips(rawSt.trip_id);
+					if (trips.length > 0) {
+						trip = trips[0];
+						tripCache.set(rawSt.trip_id, trip);
+					}
 				}
+				if (!trip) continue;
+
+				// 2. Resolve Augmented Stop Time (match by sequence)
+				const st = trip.stopTimes.find((s) => s._stopTime?.stop_sequence === rawSt.stop_sequence);
+				if (!st) continue;
+
+				// 3. Re-validate stop (in case realtime update moved it)
+				if (!st.actual_stop || !validStops.has(st.actual_stop.stop_id)) continue;
+
+				// 4. Date Logic
 				let matchingDate = getMatchingTripDate(
 					(st?.actual_departure_dates || []).concat(st?.actual_arrival_dates || []),
 				);
 				if (matchingDate === null) continue;
+
+				// 5. Time Logic
 				const ts =
 					(st.actual_departure_time ?? st.actual_arrival_time ?? 0) +
 					(toDate(matchingDate).getTime() - toDate(date).getTime()) / 1000;
 				if (ts == null || ts < startSec || ts > endSec) continue;
+
 				results.push({ st, trip });
 			}
 			return results
@@ -153,14 +173,29 @@ export function augmentStop(stop: qdf.Stop): AugmentedStop {
 			const validStops = new Set<string>([stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]);
 			const tripCache = new Map<string, ReturnType<typeof getAugmentedTrips>[0]>();
 			const results: { st: AugmentedStopTime; trip: any }[] = [];
-			for (const st of cache.getAugmentedStopTimes()) {
-				if (!st.actual_stop || !validStops.has(st.actual_stop.stop_id)) continue;
-				let trip = tripCache.get(st.trip_id);
+
+			// Query static GTFS for stop times at this station (optimized)
+			const rawStopTimes = Array.from(validStops).flatMap((id) => getGtfs().queryStopTimes({ stop_id: id }));
+
+			for (const rawSt of rawStopTimes) {
+				let trip = tripCache.get(rawSt.trip_id);
 				if (!trip) {
-					trip = getAugmentedTrips(st.trip_id)[0];
-					tripCache.set(st.trip_id, trip);
+					const trips = getAugmentedTrips(rawSt.trip_id);
+					if (trips.length > 0) {
+						trip = trips[0];
+						tripCache.set(rawSt.trip_id, trip);
+					}
 				}
+				if (!trip) continue;
+
 				if (!trip?.scheduledStartServiceDates?.includes(serviceDate)) continue;
+
+				// Resolve Augmented Stop Time
+				const st = trip.stopTimes.find((s) => s._stopTime?.stop_sequence === rawSt.stop_sequence);
+				if (!st) continue;
+
+				if (!st.actual_stop || !validStops.has(st.actual_stop.stop_id)) continue;
+
 				const ts = st.actual_departure_time;
 				if (ts == null || ts < start_time_secs || ts > end_time_secs) continue;
 				results.push({ st, trip });

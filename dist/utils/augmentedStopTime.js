@@ -68,6 +68,7 @@ function findPassingStops(stops) {
                     break;
                 addStop(stops[i], false);
             }
+            addStop(segment.to, false);
             continue;
         }
         // Handle express segments
@@ -101,6 +102,8 @@ function findPassingStopSRTs(stops) {
             results.push({ from, to, emu: srt, passing: allStops[i + 1].passing });
         }
     }
+    if (results.length == 0)
+        console.log(stops, allStops);
     return results;
 }
 function findPassingStopTimes(stopTimes) {
@@ -196,11 +199,9 @@ function resolveExitSide(stops, index, platformDataList, platformCode) {
     const platform = platformDataList?.find((v) => v.platform_code === platformCode);
     if (!platform)
         return null;
-    const prevId = index > 0
-        ? (stops[index - 1].actual_parent_station?.stop_id || stops[index - 1].actual_stop?.stop_id)
-        : "";
+    const prevId = index > 0 ? stops[index - 1].actual_parent_station?.stop_id || stops[index - 1].actual_stop?.stop_id : "";
     const nextId = index < stops.length - 1
-        ? (stops[index + 1].actual_parent_station?.stop_id || stops[index + 1].actual_stop?.stop_id)
+        ? stops[index + 1].actual_parent_station?.stop_id || stops[index + 1].actual_stop?.stop_id
         : "";
     const matchesNext = platform.next.includes(nextId);
     const matchesPrev = platform.from.includes(prevId);
@@ -219,7 +220,7 @@ function assignPlatformSides(st) {
     // Track codes to maintain continuity preference
     let prevActualTrack = "";
     let prevScheduledTrack = "";
-    // We'll build the list progressively. 
+    // We'll build the list progressively.
     // The original code used retrospective replacement of the whole list array pointer.
     // We will simplify: calculate both current platforms, check continuity against previous,
     // and update "prev" trackers.
@@ -252,7 +253,8 @@ function assignPlatformSides(st) {
         else {
             // For stopping stops, use the codes we have
             actPlat = actData?.find((v) => v.platform_code === parseInt(item.actual_platform_code ?? "0")) ?? null;
-            schPlat = schData?.find((v) => v.platform_code === parseInt(item.scheduled_platform_code ?? "0")) ?? null;
+            schPlat =
+                schData?.find((v) => v.platform_code === parseInt(item.scheduled_platform_code ?? "0")) ?? null;
         }
         // Select the best "history" based on continuity
         if (actPlat?.trackCode === prevActualTrack && schPlat?.trackCode === prevScheduledTrack) {
@@ -288,7 +290,7 @@ function assignPlatformSides(st) {
             scheduled_exit_side: schSide,
             actual_platform_code: actPlat?.platform_code?.toString() ?? item.actual_platform_code,
             scheduled_platform_code: schPlat?.platform_code?.toString() ?? item.scheduled_platform_code,
-            toSerializable: () => toSerializableAugmentedStopTime(newEntry) // Circular ref handled in closure
+            toSerializable: () => toSerializableAugmentedStopTime(newEntry), // Circular ref handled in closure
         };
         // Push to buffer
         pathBuffer.push(newEntry);
@@ -300,11 +302,11 @@ function assignPlatformSides(st) {
         prevActualTrack = actPlat?.trackCode ?? "";
         prevScheduledTrack = schPlat?.trackCode ?? "";
     }
-    // Fix the circular reference in toSerializable now that object is fully formed? 
+    // Fix the circular reference in toSerializable now that object is fully formed?
     // The original code did `v => ({ ...v, toSerializable: ... })` at the very end.
-    return pathBuffer.map(v => ({
+    return pathBuffer.map((v) => ({
         ...v,
-        toSerializable: () => toSerializableAugmentedStopTime(v)
+        toSerializable: () => toSerializableAugmentedStopTime(v),
     }));
 }
 // --- Main Augmentation Function ---
@@ -332,7 +334,7 @@ export function augmentStopTimes(stopTimes, serviceDates) {
         schedArr: Math.floor(initialScheduledArr / 86400),
         schedDep: Math.floor(initialScheduledDep / 86400),
         actArr: Math.floor(initialActualArr / 86400),
-        actDep: Math.floor(initialActualDep / 86400)
+        actDep: Math.floor(initialActualDep / 86400),
     };
     // Propagation State
     let lastDelay = 0;
@@ -344,7 +346,9 @@ export function augmentStopTimes(stopTimes, serviceDates) {
         const isPassing = passingStopTime._passing;
         // 1. Fetch Stop Info
         const scheduledStop = cache.getAugmentedStops(stopId)[0];
-        const scheduledParent = scheduledStop?.parent_station ? cache.getAugmentedStops(scheduledStop.parent_station)[0] : null;
+        const scheduledParent = scheduledStop?.parent_station
+            ? cache.getAugmentedStops(scheduledStop.parent_station)[0]
+            : null;
         // 2. Find Realtime Update
         // Logic: Match specific stop, parent station, or any child of the augmented stop
         const rtUpdate = stopTimeUpdates.find((u) => u.stop_id === stopId ||
@@ -359,7 +363,11 @@ export function augmentStopTimes(stopTimes, serviceDates) {
         let propagated = false;
         let scheduleRelationship = lastScheduleRelationship;
         let rtFlags = {
-            stop: false, parent: false, platform: false, arr: false, dep: false
+            stop: false,
+            parent: false,
+            platform: false,
+            arr: false,
+            dep: false,
         };
         let platformCode = null;
         let actualStop = scheduledStop;
@@ -403,7 +411,9 @@ export function augmentStopTimes(stopTimes, serviceDates) {
             }
             if (rtUpdate.stop_id && rtUpdate.stop_id !== stopId) {
                 actualStop = cache.getAugmentedStops(rtUpdate.stop_id)[0];
-                actualParent = actualStop?.parent_station ? cache.getAugmentedStops(actualStop.parent_station)[0] : null;
+                actualParent = actualStop?.parent_station
+                    ? cache.getAugmentedStops(actualStop.parent_station)[0]
+                    : null;
                 rtFlags.stop = true;
                 rtFlags.parent = true;
             }
@@ -442,14 +452,18 @@ export function augmentStopTimes(stopTimes, serviceDates) {
             schedArr: getOffset(schedArr),
             schedDep: getOffset(schedDep),
             actArr: getOffset(actArr),
-            actDep: getOffset(actDep)
+            actDep: getOffset(actDep),
         };
         const scheduled_arrival_dates = serviceDates.map((d) => d + (currentOffsets.schedArr - dateOffsets.schedArr));
         const scheduled_departure_dates = serviceDates.map((d) => d + (currentOffsets.schedDep - dateOffsets.schedDep));
         // Actual dates logic: if today, use actual offset, otherwise assume scheduled offset relative to that day
         const todayStr = today();
-        const actual_arrival_dates = serviceDates.map(d => d === todayStr ? d + (currentOffsets.actArr - dateOffsets.actArr) : d + (currentOffsets.schedArr - dateOffsets.schedArr));
-        const actual_departure_dates = serviceDates.map(d => d === todayStr ? d + (currentOffsets.actDep - dateOffsets.actDep) : d + (currentOffsets.schedDep - dateOffsets.schedDep));
+        const actual_arrival_dates = serviceDates.map((d) => d === todayStr
+            ? d + (currentOffsets.actArr - dateOffsets.actArr)
+            : d + (currentOffsets.schedArr - dateOffsets.schedArr));
+        const actual_departure_dates = serviceDates.map((d) => d === todayStr
+            ? d + (currentOffsets.actDep - dateOffsets.actDep)
+            : d + (currentOffsets.schedDep - dateOffsets.schedDep));
         intermediateStops.push({
             _stopTime: isPassing ? null : passingStopTime,
             trip_id: tripId,

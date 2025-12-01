@@ -51,19 +51,22 @@ export type AugmentedStopTime = {
 	actual_departure_dates: string[];
 	scheduled_departure_date_offset: number;
 	actual_departure_date_offset: number;
-} & ({
-	realtime: true;
-	realtime_info: {
-		delay_secs: number;
-		delay_string: string;
-		delay_class: "on-time" | "scheduled" | "late" | "very-late" | "early";
-		schedule_relationship: qdf.StopTimeScheduleRelationship;
-		propagated: boolean;
-	};
-} | {
-	realtime: false;
-	realtime_info: null;
-});
+} & (
+	| {
+			realtime: true;
+			realtime_info: {
+				delay_secs: number;
+				delay_string: string;
+				delay_class: "on-time" | "scheduled" | "late" | "very-late" | "early";
+				schedule_relationship: qdf.StopTimeScheduleRelationship;
+				propagated: boolean;
+			};
+	  }
+	| {
+			realtime: false;
+			realtime_info: null;
+	  }
+);
 
 // Internal type for data before platform/exit side calculation
 type IntermediateAST = Omit<AugmentedStopTime, "actual_exit_side" | "scheduled_exit_side" | "toSerializable">;
@@ -159,6 +162,7 @@ function findPassingStops(stops: string[]): { stop_id: string; passing: boolean 
 				if (stops[i] === segment.to) break;
 				addStop(stops[i], false);
 			}
+			addStop(segment.to, false);
 			continue;
 		}
 
@@ -196,6 +200,7 @@ function findPassingStopSRTs(stops: string[]): PassingStopSRT[] {
 			results.push({ from, to, emu: srt, passing: allStops[i + 1].passing });
 		}
 	}
+	if(results.length == 0) console.log(stops, allStops);
 	return results;
 }
 
@@ -268,13 +273,13 @@ function findPassingStopTimes(stopTimes: qdf.StopTime[]): PassingStopTime[] {
 			if (scaledEmu <= 0) continue; // Skip zero-time stops
 
 			const interpolatedTime = startTime.departure_time + accumulatedEmu * 60;
-			
+
 			resultTimes.push({
 				_passing: true,
 				stop_id: run.to,
 				trip_id: stopTimes[0].trip_id,
 				// Interpolate sequence
-				stop_sequence: stopTimes[0].stop_sequence + i / currentPassingRun.length, 
+				stop_sequence: stopTimes[0].stop_sequence + i / currentPassingRun.length,
 				departure_time: interpolatedTime,
 				arrival_time: interpolatedTime, // Arrival = Departure for passing
 				drop_off_type: qdf.DropOffType.None,
@@ -304,24 +309,24 @@ function findPassingStopTimes(stopTimes: qdf.StopTime[]): PassingStopTime[] {
 // --- Platform & Side Logic ---
 
 function resolveExitSide(
-	stops: IntermediateAST[], 
-	index: number, 
-	platformDataList: any[], 
-	platformCode: number
+	stops: IntermediateAST[],
+	index: number,
+	platformDataList: any[],
+	platformCode: number,
 ): "left" | "right" | "both" | null {
 	const platform = platformDataList?.find((v) => v.platform_code === platformCode);
 	if (!platform) return null;
 
-	const prevId = index > 0 
-		? (stops[index - 1].actual_parent_station?.stop_id || stops[index - 1].actual_stop?.stop_id) 
-		: "";
-	const nextId = index < stops.length - 1 
-		? (stops[index + 1].actual_parent_station?.stop_id || stops[index + 1].actual_stop?.stop_id) 
-		: "";
+	const prevId =
+		index > 0 ? stops[index - 1].actual_parent_station?.stop_id || stops[index - 1].actual_stop?.stop_id : "";
+	const nextId =
+		index < stops.length - 1
+			? stops[index + 1].actual_parent_station?.stop_id || stops[index + 1].actual_stop?.stop_id
+			: "";
 
 	const matchesNext = platform.next.includes(nextId);
 	const matchesPrev = platform.from.includes(prevId);
-	
+
 	const swap = { left: "right", right: "left", both: "both" } as const;
 
 	if (matchesNext || matchesPrev) {
@@ -335,18 +340,18 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 	// We track three versions of the list to handle track code continuity
 	// This replaces the complex intA/AltB/AltA swapping logic with a state object approach
 	// However, to keep it structurally similar to the robust original logic while cleaning it:
-	
+
 	let resultList: AugmentedStopTime[] = [];
-	
+
 	// Track codes to maintain continuity preference
 	let prevActualTrack = "";
 	let prevScheduledTrack = "";
 
-	// We'll build the list progressively. 
+	// We'll build the list progressively.
 	// The original code used retrospective replacement of the whole list array pointer.
 	// We will simplify: calculate both current platforms, check continuity against previous,
 	// and update "prev" trackers.
-	
+
 	// Note: The original logic allowed "backtracking" by swapping the whole array 'intA'.
 	// That is highly unusual. Assuming the intent is to prefer the track path that is consistent.
 	// We will simulate the "winning path" logic.
@@ -372,14 +377,15 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 			// For passing stops, we infer platform from track code if possible
 			actPlat = actData?.find((v: any) => v.trackCode === prevActualTrack) ?? null;
 			schPlat = schData?.find((v: any) => v.trackCode === prevScheduledTrack) ?? null;
-			
+
 			// If we lost the track, reset
 			if (!actPlat) prevActualTrack = "";
 			if (!schPlat) prevScheduledTrack = "";
 		} else {
 			// For stopping stops, use the codes we have
 			actPlat = actData?.find((v: any) => v.platform_code === parseInt(item.actual_platform_code ?? "0")) ?? null;
-			schPlat = schData?.find((v: any) => v.platform_code === parseInt(item.scheduled_platform_code ?? "0")) ?? null;
+			schPlat =
+				schData?.find((v: any) => v.platform_code === parseInt(item.scheduled_platform_code ?? "0")) ?? null;
 		}
 
 		// Select the best "history" based on continuity
@@ -401,11 +407,11 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 			// We need a lookahead/lookbehind.
 			// Ideally this should be done after the full path is built, but we do it iteratively here
 			// utilizing the incomplete array for "prev" and the source array for "next".
-			
+
 			// Note: The original code utilized `intA` (the growing result) for prev checks.
 			// We replicate that by passing `st` (source) and `i` (index) to a helper,
 			// acknowledging that `st` has the correct sequence of stops.
-			
+
 			if (actPlat) actSide = resolveExitSide(st, i, actData ?? [], actPlat.platform_code);
 			if (schPlat) schSide = resolveExitSide(st, i, schData ?? [], schPlat.platform_code);
 		}
@@ -417,7 +423,7 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 			scheduled_exit_side: schSide,
 			actual_platform_code: actPlat?.platform_code?.toString() ?? item.actual_platform_code,
 			scheduled_platform_code: schPlat?.platform_code?.toString() ?? item.scheduled_platform_code,
-			toSerializable: () => toSerializableAugmentedStopTime(newEntry) // Circular ref handled in closure
+			toSerializable: () => toSerializableAugmentedStopTime(newEntry), // Circular ref handled in closure
 		} as AugmentedStopTime;
 
 		// Push to buffer
@@ -433,20 +439,17 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 		prevScheduledTrack = schPlat?.trackCode ?? "";
 	}
 
-	// Fix the circular reference in toSerializable now that object is fully formed? 
+	// Fix the circular reference in toSerializable now that object is fully formed?
 	// The original code did `v => ({ ...v, toSerializable: ... })` at the very end.
-	return pathBuffer.map(v => ({
+	return pathBuffer.map((v) => ({
 		...v,
-		toSerializable: () => toSerializableAugmentedStopTime(v)
+		toSerializable: () => toSerializableAugmentedStopTime(v),
 	}));
 }
 
 // --- Main Augmentation Function ---
 
-export function augmentStopTimes(
-	stopTimes: qdf.StopTime[],
-	serviceDates: string[],
-): AugmentedStopTime[] {
+export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string[]): AugmentedStopTime[] {
 	if (stopTimes.length === 0) return [];
 
 	const tripId = stopTimes[0].trip_id;
@@ -466,14 +469,14 @@ export function augmentStopTimes(
 	const initialScheduledArr = firstStop.arrival_time ?? 0;
 	const initialScheduledDep = firstStop.departure_time ?? 0;
 	// We assume actual starts same as scheduled unless updated immediately
-	const initialActualArr = initialScheduledArr; 
+	const initialActualArr = initialScheduledArr;
 	const initialActualDep = initialScheduledDep;
 
 	const dateOffsets = {
 		schedArr: Math.floor(initialScheduledArr / 86400),
 		schedDep: Math.floor(initialScheduledDep / 86400),
 		actArr: Math.floor(initialActualArr / 86400),
-		actDep: Math.floor(initialActualDep / 86400)
+		actDep: Math.floor(initialActualDep / 86400),
 	};
 
 	// Propagation State
@@ -489,7 +492,9 @@ export function augmentStopTimes(
 
 		// 1. Fetch Stop Info
 		const scheduledStop = cache.getAugmentedStops(stopId)[0];
-		const scheduledParent = scheduledStop?.parent_station ? cache.getAugmentedStops(scheduledStop.parent_station)[0] : null;
+		const scheduledParent = scheduledStop?.parent_station
+			? cache.getAugmentedStops(scheduledStop.parent_station)[0]
+			: null;
 
 		// 2. Find Realtime Update
 		// Logic: Match specific stop, parent station, or any child of the augmented stop
@@ -509,18 +514,22 @@ export function augmentStopTimes(
 		let delaySecs = lastDelay;
 		let propagated = false;
 		let scheduleRelationship: qdf.StopTimeScheduleRelationship = lastScheduleRelationship;
-		
+
 		let rtFlags = {
-			stop: false, parent: false, platform: false, arr: false, dep: false
+			stop: false,
+			parent: false,
+			platform: false,
+			arr: false,
+			dep: false,
 		};
-		
+
 		let platformCode: string | null = null;
 		let actualStop = scheduledStop;
 		let actualParent = scheduledParent;
 
 		if (rtUpdate) {
 			propagated = false;
-			
+
 			// Update Delay/Times
 			if (rtUpdate.departure_delay !== undefined) {
 				if (schedDep !== undefined) actDep = schedDep + rtUpdate.departure_delay;
@@ -556,7 +565,9 @@ export function augmentStopTimes(
 
 			if (rtUpdate.stop_id && rtUpdate.stop_id !== stopId) {
 				actualStop = cache.getAugmentedStops(rtUpdate.stop_id)[0];
-				actualParent = actualStop?.parent_station ? cache.getAugmentedStops(actualStop.parent_station)[0] : null;
+				actualParent = actualStop?.parent_station
+					? cache.getAugmentedStops(actualStop.parent_station)[0]
+					: null;
 				rtFlags.stop = true;
 				rtFlags.parent = true;
 			}
@@ -590,52 +601,56 @@ export function augmentStopTimes(
 
 		// 5. Date Calculations
 		const getOffset = (secs: number | undefined | null) => (secs ? Math.floor(secs / 86400) : 0);
-		
+
 		const currentOffsets = {
 			schedArr: getOffset(schedArr),
 			schedDep: getOffset(schedDep),
 			actArr: getOffset(actArr),
-			actDep: getOffset(actDep)
+			actDep: getOffset(actDep),
 		};
 
 		const scheduled_arrival_dates = serviceDates.map((d) => d + (currentOffsets.schedArr - dateOffsets.schedArr));
 		const scheduled_departure_dates = serviceDates.map((d) => d + (currentOffsets.schedDep - dateOffsets.schedDep));
-		
+
 		// Actual dates logic: if today, use actual offset, otherwise assume scheduled offset relative to that day
 		const todayStr = today();
-		const actual_arrival_dates = serviceDates.map(d => 
-			d === todayStr ? d + (currentOffsets.actArr - dateOffsets.actArr) : d + (currentOffsets.schedArr - dateOffsets.schedArr)
+		const actual_arrival_dates = serviceDates.map((d) =>
+			d === todayStr
+				? d + (currentOffsets.actArr - dateOffsets.actArr)
+				: d + (currentOffsets.schedArr - dateOffsets.schedArr),
 		);
-		const actual_departure_dates = serviceDates.map(d => 
-			d === todayStr ? d + (currentOffsets.actDep - dateOffsets.actDep) : d + (currentOffsets.schedDep - dateOffsets.schedDep)
+		const actual_departure_dates = serviceDates.map((d) =>
+			d === todayStr
+				? d + (currentOffsets.actDep - dateOffsets.actDep)
+				: d + (currentOffsets.schedDep - dateOffsets.schedDep),
 		);
 
 		intermediateStops.push({
 			_stopTime: isPassing ? null : passingStopTime,
 			trip_id: tripId,
 			passing: isPassing,
-			
+
 			actual_arrival_time: actArr ? actArr % 86400 : null,
 			actual_departure_time: actDep ? actDep % 86400 : null,
 			actual_stop: actualStop,
 			actual_parent_station: actualParent,
 			actual_platform_code: isPassing ? null : (platformCode ?? scheduledStop.platform_code ?? null),
-			
+
 			rt_stop_updated: rtFlags.stop,
 			rt_parent_station_updated: rtFlags.parent,
 			rt_platform_code_updated: rtFlags.platform,
 			rt_arrival_updated: rtFlags.arr,
 			rt_departure_updated: rtFlags.dep,
-			
+
 			scheduled_arrival_time: schedArr ? schedArr % 86400 : null,
 			scheduled_departure_time: schedDep ? schedDep % 86400 : null,
 			scheduled_stop: scheduledStop,
 			scheduled_parent_station: scheduledParent,
 			scheduled_platform_code: isPassing ? null : (scheduledStop.platform_code ?? null),
-			
+
 			realtime: hasRealtime,
 			realtime_info: realtimeInfo,
-			
+
 			scheduled_arrival_dates,
 			actual_arrival_dates,
 			scheduled_arrival_date_offset: currentOffsets.schedArr - dateOffsets.schedArr,

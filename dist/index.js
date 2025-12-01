@@ -14,6 +14,8 @@ let staticInterval = null;
 export async function loadGTFS(autoRefresh = false, forceReload = false, realtimeIntervalMs = 60 * 1000, // 1 minute
 staticIntervalMs = 24 * 60 * 60 * 1000) {
     await createGtfs();
+    await cache.refreshStaticCache(true);
+    await cache.refreshRealtimeCache();
     if (!autoRefresh)
         return;
     realtimeInterval = setInterval(() => updateRealtime().catch((err) => logger.error("Error refreshing realtime GTFS data", {

@@ -21,6 +21,8 @@ export async function loadGTFS(
 	staticIntervalMs: number = 24 * 60 * 60 * 1000, // 24 hours
 ): Promise<void> {
 	await createGtfs();
+	await cache.refreshStaticCache(true);
+	await cache.refreshRealtimeCache();
 
 	if (!autoRefresh) return;
 
