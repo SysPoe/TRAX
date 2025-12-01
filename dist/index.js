@@ -27,7 +27,7 @@ staticIntervalMs = 24 * 60 * 60 * 1000) {
             error: err.message || err,
         }))
             .finally(() => {
-            traxEmitter.emit("realtime-update-complete");
+            traxEmitter.emit("realtime-update-end");
         });
     }, realtimeIntervalMs);
     staticInterval = setInterval(async () => {
@@ -45,7 +45,7 @@ staticIntervalMs = 24 * 60 * 60 * 1000) {
             });
         }
         finally {
-            traxEmitter.emit("static-update-complete");
+            traxEmitter.emit("static-update-end");
         }
     }, staticIntervalMs);
 }

@@ -8,9 +8,9 @@ import { EventEmitter } from "events";
 import { getGtfs, hasGtfs } from "./gtfsInterfaceLayer.js";
 interface TRAXEvent {
     "realtime-update-start": [];
-    "realtime-update-complete": [];
+    "realtime-update-end": [];
     "static-update-start": [];
-    "static-update-complete": [];
+    "static-update-end": [];
 }
 export declare function loadGTFS(autoRefresh?: boolean, forceReload?: boolean, realtimeIntervalMs?: number, // 1 minute
 staticIntervalMs?: number): Promise<void>;

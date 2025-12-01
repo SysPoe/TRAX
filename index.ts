@@ -11,9 +11,9 @@ import { TRAX_CONFIG } from "./config.js";
 
 interface TRAXEvent {
 	"realtime-update-start": [];
-	"realtime-update-complete": [];
+	"realtime-update-end": [];
 	"static-update-start": [];
-	"static-update-complete": [];
+	"static-update-end": [];
 }
 
 const traxEmitter: EventEmitter<TRAXEvent> = new EventEmitter();
@@ -44,7 +44,7 @@ export async function loadGTFS(
 				}),
 			)
 			.finally(() => {
-				traxEmitter.emit("realtime-update-complete");
+				traxEmitter.emit("realtime-update-end");
 			});
 	}, realtimeIntervalMs);
 	staticInterval = setInterval(async () => {
@@ -60,7 +60,7 @@ export async function loadGTFS(
 				error: error.message || error,
 			});
 		} finally {
-			traxEmitter.emit("static-update-complete");
+			traxEmitter.emit("static-update-end");
 		}
 	}, staticIntervalMs);
 }
