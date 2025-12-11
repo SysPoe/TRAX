@@ -9,24 +9,24 @@ export function toSerializableAugmentedStop(stop) {
         children: stop.children.map((child) => child.stop_id),
     };
 }
-export function augmentStop(stop) {
+export function augmentStop(stop, ctx) {
     // Cache children lookup to avoid repeated expensive operations
     let cachedChildren = null;
     const getChildren = () => {
         if (cachedChildren)
             return cachedChildren;
-        const childStops = cache.getRawStops().filter((s) => s.parent_station === stop.stop_id);
-        cachedChildren = childStops.map((s) => cache.getAugmentedStops(s.stop_id)[0] || augmentStop(s));
+        const childStops = cache.getRawStops(undefined, ctx).filter((s) => s.parent_station === stop.stop_id);
+        cachedChildren = childStops.map((s) => cache.getAugmentedStops(s.stop_id, ctx)[0] || augmentStop(s, ctx));
         return cachedChildren;
     };
-    let qrt_Places = cache.getQRTPlaces();
+    let qrt_Places = cache.getQRTPlaces(ctx);
     let trimmedStopName = stop.stop_name?.toLowerCase().replace("station", "").trim();
     let myPlace = qrt_Places.find((v) => v.Title?.toLowerCase().trim() === trimmedStopName ||
         (trimmedStopName === "roma street" && v.Title?.toLowerCase().trim().includes("roma street")));
     const getParent = () => {
         if (!stop.parent_station)
             return null;
-        return cache.getAugmentedStops(stop.parent_station)[0];
+        return cache.getAugmentedStops(stop.parent_station, ctx)[0];
     };
     return {
         ...stop,
@@ -81,7 +81,7 @@ export function augmentStop(stop) {
                 // 1. Resolve Trip
                 let trip = tripCache.get(rawSt.trip_id);
                 if (!trip) {
-                    const trips = getAugmentedTrips(rawSt.trip_id);
+                    const trips = getAugmentedTrips(rawSt.trip_id, ctx);
                     if (trips.length > 0) {
                         trip = trips[0];
                         tripCache.set(rawSt.trip_id, trip);
@@ -131,7 +131,7 @@ export function augmentStop(stop) {
             for (const rawSt of rawStopTimes) {
                 let trip = tripCache.get(rawSt.trip_id);
                 if (!trip) {
-                    const trips = getAugmentedTrips(rawSt.trip_id);
+                    const trips = getAugmentedTrips(rawSt.trip_id, ctx);
                     if (trips.length > 0) {
                         trip = trips[0];
                         tripCache.set(rawSt.trip_id, trip);

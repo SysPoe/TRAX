@@ -38,212 +38,8 @@ class LRUCache {
         return this.cache.size;
     }
 }
-let rawCache = {
-    tripUpdates: [],
-    vehiclePositions: [],
-    stopTimes: [],
-    calendars: [],
-    calendarDates: [],
-    trips: [],
-    stops: [],
-    routes: [],
-    tripsRec: new Map(),
-    stopsRec: new Map(),
-    routesRec: new Map(),
-    qrtPlaces: [],
-    qrtTrains: [],
-};
-let augmentedCache = {
-    trips: [],
-    stops: [],
-    stopTimes: {},
-    baseStopTimes: {},
-    tripsRec: new Map(),
-    stopsRec: new Map(),
-    serviceDateTrips: new Map(),
-    expressInfoCache: new LRUCache(1000), // Max 1000 express info entries
-    passingStopsCache: new LRUCache(5000), // Max 5000 passing stops entries
-    runSeriesCache: new Map(),
-};
-let _cacheLoaded = false;
-export function cacheLoaded() {
-    return _cacheLoaded;
-}
-export function getCalendars(filter) {
-    const gtfs = getGtfs();
-    if (!rawCache.calendars || rawCache.calendars.length === 0)
-        rawCache.calendars = gtfs.getCalendars();
-    if (!filter)
-        return rawCache.calendars;
-    // simple filter implementation
-    return rawCache.calendars.filter((c) => {
-        for (const key of Object.keys(filter)) {
-            // @ts-ignore
-            if (c[key] !== filter[key])
-                return false;
-        }
-        return true;
-    });
-}
-export function getCalendarDates(filter) {
-    const gtfs = getGtfs();
-    if (!rawCache.calendarDates || rawCache.calendarDates.length === 0)
-        rawCache.calendarDates = gtfs.getCalendarDates();
-    if (!filter)
-        return rawCache.calendarDates;
-    return rawCache.calendarDates.filter((c) => {
-        for (const key of Object.keys(filter)) {
-            // @ts-ignore
-            if (c[key] !== filter[key])
-                return false;
-        }
-        return true;
-    });
-}
-export function getRawTrips(trip_id) {
-    if (trip_id) {
-        const trip = rawCache.tripsRec.get(trip_id);
-        return trip ? [trip] : [];
-    }
-    return rawCache.trips;
-}
-export function getRawStops(stop_id) {
-    if (stop_id) {
-        const stop = rawCache.stopsRec.get(stop_id);
-        return stop ? [stop] : [];
-    }
-    return rawCache.stops;
-}
-export function getRawRoutes(route_id) {
-    if (route_id) {
-        const route = rawCache.routesRec.get(route_id);
-        return route ? [route] : [];
-    }
-    return rawCache.routes;
-}
-export function getTripUpdates(trip_id) {
-    const gtfs = getGtfs();
-    if (rawCache.tripUpdates.length === 0)
-        rawCache.tripUpdates = gtfs.getRealtimeTripUpdates();
-    if (trip_id)
-        return rawCache.tripUpdates.filter((v) => v.trip.trip_id == trip_id); // TODO make better
-    return rawCache.tripUpdates;
-}
-export function getVehiclePositions(trip_id) {
-    const gtfs = getGtfs();
-    if (rawCache.vehiclePositions.length === 0)
-        rawCache.vehiclePositions = gtfs.getRealtimeVehiclePositions();
-    if (trip_id)
-        return rawCache.vehiclePositions.filter((v) => v.trip.trip_id == trip_id); // TODO make better
-    return rawCache.vehiclePositions;
-}
-export function getStopTimeUpdates(trip_id) {
-    return getTripUpdates(trip_id)[0]?.stop_time_updates ?? [];
-}
-export function getQRTPlaces() {
-    return rawCache.qrtPlaces;
-}
-export function getQRTTrains() {
-    return rawCache.qrtTrains;
-}
-export function getRawStopTimes(trip_id) {
-    return getGtfs().getStopTimesForTrip(trip_id);
-}
-export function getAugmentedTrips(trip_id) {
-    if (trip_id) {
-        const trip = augmentedCache.tripsRec.get(trip_id);
-        if (trip)
-            return [trip];
-        const rawTrip = rawCache.tripsRec.get(trip_id);
-        if (rawTrip) {
-            const augmentedTrip = augmentTrip(rawTrip);
-            augmentedCache.tripsRec.set(trip_id, augmentedTrip);
-            return [augmentedTrip];
-        }
-        return [];
-    }
-    // Build from tripsRec to ensure we have current data
-    return Array.from(augmentedCache.tripsRec.values());
-}
-export function getAugmentedStops(stop_id) {
-    if (stop_id) {
-        const stop = augmentedCache.stopsRec.get(stop_id);
-        if (stop)
-            return [stop];
-        const rawStop = rawCache.stopsRec.get(stop_id);
-        if (rawStop) {
-            const augmentedStop = augmentStop(rawStop);
-            augmentedCache.stopsRec.set(stop_id, augmentedStop);
-            return [augmentedStop];
-        }
-        return [];
-    }
-    return augmentedCache.stops ?? [];
-}
-export function getAugmentedStopTimes(trip_id) {
-    if (trip_id)
-        return augmentedCache.stopTimes?.[trip_id] ?? [];
-    return Object.values(augmentedCache.stopTimes ?? {}).flat();
-}
-export function queryAugmentedStopTimes(query) {
-    const results = [];
-    const gtfs = getGtfs();
-    gtfs.queryStopTimes(query).forEach((st) => {
-        const augmentedTrip = getAugmentedTrips(st.trip_id)[0];
-        if (augmentedTrip) {
-            const augmentedStopTime = augmentedTrip.stopTimes.find((ast) => ast._stopTime?.stop_sequence === st.stop_sequence && ast.scheduled_stop?.stop_id === st.stop_id);
-            if (augmentedStopTime) {
-                results.push(augmentedStopTime);
-            }
-        }
-    });
-    return results;
-}
-export function getBaseStopTimes(trip_id) {
-    return augmentedCache.baseStopTimes?.[trip_id] ?? [];
-}
-export function cacheExpressInfo(stopListHash, expressInfo) {
-    augmentedCache.expressInfoCache.set(stopListHash, expressInfo);
-}
-export function getCachedExpressInfo(stopListHash) {
-    return augmentedCache.expressInfoCache.get(stopListHash);
-}
-export function cachePassingStops(stopListHash, passingStops) {
-    augmentedCache.passingStopsCache.set(stopListHash, passingStops);
-}
-export function getCachedPassingStops(stopListHash) {
-    return augmentedCache.passingStopsCache.get(stopListHash);
-}
-export function getRunSeries(date, runSeries, calcIfNotFound = true) {
-    let dateMap = augmentedCache.runSeriesCache.get(date);
-    if (!dateMap) {
-        dateMap = new Map();
-        augmentedCache.runSeriesCache.set(date, dateMap);
-    }
-    if (!dateMap.get(runSeries) &&
-        calcIfNotFound &&
-        augmentedCache.serviceDateTrips.get(date)?.find((v) => v.endsWith(runSeries))) {
-        calculateRunSeries(getAugmentedTrips(augmentedCache.serviceDateTrips.get(date)?.find((v) => v.endsWith(runSeries)))[0]);
-    }
-    else if (!dateMap.get(runSeries))
-        dateMap.set(runSeries, {
-            trips: [],
-            vehicle_sightings: [],
-            series: runSeries.toUpperCase(),
-            date,
-        });
-    return dateMap.get(runSeries);
-}
-export function setRunSeries(date, runSeries, data) {
-    let dateMap = augmentedCache.runSeriesCache.get(date);
-    if (!dateMap) {
-        dateMap = new Map();
-        augmentedCache.runSeriesCache.set(date, dateMap);
-    }
-    dateMap.set(runSeries, data);
-}
-function resetStaticCache() {
-    rawCache = {
+export function createEmptyRawCache() {
+    return {
         tripUpdates: [],
         vehiclePositions: [],
         stopTimes: [],
@@ -258,7 +54,9 @@ function resetStaticCache() {
         qrtPlaces: [],
         qrtTrains: [],
     };
-    augmentedCache = {
+}
+export function createEmptyAugmentedCache() {
+    return {
         trips: [],
         stops: [],
         stopTimes: {},
@@ -266,10 +64,217 @@ function resetStaticCache() {
         tripsRec: new Map(),
         stopsRec: new Map(),
         serviceDateTrips: new Map(),
-        expressInfoCache: new LRUCache(1000),
-        passingStopsCache: new LRUCache(5000),
+        expressInfoCache: new LRUCache(1000), // Max 1000 express info entries
+        passingStopsCache: new LRUCache(5000), // Max 5000 passing stops entries
         runSeriesCache: new Map(),
     };
+}
+let rawCache = createEmptyRawCache();
+let augmentedCache = createEmptyAugmentedCache();
+let _cacheLoaded = false;
+export function cacheLoaded() {
+    return _cacheLoaded;
+}
+function getContext(ctx) {
+    if (ctx)
+        return ctx;
+    return { raw: rawCache, augmented: augmentedCache };
+}
+export function getCalendars(filter, ctx) {
+    const { raw } = getContext(ctx);
+    const gtfs = getGtfs();
+    if (!raw.calendars || raw.calendars.length === 0)
+        raw.calendars = gtfs.getCalendars();
+    if (!filter)
+        return raw.calendars;
+    // simple filter implementation
+    return raw.calendars.filter((c) => {
+        for (const key of Object.keys(filter)) {
+            // @ts-ignore
+            if (c[key] !== filter[key])
+                return false;
+        }
+        return true;
+    });
+}
+export function getCalendarDates(filter, ctx) {
+    const { raw } = getContext(ctx);
+    const gtfs = getGtfs();
+    if (!raw.calendarDates || raw.calendarDates.length === 0)
+        raw.calendarDates = gtfs.getCalendarDates();
+    if (!filter)
+        return raw.calendarDates;
+    return raw.calendarDates.filter((c) => {
+        for (const key of Object.keys(filter)) {
+            // @ts-ignore
+            if (c[key] !== filter[key])
+                return false;
+        }
+        return true;
+    });
+}
+export function getRawTrips(trip_id, ctx) {
+    const { raw } = getContext(ctx);
+    if (trip_id) {
+        const trip = raw.tripsRec.get(trip_id);
+        return trip ? [trip] : [];
+    }
+    return raw.trips;
+}
+export function getRawStops(stop_id, ctx) {
+    const { raw } = getContext(ctx);
+    if (stop_id) {
+        const stop = raw.stopsRec.get(stop_id);
+        return stop ? [stop] : [];
+    }
+    return raw.stops;
+}
+export function getRawRoutes(route_id, ctx) {
+    const { raw } = getContext(ctx);
+    if (route_id) {
+        const route = raw.routesRec.get(route_id);
+        return route ? [route] : [];
+    }
+    return raw.routes;
+}
+export function getTripUpdates(trip_id, ctx) {
+    const { raw } = getContext(ctx);
+    const gtfs = getGtfs();
+    if (raw.tripUpdates.length === 0)
+        raw.tripUpdates = gtfs.getRealtimeTripUpdates();
+    if (trip_id)
+        return raw.tripUpdates.filter((v) => v.trip.trip_id == trip_id); // TODO make better
+    return raw.tripUpdates;
+}
+export function getVehiclePositions(trip_id, ctx) {
+    const { raw } = getContext(ctx);
+    const gtfs = getGtfs();
+    if (raw.vehiclePositions.length === 0)
+        raw.vehiclePositions = gtfs.getRealtimeVehiclePositions();
+    if (trip_id)
+        return raw.vehiclePositions.filter((v) => v.trip.trip_id == trip_id); // TODO make better
+    return raw.vehiclePositions;
+}
+export function getStopTimeUpdates(trip_id, ctx) {
+    return getTripUpdates(trip_id, ctx)[0]?.stop_time_updates ?? [];
+}
+export function getQRTPlaces(ctx) {
+    const { raw } = getContext(ctx);
+    return raw.qrtPlaces;
+}
+export function getQRTTrains(ctx) {
+    const { raw } = getContext(ctx);
+    return raw.qrtTrains;
+}
+export function getRawStopTimes(trip_id) {
+    return getGtfs().getStopTimesForTrip(trip_id);
+}
+export function getAugmentedTrips(trip_id, ctx) {
+    const context = getContext(ctx);
+    const { raw, augmented } = context;
+    if (trip_id) {
+        const trip = augmented.tripsRec.get(trip_id);
+        if (trip)
+            return [trip];
+        const rawTrip = raw.tripsRec.get(trip_id);
+        if (rawTrip) {
+            const augmentedTrip = augmentTrip(rawTrip, context);
+            augmented.tripsRec.set(trip_id, augmentedTrip);
+            return [augmentedTrip];
+        }
+        return [];
+    }
+    // Build from tripsRec to ensure we have current data
+    return Array.from(augmented.tripsRec.values());
+}
+export function getAugmentedStops(stop_id, ctx) {
+    const context = getContext(ctx);
+    const { raw, augmented } = context;
+    if (stop_id) {
+        const stop = augmented.stopsRec.get(stop_id);
+        if (stop)
+            return [stop];
+        const rawStop = raw.stopsRec.get(stop_id);
+        if (rawStop) {
+            const augmentedStop = augmentStop(rawStop, context);
+            augmented.stopsRec.set(stop_id, augmentedStop);
+            return [augmentedStop];
+        }
+        return [];
+    }
+    return augmented.stops ?? [];
+}
+export function getAugmentedStopTimes(trip_id, ctx) {
+    const { augmented } = getContext(ctx);
+    if (trip_id)
+        return augmented.stopTimes?.[trip_id] ?? [];
+    return Object.values(augmented.stopTimes ?? {}).flat();
+}
+export function queryAugmentedStopTimes(query, ctx) {
+    const context = getContext(ctx);
+    const results = [];
+    const gtfs = getGtfs();
+    gtfs.queryStopTimes(query).forEach((st) => {
+        const augmentedTrip = getAugmentedTrips(st.trip_id, context)[0];
+        if (augmentedTrip) {
+            const augmentedStopTime = augmentedTrip.stopTimes.find((ast) => ast._stopTime?.stop_sequence === st.stop_sequence && ast.scheduled_stop?.stop_id === st.stop_id);
+            if (augmentedStopTime) {
+                results.push(augmentedStopTime);
+            }
+        }
+    });
+    return results;
+}
+export function getBaseStopTimes(trip_id, ctx) {
+    const { augmented } = getContext(ctx);
+    return augmented.baseStopTimes?.[trip_id] ?? [];
+}
+export function cacheExpressInfo(stopListHash, expressInfo, ctx) {
+    const { augmented } = getContext(ctx);
+    augmented.expressInfoCache.set(stopListHash, expressInfo);
+}
+export function getCachedExpressInfo(stopListHash, ctx) {
+    const { augmented } = getContext(ctx);
+    return augmented.expressInfoCache.get(stopListHash);
+}
+export function cachePassingStops(stopListHash, passingStops, ctx) {
+    const { augmented } = getContext(ctx);
+    augmented.passingStopsCache.set(stopListHash, passingStops);
+}
+export function getCachedPassingStops(stopListHash, ctx) {
+    const { augmented } = getContext(ctx);
+    return augmented.passingStopsCache.get(stopListHash);
+}
+export function getRunSeries(date, runSeries, calcIfNotFound = true, ctx) {
+    const context = getContext(ctx);
+    const { augmented } = context;
+    let dateMap = augmented.runSeriesCache.get(date);
+    if (!dateMap) {
+        dateMap = new Map();
+        augmented.runSeriesCache.set(date, dateMap);
+    }
+    if (!dateMap.get(runSeries) &&
+        calcIfNotFound &&
+        augmented.serviceDateTrips.get(date)?.find((v) => v.endsWith(runSeries))) {
+        calculateRunSeries(getAugmentedTrips(augmented.serviceDateTrips.get(date)?.find((v) => v.endsWith(runSeries)), context)[0], context);
+    }
+    else if (!dateMap.get(runSeries))
+        dateMap.set(runSeries, {
+            trips: [],
+            vehicle_sightings: [],
+            series: runSeries.toUpperCase(),
+            date,
+        });
+    return dateMap.get(runSeries);
+}
+export function setRunSeries(date, runSeries, data, ctx) {
+    const { augmented } = getContext(ctx);
+    let dateMap = augmented.runSeriesCache.get(date);
+    if (!dateMap) {
+        dateMap = new Map();
+        augmented.runSeriesCache.set(date, dateMap);
+    }
+    dateMap.set(runSeries, data);
 }
 function resetRealtimeCacheIncremental(updatedTripIds) {
     rawCache.tripUpdates = [];
@@ -299,13 +304,16 @@ export async function refreshStaticCache(skipRealtimeOverlap = false) {
         module: "cache",
         function: "refreshStaticCache",
     });
-    resetStaticCache();
+    // Create new local caches (Double Buffering)
+    const newRawCache = createEmptyRawCache();
+    const newAugmentedCache = createEmptyAugmentedCache();
+    const ctx = { raw: newRawCache, augmented: newAugmentedCache };
     logger.debug("Loading QRT places...", {
         module: "cache",
         function: "refreshStaticCache",
     });
-    rawCache.qrtPlaces = await getPlaces();
-    logger.debug(`Loaded ${rawCache.qrtPlaces.length} QRT places.`, {
+    newRawCache.qrtPlaces = await getPlaces();
+    logger.debug(`Loaded ${newRawCache.qrtPlaces.length} QRT places.`, {
         module: "cache",
         function: "refreshStaticCache",
     });
@@ -313,8 +321,8 @@ export async function refreshStaticCache(skipRealtimeOverlap = false) {
         module: "cache",
         function: "refreshStaticCache",
     });
-    rawCache.stops = gtfs.getStops();
-    logger.debug(`Loaded ${rawCache.stops.length} stops.`, {
+    newRawCache.stops = gtfs.getStops();
+    logger.debug(`Loaded ${newRawCache.stops.length} stops.`, {
         module: "cache",
         function: "refreshStaticCache",
     });
@@ -322,8 +330,8 @@ export async function refreshStaticCache(skipRealtimeOverlap = false) {
         module: "cache",
         function: "refreshStaticCache",
     });
-    rawCache.calendars = gtfs.getCalendars();
-    logger.debug(`Loaded ${rawCache.calendars.length} calendars.`, {
+    newRawCache.calendars = gtfs.getCalendars();
+    logger.debug(`Loaded ${newRawCache.calendars.length} calendars.`, {
         module: "cache",
         function: "refreshStaticCache",
     });
@@ -331,8 +339,8 @@ export async function refreshStaticCache(skipRealtimeOverlap = false) {
         module: "cache",
         function: "refreshStaticCache",
     });
-    rawCache.calendarDates = gtfs.getCalendarDates();
-    logger.debug(`Loaded ${rawCache.calendarDates.length} calendar dates.`, {
+    newRawCache.calendarDates = gtfs.getCalendarDates();
+    logger.debug(`Loaded ${newRawCache.calendarDates.length} calendar dates.`, {
         module: "cache",
         function: "refreshStaticCache",
     });
@@ -340,8 +348,8 @@ export async function refreshStaticCache(skipRealtimeOverlap = false) {
         module: "cache",
         function: "refreshStaticCache",
     });
-    rawCache.routes = gtfs.getRoutes();
-    logger.debug(`Loaded ${rawCache.routes.length} routes.`, {
+    newRawCache.routes = gtfs.getRoutes();
+    logger.debug(`Loaded ${newRawCache.routes.length} routes.`, {
         module: "cache",
         function: "refreshStaticCache",
     });
@@ -349,8 +357,8 @@ export async function refreshStaticCache(skipRealtimeOverlap = false) {
         module: "cache",
         function: "refreshStaticCache",
     });
-    rawCache.trips = gtfs.getTrips().filter((v) => v.trip_id.includes("-QR "));
-    logger.debug(`Loaded ${rawCache.trips.length} trips.`, {
+    newRawCache.trips = gtfs.getTrips().filter((v) => v.trip_id.includes("-QR "));
+    logger.debug(`Loaded ${newRawCache.trips.length} trips.`, {
         module: "cache",
         function: "refreshStaticCache",
     });
@@ -358,18 +366,18 @@ export async function refreshStaticCache(skipRealtimeOverlap = false) {
         module: "cache",
         function: "refreshStaticCache",
     });
-    for (const trip of rawCache.trips)
-        rawCache.tripsRec.set(trip.trip_id, trip);
-    for (const stop of rawCache.stops)
-        rawCache.stopsRec.set(stop.stop_id, stop);
-    for (const route of rawCache.routes)
-        rawCache.routesRec.set(route.route_id, route);
+    for (const trip of newRawCache.trips)
+        newRawCache.tripsRec.set(trip.trip_id, trip);
+    for (const stop of newRawCache.stops)
+        newRawCache.stopsRec.set(stop.stop_id, stop);
+    for (const route of newRawCache.routes)
+        newRawCache.routesRec.set(route.route_id, route);
     logger.debug("Augmenting stops...", {
         module: "cache",
         function: "refreshStaticCache",
     });
-    augmentedCache.stops = rawCache.stops.map(augmentStop);
-    logger.debug(`Augmented ${augmentedCache.stops.length} stops.`, {
+    newAugmentedCache.stops = newRawCache.stops.map((s) => augmentStop(s, ctx));
+    logger.debug(`Augmented ${newAugmentedCache.stops.length} stops.`, {
         module: "cache",
         function: "refreshStaticCache",
     });
@@ -377,38 +385,41 @@ export async function refreshStaticCache(skipRealtimeOverlap = false) {
         module: "cache",
         function: "refreshStaticCache",
     });
-    for (const tripId of rawCache.tripsRec.keys()) {
-        const rawTrip = rawCache.tripsRec.get(tripId);
+    for (const tripId of newRawCache.tripsRec.keys()) {
+        const rawTrip = newRawCache.tripsRec.get(tripId);
         if (rawTrip) {
-            const augmentedTrip = augmentTrip(rawTrip);
-            augmentedCache.tripsRec.set(tripId, augmentedTrip);
+            const augmentedTrip = augmentTrip(rawTrip, ctx);
+            newAugmentedCache.tripsRec.set(tripId, augmentedTrip);
         }
     }
-    logger.debug(`Augmented ${augmentedCache.tripsRec.size} trips.`, {
+    logger.debug(`Augmented ${newAugmentedCache.tripsRec.size} trips.`, {
         module: "cache",
         function: "refreshStaticCache",
     });
-    augmentedCache.trips = Array.from(augmentedCache.tripsRec.values());
+    newAugmentedCache.trips = Array.from(newAugmentedCache.tripsRec.values());
     logger.debug("Building augmented cache records...", {
         module: "cache",
         function: "refreshStaticCache",
     });
-    for (const trip of augmentedCache.trips) {
-        augmentedCache.tripsRec.set(trip._trip.trip_id, trip);
+    for (const trip of newAugmentedCache.trips) {
+        newAugmentedCache.tripsRec.set(trip._trip.trip_id, trip);
         // Store both current stop times and base stop times (without realtime)
-        augmentedCache.stopTimes[trip._trip.trip_id] = trip.stopTimes;
-        augmentedCache.baseStopTimes[trip._trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
+        newAugmentedCache.stopTimes[trip._trip.trip_id] = trip.stopTimes;
+        newAugmentedCache.baseStopTimes[trip._trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
         for (const serviceDate of trip.actualTripDates) {
-            let tripIds = augmentedCache.serviceDateTrips.get(serviceDate);
+            let tripIds = newAugmentedCache.serviceDateTrips.get(serviceDate);
             if (!tripIds) {
                 tripIds = [];
-                augmentedCache.serviceDateTrips.set(serviceDate, tripIds);
+                newAugmentedCache.serviceDateTrips.set(serviceDate, tripIds);
             }
             tripIds.push(trip._trip.trip_id);
         }
     }
-    for (const stop of augmentedCache.stops)
-        augmentedCache.stopsRec.set(stop.stop_id, stop);
+    for (const stop of newAugmentedCache.stops)
+        newAugmentedCache.stopsRec.set(stop.stop_id, stop);
+    // SWAP CACHE
+    rawCache = newRawCache;
+    augmentedCache = newAugmentedCache;
     logger.info("Static GTFS cache refreshed.", {
         module: "cache",
         function: "refreshStaticCache",

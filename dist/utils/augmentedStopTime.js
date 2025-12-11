@@ -19,10 +19,10 @@ export function toSerializableAugmentedStopTime(st) {
 // --- Caching & Logging ---
 const loggedMissingSRT = new Set();
 // --- Helper Functions ---
-function getStopOrParentId(stopId) {
+function getStopOrParentId(stopId, ctx) {
     if (!stopId)
         return undefined;
-    const stop = cache.getRawStops(stopId)[0];
+    const stop = cache.getRawStops(stopId, ctx)[0];
     return stop?.parent_station ?? undefined;
 }
 function getPlatformData(stopId) {
@@ -57,9 +57,9 @@ function addDaysToDateString(dateStr, daysToAdd) {
     return `${ny}${nm}${nd}`;
 }
 // --- Passing Stop Logic ---
-function findPassingStops(stops) {
+function findPassingStops(stops, ctx) {
     const stopListHash = stops.join("|");
-    const cached = cache.getCachedPassingStops(stopListHash);
+    const cached = cache.getCachedPassingStops(stopListHash, ctx);
     if (cached)
         return cached;
     const expressSegments = findExpress(stops);
@@ -96,11 +96,11 @@ function findPassingStops(stops) {
         segment.skipping?.forEach((s) => addStop(s, true));
         addStop(segment.to, false);
     }
-    cache.cachePassingStops(stopListHash, allStops);
+    cache.cachePassingStops(stopListHash, allStops, ctx);
     return allStops;
 }
-function findPassingStopSRTs(stops) {
-    const allStops = findPassingStops(stops);
+function findPassingStopSRTs(stops, ctx) {
+    const allStops = findPassingStops(stops, ctx);
     const results = [];
     for (let i = 0; i < allStops.length - 1; i++) {
         const from = allStops[i].stop_id;
@@ -124,21 +124,21 @@ function findPassingStopSRTs(stops) {
     }
     return results;
 }
-function findPassingStopTimes(stopTimes) {
+function findPassingStopTimes(stopTimes, ctx) {
     if (stopTimes.length === 0)
         return [];
     // Extract parent stations for SRT lookup, sorted by sequence
     const sortedStopTimes = [...stopTimes].sort((a, b) => (a.stop_sequence ?? 0) - (b.stop_sequence ?? 0));
     const stops = sortedStopTimes
-        .map((st) => getStopOrParentId(st.stop_id))
+        .map((st) => getStopOrParentId(st.stop_id, ctx))
         .filter((v) => v !== undefined);
     const idsToTimes = {};
     for (const st of stopTimes) {
-        const parent = getStopOrParentId(st.stop_id);
+        const parent = getStopOrParentId(st.stop_id, ctx);
         if (parent)
             idsToTimes[parent] = st;
     }
-    const passingSRTs = findPassingStopSRTs(stops);
+    const passingSRTs = findPassingStopSRTs(stops, ctx);
     if (!passingSRTs.length) {
         logger.error(`No passing SRTs found for stops ${stops.join(", ")}`, {
             module: "augmentedStopTime",
@@ -328,7 +328,7 @@ function assignPlatformSides(st) {
     }));
 }
 // --- Main Augmentation Function ---
-export function augmentStopTimes(stopTimes, serviceDates) {
+export function augmentStopTimes(stopTimes, serviceDates, ctx) {
     if (stopTimes.length === 0)
         return [];
     const tripId = stopTimes[0].trip_id;
@@ -338,9 +338,9 @@ export function augmentStopTimes(stopTimes, serviceDates) {
             function: "augmentStopTimes",
         });
     }
-    const tripUpdate = cache.getTripUpdates(tripId)[0];
+    const tripUpdate = cache.getTripUpdates(tripId, ctx)[0];
     const stopTimeUpdates = tripUpdate?.stop_time_updates ?? [];
-    const passingStopTimes = findPassingStopTimes(stopTimes);
+    const passingStopTimes = findPassingStopTimes(stopTimes, ctx);
     // Initial offsets (first stop)
     const firstStop = passingStopTimes[0];
     const initialScheduledArr = firstStop.arrival_time ?? 0;
@@ -363,9 +363,9 @@ export function augmentStopTimes(stopTimes, serviceDates) {
         const stopId = passingStopTime.stop_id;
         const isPassing = passingStopTime._passing;
         // 1. Fetch Stop Info
-        const scheduledStop = cache.getAugmentedStops(stopId)[0];
+        const scheduledStop = cache.getAugmentedStops(stopId, ctx)[0];
         const scheduledParent = scheduledStop?.parent_station
-            ? cache.getAugmentedStops(scheduledStop.parent_station)[0]
+            ? cache.getAugmentedStops(scheduledStop.parent_station, ctx)[0]
             : null;
         // 2. Find Realtime Update
         // Logic: Match specific stop, parent station, or any child of the augmented stop
@@ -418,7 +418,7 @@ export function augmentStopTimes(stopTimes, serviceDates) {
                 propagated = true;
             }
             // Update Platform/Stop
-            const rtRawStop = cache.getRawStops(rtUpdate.stop_id)[0];
+            const rtRawStop = cache.getRawStops(rtUpdate.stop_id, ctx)[0];
             if (rtRawStop?.platform_code) {
                 platformCode = rtRawStop.platform_code;
                 rtFlags.platform = true;
@@ -428,9 +428,9 @@ export function augmentStopTimes(stopTimes, serviceDates) {
                 lastScheduleRelationship = scheduleRelationship;
             }
             if (rtUpdate.stop_id && rtUpdate.stop_id !== stopId) {
-                actualStop = cache.getAugmentedStops(rtUpdate.stop_id)[0];
+                actualStop = cache.getAugmentedStops(rtUpdate.stop_id, ctx)[0];
                 actualParent = actualStop?.parent_station
-                    ? cache.getAugmentedStops(actualStop.parent_station)[0]
+                    ? cache.getAugmentedStops(actualStop.parent_station, ctx)[0]
                     : null;
                 rtFlags.stop = true;
                 rtFlags.parent = true;
