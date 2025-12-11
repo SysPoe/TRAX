@@ -86,12 +86,6 @@ TRAX.on("realtime-update-end", () => {
 });
 ```
 
-## Limitations
-
-*   **Region Specific:** While the core logic handles standard GTFS, many features (like station grouping and express logic) are tailored specifically for the TransLink (South East Queensland) network.
-*   **Dependency:** This library relies on `QDF-GTFS` and expects a specific data structure from the underlying GTFS database.
-*   **Memory Usage:** TRAX caches augmented data in memory for performance, which may be significant for very large networks.
-
 ## References & Related Projects
 
 *   **GTFS Specification:** [https://gtfs.org/documentation/schedule/reference/](https://gtfs.org/documentation/schedule/reference/)
