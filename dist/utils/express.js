@@ -179,6 +179,7 @@ function buildTrainGraph(combosData) {
     }
     return graph;
 }
+const defaultGraph = buildTrainGraph(combos);
 function findPathBFS(graph, start, end) {
     if (!graph.has(start) || !graph.has(end)) {
         return null;
@@ -208,7 +209,7 @@ function findPathBFS(graph, start, end) {
     return null;
 }
 export function findExpress(givenStops, combosData = combos) {
-    const graph = buildTrainGraph(combosData);
+    const graph = combosData === combos ? defaultGraph : buildTrainGraph(combosData);
     const result = [];
     for (let i = 0; i < givenStops.length - 1; i++) {
         const startStop = givenStops[i];
