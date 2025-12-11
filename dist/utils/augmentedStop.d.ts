@@ -1,4 +1,5 @@
 import type * as qdf from "qdf-gtfs";
+import * as cache from "../cache.js";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
 export type AugmentedStop = qdf.Stop & {
     qrt_Place: boolean;
@@ -20,4 +21,4 @@ export type SerializableAugmentedStop = qdf.Stop & {
     children: string[];
 };
 export declare function toSerializableAugmentedStop(stop: Omit<AugmentedStop, "toSerializable" | "getDepartures" | "_getSDDepartures">): SerializableAugmentedStop;
-export declare function augmentStop(stop: qdf.Stop): AugmentedStop;
+export declare function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): AugmentedStop;

@@ -40,19 +40,19 @@ export function toSerializableAugmentedStop(
 	};
 }
 
-export function augmentStop(stop: qdf.Stop): AugmentedStop {
+export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): AugmentedStop {
 	// Cache children lookup to avoid repeated expensive operations
 	let cachedChildren: AugmentedStop[] | null = null;
 
 	const getChildren = (): AugmentedStop[] => {
 		if (cachedChildren) return cachedChildren;
 
-		const childStops = cache.getRawStops().filter((s) => s.parent_station === stop.stop_id);
-		cachedChildren = childStops.map((s) => cache.getAugmentedStops(s.stop_id)[0] || augmentStop(s));
+		const childStops = cache.getRawStops(undefined, ctx).filter((s) => s.parent_station === stop.stop_id);
+		cachedChildren = childStops.map((s) => cache.getAugmentedStops(s.stop_id, ctx)[0] || augmentStop(s, ctx));
 		return cachedChildren;
 	};
 
-	let qrt_Places = cache.getQRTPlaces();
+	let qrt_Places = cache.getQRTPlaces(ctx);
 	let trimmedStopName = stop.stop_name?.toLowerCase().replace("station", "").trim();
 	let myPlace = qrt_Places.find(
 		(v) =>
@@ -62,7 +62,7 @@ export function augmentStop(stop: qdf.Stop): AugmentedStop {
 
 	const getParent = (): AugmentedStop | null => {
 		if (!stop.parent_station) return null;
-		return cache.getAugmentedStops(stop.parent_station)[0];
+		return cache.getAugmentedStops(stop.parent_station, ctx)[0];
 	};
 
 	return {
@@ -122,7 +122,7 @@ export function augmentStop(stop: qdf.Stop): AugmentedStop {
 				// 1. Resolve Trip
 				let trip = tripCache.get(rawSt.trip_id);
 				if (!trip) {
-					const trips = getAugmentedTrips(rawSt.trip_id);
+					const trips = getAugmentedTrips(rawSt.trip_id, ctx);
 					if (trips.length > 0) {
 						trip = trips[0];
 						tripCache.set(rawSt.trip_id, trip);
@@ -180,7 +180,7 @@ export function augmentStop(stop: qdf.Stop): AugmentedStop {
 			for (const rawSt of rawStopTimes) {
 				let trip = tripCache.get(rawSt.trip_id);
 				if (!trip) {
-					const trips = getAugmentedTrips(rawSt.trip_id);
+					const trips = getAugmentedTrips(rawSt.trip_id, ctx);
 					if (trips.length > 0) {
 						trip = trips[0];
 						tripCache.set(rawSt.trip_id, trip);

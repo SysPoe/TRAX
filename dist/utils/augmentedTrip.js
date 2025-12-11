@@ -16,10 +16,10 @@ export function toSerializableAugmentedTrip(trip) {
         scheduleRelationship: trip.scheduleRelationship,
     };
 }
-export function augmentTrip(trip) {
+export function augmentTrip(trip, ctx) {
     const serviceDates = getServiceDatesByTrip(trip.trip_id);
     let rawStopTimes = cache.getRawStopTimes(trip.trip_id).sort((a, b) => a.stop_sequence - b.stop_sequence);
-    let parentStops = rawStopTimes.map((st) => cache.getRawStops(st.stop_id)[0]?.parent_station ?? "");
+    let parentStops = rawStopTimes.map((st) => cache.getRawStops(st.stop_id, ctx)[0]?.parent_station ?? "");
     let expressInfo = findExpress(parentStops.filter((id) => !!id));
     // Pre-calculate stop times during trip creation instead of on-demand
     let cachedStopTimes = null;
@@ -27,18 +27,18 @@ export function augmentTrip(trip) {
     for (const serviceDate of serviceDates) {
         _runSeries[serviceDate] = null;
     }
-    let scheduleRelationship = cache.getTripUpdates(trip.trip_id)[0]?.trip.schedule_relationship ?? null;
+    let scheduleRelationship = cache.getTripUpdates(trip.trip_id, ctx)[0]?.trip.schedule_relationship ?? null;
     return {
         _trip: trip,
         scheduledStartServiceDates: serviceDates,
         get scheduledTripDates() {
-            let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
+            let stopTimes = cache.getAugmentedStopTimes(trip.trip_id, ctx);
             let stopTimesToUse;
             if (stopTimes.length > 0)
                 stopTimesToUse = stopTimes;
             else {
                 if (!cachedStopTimes)
-                    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
+                    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, ctx);
                 stopTimesToUse = cachedStopTimes;
             }
             let dates = [
@@ -49,13 +49,13 @@ export function augmentTrip(trip) {
             return dates.sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
         },
         get actualTripDates() {
-            let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
+            let stopTimes = cache.getAugmentedStopTimes(trip.trip_id, ctx);
             let stopTimesToUse;
             if (stopTimes.length > 0)
                 stopTimesToUse = stopTimes;
             else {
                 if (!cachedStopTimes)
-                    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
+                    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, ctx);
                 stopTimesToUse = cachedStopTimes;
             }
             let dates = [
@@ -66,27 +66,27 @@ export function augmentTrip(trip) {
             return dates.sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
         },
         get stopTimes() {
-            let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
+            let stopTimes = cache.getAugmentedStopTimes(trip.trip_id, ctx);
             if (stopTimes.length > 0)
                 return stopTimes;
             if (!cachedStopTimes)
-                cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
+                cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, ctx);
             return cachedStopTimes;
         },
         expressInfo,
         _runSeries,
         get runSeries() {
-            calculateRunSeries(this);
+            calculateRunSeries(this, ctx);
             for (const key of Object.keys(this._runSeries))
                 console.assert(this._runSeries[Number.parseInt(key)] !== null);
             return this._runSeries;
         },
         run: trip.trip_id.slice(-4),
         toSerializable: function () {
-            let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
+            let stopTimes = cache.getAugmentedStopTimes(trip.trip_id, ctx);
             if (stopTimes.length === 0) {
                 if (!cachedStopTimes)
-                    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
+                    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, ctx);
                 stopTimes = cachedStopTimes;
             }
             return toSerializableAugmentedTrip({
@@ -105,7 +105,7 @@ export function augmentTrip(trip) {
     };
 }
 const RS_TOLLERATE_SECS = 30 * 60;
-function trackBackwards(trip, serviceDate) {
+function trackBackwards(trip, serviceDate, ctx) {
     const gtfs = getGtfs();
     let run = trip.run;
     let prevTrips = [trip];
@@ -124,7 +124,7 @@ function trackBackwards(trip, serviceDate) {
         });
         let deps = deps_ids
             .map((v) => cache
-            .getAugmentedTrips(v.trip_id)[0]
+            .getAugmentedTrips(v.trip_id, ctx)[0]
             .stopTimes.find((v) => v.scheduled_stop?.stop_id == st.scheduled_stop?.stop_id))
             .filter((v) => !!v);
         // Get next previous arrival before the current trip departs
@@ -133,7 +133,7 @@ function trackBackwards(trip, serviceDate) {
             (b.scheduled_departure_time || b.scheduled_arrival_time || Infinity));
         if (deps.length === 0)
             break;
-        let newTrip = cache.getAugmentedTrips(deps.at(-1)?.trip_id)[0];
+        let newTrip = cache.getAugmentedTrips(deps.at(-1)?.trip_id, ctx)[0];
         if (!newTrip)
             break;
         if (deps.at(-1)?._stopTime?.stop_sequence != newTrip.stopTimes.at(-1)?._stopTime?.stop_sequence)
@@ -142,7 +142,7 @@ function trackBackwards(trip, serviceDate) {
         run = newTrip.run;
         trip = newTrip;
     }
-    let rs = cache.getRunSeries(serviceDate, run, false);
+    let rs = cache.getRunSeries(serviceDate, run, false, ctx);
     for (const prevTrip of prevTrips) {
         prevTrip._runSeries[serviceDate] = run;
         if (!rs.trips.some((v) => v.trip_id === prevTrip._trip.trip_id))
@@ -157,13 +157,13 @@ function trackBackwards(trip, serviceDate) {
                 ...rs.trips,
             ];
     }
-    cache.setRunSeries(serviceDate, run, rs);
+    cache.setRunSeries(serviceDate, run, rs, ctx);
     return run;
 }
-function trackForwards(trip, serviceDate, runSeries) {
+function trackForwards(trip, serviceDate, runSeries, ctx) {
     const gtfs = getGtfs();
     let run = trip.run;
-    let rs = cache.getRunSeries(serviceDate, runSeries, false);
+    let rs = cache.getRunSeries(serviceDate, runSeries, false, ctx);
     // Track forwards, setting the runSeries
     for (let _break = 0; _break < 100; _break++) {
         let st = trip.stopTimes.at(-1);
@@ -178,7 +178,7 @@ function trackForwards(trip, serviceDate, runSeries) {
         });
         let deps = deps_ids
             .map((v) => cache
-            .getAugmentedTrips(v.trip_id)[0]
+            .getAugmentedTrips(v.trip_id, ctx)[0]
             .stopTimes.find((v) => v.scheduled_stop?.stop_id == st.scheduled_stop?.stop_id))
             .filter((v) => !!v);
         deps = deps.filter((v) => v._stopTime?.trip_id.slice(-4)[0] == run[0] && v._stopTime?.trip_id.slice(-4) != run);
@@ -186,7 +186,7 @@ function trackForwards(trip, serviceDate, runSeries) {
             (b.scheduled_departure_time || b.scheduled_arrival_time || Infinity));
         if (deps.length === 0)
             break;
-        let newTrip = cache.getAugmentedTrips(deps[0].trip_id)[0];
+        let newTrip = cache.getAugmentedTrips(deps[0].trip_id, ctx)[0];
         if (!newTrip)
             break;
         if (deps[0]?._stopTime?.stop_sequence != 1)
@@ -203,13 +203,13 @@ function trackForwards(trip, serviceDate, runSeries) {
             });
         trip = newTrip;
     }
-    cache.setRunSeries(serviceDate, runSeries, rs);
+    cache.setRunSeries(serviceDate, runSeries, rs, ctx);
 }
-export function calculateRunSeries(trip) {
+export function calculateRunSeries(trip, ctx) {
     for (const serviceDate of trip.scheduledStartServiceDates) {
         if (trip._runSeries[serviceDate] != null)
             continue;
-        let runSeries = trackBackwards(trip, serviceDate);
-        trackForwards(trip, serviceDate, runSeries);
+        let runSeries = trackBackwards(trip, serviceDate, ctx);
+        trackForwards(trip, serviceDate, runSeries, ctx);
     }
 }

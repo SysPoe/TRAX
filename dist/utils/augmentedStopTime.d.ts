@@ -1,5 +1,6 @@
 import * as qdf from "qdf-gtfs";
 import { AugmentedStop } from "./augmentedStop.js";
+import * as cache from "../cache.js";
 export type AugmentedStopTime = {
     toSerializable: () => SerializableAugmentedStopTime;
     _stopTime: qdf.StopTime | null;
@@ -50,4 +51,4 @@ export type SerializableAugmentedStopTime = Omit<AugmentedStopTime, "actual_stop
     scheduled_parent_station: string | null;
 };
 export declare function toSerializableAugmentedStopTime(st: Omit<AugmentedStopTime, "toSerializable">): SerializableAugmentedStopTime;
-export declare function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string[]): AugmentedStopTime[];
+export declare function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string[], ctx?: cache.CacheContext): AugmentedStopTime[];

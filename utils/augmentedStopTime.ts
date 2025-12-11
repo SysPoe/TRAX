@@ -112,9 +112,9 @@ const loggedMissingSRT = new Set<string>();
 
 // --- Helper Functions ---
 
-function getStopOrParentId(stopId: string | undefined): string | undefined {
+function getStopOrParentId(stopId: string | undefined, ctx?: cache.CacheContext): string | undefined {
     if (!stopId) return undefined;
-    const stop = cache.getRawStops(stopId)[0];
+    const stop = cache.getRawStops(stopId, ctx)[0];
     return stop?.parent_station ?? undefined;
 }
 
@@ -151,9 +151,9 @@ function addDaysToDateString(dateStr: string, daysToAdd: number): string {
 
 // --- Passing Stop Logic ---
 
-function findPassingStops(stops: string[]): { stop_id: string; passing: boolean }[] {
+function findPassingStops(stops: string[], ctx?: cache.CacheContext): { stop_id: string; passing: boolean }[] {
     const stopListHash = stops.join("|");
-    const cached = cache.getCachedPassingStops(stopListHash);
+    const cached = cache.getCachedPassingStops(stopListHash, ctx);
     if (cached) return cached;
 
     const expressSegments = findExpress(stops);
@@ -194,12 +194,12 @@ function findPassingStops(stops: string[]): { stop_id: string; passing: boolean 
         addStop(segment.to, false);
     }
 
-    cache.cachePassingStops(stopListHash, allStops);
+    cache.cachePassingStops(stopListHash, allStops, ctx);
     return allStops;
 }
 
-function findPassingStopSRTs(stops: string[]): PassingStopSRT[] {
-    const allStops = findPassingStops(stops);
+function findPassingStopSRTs(stops: string[], ctx?: cache.CacheContext): PassingStopSRT[] {
+    const allStops = findPassingStops(stops, ctx);
     const results: PassingStopSRT[] = [];
 
     for (let i = 0; i < allStops.length - 1; i++) {
@@ -225,22 +225,22 @@ function findPassingStopSRTs(stops: string[]): PassingStopSRT[] {
     return results;
 }
 
-function findPassingStopTimes(stopTimes: qdf.StopTime[]): PassingStopTime[] {
+function findPassingStopTimes(stopTimes: qdf.StopTime[], ctx?: cache.CacheContext): PassingStopTime[] {
     if (stopTimes.length === 0) return [];
 
     // Extract parent stations for SRT lookup, sorted by sequence
     const sortedStopTimes = [...stopTimes].sort((a, b) => (a.stop_sequence ?? 0) - (b.stop_sequence ?? 0));
     const stops = sortedStopTimes
-        .map((st) => getStopOrParentId(st.stop_id))
+        .map((st) => getStopOrParentId(st.stop_id, ctx))
         .filter((v): v is string => v !== undefined);
 
     const idsToTimes: Record<string, qdf.StopTime> = {};
     for (const st of stopTimes) {
-        const parent = getStopOrParentId(st.stop_id);
+        const parent = getStopOrParentId(st.stop_id, ctx);
         if (parent) idsToTimes[parent] = st;
     }
 
-    const passingSRTs = findPassingStopSRTs(stops);
+    const passingSRTs = findPassingStopSRTs(stops, ctx);
     if (!passingSRTs.length) {
         logger.error(`No passing SRTs found for stops ${stops.join(", ")}`, {
             module: "augmentedStopTime",
@@ -470,7 +470,7 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 
 // --- Main Augmentation Function ---
 
-export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string[]): AugmentedStopTime[] {
+export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string[], ctx?: cache.CacheContext): AugmentedStopTime[] {
     if (stopTimes.length === 0) return [];
 
     const tripId = stopTimes[0].trip_id;
@@ -481,9 +481,9 @@ export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string
         });
     }
 
-    const tripUpdate = cache.getTripUpdates(tripId)[0];
+    const tripUpdate = cache.getTripUpdates(tripId, ctx)[0];
     const stopTimeUpdates = tripUpdate?.stop_time_updates ?? [];
-    const passingStopTimes = findPassingStopTimes(stopTimes);
+    const passingStopTimes = findPassingStopTimes(stopTimes, ctx);
 
     // Initial offsets (first stop)
     const firstStop = passingStopTimes[0];
@@ -512,9 +512,9 @@ export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string
         const isPassing = passingStopTime._passing;
 
         // 1. Fetch Stop Info
-        const scheduledStop = cache.getAugmentedStops(stopId)[0];
+        const scheduledStop = cache.getAugmentedStops(stopId, ctx)[0];
         const scheduledParent = scheduledStop?.parent_station
-            ? cache.getAugmentedStops(scheduledStop.parent_station)[0]
+            ? cache.getAugmentedStops(scheduledStop.parent_station, ctx)[0]
             : null;
 
         // 2. Find Realtime Update
@@ -573,7 +573,7 @@ export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string
             }
 
             // Update Platform/Stop
-            const rtRawStop = cache.getRawStops(rtUpdate.stop_id)[0];
+            const rtRawStop = cache.getRawStops(rtUpdate.stop_id, ctx)[0];
             if (rtRawStop?.platform_code) {
                 platformCode = rtRawStop.platform_code;
                 rtFlags.platform = true;
@@ -585,9 +585,9 @@ export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string
             }
 
             if (rtUpdate.stop_id && rtUpdate.stop_id !== stopId) {
-                actualStop = cache.getAugmentedStops(rtUpdate.stop_id)[0];
+                actualStop = cache.getAugmentedStops(rtUpdate.stop_id, ctx)[0];
                 actualParent = actualStop?.parent_station
-                    ? cache.getAugmentedStops(actualStop.parent_station)[0]
+                    ? cache.getAugmentedStops(actualStop.parent_station, ctx)[0]
                     : null;
                 rtFlags.stop = true;
                 rtFlags.parent = true;
