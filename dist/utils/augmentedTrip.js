@@ -28,6 +28,10 @@ export function augmentTrip(trip) {
         _runSeries[serviceDate] = null;
     }
     let scheduleRelationship = cache.getTripUpdates(trip.trip_id)[0]?.trip.schedule_relationship ?? null;
+    let cachedScheduledTripDates = null;
+    let cachedScheduledTripDatesSource = null;
+    let cachedActualTripDates = null;
+    let cachedActualTripDatesSource = null;
     return {
         _trip: trip,
         scheduledStartServiceDates: serviceDates,
@@ -41,12 +45,18 @@ export function augmentTrip(trip) {
                     cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
                 stopTimesToUse = cachedStopTimes;
             }
+            if (cachedScheduledTripDates && cachedScheduledTripDatesSource === stopTimesToUse) {
+                return cachedScheduledTripDates;
+            }
             let dates = [
                 ...new Set(stopTimesToUse
                     .map((st) => [...(st.scheduled_arrival_dates || []), ...(st.scheduled_departure_dates || [])])
                     .flat()),
             ];
-            return dates.sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
+            dates.sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
+            cachedScheduledTripDates = dates;
+            cachedScheduledTripDatesSource = stopTimesToUse;
+            return dates;
         },
         get actualTripDates() {
             let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
@@ -58,12 +68,18 @@ export function augmentTrip(trip) {
                     cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates);
                 stopTimesToUse = cachedStopTimes;
             }
+            if (cachedActualTripDates && cachedActualTripDatesSource === stopTimesToUse) {
+                return cachedActualTripDates;
+            }
             let dates = [
                 ...new Set(stopTimesToUse
                     .map((st) => [...(st.actual_arrival_dates || []), ...(st.actual_departure_dates || [])])
                     .flat()),
             ];
-            return dates.sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
+            dates.sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
+            cachedActualTripDates = dates;
+            cachedActualTripDatesSource = stopTimesToUse;
+            return dates;
         },
         get stopTimes() {
             let stopTimes = cache.getAugmentedStopTimes(trip.trip_id);
