@@ -2,20 +2,6 @@
 
 TRAX is a high-level TypeScript/Node.js API designed to interact with TransLink's Queensland Rail services data. It seamlessly integrates static GTFS schedules with GTFS-Realtime feeds (Trip Updates, Vehicle Positions, and Alerts) to provide a rich, unified view of the network.
 
-Features include robust data augmentation, intelligent caching, express/passing stop calculations, and automatic realtime synchronization.
-
-## Features
-
-*   **Unified Data Model:** Treats static schedules and realtime updates as a single cohesive dataset. Access "Augmented" trips and stops that automatically reflect live delays, cancellations, and platform changes.
-*   **Realtime Synchronization:** Built-in polling handles GTFS-Realtime feeds (Alerts, Trip Updates, Vehicle Positions) automatically, emitting events when data changes.
-*   **Express & Passing Logic:** Algorithms to detect express segments and generate human-readable descriptions of stopping patterns (e.g., "Express between A and B").
-*   **Data Augmentation:**
-    *   **AugmentedTrips:** Combines static trip info with live updates.
-    *   **AugmentedStops:** Live departure boards with real-time arrival estimates.
-    *   **Run Series:** Groups related trips to track vehicle blocks and consistency.
-*   **Optimized Caching:** In-memory caching with atomic swaps ensures high performance and data consistency during updates.
-*   **Type-Safe:** Fully typed with TypeScript for reliable development.
-
 ## Installation
 
 Install directly from the GitHub repository:
