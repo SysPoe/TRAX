@@ -167,8 +167,7 @@ export function getCalendars(filter?: Partial<Calendar>, ctx?: CacheContext): Ca
 export function getCalendarDates(filter?: Partial<CalendarDate>, ctx?: CacheContext): CalendarDate[] {
 	const { raw } = getContext(ctx);
 	const gtfs = getGtfs();
-	if (!raw.calendarDates || raw.calendarDates.length === 0)
-		raw.calendarDates = gtfs.getCalendarDates();
+	if (!raw.calendarDates || raw.calendarDates.length === 0) raw.calendarDates = gtfs.getCalendarDates();
 	if (!filter) return raw.calendarDates;
 	return raw.calendarDates.filter((c) => {
 		for (const key of Object.keys(filter)) {
@@ -325,7 +324,12 @@ export function getCachedPassingStops(stopListHash: string, ctx?: CacheContext):
 	return augmented.passingStopsCache.get(stopListHash);
 }
 
-export function getRunSeries(date: string, runSeries: string, calcIfNotFound: boolean = true, ctx?: CacheContext): RunSeries {
+export function getRunSeries(
+	date: string,
+	runSeries: string,
+	calcIfNotFound: boolean = true,
+	ctx?: CacheContext,
+): RunSeries {
 	const context = getContext(ctx);
 	const { augmented } = context;
 
@@ -340,8 +344,11 @@ export function getRunSeries(date: string, runSeries: string, calcIfNotFound: bo
 		augmented.serviceDateTrips.get(date)?.find((v) => v.endsWith(runSeries))
 	) {
 		calculateRunSeries(
-			getAugmentedTrips(augmented.serviceDateTrips.get(date)?.find((v) => v.endsWith(runSeries)), context)[0],
-			context
+			getAugmentedTrips(
+				augmented.serviceDateTrips.get(date)?.find((v) => v.endsWith(runSeries)),
+				context,
+			)[0],
+			context,
 		);
 	} else if (!dateMap.get(runSeries))
 		dateMap.set(runSeries, {

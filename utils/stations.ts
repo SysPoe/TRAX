@@ -9,7 +9,9 @@ let qr_stations: string[] = JSON.parse(
 
 export function getGtfsStations(): qdf.Stop[] {
 	if (cacheLoaded()) return qr_stations.flatMap((stop_id) => getRawStops(stop_id)).filter((v) => v);
-	return getGtfs().getStops().filter(v => qr_stations.includes(v.stop_id));
+	return getGtfs()
+		.getStops()
+		.filter((v) => qr_stations.includes(v.stop_id));
 }
 
 export function getStations(): AugmentedStop[] {

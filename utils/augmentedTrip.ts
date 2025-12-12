@@ -139,10 +139,10 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 				expressInfo,
 				runSeries: this.runSeries,
 				run: trip.trip_id.slice(-4),
-				scheduleRelationship
+				scheduleRelationship,
 			});
 		},
-		scheduleRelationship
+		scheduleRelationship,
 	};
 }
 
@@ -162,9 +162,8 @@ function trackBackwards(trip: AugmentedTrip, serviceDate: string, ctx?: cache.Ca
 		let deps_ids = gtfs.queryStopTimes({
 			stop_id: st.scheduled_stop?.stop_id,
 			date: serviceDate.toString(),
-			start_time:
-				(st.scheduled_departure_time || st.scheduled_arrival_time || 0) - RS_TOLLERATE_SECS,
-			end_time: (st.scheduled_departure_time || st.scheduled_arrival_time || 0),
+			start_time: (st.scheduled_departure_time || st.scheduled_arrival_time || 0) - RS_TOLLERATE_SECS,
+			end_time: st.scheduled_departure_time || st.scheduled_arrival_time || 0,
 		});
 		let deps = deps_ids
 			.map((v) =>
@@ -225,8 +224,7 @@ function trackForwards(trip: AugmentedTrip, serviceDate: string, runSeries: stri
 		let deps_ids = gtfs.queryStopTimes({
 			stop_id: st.scheduled_stop?.stop_id,
 			date: serviceDate.toString(),
-			start_time:
-				st.scheduled_departure_time || st.scheduled_arrival_time || 0,
+			start_time: st.scheduled_departure_time || st.scheduled_arrival_time || 0,
 			end_time: (st.scheduled_departure_time || st.scheduled_arrival_time || 0) + RS_TOLLERATE_SECS,
 		});
 		let deps = deps_ids
@@ -255,9 +253,7 @@ function trackForwards(trip: AugmentedTrip, serviceDate: string, runSeries: stri
 			rs.trips.push({
 				trip_id: newTrip._trip.trip_id,
 				trip_start_time:
-					newTrip.stopTimes[0].scheduled_departure_time ||
-					newTrip.stopTimes[0].scheduled_arrival_time ||
-					0,
+					newTrip.stopTimes[0].scheduled_departure_time || newTrip.stopTimes[0].scheduled_arrival_time || 0,
 				run,
 			});
 		trip = newTrip;

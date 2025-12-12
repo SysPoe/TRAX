@@ -15,17 +15,17 @@ export function getServiceDates(
 
 		let currentDate = new Date(
 			String(start_date).substring(0, 4) +
-			"-" +
-			String(start_date).substring(4, 6) +
-			"-" +
-			String(start_date).substring(6, 8),
+				"-" +
+				String(start_date).substring(4, 6) +
+				"-" +
+				String(start_date).substring(6, 8),
 		);
 		const endDate = new Date(
 			String(end_date).substring(0, 4) +
-			"-" +
-			String(end_date).substring(4, 6) +
-			"-" +
-			String(end_date).substring(6, 8),
+				"-" +
+				String(end_date).substring(4, 6) +
+				"-" +
+				String(end_date).substring(6, 8),
 		);
 
 		while (currentDate <= endDate) {

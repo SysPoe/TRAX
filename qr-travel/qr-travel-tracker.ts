@@ -414,11 +414,14 @@ export async function getCurrentQRTravelTrains(retries = 5): Promise<TravelTrip[
 		return travelTrips;
 	} catch (error: any) {
 		let secs = 5 * (6 - retries);
-		logger.error(`Failed to get current QR Travel trains: ${error.message || error}. Retrying in ${secs} seconds.`, {
-			module: "qr-travel-tracker",
-			function: "getCurrentQRTravelTrains",
-			error: error.message || error,
-		});
+		logger.error(
+			`Failed to get current QR Travel trains: ${error.message || error}. Retrying in ${secs} seconds.`,
+			{
+				module: "qr-travel-tracker",
+				function: "getCurrentQRTravelTrains",
+				error: error.message || error,
+			},
+		);
 		retries--;
 		if (retries > 0) {
 			await new Promise((resolve) => setTimeout(resolve, secs * 1000));
