@@ -12,7 +12,7 @@ interface TRAXEvent {
     "static-update-start": [];
     "static-update-end": [];
 }
-export declare function loadGTFS(autoRefresh?: boolean, forceReload?: boolean, realtimeIntervalMs?: number, // 1 minute
+export declare function loadGTFS(autoRefresh?: boolean, realtimeIntervalMs?: number, // 1 minute
 staticIntervalMs?: number): Promise<void>;
 export declare function clearIntervals(): void;
 export declare function formatTimestamp(ts?: number | null): string;

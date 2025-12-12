@@ -11,7 +11,7 @@ import { TRAX_CONFIG } from "./config.js";
 const traxEmitter = new EventEmitter();
 let realtimeInterval = null;
 let staticInterval = null;
-export async function loadGTFS(autoRefresh = false, forceReload = false, realtimeIntervalMs = 60 * 1000, // 1 minute
+export async function loadGTFS(autoRefresh = false, realtimeIntervalMs = 60 * 1000, // 1 minute
 staticIntervalMs = 24 * 60 * 60 * 1000) {
     await createGtfs();
     await cache.refreshStaticCache(true);

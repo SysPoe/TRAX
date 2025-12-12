@@ -23,7 +23,6 @@ let staticInterval: NodeJS.Timeout | null = null;
 
 export async function loadGTFS(
 	autoRefresh: boolean = false,
-	forceReload: boolean = false,
 	realtimeIntervalMs: number = 60 * 1000, // 1 minute
 	staticIntervalMs: number = 24 * 60 * 60 * 1000, // 24 hours
 ): Promise<void> {
