@@ -1,0 +1,41 @@
+# .github/workflows/build.yml
+name: Build and Archive Artifacts
+
+on:
+    push:
+        branches:
+            - main
+            - develop
+    pull_request:
+        branches:
+            - main
+            - develop
+    # Allows you to run this workflow manually from the Actions tab
+    workflow_dispatch:
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js environment
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20" # Or any other version compatible with your project (e.g., 18, 22)
+                  cache: "npm" # Caches npm dependencies to speed up subsequent runs
+
+            - name: Install dependencies
+              run: npm ci # Use npm ci for clean installs in CI environments
+
+            - name: Run the build script
+              # This step runs the "build" script defined in your package.json
+              run: npm run build
+
+            - name: Upload build artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: app-build # Name of the artifact
+                  path: dist/ # The path to your generated build files
