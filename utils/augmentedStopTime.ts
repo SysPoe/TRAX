@@ -635,6 +635,7 @@ export function augmentStopTimes(
 		};
 
 		const todayStr = today();
+		const tripUpdateStartDate = tripUpdate?.trip.start_date ?? todayStr;
 
 		const scheduled_arrival_dates = serviceDates.map((d) =>
 			addDaysToDateString(d, currentOffsets.schedArr - dateOffsets.schedArr),
@@ -644,12 +645,12 @@ export function augmentStopTimes(
 		);
 
 		const actual_arrival_dates = serviceDates.map((d) =>
-			d === todayStr
+			d === tripUpdateStartDate
 				? addDaysToDateString(d, currentOffsets.actArr - dateOffsets.actArr)
 				: addDaysToDateString(d, currentOffsets.schedArr - dateOffsets.schedArr),
 		);
 		const actual_departure_dates = serviceDates.map((d) =>
-			d === todayStr
+			d === tripUpdateStartDate
 				? addDaysToDateString(d, currentOffsets.actDep - dateOffsets.actDep)
 				: addDaysToDateString(d, currentOffsets.schedDep - dateOffsets.schedDep),
 		);

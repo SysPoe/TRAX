@@ -2,6 +2,7 @@
 import { expandWithSRTPassingStops } from "../utils/SectionalRunningTimes/metroSRTTravelTrain.js";
 import logger from "../utils/logger.js";
 import { getGtfsStations } from "../utils/stations.js";
+import { parseBrisbaneTime } from "../utils/time.js";
 import type {
 	GetServiceResponse,
 	QRTPlace,
@@ -97,10 +98,10 @@ export async function getAllServices() {
 export async function getServiceUpdates(startDate?: string, endDate?: string): Promise<ServiceUpdate[]> {
 	// Default startDate: first day of current month
 	// Default endDate: one year after startDate
-	const now = new Date();
-	const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
+	const now = new Date(Date.now() + 36000000); // Brisbane time (+10h)
+	const defaultStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 	const defaultEnd = new Date(defaultStart);
-	defaultEnd.setFullYear(defaultEnd.getFullYear() + 1);
+	defaultEnd.setUTCFullYear(defaultEnd.getUTCFullYear() + 1);
 
 	const start = startDate || defaultStart.toISOString().slice(0, 10);
 	const end = endDate || defaultEnd.toISOString().slice(0, 10);
@@ -174,8 +175,8 @@ function convertQRTServiceToTravelTrip(
 			movement.PlannedArrival !== "0001-01-01T00:00:00" &&
 			movement.ActualArrival !== "0001-01-01T00:00:00"
 		) {
-			const plannedArr = new Date(movement.PlannedArrival).getTime();
-			const actualArr = new Date(movement.ActualArrival).getTime();
+			const plannedArr = parseBrisbaneTime(movement.PlannedArrival);
+			const actualArr = parseBrisbaneTime(movement.ActualArrival);
 			arrivalDelaySeconds = Math.round((actualArr - plannedArr) / 1000);
 		}
 		if (
@@ -184,8 +185,8 @@ function convertQRTServiceToTravelTrip(
 			movement.PlannedDeparture !== "0001-01-01T00:00:00" &&
 			movement.ActualDeparture !== "0001-01-01T00:00:00"
 		) {
-			const plannedDep = new Date(movement.PlannedDeparture).getTime();
-			const actualDep = new Date(movement.ActualDeparture).getTime();
+			const plannedDep = parseBrisbaneTime(movement.PlannedDeparture);
+			const actualDep = parseBrisbaneTime(movement.ActualDeparture);
 			departureDelaySeconds = Math.round((actualDep - plannedDep) / 1000);
 			// Use departure delay for delayString/class
 			const delaySecs = departureDelaySeconds;
@@ -280,7 +281,7 @@ function convertQRTServiceToTravelTrip(
 function getDelay(delaySecs: number | null = null, departureTime: string | null) {
 	if (delaySecs === null || departureTime === null) return { delayString: "scheduled", delayClass: "scheduled" };
 
-	let departsInSecs = Math.round(new Date(departureTime).getTime() - Date.now()) / 1000;
+	let departsInSecs = Math.round(parseBrisbaneTime(departureTime) - Date.now()) / 1000;
 	departsInSecs = Math.round(departsInSecs / 60) * 60;
 	const roundedDelay = delaySecs ? Math.round(delaySecs / 60) * 60 : null;
 	const delayString =

@@ -967,6 +967,7 @@ SRT_DATA = SRT_DATA.concat(
 );
 
 import type { TrainMovementDTO } from "../../qr-travel/types.js";
+import { parseBrisbaneTime } from "../time.js";
 
 // Output type for each stop (stopping or passing)
 export interface SRTStop {
@@ -991,7 +992,7 @@ export interface SRTStop {
 function getDelay(delaySecs: number | null = null, departureTime: string | null) {
 	if (delaySecs === null || departureTime === null) return { delayString: "scheduled", delayClass: "scheduled" };
 
-	let departsInSecs = Math.round(new Date(departureTime).getTime() - Date.now()) / 1000;
+	let departsInSecs = Math.round(parseBrisbaneTime(departureTime) - Date.now()) / 1000;
 	departsInSecs = Math.round(departsInSecs / 60) * 60;
 	const roundedDelay = delaySecs ? Math.round(delaySecs / 60) * 60 : null;
 	const delayString =
@@ -1048,8 +1049,8 @@ function pushSRT(
 export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[]): SRTStop[] {
 	function calcDelay(actual?: string, planned?: string): number | null {
 		if (!actual || !planned || actual === "0001-01-01T00:00:00" || planned === "0001-01-01T00:00:00") return null;
-		const a = new Date(actual).getTime();
-		const p = new Date(planned).getTime();
+		const a = parseBrisbaneTime(actual);
+		const p = parseBrisbaneTime(planned);
 		if (isNaN(a) || isNaN(p)) return null;
 		return Math.round((a - p) / 1000);
 	}
@@ -1068,7 +1069,7 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 		}));
 
 	const result: SRTStop[] = [];
-	let prevTime: Date | null = null;
+	let prevTime: number | null = null;
 	for (let i = 0; i < stoppingMovements.length - 1; ++i) {
 		const from = stoppingMovements[i];
 		const to = stoppingMovements[i + 1];
@@ -1088,9 +1089,9 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 			});
 			// Set prevTime to actual/planned departure if available
 			if (from.ActualDeparture && from.ActualDeparture !== "0001-01-01T00:00:00") {
-				prevTime = new Date(from.ActualDeparture);
+				prevTime = parseBrisbaneTime(from.ActualDeparture);
 			} else if (from.PlannedDeparture && from.PlannedDeparture !== "0001-01-01T00:00:00") {
-				prevTime = new Date(from.PlannedDeparture);
+				prevTime = parseBrisbaneTime(from.PlannedDeparture);
 			} else {
 				prevTime = null;
 			}
@@ -1104,8 +1105,9 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 		if (seg) {
 			// Direct SRT segment, no passing stops
 			// Estimate next stop's arrival time
-			let estPass: Date | undefined =
-				prevTime && seg.travelTrain ? new Date(prevTime.getTime() + seg.travelTrain * 60000) : undefined;
+			let estPass: number | undefined =
+				prevTime && seg.travelTrain ? prevTime + seg.travelTrain * 60000 : undefined;
+			let estPassDate = estPass ? new Date(estPass) : undefined;
 			pushSRT(result, {
 				placeCode: to.PlaceCode,
 				gtfsStopId: to.gtfsStopId ?? null,
@@ -1116,18 +1118,8 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 				actualArrival: to.ActualArrival,
 				actualDeparture: to.ActualDeparture,
 				srtMinutes: seg.travelTrain,
-				estimatedPassingTime: estPass
-					? estPass.getFullYear().toString().padStart(4, "0") +
-						"-" +
-						(estPass.getMonth() + 1).toString().padStart(2, "0") +
-						"-" +
-						estPass.getDate().toString().padStart(2, "0") +
-						"T" +
-						estPass.getHours().toString().padStart(2, "0") +
-						":" +
-						estPass.getMinutes().toString().padStart(2, "0") +
-						":" +
-						estPass.getSeconds().toString().padStart(2, "0")
+				estimatedPassingTime: estPassDate
+					? estPassDate.toISOString().slice(0, 19)
 					: undefined,
 				arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
 				departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
@@ -1187,17 +1179,17 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 
 			// Calculate actual time between from and to stations
 			let fromTime = prevTime;
-			let toTime: Date | null = null;
+			let toTime: number | null = null;
 			if (to.ActualArrival && to.ActualArrival !== "0001-01-01T00:00:00") {
-				toTime = new Date(to.ActualArrival);
+				toTime = parseBrisbaneTime(to.ActualArrival);
 			} else if (to.PlannedArrival && to.PlannedArrival !== "0001-01-01T00:00:00") {
-				toTime = new Date(to.PlannedArrival);
+				toTime = parseBrisbaneTime(to.PlannedArrival);
 			}
 
 			// Calculate scaling factor: actualTime / srtTime
 			let scaleFactor = 1.0;
 			if (fromTime && toTime && totalSRT > 0) {
-				let actualMinutes = (toTime.getTime() - fromTime.getTime()) / 60000;
+				let actualMinutes = (toTime - fromTime) / 60000;
 				scaleFactor = actualMinutes / totalSRT;
 			}
 
@@ -1211,11 +1203,14 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 					const orig = stoppingMovements.find((m) => m.PlaceName === stopName);
 
 					// Calculate scaled time based on actual travel time
-					let estPass: Date | undefined = undefined;
+					let estPass: number | undefined = undefined;
 					if (fromTime) {
 						let scaledMinutes = cumulativeSRT * scaleFactor;
-						estPass = new Date(fromTime.getTime() + scaledMinutes * 60000);
+						estPass = fromTime + scaledMinutes * 60000;
 					}
+
+					let estPassDate = estPass ? new Date(estPass) : undefined;
+					let estPassStr = estPassDate ? estPassDate.toISOString().slice(0, 19) : undefined;
 
 					pushSRT(result, {
 						placeCode: orig?.PlaceCode || "",
@@ -1227,26 +1222,14 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 						actualArrival: orig?.ActualArrival,
 						actualDeparture: orig?.ActualDeparture,
 						srtMinutes: foundSeg.travelTrain,
-						estimatedPassingTime: estPass
-							? estPass.getFullYear().toString().padStart(4, "0") +
-								"-" +
-								(estPass.getMonth() + 1).toString().padStart(2, "0") +
-								"-" +
-								estPass.getDate().toString().padStart(2, "0") +
-								"T" +
-								estPass.getHours().toString().padStart(2, "0") +
-								":" +
-								estPass.getMinutes().toString().padStart(2, "0") +
-								":" +
-								estPass.getSeconds().toString().padStart(2, "0")
-							: undefined,
+						estimatedPassingTime: estPassStr,
 						arrivalDelaySeconds: calcDelay(
-							orig?.ActualArrival ?? (estPass ? estPass.toISOString() : undefined),
-							orig?.PlannedArrival ?? (estPass ? estPass.toISOString() : undefined),
+							orig?.ActualArrival ?? estPassStr,
+							orig?.PlannedArrival ?? estPassStr,
 						),
 						departureDelaySeconds: calcDelay(
-							orig?.ActualDeparture ?? (estPass ? estPass.toISOString() : undefined),
-							orig?.PlannedDeparture ?? (estPass ? estPass.toISOString() : undefined),
+							orig?.ActualDeparture ?? estPassStr,
+							orig?.PlannedDeparture ?? estPassStr,
 						),
 					});
 					prevTime = estPass ?? null;
@@ -1269,9 +1252,9 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 			});
 			// Update prevTime to the actual departure of this stop
 			if (to.ActualDeparture && to.ActualDeparture !== "0001-01-01T00:00:00") {
-				prevTime = new Date(to.ActualDeparture);
+				prevTime = parseBrisbaneTime(to.ActualDeparture);
 			} else if (to.PlannedDeparture && to.PlannedDeparture !== "0001-01-01T00:00:00") {
-				prevTime = new Date(to.PlannedDeparture);
+				prevTime = parseBrisbaneTime(to.PlannedDeparture);
 			} else {
 				prevTime = toTime;
 			}
@@ -1292,9 +1275,9 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 		});
 		// Update prevTime for next segments
 		if (to.ActualDeparture && to.ActualDeparture !== "0001-01-01T00:00:00") {
-			prevTime = new Date(to.ActualDeparture);
+			prevTime = parseBrisbaneTime(to.ActualDeparture);
 		} else if (to.PlannedDeparture && to.PlannedDeparture !== "0001-01-01T00:00:00") {
-			prevTime = new Date(to.PlannedDeparture);
+			prevTime = parseBrisbaneTime(to.PlannedDeparture);
 		}
 	}
 	// End for loop
