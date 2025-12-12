@@ -64,8 +64,6 @@ export type RawCache = {
 	tripUpdates: RealtimeTripUpdate[];
 	vehiclePositions: RealtimeVehiclePosition[];
 
-	stopTimes: StopTime[];
-
 	calendars: Calendar[];
 	calendarDates: CalendarDate[];
 
@@ -107,7 +105,6 @@ export function createEmptyRawCache(): RawCache {
 	return {
 		tripUpdates: [],
 		vehiclePositions: [],
-		stopTimes: [],
 		calendars: [],
 		calendarDates: [],
 		trips: [],
