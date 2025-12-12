@@ -89,6 +89,7 @@ export type AugmentedCache = {
 	stopsRec: Map<string, AugmentedStop>;
 
 	serviceDateTrips: Map<string, string[]>; // Maps serviceDate to trip IDs
+	passingTrips: Map<string, string[]>; // Maps stopId to list of trip IDs that pass through it
 
 	// Performance caches with LRU eviction
 	expressInfoCache: LRUCache<string, any[]>;
@@ -127,6 +128,7 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 		tripsRec: new Map(),
 		stopsRec: new Map(),
 		serviceDateTrips: new Map(),
+		passingTrips: new Map(),
 		expressInfoCache: new LRUCache<string, any[]>(1000), // Max 1000 express info entries
 		passingStopsCache: new LRUCache<string, any[]>(5000), // Max 5000 passing stops entries
 		runSeriesCache: new Map(),
@@ -326,6 +328,11 @@ export function getCachedPassingStops(stopListHash: string, ctx?: CacheContext):
 	return augmented.passingStopsCache.get(stopListHash);
 }
 
+export function getPassingTrips(stopId: string, ctx?: CacheContext): string[] {
+	const { augmented } = getContext(ctx);
+	return augmented.passingTrips.get(stopId) ?? [];
+}
+
 export function getRunSeries(
 	date: string,
 	runSeries: string,
@@ -392,6 +399,16 @@ function resetRealtimeCacheIncremental(updatedTripIds: Set<string>): void {
 			augmentedCache.serviceDateTrips.delete(serviceDate);
 		} else {
 			augmentedCache.serviceDateTrips.set(serviceDate, filteredTripIds);
+		}
+	}
+
+	// Remove affected trips from passingTrips
+	for (const [stopId, tripIds] of augmentedCache.passingTrips) {
+		const filteredTripIds = tripIds.filter((id) => !updatedTripIds.has(id));
+		if (filteredTripIds.length === 0) {
+			augmentedCache.passingTrips.delete(stopId);
+		} else {
+			augmentedCache.passingTrips.set(stopId, filteredTripIds);
 		}
 	}
 }
@@ -526,6 +543,19 @@ export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): 
 			}
 			tripIds.push(trip._trip.trip_id);
 		}
+
+		// Populate passingTrips
+		for (const st of trip.stopTimes) {
+			if (st.passing && st.actual_stop) {
+				const stopId = st.actual_stop.stop_id;
+				let tripIds = newAugmentedCache.passingTrips.get(stopId);
+				if (!tripIds) {
+					tripIds = [];
+					newAugmentedCache.passingTrips.set(stopId, tripIds);
+				}
+				tripIds.push(trip._trip.trip_id);
+			}
+		}
 	}
 	for (const stop of newAugmentedCache.stops) newAugmentedCache.stopsRec.set(stop.stop_id, stop);
 
@@ -649,6 +679,19 @@ export async function refreshRealtimeCache(): Promise<void> {
 				augmentedCache.serviceDateTrips.set(serviceDate, tripIds);
 			}
 			tripIds.push(trip._trip.trip_id);
+		}
+
+		// Populate passingTrips for updated trips
+		for (const st of trip.stopTimes) {
+			if (st.passing && st.actual_stop) {
+				const stopId = st.actual_stop.stop_id;
+				let tripIds = augmentedCache.passingTrips.get(stopId);
+				if (!tripIds) {
+					tripIds = [];
+					augmentedCache.passingTrips.set(stopId, tripIds);
+				}
+				tripIds.push(trip._trip.trip_id);
+			}
 		}
 	}
 
