@@ -200,6 +200,16 @@ export function getRawRoutes(route_id?: string, ctx?: CacheContext): Route[] {
 	return raw.routes;
 }
 
+export function getRawCalendars(ctx?: CacheContext): Calendar[] {
+	const { raw } = getContext(ctx);
+	return raw.calendars;
+}
+
+export function getRawCalendarDates(ctx?: CacheContext): CalendarDate[] {
+	const { raw } = getContext(ctx);
+	return raw.calendarDates;
+}
+
 export function getTripUpdates(trip_id?: string, ctx?: CacheContext): RealtimeTripUpdate[] {
 	const { raw } = getContext(ctx);
 	const gtfs = getGtfs();

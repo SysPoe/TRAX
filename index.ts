@@ -35,13 +35,6 @@ export async function loadGTFS(
 	realtimeInterval = setInterval(() => {
 		traxEmitter.emit("realtime-update-start");
 		updateRealtime()
-			.catch((err: any) =>
-				logger.error("Error refreshing realtime GTFS data", {
-					module: "index",
-					function: "loadGTFS",
-					error: err.message || err,
-				}),
-			)
 			.finally(() => {
 				traxEmitter.emit("realtime-update-end");
 			});
@@ -92,12 +85,10 @@ export async function updateRealtime(): Promise<void> {
 		);
 		await cache.refreshRealtimeCache();
 	} catch (error: any) {
-		logger.error("Error updating realtime GTFS data", {
+		logger.error("Error updating realtime GTFS data: " + error.message || error, {
 			module: "index",
 			function: "updateRealtime",
-			error: error.message || error,
 		});
-		throw error;
 	}
 }
 
@@ -123,6 +114,8 @@ const TRAX = {
 	getRawTrips: cache.getRawTrips,
 	getRawStops: cache.getRawStops,
 	getRawRoutes: cache.getRawRoutes,
+	getRawCalendars: cache.getRawCalendars,
+	getRawCalendarDates: cache.getRawCalendarDates,
 	getStopTimeUpdates: cache.getStopTimeUpdates,
 	getTripUpdates: cache.getTripUpdates,
 	getVehiclePositions: cache.getVehiclePositions,
