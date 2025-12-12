@@ -8,3 +8,4 @@
 profiler
 TRAX.log
 dist
+.TRAXCACHE
