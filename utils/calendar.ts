@@ -1,5 +1,5 @@
 import type * as qdf from "qdf-gtfs";
-import { getRawTrips, getCalendars, getCalendarDates } from "../cache.js";
+import { getRawTrips, getCalendars, getCalendarDates, CacheContext } from "../cache.js";
 
 export function getServiceDates(
 	calendars: qdf.Calendar[],
@@ -77,8 +77,8 @@ export function getServiceDates(
 	return serviceDates;
 }
 
-export function getServiceDatesByTrip(trip_id: string): string[] {
-	const trips = getRawTrips(trip_id);
+export function getServiceDatesByTrip(trip_id: string, ctx?: CacheContext): string[] {
+	const trips = getRawTrips(trip_id, ctx);
 	const trip = trips && trips.length > 0 ? trips[0] : undefined;
 	if (!trip) return [];
 	const calendars = getCalendars({ service_id: trip.service_id });

@@ -52,7 +52,7 @@ export function toSerializableAugmentedTrip(
 }
 
 export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): AugmentedTrip {
-	const serviceDates = getServiceDatesByTrip(trip.trip_id);
+	const serviceDates = getServiceDatesByTrip(trip.trip_id, ctx);
 
 	let rawStopTimes = cache.getRawStopTimes(trip.trip_id).sort((a, b) => a.stop_sequence - b.stop_sequence);
 
