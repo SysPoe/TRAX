@@ -14,8 +14,23 @@ async function main() {
 	let end_realtime = Date.now();
 
 	console.log(
-		TRAX.getAugmentedStops("place_aucsta")[0].getDepartures(
-			new Date().toISOString().slice(0, 10).replaceAll("-", ""),
+		TRAX.getAugmentedStops("place_romsta")[0].getDepartures(
+			new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10).replaceAll("-", ""),
+			"00:00:00",
+			"23:59:59",
+		).length + 
+		TRAX.getAugmentedStops("place_norsta")[0].getDepartures(
+			new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10).replaceAll("-", ""),
+			"00:00:00",
+			"23:59:59",
+		).length + 
+		TRAX.getAugmentedStops("place_beesta")[0].getDepartures(
+			new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10).replaceAll("-", ""),
+			"00:00:00",
+			"23:59:59",
+		).length + 
+		TRAX.getAugmentedStops("place_milsta")[0].getDepartures(
+			new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10).replaceAll("-", ""),
 			"00:00:00",
 			"23:59:59",
 		).length,
