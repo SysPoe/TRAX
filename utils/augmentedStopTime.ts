@@ -52,7 +52,7 @@ export type AugmentedStopTime = {
 	scheduled_departure_date_offset: number;
 	actual_departure_date_offset: number;
 } & (
-	| {
+		| {
 			realtime: true;
 			realtime_info: {
 				delay_secs: number;
@@ -61,12 +61,12 @@ export type AugmentedStopTime = {
 				schedule_relationship: qdf.StopTimeScheduleRelationship;
 				propagated: boolean;
 			};
-	  }
-	| {
+		}
+		| {
 			realtime: false;
 			realtime_info: null;
-	  }
-);
+		}
+	);
 
 // Internal type for data before platform/exit side calculation
 type IntermediateAST = Omit<AugmentedStopTime, "actual_exit_side" | "scheduled_exit_side" | "toSerializable">;
@@ -205,7 +205,7 @@ function findPassingStopSRTs(stops: string[], ctx?: cache.CacheContext): Passing
 	for (let i = 0; i < allStops.length - 1; i++) {
 		const from = allStops[i].stop_id;
 		const to = allStops[i + 1].stop_id;
-		const srt = getSRT(from, to);
+		const srt = getSRT(from, to, ctx);
 
 		if (srt === undefined) {
 			const key = `${from}|${to}`;

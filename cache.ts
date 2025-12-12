@@ -139,11 +139,6 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 let rawCache: RawCache = createEmptyRawCache();
 let augmentedCache: AugmentedCache = createEmptyAugmentedCache();
 
-let _cacheLoaded = false;
-export function cacheLoaded(): boolean {
-	return _cacheLoaded;
-}
-
 function getContext(ctx?: CacheContext): CacheContext {
 	if (ctx) return ctx;
 	return { raw: rawCache, augmented: augmentedCache };
@@ -396,7 +391,6 @@ function resetRealtimeCacheIncremental(updatedTripIds: Set<string>): void {
 
 export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): Promise<void> {
 	const gtfs = getGtfs();
-	_cacheLoaded = false;
 	logger.debug("Refreshing static GTFS cache...", {
 		module: "cache",
 		function: "refreshStaticCache",
@@ -536,12 +530,10 @@ export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): 
 		module: "cache",
 		function: "refreshStaticCache",
 	});
-	_cacheLoaded = true;
 }
 
 export async function refreshRealtimeCache(): Promise<void> {
 	const gtfs = getGtfs();
-	_cacheLoaded = false;
 	logger.debug("Refreshing realtime GTFS cache...", {
 		module: "cache",
 		function: "refreshRealtimeCache",
@@ -659,5 +651,4 @@ export async function refreshRealtimeCache(): Promise<void> {
 		module: "cache",
 		function: "refreshRealtimeCache",
 	});
-	_cacheLoaded = true;
 }
