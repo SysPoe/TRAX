@@ -22,4 +22,14 @@ export function secTimeDiff(t1: string, t2: string): number {
 	return diff;
 }
 
-export default { timeDiff, secTimeDiff };
+export function parseBrisbaneTime(dateStr: string): number {
+	if (!dateStr) return 0;
+	// Check if it has timezone (Z or +HH:MM or -HH:MM)
+	if (dateStr.match(/(Z|[+-]\d{2}:?\d{2})$/)) {
+		return new Date(dateStr).getTime();
+	}
+	// Assume Brisbane +10:00
+	return new Date(dateStr + "+10:00").getTime();
+}
+
+export default { timeDiff, secTimeDiff, parseBrisbaneTime };

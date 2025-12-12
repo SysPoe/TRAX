@@ -1,5 +1,5 @@
 import type * as qdf from "qdf-gtfs";
-import { getRawTrips, getCalendars, getCalendarDates } from "../cache.js";
+import { getRawTrips, getCalendars, getCalendarDates, CacheContext } from "../cache.js";
 
 export function getServiceDates(
 	calendars: qdf.Calendar[],
@@ -13,23 +13,26 @@ export function getServiceDates(
 
 		serviceDates[service_id] = serviceDates[service_id] || [];
 
+		// Parse date components manually to treat them as UTC
+		const sDateStr = String(start_date);
+		const eDateStr = String(end_date);
 		let currentDate = new Date(
-			String(start_date).substring(0, 4) +
-				"-" +
-				String(start_date).substring(4, 6) +
-				"-" +
-				String(start_date).substring(6, 8),
+			Date.UTC(
+				Number(sDateStr.substring(0, 4)),
+				Number(sDateStr.substring(4, 6)) - 1, // Month is 0-indexed
+				Number(sDateStr.substring(6, 8)),
+			),
 		);
 		const endDate = new Date(
-			String(end_date).substring(0, 4) +
-				"-" +
-				String(end_date).substring(4, 6) +
-				"-" +
-				String(end_date).substring(6, 8),
+			Date.UTC(
+				Number(eDateStr.substring(0, 4)),
+				Number(eDateStr.substring(4, 6)) - 1,
+				Number(eDateStr.substring(6, 8)),
+			),
 		);
 
 		while (currentDate <= endDate) {
-			const dayOfWeek = currentDate.getDay(); // 0 for Sunday, 1 for Monday, etc.
+			const dayOfWeek = currentDate.getUTCDay(); // 0 for Sunday, 1 for Monday, etc.
 			const dateAsNumber = currentDate.toISOString().slice(0, 10).replace(/-/g, "");
 
 			let serviceRuns = false;
@@ -45,7 +48,7 @@ export function getServiceDates(
 				serviceDates[service_id].push(dateAsNumber);
 			}
 
-			currentDate.setDate(currentDate.getDate() + 1);
+			currentDate.setUTCDate(currentDate.getUTCDate() + 1);
 		}
 	}
 
@@ -74,8 +77,8 @@ export function getServiceDates(
 	return serviceDates;
 }
 
-export function getServiceDatesByTrip(trip_id: string): string[] {
-	const trips = getRawTrips(trip_id);
+export function getServiceDatesByTrip(trip_id: string, ctx?: CacheContext): string[] {
+	const trips = getRawTrips(trip_id, ctx);
 	const trip = trips && trips.length > 0 ? trips[0] : undefined;
 	if (!trip) return [];
 	const calendars = getCalendars({ service_id: trip.service_id });
