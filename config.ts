@@ -1,3 +1,4 @@
+import { ProgressInfo } from "qdf-gtfs";
 import logger, { LogLevel } from "./utils/logger.js";
 
 export const DEBUG = true;
@@ -11,6 +12,7 @@ export const TRAX_CONFIG = {
 	verbose: DEBUG,
 	db: undefined,
 	logFunction: (message: string) => logger.debug(message, { module: "gtfs" }),
+	progressLog: (info: ProgressInfo) => logger.progress(info),
 };
 
 // Configure logger based on DEBUG flag

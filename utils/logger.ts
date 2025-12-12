@@ -1,6 +1,7 @@
 import chalk from "chalk";
 import stripAnsi from "strip-ansi";
 import fs from "fs";
+import { ProgressInfo } from "qdf-gtfs";
 
 export enum LogLevel {
 	NONE = 0,
@@ -67,6 +68,46 @@ class Logger {
 			this.writeLog(stripAnsi(logMessage));
 			console.error(logMessage);
 		}
+	}
+
+	progress(info: ProgressInfo): void {
+		const { task, current, total, speed, eta } = info;
+
+		const percent = total > 0 ? (current / total) * 100 : 0;
+
+		if (total > 0) {
+			const width = 20;
+			const completed = Math.floor((percent / 100) * width);
+			const bar = '='.repeat(completed) + '>'.repeat(completed < width ? 1 : 0) + ' '.repeat(width - completed - (completed < width ? 1 : 0));
+
+			const sizeStr = `${this.formatBytes(current)}/${this.formatBytes(total)}`;
+			const speedStr = `${this.formatBytes(speed ?? 0)}/s`;
+			const etaStr = `ETA ${this.formatDuration(eta ?? 0)}`;
+
+			process.stdout.write(`\x1b[0K\r[${bar}] ${percent.toFixed(1)}% | ${sizeStr} | ${speedStr} | ${etaStr} | ${task}`);
+			if (percent >= 100) {
+				process.stdout.write('\r\x1b[0K');
+			}
+		}
+	}
+
+	private formatBytes(bytes: number): string {
+		if (bytes === 0) return '0 B';
+		const k = 1024;
+		const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+		const i = Math.floor(Math.log(bytes) / Math.log(k));
+		return parseFloat((bytes / Math.pow(k, i)).toFixed(2)).toFixed(2) + ' ' + sizes[i];
+	}
+
+	private formatDuration(seconds: number): string {
+		if (!isFinite(seconds) || seconds < 0) return "--:--";
+		const h = Math.floor(seconds / 3600);
+		const m = Math.floor((seconds % 3600) / 60);
+		const s = Math.floor(seconds % 60);
+		if (h > 0) {
+			return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+		}
+		return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 	}
 
 	private formatLog(
