@@ -17,6 +17,7 @@ import { getCurrentQRTravelTrains, getPlaces } from "./qr-travel/qr-travel-track
 import logger from "./utils/logger.js";
 import { getGtfs } from "./gtfsInterfaceLayer.js";
 import * as qdf from "qdf-gtfs";
+import { ensureServiceCapacityData } from "./utils/serviceCapacity.js";
 
 class LRUCache<K, V> {
 	private cache = new Map<K, V>();
@@ -489,6 +490,8 @@ export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): 
 		module: "cache",
 		function: "refreshStaticCache",
 	});
+
+	await ensureServiceCapacityData();
 
 	for (const trip of newRawCache.trips) newRawCache.tripsRec.set(trip.trip_id, trip);
 	for (const stop of newRawCache.stops) newRawCache.stopsRec.set(stop.stop_id, stop);
