@@ -1,0 +1,3993 @@
+{
+    "place_romsta": [
+        {
+            "platform_code": 2,
+            "trackName": "Roma Street P2",
+            "trackCode": "RSTP2",
+            "from": [
+                "place_milsta"
+            ],
+            "next": [
+                "place_censta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Roma Street P3",
+            "trackCode": "RSTP3",
+            "from": [
+                "place_milsta"
+            ],
+            "next": [
+                "place_censta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Roma Street P4",
+            "trackCode": "RSTP4",
+            "from": [
+                "place_milsta"
+            ],
+            "next": [
+                "place_censta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 5,
+            "trackName": "Roma Street P5",
+            "trackCode": "RSTP5",
+            "from": [
+                "place_milsta"
+            ],
+            "next": [
+                "place_censta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 6,
+            "trackName": "Roma Street P6",
+            "trackCode": "RSTP6",
+            "from": [
+                "place_milsta"
+            ],
+            "next": [
+                "place_censta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 7,
+            "trackName": "Roma Street P7",
+            "trackCode": "RSTP7",
+            "from": [
+                "place_milsta"
+            ],
+            "next": [
+                "place_censta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 8,
+            "trackName": "Roma Street P8",
+            "trackCode": "RSTP8",
+            "from": [
+                "place_milsta"
+            ],
+            "next": [
+                "place_censta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 9,
+            "trackName": "Roma Street P9",
+            "trackCode": "RSTP9",
+            "from": [
+                "place_milsta"
+            ],
+            "next": [
+                "place_censta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 10,
+            "trackName": "Roma Street P0",
+            "trackCode": "RSTP0",
+            "from": [
+                "place_milsta"
+            ],
+            "next": [
+                "place_censta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_censta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Suburban - Central Line",
+            "trackCode": "USC",
+            "from": [
+                "place_forsta"
+            ],
+            "next": [
+                "place_romsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Central P2",
+            "trackCode": "CENP2",
+            "from": [
+                "place_forsta"
+            ],
+            "next": [
+                "place_romsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Down Suburban - Central Line",
+            "trackCode": "DSC",
+            "from": [
+                "place_romsta"
+            ],
+            "next": [
+                "place_forsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Central P4",
+            "trackCode": "CENP4",
+            "from": [
+                "place_romsta"
+            ],
+            "next": [
+                "place_forsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 5,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_forsta"
+            ],
+            "next": [
+                "place_romsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 6,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_romsta"
+            ],
+            "next": [
+                "place_forsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_forsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Suburban - Central Line",
+            "trackCode": "USC",
+            "from": [
+                "place_bowsta"
+            ],
+            "next": [
+                "place_censta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Suburban - Central Line",
+            "trackCode": "DSC",
+            "from": [
+                "place_censta"
+            ],
+            "next": [
+                "place_bowsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_bowsta"
+            ],
+            "next": [
+                "place_censta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_censta"
+            ],
+            "next": [
+                "place_bowsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_bowsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Suburban - Central Line",
+            "trackCode": "USC",
+            "from": [
+                "place_albsta",
+                "place_winsta"
+            ],
+            "next": [
+                "place_forsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Suburban - Central Line",
+            "trackCode": "DSC",
+            "from": [
+                "place_forsta"
+            ],
+            "next": [
+                "place_albsta",
+                "place_wilsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_albsta",
+                "place_winsta"
+            ],
+            "next": [
+                "place_forsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_forsta"
+            ],
+            "next": [
+                "place_albsta",
+                "place_wilsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_albsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Suburban - Central Line",
+            "trackCode": "USC",
+            "from": [
+                "place_wolsta"
+            ],
+            "next": [
+                "place_bowsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Suburban - Central Line",
+            "trackCode": "DSC",
+            "from": [
+                "place_bowsta"
+            ],
+            "next": [
+                "place_wolsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_wolsta"
+            ],
+            "next": [
+                "place_bowsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_bowsta"
+            ],
+            "next": [
+                "place_wolsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_wolsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Suburban - Central Line",
+            "trackCode": "USC",
+            "from": [
+                "place_egjsta"
+            ],
+            "next": [
+                "place_albsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Suburban - Central Line",
+            "trackCode": "DSC",
+            "from": [
+                "place_albsta"
+            ],
+            "next": [
+                "place_egjsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_egjsta"
+            ],
+            "next": [
+                "place_albsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_albsta"
+            ],
+            "next": [
+                "place_egjsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_egjsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Suburban - Central Line",
+            "trackCode": "USC",
+            "from": [
+                "place_clasta",
+                "place_intsta",
+                "place_tomsta"
+            ],
+            "next": [
+                "place_wolsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Suburban - Central Line",
+            "trackCode": "DSC",
+            "from": [
+                "place_wolsta"
+            ],
+            "next": [
+                "place_clasta",
+                "place_intsta",
+                "place_tomsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_clasta",
+                "place_intsta",
+                "place_tomsta"
+            ],
+            "next": [
+                "place_wolsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_wolsta"
+            ],
+            "next": [
+                "place_clasta",
+                "place_intsta",
+                "place_tomsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_clasta": [
+        {
+            "platform_code": 1,
+            "trackName": "Doomben Line",
+            "trackCode": "DBL",
+            "from": [
+                "place_egjsta"
+            ],
+            "next": [
+                "place_hensta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_hensta": [
+        {
+            "platform_code": 1,
+            "trackName": "Doomben Line",
+            "trackCode": "DBL",
+            "from": [
+                "place_clasta"
+            ],
+            "next": [
+                "place_ascsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_ascsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Doomben Line",
+            "trackCode": "DBL",
+            "from": [
+                "place_hensta"
+            ],
+            "next": [
+                "place_dbnsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_dbnsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Doomben P1",
+            "trackCode": "DBNP1",
+            "from": [],
+            "next": [
+                "place_ascsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Doomben P2",
+            "trackCode": "DBNP2",
+            "from": [],
+            "next": [
+                "place_ascsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_intsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Track 1 - Airport Line",
+            "trackCode": "APL1",
+            "from": [
+                "place_egjsta"
+            ],
+            "next": [
+                "place_domsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Track 2 - Airport Line",
+            "trackCode": "APL2",
+            "from": [
+                "place_egjsta"
+            ],
+            "next": [
+                "place_domsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_domsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Track 1 - Airport Line",
+            "trackCode": "APL1",
+            "from": [],
+            "next": [
+                "place_intsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Track 2 - Airport Line",
+            "trackCode": "APL2",
+            "from": [],
+            "next": [
+                "place_intsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_tomsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Suburban - Central Line",
+            "trackCode": "USC",
+            "from": [
+                "place_nunsta"
+            ],
+            "next": [
+                "place_egjsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Suburban - Central Line",
+            "trackCode": "DSC",
+            "from": [
+                "place_egjsta"
+            ],
+            "next": [
+                "place_nunsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_nunsta"
+            ],
+            "next": [
+                "place_egjsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_egjsta"
+            ],
+            "next": [
+                "place_nunsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_nunsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Suburban - Central Line",
+            "trackCode": "USC",
+            "from": [
+                "place_norsta"
+            ],
+            "next": [
+                "place_tomsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Suburban - Central Line",
+            "trackCode": "DSC",
+            "from": [
+                "place_tomsta"
+            ],
+            "next": [
+                "place_norsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_norsta"
+            ],
+            "next": [
+                "place_tomsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_tomsta"
+            ],
+            "next": [
+                "place_norsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_norsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Suburban - Central Line",
+            "trackCode": "USC",
+            "from": [
+                "place_virsta",
+                "place_binsta"
+            ],
+            "next": [
+                "place_nunsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Suburban - Central Line",
+            "trackCode": "DSC",
+            "from": [
+                "place_nunsta"
+            ],
+            "next": [
+                "place_virsta",
+                "place_binsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_virsta",
+                "place_binsta"
+            ],
+            "next": [
+                "place_nunsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_nunsta"
+            ],
+            "next": [
+                "place_virsta",
+                "place_binsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_binsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Shorncliffe Line",
+            "trackCode": "USH",
+            "from": [
+                "place_baysta"
+            ],
+            "next": [
+                "place_norsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Shorncliffe Line",
+            "trackCode": "DSH",
+            "from": [
+                "place_norsta"
+            ],
+            "next": [
+                "place_baysta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_baysta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Shorncliffe Line",
+            "trackCode": "USH",
+            "from": [
+                "place_nudsta"
+            ],
+            "next": [
+                "place_binsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Shorncliffe Line",
+            "trackCode": "DSH",
+            "from": [
+                "place_binsta"
+            ],
+            "next": [
+                "place_nudsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_nudsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Shorncliffe Line",
+            "trackCode": "USH",
+            "from": [
+                "place_bdlsta"
+            ],
+            "next": [
+                "place_baysta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Shorncliffe Line",
+            "trackCode": "DSH",
+            "from": [
+                "place_baysta"
+            ],
+            "next": [
+                "place_bdlsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_bdlsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Shorncliffe Line",
+            "trackCode": "USH",
+            "from": [
+                "place_nobsta"
+            ],
+            "next": [
+                "place_nudsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Shorncliffe Line",
+            "trackCode": "DSH",
+            "from": [
+                "place_nudsta"
+            ],
+            "next": [
+                "place_nobsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_nobsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Shorncliffe Line",
+            "trackCode": "USH",
+            "from": [
+                "place_deasta"
+            ],
+            "next": [
+                "place_bdlsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Shorncliffe Line",
+            "trackCode": "DSH",
+            "from": [
+                "place_bdlsta"
+            ],
+            "next": [
+                "place_deasta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_deasta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Shorncliffe Line",
+            "trackCode": "USH",
+            "from": [
+                "place_sgtsta"
+            ],
+            "next": [
+                "place_nobsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Shorncliffe Line",
+            "trackCode": "DSH",
+            "from": [
+                "place_nobsta"
+            ],
+            "next": [
+                "place_sgtsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_sgtsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Down - Shorncliffe Line",
+            "trackCode": "DSH",
+            "from": [
+                "place_deasta"
+            ],
+            "next": [
+                "place_shnsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Up - Shorncliffe Line",
+            "trackCode": "USH",
+            "from": [
+                "place_shnsta"
+            ],
+            "next": [
+                "place_deasta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_shnsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Shorncliffe P1",
+            "trackCode": "SHNP1",
+            "from": [],
+            "next": [
+                "place_sgtsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_virsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_snssta"
+            ],
+            "next": [
+                "place_norsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Middle - Northern Line",
+            "trackCode": "MTN",
+            "from": [
+                "place_norsta"
+            ],
+            "next": [
+                "place_snssta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_norsta"
+            ],
+            "next": [
+                "place_snssta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_snssta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_geesta"
+            ],
+            "next": [
+                "place_virsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Middle - Northern Line",
+            "trackCode": "MTN",
+            "from": [
+                "place_virsta"
+            ],
+            "next": [
+                "place_geesta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_virsta"
+            ],
+            "next": [
+                "place_geesta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_geesta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_zllsta"
+            ],
+            "next": [
+                "place_snssta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Middle - Northern Line",
+            "trackCode": "MTN",
+            "from": [
+                "place_snssta"
+            ],
+            "next": [
+                "place_zllsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_snssta"
+            ],
+            "next": [
+                "place_zllsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_zllsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_cassta"
+            ],
+            "next": [
+                "place_geesta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Middle - Northern Line",
+            "trackCode": "MTN",
+            "from": [
+                "place_geesta"
+            ],
+            "next": [
+                "place_cassta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_geesta"
+            ],
+            "next": [
+                "place_cassta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_cassta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_balsta"
+            ],
+            "next": [
+                "place_zllsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Middle - Northern Line",
+            "trackCode": "MTN",
+            "from": [
+                "place_zllsta"
+            ],
+            "next": [
+                "place_balsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_zllsta"
+            ],
+            "next": [
+                "place_balsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_balsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_strsta"
+            ],
+            "next": [
+                "place_cassta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Middle - Northern Line",
+            "trackCode": "MTN",
+            "from": [
+                "place_cassta"
+            ],
+            "next": [
+                "place_strsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_cassta"
+            ],
+            "next": [
+                "place_strsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_strsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_brasta"
+            ],
+            "next": [
+                "place_balsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Middle - Northern Line",
+            "trackCode": "MTN",
+            "from": [
+                "place_balsta"
+            ],
+            "next": [
+                "place_brasta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_balsta"
+            ],
+            "next": [
+                "place_brasta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_brasta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_lawsta"
+            ],
+            "next": [
+                "place_strsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Middle - Northern Line",
+            "trackCode": "MTN",
+            "from": [
+                "place_strsta"
+            ],
+            "next": [
+                "place_lawsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_strsta"
+            ],
+            "next": [
+                "place_lawsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_lawsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_petsta"
+            ],
+            "next": [
+                "place_brasta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Middle - Northern Line",
+            "trackCode": "MTN",
+            "from": [
+                "place_brasta"
+            ],
+            "next": [
+                "place_petsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_brasta"
+            ],
+            "next": [
+                "place_petsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_petsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Petrie P1",
+            "trackCode": "PETP1",
+            "from": [
+                "place_lawsta"
+            ],
+            "next": [
+                "place_daksta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Petrie P2",
+            "trackCode": "PETP2",
+            "from": [
+                "place_lawsta"
+            ],
+            "next": [
+                "place_daksta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Petrie P3",
+            "trackCode": "PETP3",
+            "from": [
+                "place_lawsta"
+            ],
+            "next": [
+                "place_kalsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Petrie P4",
+            "trackCode": "PETP4",
+            "from": [
+                "place_daksta",
+                "place_kalsta"
+            ],
+            "next": [
+                "place_lawsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 5,
+            "trackName": "Petrie P5",
+            "trackCode": "PETP5",
+            "from": [
+                "place_daksta",
+                "place_kalsta"
+            ],
+            "next": [
+                "place_lawsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_kalsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Redcliffe Line",
+            "trackCode": "URL",
+            "from": [
+                "place_mudsta"
+            ],
+            "next": [
+                "place_petsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Redcliffe Line",
+            "trackCode": "DRL",
+            "from": [
+                "place_petsta"
+            ],
+            "next": [
+                "place_mudsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_mudsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Redcliffe Line",
+            "trackCode": "URL",
+            "from": [
+                "place_mahsta"
+            ],
+            "next": [
+                "place_kalsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Redcliffe Line",
+            "trackCode": "DRL",
+            "from": [
+                "place_kalsta"
+            ],
+            "next": [
+                "place_mahsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_mahsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Redcliffe Line",
+            "trackCode": "URL",
+            "from": [
+                "place_mhesta"
+            ],
+            "next": [
+                "place_mudsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Redcliffe Line",
+            "trackCode": "DRL",
+            "from": [
+                "place_mudsta"
+            ],
+            "next": [
+                "place_mhesta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_mhesta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Redcliffe Line",
+            "trackCode": "URL",
+            "from": [
+                "place_rotsta"
+            ],
+            "next": [
+                "place_mahsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Redcliffe Line",
+            "trackCode": "DRL",
+            "from": [
+                "place_mahsta"
+            ],
+            "next": [
+                "place_rotsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_rotsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Down - Redcliffe Line",
+            "trackCode": "DRL",
+            "from": [
+                "place_mhesta"
+            ],
+            "next": [
+                "place_kprsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Up - Redcliffe Line",
+            "trackCode": "URL",
+            "from": [
+                "place_kprsta"
+            ],
+            "next": [
+                "place_mhesta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_kprsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Kippa-Ring P1",
+            "trackCode": "KPRP1",
+            "from": [],
+            "next": [
+                "place_rotsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Kippa-Ring P2",
+            "trackCode": "KPRP2",
+            "from": [],
+            "next": [
+                "place_rotsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_daksta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_narsta"
+            ],
+            "next": [
+                "place_petsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_petsta"
+            ],
+            "next": [
+                "place_narsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_narsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_bursta"
+            ],
+            "next": [
+                "place_daksta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Middle Track - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_daksta"
+            ],
+            "next": [
+                "place_bursta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_daksta"
+            ],
+            "next": [
+                "place_bursta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_bursta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_myesta"
+            ],
+            "next": [
+                "place_narsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_narsta"
+            ],
+            "next": [
+                "place_myesta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_myesta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_cabstn"
+            ],
+            "next": [
+                "place_bursta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_bursta"
+            ],
+            "next": [
+                "place_cabstn"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_cabstn": [
+        {
+            "platform_code": 1,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_myesta"
+            ],
+            "next": [
+                "place_elmsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_elmsta"
+            ],
+            "next": [
+                "place_myesta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Caboolture P3",
+            "trackCode": "CABP3",
+            "from": [
+                "place_elmsta"
+            ],
+            "next": [
+                "place_myesta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_elmsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_bbrsta"
+            ],
+            "next": [
+                "place_cabstn"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_cabstn"
+            ],
+            "next": [
+                "place_bbrsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_bbrsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_gmtsta"
+            ],
+            "next": [
+                "place_elmsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_elmsta"
+            ],
+            "next": [
+                "place_gmtsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_gmtsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_bwrsta"
+            ],
+            "next": [
+                "place_bbrsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_bbrsta"
+            ],
+            "next": [
+                "place_bwrsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_bwrsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_lansta"
+            ],
+            "next": [
+                "place_gmtsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_gmtsta"
+            ],
+            "next": [
+                "place_lansta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_lansta": [
+        {
+            "platform_code": 1,
+            "trackName": "Down Main - Northern Line",
+            "trackCode": "DMN",
+            "from": [
+                "place_bwrsta"
+            ],
+            "next": [
+                "place_molsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Up Main - Northern Line",
+            "trackCode": "UMN",
+            "from": [
+                "place_molsta"
+            ],
+            "next": [
+                "place_bwrsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_molsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Mooloolah P1",
+            "trackCode": "MOLP1",
+            "from": [
+                "place_eudsta"
+            ],
+            "next": [
+                "place_lansta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_eudsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Eudlo P1",
+            "trackCode": "EUDP1",
+            "from": [
+                "place_palsta"
+            ],
+            "next": [
+                "place_molsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_palsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Palmwoods P1",
+            "trackCode": "PALP1",
+            "from": [
+                "place_wbysta"
+            ],
+            "next": [
+                "place_eudsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_wbysta": [
+        {
+            "platform_code": 1,
+            "trackName": "Woombye P1",
+            "trackCode": "WBYRP1",
+            "from": [
+                "place_namsta"
+            ],
+            "next": [
+                "place_palsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_namsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Nambour P1",
+            "trackCode": "NAMBP1",
+            "from": [
+                "place_yansta"
+            ],
+            "next": [
+                "place_wbysta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Nambour P2",
+            "trackCode": "NAMBP2",
+            "from": [
+                "place_yansta"
+            ],
+            "next": [
+                "place_wbysta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_yansta": [
+        {
+            "platform_code": 1,
+            "trackName": "Yandina P1",
+            "trackCode": "YANDP1",
+            "from": [
+                "place_eumsta"
+            ],
+            "next": [
+                "place_namsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_eumsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Eumundi P1",
+            "trackCode": "EUMP1",
+            "from": [
+                "place_crysta"
+            ],
+            "next": [
+                "place_yansta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_crysta": [
+        {
+            "platform_code": 1,
+            "trackName": "Cooroy P1",
+            "trackCode": "COOP1",
+            "from": [
+                "place_pomsta"
+            ],
+            "next": [
+                "place_eumsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_pomsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Pomona P1",
+            "trackCode": "POMP1",
+            "from": [
+                "place_crnsta"
+            ],
+            "next": [
+                "place_crysta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_crnsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Cooran P1",
+            "trackCode": "CRNP1",
+            "from": [
+                "place_trvsta"
+            ],
+            "next": [
+                "place_pomsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_trvsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Traveston P1",
+            "trackCode": "TRVP1",
+            "from": [
+                "place_gymsta"
+            ],
+            "next": [
+                "place_crnsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_gymsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Gympie North P1",
+            "trackCode": "GYMP1",
+            "from": [],
+            "next": [
+                "place_trvsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_winsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Ferny Grove Line",
+            "trackCode": "UFG",
+            "from": [
+                "place_wilsta"
+            ],
+            "next": [
+                "place_bowsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Ferny Grove Line",
+            "trackCode": "DFG",
+            "from": [
+                "place_bowsta"
+            ],
+            "next": [
+                "place_wilsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_wilsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Ferny Grove Line",
+            "trackCode": "UFG",
+            "from": [
+                "place_newsta"
+            ],
+            "next": [
+                "place_winsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Ferny Grove Line",
+            "trackCode": "DFG",
+            "from": [
+                "place_winsta",
+                "place_bowsta"
+            ],
+            "next": [
+                "place_newsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_newsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Ferny Grove Line",
+            "trackCode": "UFG",
+            "from": [
+                "place_aldsta"
+            ],
+            "next": [
+                "place_wilsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Ferny Grove Line",
+            "trackCode": "DFG",
+            "from": [
+                "place_wilsta"
+            ],
+            "next": [
+                "place_aldsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_aldsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Ferny Grove Line",
+            "trackCode": "UFG",
+            "from": [
+                "place_enosta"
+            ],
+            "next": [
+                "place_newsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Ferny Grove Line",
+            "trackCode": "DFG",
+            "from": [
+                "place_newsta"
+            ],
+            "next": [
+                "place_enosta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_enosta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Ferny Grove Line",
+            "trackCode": "UFG",
+            "from": [
+                "place_gaysta"
+            ],
+            "next": [
+                "place_aldsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Ferny Grove Line",
+            "trackCode": "DFG",
+            "from": [
+                "place_aldsta"
+            ],
+            "next": [
+                "place_gaysta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_gaysta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Ferny Grove Line",
+            "trackCode": "UFG",
+            "from": [
+                "place_mitsta"
+            ],
+            "next": [
+                "place_enosta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Ferny Grove Line",
+            "trackCode": "DFG",
+            "from": [
+                "place_enosta"
+            ],
+            "next": [
+                "place_mitsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_mitsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Ferny Grove Line",
+            "trackCode": "UFG",
+            "from": [
+                "place_oxfsta"
+            ],
+            "next": [
+                "place_gaysta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Ferny Grove Line",
+            "trackCode": "DFG",
+            "from": [
+                "place_gaysta"
+            ],
+            "next": [
+                "place_oxfsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_oxfsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Ferny Grove Line",
+            "trackCode": "UFG",
+            "from": [
+                "place_grosta"
+            ],
+            "next": [
+                "place_mitsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Ferny Grove Line",
+            "trackCode": "DFG",
+            "from": [
+                "place_mitsta"
+            ],
+            "next": [
+                "place_grosta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_grosta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Ferny Grove Line",
+            "trackCode": "UFG",
+            "from": [
+                "place_kepsta"
+            ],
+            "next": [
+                "place_oxfsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Ferny Grove Line",
+            "trackCode": "DFG",
+            "from": [
+                "place_oxfsta"
+            ],
+            "next": [
+                "place_kepsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_kepsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up - Ferny Grove Line",
+            "trackCode": "UFG",
+            "from": [
+                "place_ferstn",
+                "place_fersta"
+            ],
+            "next": [
+                "place_grosta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down - Ferny Grove Line",
+            "trackCode": "DFG",
+            "from": [
+                "place_grosta"
+            ],
+            "next": [
+                "place_ferstn",
+                "place_fersta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_ferstn": [
+        {
+            "platform_code": 1,
+            "trackName": "Ferny Grove P1",
+            "trackCode": "FERGP1",
+            "from": [],
+            "next": [
+                "place_kepsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Ferny Grove P2",
+            "trackCode": "FERGP2",
+            "from": [],
+            "next": [
+                "place_kepsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_fersta": [
+        {
+            "platform_code": 1,
+            "trackName": "Ferny Grove P1",
+            "trackCode": "FERGP1",
+            "from": [],
+            "next": [
+                "place_kepsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Ferny Grove P2",
+            "trackCode": "FERGP2",
+            "from": [],
+            "next": [
+                "place_kepsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_milsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Suburban - Central Line",
+            "trackCode": "USC",
+            "from": [
+                "place_romsta"
+            ],
+            "next": [
+                "place_aucsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Suburban - Central Line",
+            "trackCode": "DSC",
+            "from": [
+                "place_aucsta"
+            ],
+            "next": [
+                "place_romsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_romsta"
+            ],
+            "next": [
+                "place_aucsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_aucsta"
+            ],
+            "next": [
+                "place_romsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_aucsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Suburban - Central Line",
+            "trackCode": "USC",
+            "from": [
+                "place_milsta"
+            ],
+            "next": [
+                "place_twgsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Suburban - Central Line",
+            "trackCode": "DSC",
+            "from": [
+                "place_twgsta"
+            ],
+            "next": [
+                "place_milsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_milsta"
+            ],
+            "next": [
+                "place_twgsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_twgsta"
+            ],
+            "next": [
+                "place_milsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_twgsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Suburban - Central Line",
+            "trackCode": "USC",
+            "from": [
+                "place_aucsta"
+            ],
+            "next": [
+                "place_tarsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Suburban - Central Line",
+            "trackCode": "DSC",
+            "from": [
+                "place_tarsta"
+            ],
+            "next": [
+                "place_aucsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_aucsta"
+            ],
+            "next": [
+                "place_tarsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_tarsta"
+            ],
+            "next": [
+                "place_aucsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_tarsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Suburban - Central Line",
+            "trackCode": "USC",
+            "from": [
+                "place_twgsta"
+            ],
+            "next": [
+                "place_indsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Suburban - Central Line",
+            "trackCode": "DSC",
+            "from": [
+                "place_indsta"
+            ],
+            "next": [
+                "place_twgsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_twgsta"
+            ],
+            "next": [
+                "place_indsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_indsta"
+            ],
+            "next": [
+                "place_twgsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_indsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Suburban - Central Line",
+            "trackCode": "USC",
+            "from": [
+                "place_tarsta"
+            ],
+            "next": [
+                "place_chesta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Suburban - Central Line",
+            "trackCode": "DSC",
+            "from": [
+                "place_chesta"
+            ],
+            "next": [
+                "place_tarsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_tarsta"
+            ],
+            "next": [
+                "place_chesta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_chesta"
+            ],
+            "next": [
+                "place_tarsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_chesta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Suburban - Central Line",
+            "trackCode": "USC",
+            "from": [
+                "place_indsta"
+            ],
+            "next": [
+                "place_grasta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Suburban - Central Line",
+            "trackCode": "DSC",
+            "from": [
+                "place_grasta"
+            ],
+            "next": [
+                "place_indsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_indsta"
+            ],
+            "next": [
+                "place_grasta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_grasta"
+            ],
+            "next": [
+                "place_indsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_grasta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Suburban - Central Line",
+            "trackCode": "USC",
+            "from": [
+                "place_chesta"
+            ],
+            "next": [
+                "place_shesta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Suburban - Central Line",
+            "trackCode": "DSC",
+            "from": [
+                "place_shesta"
+            ],
+            "next": [
+                "place_chesta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_chesta"
+            ],
+            "next": [
+                "place_shesta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_shesta"
+            ],
+            "next": [
+                "place_chesta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_shesta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Suburban - Central Line",
+            "trackCode": "USC",
+            "from": [
+                "place_grasta"
+            ],
+            "next": [
+                "place_corsta",
+                "place_corind"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Suburban - Central Line",
+            "trackCode": "DSC",
+            "from": [
+                "place_corsta",
+                "place_corind"
+            ],
+            "next": [
+                "place_grasta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_grasta"
+            ],
+            "next": [
+                "place_corsta",
+                "place_corind"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_corsta",
+                "place_corind"
+            ],
+            "next": [
+                "place_grasta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_corsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Corinda P1",
+            "trackCode": "CORP1",
+            "from": [
+                "place_oxlsta"
+            ],
+            "next": [
+                "place_shesta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Corinda P2",
+            "trackCode": "CORP2",
+            "from": [
+                "place_oxlsta"
+            ],
+            "next": [
+                "place_shesta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Corinda P3",
+            "trackCode": "CORP3",
+            "from": [
+                "place_oxlsta"
+            ],
+            "next": [
+                "place_shesta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Corinda P4",
+            "trackCode": "CORP4",
+            "from": [
+                "place_oxlsta"
+            ],
+            "next": [
+                "place_shesta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 5,
+            "trackName": "Corinda P5",
+            "trackCode": "CORP5",
+            "from": [
+                "place_oxlsta"
+            ],
+            "next": [
+                "place_shesta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_corind": [
+        {
+            "platform_code": 1,
+            "trackName": "Corinda P1",
+            "trackCode": "CORP1",
+            "from": [
+                "place_oxlsta"
+            ],
+            "next": [
+                "place_shesta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Corinda P2",
+            "trackCode": "CORP2",
+            "from": [
+                "place_oxlsta"
+            ],
+            "next": [
+                "place_shesta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Corinda P3",
+            "trackCode": "CORP3",
+            "from": [
+                "place_oxlsta"
+            ],
+            "next": [
+                "place_shesta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Corinda P4",
+            "trackCode": "CORP4",
+            "from": [
+                "place_oxlsta"
+            ],
+            "next": [
+                "place_shesta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 5,
+            "trackName": "Corinda P5",
+            "trackCode": "CORP5",
+            "from": [
+                "place_oxlsta"
+            ],
+            "next": [
+                "place_shesta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_oxlsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Oxley P1",
+            "trackCode": "OXLP1",
+            "from": [
+                "place_darsta"
+            ],
+            "next": [
+                "place_corsta",
+                "place_corind"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Oxley P2",
+            "trackCode": "OXLP2",
+            "from": [
+                "place_darsta"
+            ],
+            "next": [
+                "place_corsta",
+                "place_corind"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Oxley P3",
+            "trackCode": "OXLP3",
+            "from": [
+                "place_darsta"
+            ],
+            "next": [
+                "place_corsta",
+                "place_corind"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_darsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Darra P1",
+            "trackCode": "DARP1",
+            "from": [
+                "place_ricsta",
+                "place_wacsta"
+            ],
+            "next": [
+                "place_oxlsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Darra P2",
+            "trackCode": "DARP2",
+            "from": [
+                "place_ricsta",
+                "place_wacsta"
+            ],
+            "next": [
+                "place_oxlsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Darra P3",
+            "trackCode": "DARP3",
+            "from": [
+                "place_ricsta",
+                "place_wacsta"
+            ],
+            "next": [
+                "place_oxlsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Darra P4",
+            "trackCode": "DARP4",
+            "from": [
+                "place_ricsta",
+                "place_wacsta"
+            ],
+            "next": [
+                "place_oxlsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_ricsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Springfield Line",
+            "trackCode": "UMS",
+            "from": [
+                "place_darsta"
+            ],
+            "next": [
+                "place_sprsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Main - Springfield Line",
+            "trackCode": "DMS",
+            "from": [
+                "place_sprsta"
+            ],
+            "next": [
+                "place_darsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_sprsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Down Main - Springfield Line",
+            "trackCode": "DMS",
+            "from": [
+                "place_spcsta"
+            ],
+            "next": [
+                "place_ricsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Up Main - Springfield Line",
+            "trackCode": "UMS",
+            "from": [
+                "place_ricsta"
+            ],
+            "next": [
+                "place_spcsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_spcsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Springfield Central P1",
+            "trackCode": "SPCP1",
+            "from": [],
+            "next": [
+                "place_sprsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Springfield Central P2",
+            "trackCode": "SPCP2",
+            "from": [],
+            "next": [
+                "place_sprsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_wacsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_gaista"
+            ],
+            "next": [
+                "place_darsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_darsta"
+            ],
+            "next": [
+                "place_gaista"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_gaista": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_wacsta"
+            ],
+            "next": [
+                "place_goosta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_goosta"
+            ],
+            "next": [
+                "place_wacsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_goosta": [
+        {
+            "platform_code": 1,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_rbksta",
+                "place_redsta"
+            ],
+            "next": [
+                "place_gaista"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_gaista"
+            ],
+            "next": [
+                "place_rbksta",
+                "place_redsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_rbksta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_goosta"
+            ],
+            "next": [
+                "place_rivsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_rivsta"
+            ],
+            "next": [
+                "place_goosta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_redsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_goosta"
+            ],
+            "next": [
+                "place_rivsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_rivsta"
+            ],
+            "next": [
+                "place_goosta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_rivsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_dinsta"
+            ],
+            "next": [
+                "place_rbksta",
+                "place_redsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_rbksta",
+                "place_redsta"
+            ],
+            "next": [
+                "place_dinsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_dinsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_rivsta"
+            ],
+            "next": [
+                "place_ebbsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_ebbsta"
+            ],
+            "next": [
+                "place_rivsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_ebbsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_bunsta"
+            ],
+            "next": [
+                "place_dinsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_dinsta"
+            ],
+            "next": [
+                "place_bunsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_bunsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_ebbsta"
+            ],
+            "next": [
+                "place_bvlsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_bvlsta"
+            ],
+            "next": [
+                "place_ebbsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_bvlsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_bunsta"
+            ],
+            "next": [
+                "place_eassta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_eassta"
+            ],
+            "next": [
+                "place_bunsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_eassta": [
+        {
+            "platform_code": 1,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_bvlsta"
+            ],
+            "next": [
+                "place_ipssta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_ipssta"
+            ],
+            "next": [
+                "place_bvlsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_ipssta": [
+        {
+            "platform_code": 1,
+            "trackName": "Ipswich P1",
+            "trackCode": "IPSP1",
+            "from": [
+                "place_thmsta"
+            ],
+            "next": [
+                "place_eassta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Ipswich P2",
+            "trackCode": "IPSP2",
+            "from": [
+                "place_thmsta"
+            ],
+            "next": [
+                "place_eassta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Ipswich P3",
+            "trackCode": "IPSP3",
+            "from": [
+                "place_thmsta"
+            ],
+            "next": [
+                "place_eassta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Ipswich P4",
+            "trackCode": "IPSP4",
+            "from": [
+                "place_thmsta"
+            ],
+            "next": [
+                "place_eassta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_thmsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_wulsta"
+            ],
+            "next": [
+                "place_ipssta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_ipssta"
+            ],
+            "next": [
+                "place_wulsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_wulsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_karsta"
+            ],
+            "next": [
+                "place_thmsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_thmsta"
+            ],
+            "next": [
+                "place_karsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_karsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_walsta"
+            ],
+            "next": [
+                "place_wulsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_wulsta"
+            ],
+            "next": [
+                "place_walsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_walsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_thasta"
+            ],
+            "next": [
+                "place_karsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_karsta"
+            ],
+            "next": [
+                "place_thasta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_thasta": [
+        {
+            "platform_code": 1,
+            "trackName": "Down Main - Central Line",
+            "trackCode": "DMC",
+            "from": [
+                "place_rossta"
+            ],
+            "next": [
+                "place_walsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Up Main - Central Line",
+            "trackCode": "UMC",
+            "from": [
+                "place_walsta"
+            ],
+            "next": [
+                "place_rossta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_rossta": [
+        {
+            "platform_code": 1,
+            "trackName": "Rosewood P1",
+            "trackCode": "ROSWP1",
+            "from": [],
+            "next": [
+                "place_thasta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Rosewood P2",
+            "trackCode": "ROSWP2",
+            "from": [],
+            "next": [
+                "place_thasta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_sousta": [
+        {
+            "platform_code": 1,
+            "trackName": "Southern 3-Track 1",
+            "trackCode": "S3T1",
+            "from": [
+                "place_romsta"
+            ],
+            "next": [
+                "place_sbasta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Southern 3-Track 2",
+            "trackCode": "S3T2",
+            "from": [
+                "place_romsta"
+            ],
+            "next": [
+                "place_sbasta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Southern 3-Track 3",
+            "trackCode": "S3T3",
+            "from": [
+                "place_romsta"
+            ],
+            "next": [
+                "place_sbasta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_sbasta": [
+        {
+            "platform_code": 1,
+            "trackName": "Southern 3-Track 1",
+            "trackCode": "S3T1",
+            "from": [
+                "place_sousta"
+            ],
+            "next": [
+                "place_parsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Southern 3-Track 2",
+            "trackCode": "S3T2",
+            "from": [
+                "place_sousta"
+            ],
+            "next": [
+                "place_parsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Southern 3-Track 3",
+            "trackCode": "S3T3",
+            "from": [
+                "place_sousta"
+            ],
+            "next": [
+                "place_parsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_parsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Park Road P1",
+            "trackCode": "PRDP1",
+            "from": [
+                "place_sbasta"
+            ],
+            "next": [
+                "place_brdsta",
+                "place_dupsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Cleveland Down",
+            "trackCode": "CLDN",
+            "from": [
+                "place_brdsta"
+            ],
+            "next": [
+                "place_sbasta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 3,
+            "trackName": "Park Road P3",
+            "trackCode": "PRDP3",
+            "from": [
+                "place_sbasta"
+            ],
+            "next": [
+                "place_brdsta",
+                "place_dupsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 4,
+            "trackName": "Park Road P4",
+            "trackCode": "PRDP4",
+            "from": [
+                "place_sbasta"
+            ],
+            "next": [
+                "place_brdsta",
+                "place_dupsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_brdsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Cleveland Up",
+            "trackCode": "CLUP",
+            "from": [
+                "place_parsta"
+            ],
+            "next": [
+                "place_coosta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Cleveland Down",
+            "trackCode": "CLDN",
+            "from": [
+                "place_coosta"
+            ],
+            "next": [
+                "place_parsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_coosta": [
+        {
+            "platform_code": 1,
+            "trackName": "Cleveland Down",
+            "trackCode": "CLDN",
+            "from": [
+                "place_npksta"
+            ],
+            "next": [
+                "place_brdsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Cleveland Up",
+            "trackCode": "CLUP",
+            "from": [
+                "place_brdsta"
+            ],
+            "next": [
+                "place_npksta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_npksta": [
+        {
+            "platform_code": 1,
+            "trackName": "Cleveland Up",
+            "trackCode": "CLUP",
+            "from": [
+                "place_coosta"
+            ],
+            "next": [
+                "place_mgssta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Cleveland Down",
+            "trackCode": "CLDN",
+            "from": [
+                "place_mgssta"
+            ],
+            "next": [
+                "place_coosta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_mgssta": [
+        {
+            "platform_code": 1,
+            "trackName": "Cleveland Up",
+            "trackCode": "CLUP",
+            "from": [
+                "place_npksta"
+            ],
+            "next": [
+                "place_cansta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Cleveland Down",
+            "trackCode": "CLDN",
+            "from": [
+                "place_cansta"
+            ],
+            "next": [
+                "place_npksta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_cansta": [
+        {
+            "platform_code": 1,
+            "trackName": "Cleveland Up",
+            "trackCode": "CLUP",
+            "from": [
+                "place_mgssta"
+            ],
+            "next": [
+                "place_mursta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Cleveland Down",
+            "trackCode": "CLDN",
+            "from": [
+                "place_mursta"
+            ],
+            "next": [
+                "place_mgssta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_mursta": [
+        {
+            "platform_code": 1,
+            "trackName": "Cleveland Up",
+            "trackCode": "CLUP",
+            "from": [
+                "place_cansta"
+            ],
+            "next": [
+                "place_hemsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Cleveland Down",
+            "trackCode": "CLDN",
+            "from": [
+                "place_hemsta"
+            ],
+            "next": [
+                "place_cansta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_hemsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Cleveland Down",
+            "trackCode": "CLDN",
+            "from": [
+                "place_linsta"
+            ],
+            "next": [
+                "place_mursta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Cleveland Up",
+            "trackCode": "CLUP",
+            "from": [
+                "place_mursta"
+            ],
+            "next": [
+                "place_linsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_linsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Cleveland Up",
+            "trackCode": "CLUP",
+            "from": [
+                "place_hemsta"
+            ],
+            "next": [
+                "place_wyhsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Cleveland Down",
+            "trackCode": "CLDN",
+            "from": [
+                "place_wyhsta"
+            ],
+            "next": [
+                "place_hemsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_wyhsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Cleveland Up",
+            "trackCode": "CLUP",
+            "from": [
+                "place_linsta"
+            ],
+            "next": [
+                "place_wnmsta"
+            ],
+            "exitSide": "left"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Cleveland Down",
+            "trackCode": "CLDN",
+            "from": [
+                "place_wnmsta"
+            ],
+            "next": [
+                "place_linsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_wnmsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Cleveland Down",
+            "trackCode": "CLDN",
+            "from": [
+                "place_wynsta"
+            ],
+            "next": [
+                "place_wyhsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Cleveland Up",
+            "trackCode": "CLUP",
+            "from": [
+                "place_wyhsta"
+            ],
+            "next": [
+                "place_wynsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_wynsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Cleveland Down",
+            "trackCode": "CLDN",
+            "from": [
+                "place_mansta"
+            ],
+            "next": [
+                "place_wnmsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Cleveland Up",
+            "trackCode": "CLUP",
+            "from": [
+                "place_wnmsta"
+            ],
+            "next": [
+                "place_mansta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_mansta": [
+        {
+            "platform_code": 1,
+            "trackName": "Cleveland Down",
+            "trackCode": "CLDN",
+            "from": [
+                "place_lotsta"
+            ],
+            "next": [
+                "place_wynsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Cleveland Up",
+            "trackCode": "CLUP",
+            "from": [
+                "place_wynsta"
+            ],
+            "next": [
+                "place_lotsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_lotsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Lota P1",
+            "trackCode": "LOTP1",
+            "from": [
+                "place_mansta"
+            ],
+            "next": [
+                "place_thosta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Lota P2",
+            "trackCode": "LOTP2",
+            "from": [
+                "place_thosta"
+            ],
+            "next": [
+                "place_mansta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_thosta": [
+        {
+            "platform_code": 1,
+            "trackName": "Thorneside P1",
+            "trackCode": "THOP1",
+            "from": [
+                "place_birsta"
+            ],
+            "next": [
+                "place_lotsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Thorneside P1",
+            "trackCode": "THOP2",
+            "from": [
+                "place_lotsta"
+            ],
+            "next": [
+                "place_birsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_birsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Birkdale P1",
+            "trackCode": "BIRP1",
+            "from": [
+                "place_thosta"
+            ],
+            "next": [
+                "place_welsta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_welsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Cleveland Up",
+            "trackCode": "CLUP",
+            "from": [
+                "place_birsta"
+            ],
+            "next": [
+                "place_ormsta"
+            ],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Cleveland Down",
+            "trackCode": "CLDN",
+            "from": [
+                "place_ormsta"
+            ],
+            "next": [
+                "place_birsta"
+            ],
+            "exitSide": "right"
+        }
+    ],
+    "place_ormsta": [
+        {
+            "platform_code": 1,
+            "trackName": "Ormiston P1",
+            "trackCode": "ORMP1",
+            "from": [
+                "place_welsta"
+            ],
+            "next": [
+                "place_clesta"
+            ],
+            "exitSide": "left"
+        }
+    ],
+    "place_clesta": [
+        {
+            "platform_code": 1,
+            "trackName": "Cleveland P1",
+            "trackCode": "CLEP1",
+            "from": [
+                "place_ormsta"
+            ],
+            "next": [],
+            "exitSide": "right"
+        },
+        {
+            "platform_code": 2,
+            "trackName": "Cleveland P2",
+            "trackCode": "CLEP2",
+            "from": [
+                "place_ormsta"
+            ],
+            "next": [],
+            "exitSide": "left"
+        }
+    ]
+}

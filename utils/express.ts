@@ -351,9 +351,8 @@ export function findExpressString(expressData: ExpressInfo[], stop_id: string | 
 						? stoppingAtNames[0]
 						: stoppingAtNames.length == 2
 							? `${stoppingAtNames[0]} and ${stoppingAtNames[1]}`
-							: `${stoppingAtNames.slice(0, -1).join(", ")}, and ${
-									stoppingAtNames[stoppingAtNames.length - 1]
-								}`;
+							: `${stoppingAtNames.slice(0, -1).join(", ")}, and ${stoppingAtNames[stoppingAtNames.length - 1]
+							}`;
 				return stop_id !== null &&
 					(run.from == cache.getRawStops(stop_id)[0]?.parent_station || run.from == stop_id)
 					? run.stoppingAt.length > 0

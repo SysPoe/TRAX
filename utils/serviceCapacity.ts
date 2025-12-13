@@ -1,6 +1,5 @@
 import fs from "fs";
 import path from "path";
-import { TRAX_CONFIG } from "../config.js";
 import logger from "./logger.js";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { AugmentedTrip } from "./augmentedTrip.js";
@@ -8,11 +7,9 @@ import { getRawRoutes } from "../cache.js";
 import zlib from "zlib";
 import { pipeline } from "stream";
 import { promisify } from "util";
-import { fileURLToPath } from "url";
+import { getDataFilePath } from "./fs.js";
 
 const pipe = promisify(pipeline);
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const CACHE_DIR = ".TRAXCACHE";
 const FILE_NAME = "service_capacity.csv";
@@ -51,30 +48,13 @@ export async function ensureServiceCapacityData(): Promise<void> {
 	if (!fs.existsSync(FILE_PATH)) {
 		logger.info("Extracting service capacity data from local archive...", { module: "serviceCapacity" });
 		try {
-			// Locate the archive. It might be in the same folder (if running via tsx/source)
-			// or in the project root's utils/capacity if running from dist/
-			const candidates = [
-				path.join(__dirname, "capacity", "service_capacity.csv.gz"),
-				path.join(__dirname, "..", "utils", "capacity", "service_capacity.csv.gz"),
-				path.join(__dirname, "..", "..", "utils", "capacity", "service_capacity.csv.gz"),
-			];
-
-			const zipPath = candidates.find((p) => fs.existsSync(p));
-
-			if (!zipPath) {
-				throw new Error(`Local archive not found. Searched at: ${candidates.join(", ")}`);
-			}
+			const zipPath = getDataFilePath("service_capacity.csv.gz");
 
 			await pipe(fs.createReadStream(zipPath), zlib.createGunzip(), fs.createWriteStream(FILE_PATH));
 			logger.info("Service capacity data extracted.", { module: "serviceCapacity" });
 		} catch (e) {
 			logger.error(`Failed to extract service capacity data: ${e}`, { module: "serviceCapacity" });
 		}
-	} else {
-		// Optional: Check if expired, but since we use embedded data now,
-		// expiration might just mean "re-extract if we updated the package"
-		// or just ignore expiry since we don't download anymore.
-		// We'll keep it simple: if it exists, use it.
 	}
 
 	loadServiceCapacityData();

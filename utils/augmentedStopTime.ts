@@ -4,7 +4,7 @@ import * as cache from "../cache.js";
 import { findExpress } from "./express.js";
 import { getSRT } from "./SectionalRunningTimes/gtfs.js";
 import { today } from "../index.js";
-import platformData from "./platformData/data.js";
+import platformData from "./platformData.js";
 import logger from "./logger.js";
 
 // --- Types & Exports ---
