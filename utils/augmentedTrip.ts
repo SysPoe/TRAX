@@ -70,6 +70,17 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 
 	let scheduleRelationship = cache.getTripUpdates(trip.trip_id, ctx)[0]?.trip.schedule_relationship ?? null;
 
+	const ensureCachedStopTimes = () => {
+		if (!cachedStopTimes) {
+			cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, ctx);
+			// Attach service capacity method
+			for (const st of cachedStopTimes) {
+				st.getServiceCapacity = (date: string) => getServiceCapacity(result, st, date);
+			}
+		}
+		return cachedStopTimes;
+	};
+
 	const result: AugmentedTrip = {
 		_trip: trip,
 		scheduledStartServiceDates: serviceDates,
@@ -77,16 +88,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 			let stopTimes = cache.getAugmentedStopTimes(trip.trip_id, ctx);
 			let stopTimesToUse: AugmentedStopTime[];
 			if (stopTimes.length > 0) stopTimesToUse = stopTimes;
-			else {
-				if (!cachedStopTimes) {
-				    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, ctx);
-				    // Attach service capacity method
-				    for(const st of cachedStopTimes) {
-				        st.getServiceCapacity = (date: string) => getServiceCapacity(result, st, date);
-				    }
-				}
-				stopTimesToUse = cachedStopTimes;
-			}
+			else stopTimesToUse = ensureCachedStopTimes();
 
 			let dates = [
 				...new Set(
@@ -101,16 +103,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 			let stopTimes = cache.getAugmentedStopTimes(trip.trip_id, ctx);
 			let stopTimesToUse: AugmentedStopTime[];
 			if (stopTimes.length > 0) stopTimesToUse = stopTimes;
-			else {
-				if (!cachedStopTimes) {
-				    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, ctx);
-				    // Attach service capacity method
-				    for(const st of cachedStopTimes) {
-				        st.getServiceCapacity = (date: string) => getServiceCapacity(result, st, date);
-				    }
-				}
-				stopTimesToUse = cachedStopTimes;
-			}
+			else stopTimesToUse = ensureCachedStopTimes();
 
 			let dates = [
 				...new Set(
@@ -124,15 +117,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 		get stopTimes() {
 			let stopTimes = cache.getAugmentedStopTimes(trip.trip_id, ctx);
 			if (stopTimes.length > 0) return stopTimes;
-
-			if (!cachedStopTimes) {
-			    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, ctx);
-			    // Attach service capacity method
-			    for(const st of cachedStopTimes) {
-			        st.getServiceCapacity = (date: string) => getServiceCapacity(result, st, date);
-			    }
-			}
-			return cachedStopTimes;
+			return ensureCachedStopTimes();
 		},
 		expressInfo,
 		_runSeries,
@@ -146,14 +131,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 		toSerializable: function () {
 			let stopTimes = cache.getAugmentedStopTimes(trip.trip_id, ctx);
 			if (stopTimes.length === 0) {
-				if (!cachedStopTimes) {
-				    cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, ctx);
-				    // Attach service capacity method
-				    for(const st of cachedStopTimes) {
-				        st.getServiceCapacity = (date: string) => getServiceCapacity(result, st, date);
-				    }
-				}
-				stopTimes = cachedStopTimes;
+				stopTimes = ensureCachedStopTimes();
 			}
 			return toSerializableAugmentedTrip({
 				_trip: trip,

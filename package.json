@@ -13,7 +13,7 @@
     },
     "dependencies": {
         "chalk": "^5.4.1",
-        "qdf-gtfs": "github:SysPoe/QDF-GTFS",
+        "qdf-gtfs": "file:../QDF-GTFS",
         "strip-ansi": "^7.1.2"
     },
     "scripts": {
