@@ -9,3 +9,4 @@ profiler
 TRAX.log
 dist
 .TRAXCACHE
+pnpm-lock.yaml
