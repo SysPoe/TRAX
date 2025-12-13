@@ -240,7 +240,7 @@ function getTripDirection(trip: AugmentedTrip, currentStopSequence: number): "In
     );
 
     if (centralIndex !== -1) {
-        if (currentStopSequence < stopTimes[centralIndex].stop_sequence) return "Inbound";
+        if (currentStopSequence < (stopTimes[centralIndex] as any)._stopTime?.stop_sequence) return "Inbound";
         return "Outbound";
     }
 
@@ -248,7 +248,7 @@ function getTripDirection(trip: AugmentedTrip, currentStopSequence: number): "In
         (st.scheduled_parent_station?.stop_id === "place_romsta" || st.scheduled_stop?.stop_id === "place_romsta")
     );
      if (romaIndex !== -1) {
-        if (currentStopSequence < stopTimes[romaIndex].stop_sequence) return "Inbound";
+        if (currentStopSequence < (stopTimes[romaIndex] as any)._stopTime?.stop_sequence) return "Inbound";
         return "Outbound";
     }
 
