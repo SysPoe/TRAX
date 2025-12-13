@@ -88,7 +88,7 @@ function loadServiceCapacityData() {
 	const headers = lines[0]
 		.split(",")
 		.map((h) => h.trim().toLowerCase().replace(/"/g, ""));
-	hasId = headers[0] === "_id";
+	const hasId = headers[0] === "_id";
 
 	capacityIndex = new Map();
 	let count = 0;
