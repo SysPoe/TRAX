@@ -1,8 +1,9 @@
 import chalk from "chalk";
 import stripAnsi from "strip-ansi";
-import fs from "fs/promises";
+import fs from "fs";
 import { ProgressInfo } from "qdf-gtfs";
 import cliProgress from "cli-progress";
+import { WriteStream } from "fs";
 
 export enum LogLevel {
 	NONE = 0,
@@ -23,31 +24,21 @@ class Logger {
 	private prefix: string;
 	private multibar: cliProgress.MultiBar | undefined;
 	private bars: Map<string, cliProgress.SingleBar>;
+	private stream: WriteStream;
 
 	constructor(level: LogLevel = LogLevel.INFO, prefix: string = "TRAX") {
 		this.level = level;
 		this.prefix = prefix;
 		this.bars = new Map();
+		this.stream = fs.createWriteStream("./TRAX.log", { flags: "a" });
 	}
 
 	setLevel(level: LogLevel): void {
 		this.level = level;
 	}
 
-	private async writeLog(message: string): Promise<void> {
-		const logFilePath = "./TRAX.log";
-		try {
-			await fs.access(logFilePath);
-		} catch {
-			await fs.writeFile(logFilePath, "");
-		}
-		// TODO Dangerous!!! Clear the log file if it exceeds 10 MB. Disable when debug is done.
-		try {
-			if ((await fs.stat(logFilePath)).size > 10 * 1024 * 1024) await fs.truncate(logFilePath, 0);
-			await fs.writeFile(logFilePath, message + "\n", { flag: "a" });
-		} catch (e) {
-			// Ignore logging errors to avoid recursion or crash
-		}
+	private writeLog(message: string): void {
+		this.stream.write(message + "\n");
 	}
 
 	private print(message: string, method: "log" | "warn" | "error" | "debug" = "log"): void {
