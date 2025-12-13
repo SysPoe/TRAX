@@ -90,8 +90,8 @@ export function toSerializableAugmentedStopTime(
         actual_parent_station: st.actual_parent_station?.stop_id ?? null,
         scheduled_stop: st.scheduled_stop?.stop_id ?? null,
         scheduled_parent_station: st.scheduled_parent_station?.stop_id ?? null,
-		// @ts-expect-error
-		toSerializable: undefined,
+        // @ts-expect-error
+        toSerializable: undefined,
     };
 }
 
@@ -130,11 +130,18 @@ function calculateDelayClass(delaySecs: number) {
     return { str: `${Math.round(Math.abs(delaySecs) / 60)}m early`, cls: "early" as const };
 }
 
+const dateStringCache = new Map<string, string>();
+
 /**
  * Adds days to a YYYYMMDD string correctly.
  */
 function addDaysToDateString(dateStr: string, daysToAdd: number): string {
     if (daysToAdd === 0) return dateStr;
+
+    const key = `${dateStr}|${daysToAdd}`;
+    const cached = dateStringCache.get(key);
+    if (cached) return cached;
+
     const y = parseInt(dateStr.slice(0, 4), 10);
     const m = parseInt(dateStr.slice(4, 6), 10) - 1; // Month is 0-indexed
     const d = parseInt(dateStr.slice(6, 8), 10);
@@ -146,7 +153,9 @@ function addDaysToDateString(dateStr: string, daysToAdd: number): string {
     const ny = date.getUTCFullYear();
     const nm = (date.getUTCMonth() + 1).toString().padStart(2, "0");
     const nd = date.getUTCDate().toString().padStart(2, "0");
-    return `${ny}${nm}${nd}`;
+    const result = `${ny}${nm}${nd}`;
+    dateStringCache.set(key, result);
+    return result;
 }
 
 // --- Passing Stop Logic ---
@@ -228,9 +237,9 @@ function findPassingStopSRTs(stops: string[]): PassingStopSRT[] {
 function findPassingStopTimes(stopTimes: qdf.StopTime[]): PassingStopTime[] {
     if (stopTimes.length === 0) return [];
 
-    // Extract parent stations for SRT lookup, sorted by sequence
-    const sortedStopTimes = [...stopTimes].sort((a, b) => (a.stop_sequence ?? 0) - (b.stop_sequence ?? 0));
-    const stops = sortedStopTimes
+    // Extract parent stations for SRT lookup
+    // Assume stopTimes are already sorted by sequence (caller augmentStopTimes receives them sorted)
+    const stops = stopTimes
         .map((st) => getStopOrParentId(st.stop_id))
         .filter((v): v is string => v !== undefined);
 
@@ -606,17 +615,25 @@ export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string
         }
 
         // 4. Construct Realtime Info Object
-        let realtimeInfo = null;
         const hasRealtime = rtUpdate != undefined || propagated || tripUpdate != undefined;
+        let realtimePart: { realtime: true; realtime_info: { delay_secs: number; delay_string: string; delay_class: "on-time" | "scheduled" | "late" | "very-late" | "early"; schedule_relationship: qdf.StopTimeScheduleRelationship; propagated: boolean; }; } | { realtime: false; realtime_info: null; };
 
         if (hasRealtime) {
             const { str, cls } = calculateDelayClass(delaySecs);
-            realtimeInfo = {
-                delay_secs: delaySecs,
-                delay_string: str,
-                delay_class: cls,
-                schedule_relationship: scheduleRelationship,
-                propagated: propagated && !isPassing,
+            realtimePart = {
+                realtime: true,
+                realtime_info: {
+                    delay_secs: delaySecs,
+                    delay_string: str,
+                    delay_class: cls,
+                    schedule_relationship: scheduleRelationship,
+                    propagated: propagated && !isPassing,
+                }
+            };
+        } else {
+            realtimePart = {
+                realtime: false,
+                realtime_info: null
             };
         }
 
@@ -632,22 +649,27 @@ export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string
 
         const todayStr = today();
 
-        const scheduled_arrival_dates = serviceDates.map((d) => 
-            addDaysToDateString(d, currentOffsets.schedArr - dateOffsets.schedArr)
+        const schedArrOffset = currentOffsets.schedArr - dateOffsets.schedArr;
+        const schedDepOffset = currentOffsets.schedDep - dateOffsets.schedDep;
+        const actArrOffset = currentOffsets.actArr - dateOffsets.actArr;
+        const actDepOffset = currentOffsets.actDep - dateOffsets.actDep;
+
+        const scheduled_arrival_dates = schedArrOffset === 0 ? serviceDates : serviceDates.map((d) =>
+            addDaysToDateString(d, schedArrOffset)
         );
-        const scheduled_departure_dates = serviceDates.map((d) => 
-            addDaysToDateString(d, currentOffsets.schedDep - dateOffsets.schedDep)
+        const scheduled_departure_dates = schedDepOffset === 0 ? serviceDates : serviceDates.map((d) =>
+            addDaysToDateString(d, schedDepOffset)
         );
 
         const actual_arrival_dates = serviceDates.map((d) =>
             d === todayStr
-                ? addDaysToDateString(d, currentOffsets.actArr - dateOffsets.actArr)
-                : addDaysToDateString(d, currentOffsets.schedArr - dateOffsets.schedArr),
+                ? addDaysToDateString(d, actArrOffset)
+                : addDaysToDateString(d, schedArrOffset),
         );
         const actual_departure_dates = serviceDates.map((d) =>
             d === todayStr
-                ? addDaysToDateString(d, currentOffsets.actDep - dateOffsets.actDep)
-                : addDaysToDateString(d, currentOffsets.schedDep - dateOffsets.schedDep),
+                ? addDaysToDateString(d, actDepOffset)
+                : addDaysToDateString(d, schedDepOffset),
         );
 
         intermediateStops.push({
@@ -673,8 +695,7 @@ export function augmentStopTimes(stopTimes: qdf.StopTime[], serviceDates: string
             scheduled_parent_station: scheduledParent,
             scheduled_platform_code: isPassing ? null : (scheduledStop.platform_code ?? null),
 
-            realtime: hasRealtime,
-            realtime_info: realtimeInfo,
+            ...realtimePart,
 
             scheduled_arrival_dates,
             actual_arrival_dates,
