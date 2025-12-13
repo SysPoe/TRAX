@@ -464,8 +464,6 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 		prevScheduledTrack = schPlat?.trackCode ?? "";
 	}
 
-	// Fix the circular reference in toSerializable now that object is fully formed?
-	// The original code did `v => ({ ...v, toSerializable: ... })` at the very end.
 	return pathBuffer.map((v) => ({
 		...v,
 		toSerializable: () => toSerializableAugmentedStopTime(v),

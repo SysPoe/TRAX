@@ -15,14 +15,9 @@ function testGetDayType() {
 
 function testFormatTimeBucket() {
     console.log("Testing formatTimeBucket...");
-    // 5:00 AM = 5 * 60 * 60 = 18000 seconds
     assert.strictEqual(formatTimeBucket(18000), "5:00 AM");
-    // 5:07 AM = 18420 -> rounds to 5:00 or 5:15?
-    // 7 mins is < 8, so down to 0.
     assert.strictEqual(formatTimeBucket(18000 + 7 * 60), "5:00 AM");
-    // 5:08 AM -> rounds up to 5:15
     assert.strictEqual(formatTimeBucket(18000 + 8 * 60), "5:15 AM");
-    // 13:00 = 1:00 PM
     assert.strictEqual(formatTimeBucket(13 * 3600), "1:00 PM");
     console.log("PASS");
 }
