@@ -479,7 +479,7 @@ export function augmentStopTimes(
 	}
 
 	const tripUpdate = cache.getTripUpdates(tripId, ctx)[0];
-	const stopTimeUpdates = tripUpdate?.stop_time_updates ?? [];
+	const stopTimeUpdates: qdf.RealtimeStopTimeUpdate[] = tripUpdate?.stop_time_updates ?? [];
 	const passingStopTimes = findPassingStopTimes(stopTimes, ctx);
 
 	// Initial offsets (first stop)
