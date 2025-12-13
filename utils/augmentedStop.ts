@@ -118,10 +118,7 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 			// Query static GTFS for stop times at this station (optimized)
 			const rawStopTimes = Array.from(validStops).flatMap((id) => getGtfs().queryStopTimes({ stop_id: id }));
 			const passingTrips = Array.from(validStops).flatMap((id) => getPassingTrips(id, ctx));
-			const allTripIds = new Set([
-				...rawStopTimes.map((st) => st.trip_id),
-				...passingTrips,
-			]);
+			const allTripIds = new Set([...rawStopTimes.map((st) => st.trip_id), ...passingTrips]);
 
 			for (const tripId of allTripIds) {
 				// 1. Resolve Trip
@@ -184,10 +181,7 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 			// Query static GTFS for stop times at this station (optimized)
 			const rawStopTimes = Array.from(validStops).flatMap((id) => getGtfs().queryStopTimes({ stop_id: id }));
 			const passingTrips = Array.from(validStops).flatMap((id) => getPassingTrips(id, ctx));
-			const allTripIds = new Set([
-				...rawStopTimes.map((st) => st.trip_id),
-				...passingTrips,
-			]);
+			const allTripIds = new Set([...rawStopTimes.map((st) => st.trip_id), ...passingTrips]);
 
 			for (const tripId of allTripIds) {
 				let trip = tripCache.get(tripId);

@@ -62,23 +62,17 @@ export async function ensureServiceCapacityData(): Promise<void> {
 			const zipPath = candidates.find((p) => fs.existsSync(p));
 
 			if (!zipPath) {
-				throw new Error(
-					`Local archive not found. Searched at: ${candidates.join(", ")}`
-				);
+				throw new Error(`Local archive not found. Searched at: ${candidates.join(", ")}`);
 			}
 
-			await pipe(
-				fs.createReadStream(zipPath),
-				zlib.createGunzip(),
-				fs.createWriteStream(FILE_PATH)
-			);
+			await pipe(fs.createReadStream(zipPath), zlib.createGunzip(), fs.createWriteStream(FILE_PATH));
 			logger.info("Service capacity data extracted.", { module: "serviceCapacity" });
 		} catch (e) {
 			logger.error(`Failed to extract service capacity data: ${e}`, { module: "serviceCapacity" });
 		}
 	} else {
-		// Optional: Check if expired, but since we use embedded data now, 
-		// expiration might just mean "re-extract if we updated the package" 
+		// Optional: Check if expired, but since we use embedded data now,
+		// expiration might just mean "re-extract if we updated the package"
 		// or just ignore expiry since we don't download anymore.
 		// We'll keep it simple: if it exists, use it.
 	}
@@ -94,9 +88,7 @@ function loadServiceCapacityData() {
 	const content = fs.readFileSync(FILE_PATH, "utf-8");
 	const lines = content.split("\n");
 
-	const headers = lines[0]
-		.split(",")
-		.map((h) => h.trim().toLowerCase().replace(/"/g, ""));
+	const headers = lines[0].split(",").map((h) => h.trim().toLowerCase().replace(/"/g, ""));
 	const hasId = headers[0] === "_id";
 
 	capacityIndex = new Map();
@@ -161,9 +153,9 @@ function isFerryOrTram(route: string): boolean {
 }
 
 function normalizeStopName(csvStop: string): string {
-	const parts = csvStop.split(' - ');
+	const parts = csvStop.split(" - ");
 	if (parts.length > 1) {
-		return parts.slice(1).join(' - ').toLowerCase().trim();
+		return parts.slice(1).join(" - ").toLowerCase().trim();
 	}
 	return csvStop.toLowerCase().trim();
 }
@@ -208,7 +200,7 @@ function formatTimeBucket(seconds: number): string {
 	let h12 = h % 12;
 	if (h12 === 0) h12 = 12;
 
-	const mStr = m.toString().padStart(2, '0');
+	const mStr = m.toString().padStart(2, "0");
 	return `${h12}:${mStr} ${ampm}`;
 }
 
@@ -233,131 +225,138 @@ function getTripDirection(trip: AugmentedTrip, currentStopSequence: number): "In
 		return null;
 	}
 
-    const centralIndex = stopTimes.findIndex(st =>
-        (st.scheduled_parent_station?.stop_id === "place_censta" || st.scheduled_stop?.stop_id === "place_censta")
-    );
+	const centralIndex = stopTimes.findIndex(
+		(st) =>
+			st.scheduled_parent_station?.stop_id === "place_censta" || st.scheduled_stop?.stop_id === "place_censta",
+	);
 
-    if (centralIndex !== -1) {
-        if (currentStopSequence < stopTimes[centralIndex]._stopTime?.stop_sequence!) {
-            // If the trip starts in the city (e.g. Roma Street), it's likely an Outbound trip 
-            // even before it hits Central.
-            const firstStopId = stopTimes[0]?.scheduled_parent_station?.stop_id || stopTimes[0]?.scheduled_stop?.stop_id;
-            if (firstStopId && CITY_STATIONS.includes(firstStopId)) {
-                return "Outbound";
-            }
-            return "Inbound";
-        }
-        return "Outbound";
-    }
+	if (centralIndex !== -1) {
+		if (currentStopSequence < stopTimes[centralIndex]._stopTime?.stop_sequence!) {
+			// If the trip starts in the city (e.g. Roma Street), it's likely an Outbound trip
+			// even before it hits Central.
+			const firstStopId =
+				stopTimes[0]?.scheduled_parent_station?.stop_id || stopTimes[0]?.scheduled_stop?.stop_id;
+			if (firstStopId && CITY_STATIONS.includes(firstStopId)) {
+				return "Outbound";
+			}
+			return "Inbound";
+		}
+		return "Outbound";
+	}
 
-    const romaIndex = stopTimes.findIndex(st =>
-        (st.scheduled_parent_station?.stop_id === "place_romsta" || st.scheduled_stop?.stop_id === "place_romsta")
-    );
-     if (romaIndex !== -1) {
-        if (currentStopSequence < stopTimes[romaIndex]._stopTime?.stop_sequence!) {
-             const firstStopId = stopTimes[0]?.scheduled_parent_station?.stop_id || stopTimes[0]?.scheduled_stop?.stop_id;
-            if (firstStopId && CITY_STATIONS.includes(firstStopId)) {
-                return "Outbound";
-            }
-            return "Inbound";
-        }
-        return "Outbound";
-    }
+	const romaIndex = stopTimes.findIndex(
+		(st) =>
+			st.scheduled_parent_station?.stop_id === "place_romsta" || st.scheduled_stop?.stop_id === "place_romsta",
+	);
+	if (romaIndex !== -1) {
+		if (currentStopSequence < stopTimes[romaIndex]._stopTime?.stop_sequence!) {
+			const firstStopId =
+				stopTimes[0]?.scheduled_parent_station?.stop_id || stopTimes[0]?.scheduled_stop?.stop_id;
+			if (firstStopId && CITY_STATIONS.includes(firstStopId)) {
+				return "Outbound";
+			}
+			return "Inbound";
+		}
+		return "Outbound";
+	}
 
-    const dirId = trip._trip.direction_id;
-    if (dirId === 0) return "Inbound";
-    if (dirId === 1) return "Outbound";
-    return "Inbound";
+	const dirId = trip._trip.direction_id;
+	if (dirId === 0) return "Inbound";
+	if (dirId === 1) return "Outbound";
+	return "Inbound";
 }
 
 const ROUTE_KEYWORD_MAP: Record<string, string> = {
-    "Airport": "Airport Line",
-    "Beenleigh": "Beenleigh Line",
-    "Caboolture": "Caboolture Line",
-    "Cleveland": "Cleveland Line",
-    "Doomben": "Doomben Line",
-    "Ferny Grove": "Ferny Grove Line",
-    "Varsity Lakes": "Gold Coast Line",
-    "Gold Coast": "Gold Coast Line",
-    "Ipswich": "Ipswich/Rosewood Lines",
-    "Rosewood": "Ipswich/Rosewood Lines",
-    "Redcliffe Peninsula": "Redcliffe Peninsula Line",
-    "Shorncliffe": "Shorncliffe Line",
-    "Springfield": "Springfield Line",
-    "Nambour": "Sunshine Coast Line",
-    "Gympie": "Sunshine Coast Line",
-    "Gympie North": "Sunshine Coast Line",
-    "Sunshine Coast": "Sunshine Coast Line",
+	Airport: "Airport Line",
+	Beenleigh: "Beenleigh Line",
+	Caboolture: "Caboolture Line",
+	Cleveland: "Cleveland Line",
+	Doomben: "Doomben Line",
+	"Ferny Grove": "Ferny Grove Line",
+	"Varsity Lakes": "Gold Coast Line",
+	"Gold Coast": "Gold Coast Line",
+	Ipswich: "Ipswich/Rosewood Lines",
+	Rosewood: "Ipswich/Rosewood Lines",
+	"Redcliffe Peninsula": "Redcliffe Peninsula Line",
+	Shorncliffe: "Shorncliffe Line",
+	Springfield: "Springfield Line",
+	Nambour: "Sunshine Coast Line",
+	Gympie: "Sunshine Coast Line",
+	"Gympie North": "Sunshine Coast Line",
+	"Sunshine Coast": "Sunshine Coast Line",
 };
 
 export function getServiceCapacity(
-    trip: AugmentedTrip,
-    stopTime: AugmentedStopTime,
-    dateStr: string,
-	_dirOverride?: string
+	trip: AugmentedTrip,
+	stopTime: AugmentedStopTime,
+	dateStr: string,
+	_dirOverride?: string,
 ): string | null {
-    if (!loaded) return null;
+	if (!loaded) return null;
 
-    const route = getRawRoutes(trip._trip.route_id)[0];
-    const routeName = route?.route_long_name;
-    if (!routeName) return null;
+	const route = getRawRoutes(trip._trip.route_id)[0];
+	const routeName = route?.route_long_name;
+	if (!routeName) return null;
 
-    const seq = stopTime._stopTime?.stop_sequence ?? 0;
-    const direction = _dirOverride ?? getTripDirection(trip, seq);
-    if (!direction) return null;
+	const seq = stopTime._stopTime?.stop_sequence ?? 0;
+	const direction = _dirOverride ?? getTripDirection(trip, seq);
+	if (!direction) return null;
 
-    const dayType = getDayType(dateStr);
+	const dayType = getDayType(dateStr);
 
-    const stopName = stopTime.scheduled_parent_station?.stop_name || stopTime.scheduled_stop?.stop_name;
-    if (!stopName) return null;
-	
-    const normStopName = stopName.toLowerCase().trim();
+	let stopName = stopTime.scheduled_parent_station?.stop_name ?? stopTime.scheduled_stop?.stop_name;
+	if (!stopName) return null;
+	if (stopName.trim().toLowerCase().startsWith("boggo")) stopName = "Park Road";
+	if (stopName.trim().toLowerCase().startsWith("international")) stopName = "International Terminal";
+	if (stopName.trim().toLowerCase().startsWith("domestic")) stopName = "Domestic Terminal";
 
-    const departureTime = stopTime.scheduled_departure_time;
-    if (departureTime === null) return null;
+	const normStopName = stopName.toLowerCase().trim();
 
-    const timeBucket = formatTimeBucket(departureTime);
+	const departureTime = stopTime.scheduled_departure_time;
+	if (departureTime === null) return null;
 
-    // Map routeName (e.g. "Brisbane City - Ferny Grove") to potential lines (e.g. "Ferny Grove Line")
-    const routeParts = routeName.split(" - ");
-    const candidateLines = new Set<string>();
-    
-    for (const part of routeParts) {
-        const trimmed = part.trim();
-        if (ROUTE_KEYWORD_MAP[trimmed]) {
-            candidateLines.add(ROUTE_KEYWORD_MAP[trimmed]);
-        }
-    }
+	const timeBucket = formatTimeBucket(departureTime);
 
-    if (candidateLines.size === 0) return null;
+	// Map routeName (e.g. "Brisbane City - Ferny Grove") to potential lines (e.g. "Ferny Grove Line")
+	const routeParts = routeName.split(" - ");
+	const candidateLines = new Set<string>();
 
-    for (const lineName of candidateLines) {
-        const rMap = capacityIndex.get(lineName);
-        if (!rMap) continue;
+	for (const part of routeParts) {
+		const trimmed = part.trim();
+		if (ROUTE_KEYWORD_MAP[trimmed]) {
+			candidateLines.add(ROUTE_KEYWORD_MAP[trimmed]);
+		}
+	}
 
-        const dMap = rMap.get(direction);
-        if (!dMap) continue;
+	if (candidateLines.size === 0) return null;
 
-        const dayMap = dMap.get(dayType);
-        if (!dayMap) continue;
+	for (const lineName of candidateLines) {
+		const rMap = capacityIndex.get(lineName);
+		if (!rMap) continue;
 
-        // Try exact match
-        let sMap = dayMap.get(normStopName);
-        
-        // Try clean match
-        if (!sMap) {
-            const cleanName = normStopName.replace(" station", "").replace(" platform", "").trim();
-            sMap = dayMap.get(cleanName);
-        }
+		const dMap = rMap.get(direction);
+		if (!dMap) continue;
 
-        if (sMap) {
-            const val = sMap.get(timeBucket);
-            if (val) return val;
-        }
-    }
-    
-    // If we loop through all candidates and find nothing, we return null.
-    return null;
+		const dayMap = dMap.get(dayType);
+		if (!dayMap) continue;
+
+		// Try exact match
+		let sMap = dayMap.get(normStopName);
+
+		// Try clean match
+		if (!sMap) {
+			const cleanName = normStopName.replace(" station", "").replace(" platform", "").trim();
+			sMap = dayMap.get(cleanName);
+		}
+
+		if (sMap) {
+			const val = sMap.get(timeBucket);
+			if (val) return val;
+		}
+	}
+
+	// If we loop through all candidates and find nothing, we return null.
+	return null;
 }
 
 export const _test = {
@@ -365,5 +364,5 @@ export const _test = {
 	formatTimeBucket,
 	getTripDirection,
 	loadServiceCapacityData,
-	capacityIndex
+	capacityIndex,
 };

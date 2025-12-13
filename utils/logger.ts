@@ -99,10 +99,9 @@ class Logger {
 		if (!this.multibar) {
 			this.multibar = new cliProgress.MultiBar(
 				{
-					clearOnComplete: false,
+					clearOnComplete: true,
 					hideCursor: true,
-					format:
-						"[{bar}] {percentage}% | {value_formatted}/{total_formatted} | {speed_formatted} | ETA {eta_formatted} | {task}",
+					format: "[{bar}] {percentage}% | {value_formatted}/{total_formatted} | {speed_formatted} | ETA {eta_formatted} | {task}",
 					autopadding: true,
 				},
 				cliProgress.Presets.shades_classic,
@@ -112,8 +111,7 @@ class Logger {
 		// Create bar if not exists
 		let bar = this.bars.get(task);
 		const formatValue = (val: number) => (unit === "bytes" ? this.formatBytes(val) : val.toLocaleString());
-		const formatSpeed = (val: number) =>
-			unit === "bytes" ? `${this.formatBytes(val)}/s` : `${val.toFixed(1)}/s`;
+		const formatSpeed = (val: number) => (unit === "bytes" ? `${this.formatBytes(val)}/s` : `${val.toFixed(1)}/s`);
 
 		if (!bar) {
 			bar = this.multibar.create(total, current, {
@@ -133,14 +131,26 @@ class Logger {
 		}
 
 		// Cleanup if finished
-		if (current >= total && total > 0) {
+		const isDone = total <= 0 || current >= total;
+		if (isDone) {
 			bar.stop();
+			this.multibar.remove(bar);
 			this.bars.delete(task);
 			if (this.bars.size === 0) {
-				this.multibar.stop();
-				this.multibar = undefined;
+				this.clearProgressBars();
 			}
 		}
+	}
+
+	private clearProgressBars(): void {
+		if (this.multibar) {
+			this.multibar.stop();
+			this.multibar = undefined;
+		}
+		this.bars.forEach((b) => b.stop());
+		this.bars.clear();
+		// Ensure the cursor ends up on a clean line so subsequent logs appear at the bottom
+		console.log("");
 	}
 
 	private formatBytes(bytes: number): string {
@@ -149,20 +159,6 @@ class Logger {
 		const sizes = ["B", "KB", "MB", "GB", "TB"];
 		const i = Math.floor(Math.log(bytes) / Math.log(k));
 		return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-	}
-
-	// formatDuration is handled by cli-progress (eta_formatted) usually, but we keep the helper if needed internally
-	private formatDuration(seconds: number): string {
-		if (!isFinite(seconds) || seconds < 0) return "--:--";
-		const h = Math.floor(seconds / 3600);
-		const m = Math.floor((seconds % 3600) / 60);
-		const s = Math.floor(seconds % 60);
-		if (h > 0) {
-			return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s
-				.toString()
-				.padStart(2, "0")}`;
-		}
-		return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 	}
 
 	private formatLog(

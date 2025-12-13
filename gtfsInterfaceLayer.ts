@@ -4,7 +4,13 @@ import { TRAX_CONFIG } from "./config.js";
 let currentGtfs: GTFS | null = null;
 
 export async function createGtfs() {
-	let gtfs = new GTFS({ ansi: false, logger: TRAX_CONFIG.logFunction, progress: TRAX_CONFIG.progressLog, cache: true, cacheDir: ".TRAXCACHE" });
+	let gtfs = new GTFS({
+		ansi: false,
+		logger: TRAX_CONFIG.logFunction,
+		progress: TRAX_CONFIG.progressLog,
+		cache: true,
+		cacheDir: ".TRAXCACHE",
+	});
 	await gtfs.loadFromUrl(TRAX_CONFIG.url);
 	await gtfs.updateRealtimeFromUrl(
 		TRAX_CONFIG.realtimeAlerts,

@@ -34,10 +34,9 @@ export async function loadGTFS(
 
 	realtimeInterval = setInterval(() => {
 		traxEmitter.emit("realtime-update-start");
-		updateRealtime()
-			.finally(() => {
-				traxEmitter.emit("realtime-update-end");
-			});
+		updateRealtime().finally(() => {
+			traxEmitter.emit("realtime-update-end");
+		});
 	}, realtimeIntervalMs);
 	staticInterval = setInterval(async () => {
 		traxEmitter.emit("static-update-start");

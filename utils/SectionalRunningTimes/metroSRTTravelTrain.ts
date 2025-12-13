@@ -1118,9 +1118,7 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 				actualArrival: to.ActualArrival,
 				actualDeparture: to.ActualDeparture,
 				srtMinutes: seg.travelTrain,
-				estimatedPassingTime: estPassDate
-					? estPassDate.toISOString().slice(0, 19)
-					: undefined,
+				estimatedPassingTime: estPassDate ? estPassDate.toISOString().slice(0, 19) : undefined,
 				arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
 				departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
 			});

@@ -184,10 +184,16 @@ function parseSRTtoMatrix(srtString: string, ctx?: CacheContext): SRTMatrix {
 		let [from, to, emu] = lines[i].split(",");
 
 		if (from === "Exhibition") from = "place_exhsta";
-		else from = stations.find((v) => v.stop_name?.toLowerCase().trim().startsWith(from.toLowerCase().trim()))?.stop_id ?? "";
+		else
+			from =
+				stations.find((v) => v.stop_name?.toLowerCase().trim().startsWith(from.toLowerCase().trim()))
+					?.stop_id ?? "";
 
 		if (to === "Exhibition") to = "place_exhsta";
-		else to = stations.find((v) => v.stop_name?.toLowerCase().trim().startsWith(to.toLowerCase().trim()))?.stop_id ?? "";
+		else
+			to =
+				stations.find((v) => v.stop_name?.toLowerCase().trim().startsWith(to.toLowerCase().trim()))?.stop_id ??
+				"";
 
 		if (!from || from.length === 0) {
 			logger.warn(`Invalid SRT from: ${lines[i]}`, {

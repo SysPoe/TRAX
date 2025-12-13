@@ -54,7 +54,7 @@ export type AugmentedStopTime = {
 
 	getServiceCapacity: (date: string) => string | null;
 } & (
-		| {
+	| {
 			realtime: true;
 			realtime_info: {
 				delay_secs: number;
@@ -63,19 +63,24 @@ export type AugmentedStopTime = {
 				schedule_relationship: qdf.StopTimeScheduleRelationship;
 				propagated: boolean;
 			};
-		}
-		| {
+	  }
+	| {
 			realtime: false;
 			realtime_info: null;
-		}
-	);
+	  }
+);
 
 // Internal type for data before platform/exit side calculation
 type IntermediateAST = Omit<AugmentedStopTime, "actual_exit_side" | "scheduled_exit_side" | "toSerializable">;
 
 export type SerializableAugmentedStopTime = Omit<
 	AugmentedStopTime,
-	"actual_stop" | "actual_parent_station" | "scheduled_stop" | "scheduled_parent_station" | "toSerializable" | "getServiceCapacity"
+	| "actual_stop"
+	| "actual_parent_station"
+	| "scheduled_stop"
+	| "scheduled_parent_station"
+	| "toSerializable"
+	| "getServiceCapacity"
 > & {
 	actual_stop: string | null;
 	actual_parent_station: string | null;
