@@ -175,8 +175,8 @@ function convertQRTServiceToTravelTrip(
 			movement.PlannedArrival !== "0001-01-01T00:00:00" &&
 			movement.ActualArrival !== "0001-01-01T00:00:00"
 		) {
-			const plannedArr = parseBrisbaneTime(movement.PlannedArrival);
-			const actualArr = parseBrisbaneTime(movement.ActualArrival);
+			const plannedArr = parseBrisbaneTime(movement.PlannedArrival, "Z");
+			const actualArr = parseBrisbaneTime(movement.ActualArrival, "Z");
 			arrivalDelaySeconds = Math.round((actualArr - plannedArr) / 1000);
 		}
 		if (
@@ -185,8 +185,8 @@ function convertQRTServiceToTravelTrip(
 			movement.PlannedDeparture !== "0001-01-01T00:00:00" &&
 			movement.ActualDeparture !== "0001-01-01T00:00:00"
 		) {
-			const plannedDep = parseBrisbaneTime(movement.PlannedDeparture);
-			const actualDep = parseBrisbaneTime(movement.ActualDeparture);
+			const plannedDep = parseBrisbaneTime(movement.PlannedDeparture, "Z");
+			const actualDep = parseBrisbaneTime(movement.ActualDeparture, "Z");
 			departureDelaySeconds = Math.round((actualDep - plannedDep) / 1000);
 			// Use departure delay for delayString/class
 			const delaySecs = departureDelaySeconds;

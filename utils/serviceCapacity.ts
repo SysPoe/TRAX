@@ -238,7 +238,15 @@ function getTripDirection(trip: AugmentedTrip, currentStopSequence: number): "In
     );
 
     if (centralIndex !== -1) {
-        if (currentStopSequence < stopTimes[centralIndex]._stopTime?.stop_sequence!) return "Inbound";
+        if (currentStopSequence < stopTimes[centralIndex]._stopTime?.stop_sequence!) {
+            // If the trip starts in the city (e.g. Roma Street), it's likely an Outbound trip 
+            // even before it hits Central.
+            const firstStopId = stopTimes[0]?.scheduled_parent_station?.stop_id || stopTimes[0]?.scheduled_stop?.stop_id;
+            if (firstStopId && CITY_STATIONS.includes(firstStopId)) {
+                return "Outbound";
+            }
+            return "Inbound";
+        }
         return "Outbound";
     }
 
@@ -246,7 +254,13 @@ function getTripDirection(trip: AugmentedTrip, currentStopSequence: number): "In
         (st.scheduled_parent_station?.stop_id === "place_romsta" || st.scheduled_stop?.stop_id === "place_romsta")
     );
      if (romaIndex !== -1) {
-        if (currentStopSequence < stopTimes[romaIndex]._stopTime?.stop_sequence!) return "Inbound";
+        if (currentStopSequence < stopTimes[romaIndex]._stopTime?.stop_sequence!) {
+             const firstStopId = stopTimes[0]?.scheduled_parent_station?.stop_id || stopTimes[0]?.scheduled_stop?.stop_id;
+            if (firstStopId && CITY_STATIONS.includes(firstStopId)) {
+                return "Outbound";
+            }
+            return "Inbound";
+        }
         return "Outbound";
     }
 
@@ -272,13 +286,15 @@ const ROUTE_KEYWORD_MAP: Record<string, string> = {
     "Springfield": "Springfield Line",
     "Nambour": "Sunshine Coast Line",
     "Gympie": "Sunshine Coast Line",
+    "Gympie North": "Sunshine Coast Line",
     "Sunshine Coast": "Sunshine Coast Line",
 };
 
 export function getServiceCapacity(
     trip: AugmentedTrip,
     stopTime: AugmentedStopTime,
-    dateStr: string
+    dateStr: string,
+	_dirOverride?: string
 ): string | null {
     if (!loaded) {
 		logger.debug(`Service capacity data not loaded.`, { module: "serviceCapacity" });
@@ -293,7 +309,7 @@ export function getServiceCapacity(
 	}
 
     const seq = stopTime._stopTime?.stop_sequence ?? 0;
-    const direction = getTripDirection(trip, seq);
+    const direction = _dirOverride ?? getTripDirection(trip, seq);
     if (!direction) {
 		logger.debug(`Could not determine direction for trip ID ${trip._trip.trip_id}.`, { module: "serviceCapacity" });
 		return null;
@@ -357,7 +373,7 @@ export function getServiceCapacity(
     }
     
     // If we loop through all candidates and find nothing, we return null.
-    // logger.debug(`Capacity data not found for ${routeName} (mapped: ${Array.from(candidateLines).join(", ")}) at ${normStopName} (${timeBucket})`, { module: "serviceCapacity" });
+    logger.debug(`Capacity data not found for ${routeName} (mapped: ${Array.from(candidateLines).join(", ")}) at ${normStopName} (${timeBucket})`, { module: "serviceCapacity" });
 
     return null;
 }

@@ -1049,8 +1049,8 @@ function pushSRT(
 export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[]): SRTStop[] {
 	function calcDelay(actual?: string, planned?: string): number | null {
 		if (!actual || !planned || actual === "0001-01-01T00:00:00" || planned === "0001-01-01T00:00:00") return null;
-		const a = parseBrisbaneTime(actual);
-		const p = parseBrisbaneTime(planned);
+		const a = parseBrisbaneTime(actual, "Z");
+		const p = parseBrisbaneTime(planned, "Z");
 		if (isNaN(a) || isNaN(p)) return null;
 		return Math.round((a - p) / 1000);
 	}
@@ -1089,9 +1089,9 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 			});
 			// Set prevTime to actual/planned departure if available
 			if (from.ActualDeparture && from.ActualDeparture !== "0001-01-01T00:00:00") {
-				prevTime = parseBrisbaneTime(from.ActualDeparture);
+				prevTime = parseBrisbaneTime(from.ActualDeparture, "Z");
 			} else if (from.PlannedDeparture && from.PlannedDeparture !== "0001-01-01T00:00:00") {
-				prevTime = parseBrisbaneTime(from.PlannedDeparture);
+				prevTime = parseBrisbaneTime(from.PlannedDeparture, "Z");
 			} else {
 				prevTime = null;
 			}
@@ -1181,9 +1181,9 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 			let fromTime = prevTime;
 			let toTime: number | null = null;
 			if (to.ActualArrival && to.ActualArrival !== "0001-01-01T00:00:00") {
-				toTime = parseBrisbaneTime(to.ActualArrival);
+				toTime = parseBrisbaneTime(to.ActualArrival, "Z");
 			} else if (to.PlannedArrival && to.PlannedArrival !== "0001-01-01T00:00:00") {
-				toTime = parseBrisbaneTime(to.PlannedArrival);
+				toTime = parseBrisbaneTime(to.PlannedArrival, "Z");
 			}
 
 			// Calculate scaling factor: actualTime / srtTime
@@ -1252,9 +1252,9 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 			});
 			// Update prevTime to the actual departure of this stop
 			if (to.ActualDeparture && to.ActualDeparture !== "0001-01-01T00:00:00") {
-				prevTime = parseBrisbaneTime(to.ActualDeparture);
+				prevTime = parseBrisbaneTime(to.ActualDeparture, "Z");
 			} else if (to.PlannedDeparture && to.PlannedDeparture !== "0001-01-01T00:00:00") {
-				prevTime = parseBrisbaneTime(to.PlannedDeparture);
+				prevTime = parseBrisbaneTime(to.PlannedDeparture, "Z");
 			} else {
 				prevTime = toTime;
 			}
@@ -1275,9 +1275,9 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 		});
 		// Update prevTime for next segments
 		if (to.ActualDeparture && to.ActualDeparture !== "0001-01-01T00:00:00") {
-			prevTime = parseBrisbaneTime(to.ActualDeparture);
+			prevTime = parseBrisbaneTime(to.ActualDeparture, "Z");
 		} else if (to.PlannedDeparture && to.PlannedDeparture !== "0001-01-01T00:00:00") {
-			prevTime = parseBrisbaneTime(to.PlannedDeparture);
+			prevTime = parseBrisbaneTime(to.PlannedDeparture, "Z");
 		}
 	}
 	// End for loop
