@@ -52,7 +52,6 @@ export type AugmentedStopTime = {
 	scheduled_departure_date_offset: number;
 	actual_departure_date_offset: number;
 
-	// Methods
 	getServiceCapacity: (date: string) => string | null;
 } & (
 		| {
@@ -694,7 +693,7 @@ export function augmentStopTimes(
 			actual_departure_dates,
 			scheduled_departure_date_offset: currentOffsets.schedDep - dateOffsets.schedDep,
 			actual_departure_date_offset: currentOffsets.actDep - dateOffsets.actDep,
-			getServiceCapacity: () => null, // Placeholder, updated later
+			getServiceCapacity: () => null,
 		});
 	}
 

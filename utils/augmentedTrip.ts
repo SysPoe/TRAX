@@ -73,7 +73,6 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 	const ensureCachedStopTimes = () => {
 		if (!cachedStopTimes) {
 			cachedStopTimes = augmentStopTimes(rawStopTimes, serviceDates, ctx);
-			// Attach service capacity method
 			for (const st of cachedStopTimes) {
 				st.getServiceCapacity = (date: string) => getServiceCapacity(result, st, date);
 			}

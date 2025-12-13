@@ -10,11 +10,10 @@ import { getRawRoutes } from "../cache.js";
 const CACHE_DIR = ".TRAXCACHE";
 const FILE_NAME = "service_capacity.csv";
 const FILE_PATH = path.join(CACHE_DIR, FILE_NAME);
-const MAX_AGE_MS = 28 * 24 * 60 * 60 * 1000; // 28 days
+const MAX_AGE_MS = 28 * 24 * 60 * 60 * 1000;
 
-// Data Structures
 export type ServiceCapacityData = {
-	_id: string; // May be empty if file doesn't have it
+	_id: string;
 	route: string;
 	direction: string;
 	day_type: string;
@@ -23,13 +22,11 @@ export type ServiceCapacityData = {
 	availability: string;
 };
 
-// Map<Route, Map<Direction, Map<DayType, Map<StopName, Map<Time, Availability>>>>>
 type CapacityIndex = Map<string, Map<string, Map<string, Map<string, Map<string, string>>>>>;
 
 let capacityIndex: CapacityIndex = new Map();
 let loaded = false;
 
-// Helpers
 function getMap<K, V>(map: Map<K, V>, key: K, factory: () => V): V {
 	let val = map.get(key);
 	if (!val) {
@@ -99,9 +96,6 @@ function loadServiceCapacityData() {
 	const content = fs.readFileSync(FILE_PATH, "utf-8");
 	const lines = content.split("\n");
 
-	// Determine format by headers
-	// Expected: _id,route,direction,day_type,stop,stop_quarter_hour,availability
-	// Or: route,direction,day_type,stop,stop_quarter_hour,availability
 	const headers = lines[0]
 		.split(",")
 		.map((h) => h.trim().toLowerCase().replace(/"/g, ""));
@@ -129,13 +123,10 @@ function loadServiceCapacityData() {
 
 		if (isFerryOrTram(row.route)) continue;
 
-		// Indexing
-		// Route -> Direction -> Day -> StopName -> Time -> Availability
 		const routeMap = getMap(capacityIndex, row.route, () => new Map());
 		const dirMap = getMap(routeMap, row.direction, () => new Map());
 		const dayMap = getMap(dirMap, row.day_type, () => new Map());
 
-		// Normalize stop name: "1 - Domestic Terminal" -> "Domestic Terminal"
 		const normalizedStopName = normalizeStopName(row.stop);
 		const stopMap = getMap(dayMap, normalizedStopName, () => new Map());
 
@@ -172,17 +163,12 @@ function isFerryOrTram(route: string): boolean {
 }
 
 function normalizeStopName(csvStop: string): string {
-    // Format "ID - Name" or just "Name"
-    // e.g. "1 - Domestic Terminal" -> "domestic terminal"
     const parts = csvStop.split(' - ');
     if (parts.length > 1) {
-        // Return everything after the first " - "
         return parts.slice(1).join(' - ').toLowerCase().trim();
     }
     return csvStop.toLowerCase().trim();
 }
-
-// --- Lookup Logic ---
 
 const CITY_STATIONS = [
 	"place_censta", // Central
@@ -198,26 +184,16 @@ function getDayType(dateStr: string): string {
 	const m = parseInt(dateStr.slice(4, 6)) - 1;
 	const d = parseInt(dateStr.slice(6, 8));
 	const date = new Date(y, m, d);
-	const day = date.getDay(); // 0 = Sunday, 1 = Monday, ...
+	const day = date.getDay();
 
-	if (day === 0) return "Sunday/Public Holiday"; // Simple Assumption. Real logic needs holiday calendar.
+	if (day === 0) return "Sunday/Public Holiday";
 	if (day === 6) return "Saturday";
 
-    // Map number to string
     const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     return days[day];
-    // Note: CSV uses "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday/Public Holiday"
-    // Does it have distinct Sunday? "Sunday/Public Holiday" implies grouped.
 }
 
 function formatTimeBucket(seconds: number): string {
-    // Round to nearest 15 mins
-    // 5:00 AM -> 5:00 AM
-    // 5:07 AM -> 5:00 AM or 5:15 AM?
-    // User said: "if your service comes more frequently, services inside that time period will be grouped together"
-    // Sample: "5:00 AM", "5:15 AM".
-
-    // Let's use standard rounding.
     const minutesTotal = Math.round(seconds / 60);
     const remainder = minutesTotal % 15;
     let roundedMinutes = minutesTotal;
@@ -227,8 +203,6 @@ function formatTimeBucket(seconds: number): string {
         roundedMinutes = minutesTotal + (15 - remainder);
     }
 
-    // Normalize to 24h then convert to 12h AM/PM
-    // Handle overflow (next day)
     let h = Math.floor(roundedMinutes / 60) % 24;
     let m = roundedMinutes % 60;
 
@@ -241,15 +215,6 @@ function formatTimeBucket(seconds: number): string {
 }
 
 function getTripDirection(trip: AugmentedTrip, currentStopSequence: number): "Inbound" | "Outbound" | null {
-    // Heuristic:
-    // "Inbound" = Heading towards City.
-    // "Outbound" = Heading away from City.
-
-    // Check where City Stations are in the trip sequence.
-    // If we haven't reached them yet -> Inbound.
-    // If we have passed them -> Outbound.
-
-    // Find index of last city station in trip
     let firstCityIndex = -1;
     let lastCityIndex = -1;
 
@@ -264,55 +229,11 @@ function getTripDirection(trip: AugmentedTrip, currentStopSequence: number): "In
     }
 
     if (firstCityIndex === -1) {
-        // Trip does not touch city.
-        // Fallback to direction_id if available?
-        // Or assume "Outbound" if it's not going to city?
-        // Usually Interurban lines.
-        // If direction_id is available:
-        // 0: Generally Inbound (Towards Brisbane)
-        // 1: Generally Outbound (Away from Brisbane)
         const dirId = trip._trip.direction_id;
         if (dirId === 0) return "Inbound";
         if (dirId === 1) return "Outbound";
         return null;
     }
-
-    // If current stop is before the LAST city station -> Inbound (or Cross-City which counts as Inbound until it leaves)
-    // Wait, "Outbound" usually starts at the City.
-    // If a trip is Gold Coast -> Airport.
-    // It is Inbound until Central.
-    // Then Outbound from Central to Airport.
-
-    // So if current stop index <= lastCityIndex -> Inbound?
-    // No, if it's *at* Central, heading to Airport, is it Outbound?
-    // Usually "Outbound" services depart from City.
-    // So if current stop is a City Station, and we are not at the end of the trip...
-    // Let's look at the sample:
-    // "Airport Line, Inbound, ... Domestic Terminal". This is heading to City.
-    // "Airport Line, Outbound, ... Central". This is heading to Airport.
-
-    // So:
-    // If we are heading TO the city (current index < firstCityIndex) -> Inbound.
-    // If we are AT the city (first <= current <= last) -> ?
-    //    Usually considered Outbound if departing? Or Inbound arriving?
-    //    If I check capacity at Central for an Airport train, I want "Outbound" capacity.
-    //    If I check capacity at Central for a Gold Coast train (which came from Airport), I want "Outbound" capacity.
-    //    So if we are AT city, we usually look for Outbound capacity?
-    //    Unless it terminates at City. Then it's Inbound capacity (arriving).
-
-    // Refined Logic:
-    // If current stop is *after* the start of the city zone -> Outbound.
-    // If current stop is *before* the start of the city zone -> Inbound.
-    // What about *within* the city zone?
-    // e.g. Roma St -> Central.
-    // It's part of the Inbound journey usually?
-    // Let's assume:
-    // If we are BEFORE the "main" city station (Central), it is Inbound.
-    // If we are AT or AFTER Central, it is Outbound.
-
-    // Let's simplify:
-    // If the trip is going TO Central (and hasn't reached it), it is Inbound.
-    // If the trip has passed Central (or is at Central), it is Outbound.
 
     const centralIndex = stopTimes.findIndex(st =>
         (st.scheduled_parent_station?.stop_id === "place_censta" || st.scheduled_stop?.stop_id === "place_censta")
@@ -323,7 +244,6 @@ function getTripDirection(trip: AugmentedTrip, currentStopSequence: number): "In
         return "Outbound";
     }
 
-    // No Central. Try Roma St.
     const romaIndex = stopTimes.findIndex(st =>
         (st.scheduled_parent_station?.stop_id === "place_romsta" || st.scheduled_stop?.stop_id === "place_romsta")
     );
@@ -332,11 +252,10 @@ function getTripDirection(trip: AugmentedTrip, currentStopSequence: number): "In
         return "Outbound";
     }
 
-    // Fallback to direction_id
     const dirId = trip._trip.direction_id;
     if (dirId === 0) return "Inbound";
     if (dirId === 1) return "Outbound";
-    return "Inbound"; // Default
+    return "Inbound";
 }
 
 export function getServiceCapacity(
@@ -346,38 +265,24 @@ export function getServiceCapacity(
 ): string | null {
     if (!loaded) return null;
 
-    // 1. Get Route Name
-    // GTFS Route Name: "Airport Line".
     const route = getRawRoutes(trip._trip.route_id)[0];
     const routeName = route?.route_long_name;
     if (!routeName) return null;
 
-    // 2. Get Direction
-    // We need the stop sequence. In AugmentedStopTime, it's not directly exposed but we can find it in the trip's stop times
-    // or cast if we know the internal structure.
-    // Let's rely on finding the stopTime object in the trip's stopTimes array to be safe and use that index if needed,
-    // OR just cast since we know it's there at runtime.
-    // Ideally we should update AugmentedStopTime to include stop_sequence.
-    // For now, let's just cast to any to avoid the error without @ts-ignore.
     const seq = (stopTime as any)._stopTime?.stop_sequence ?? 0;
     const direction = getTripDirection(trip, seq);
     if (!direction) return null;
 
-    // 3. Get Day Type
     const dayType = getDayType(dateStr);
 
-    // 4. Get Stop Name
     const stopName = stopTime.scheduled_parent_station?.stop_name || stopTime.scheduled_stop?.stop_name;
     if (!stopName) return null;
     const normStopName = stopName.toLowerCase().trim();
 
-    // 5. Get Time
     const departureTime = stopTime.scheduled_departure_time;
     if (departureTime === null) return null;
     const timeBucket = formatTimeBucket(departureTime);
 
-    // Lookup
-    // Route -> Direction -> Day -> Stop -> Time
     const rMap = capacityIndex.get(routeName);
     if (!rMap) return null;
 
@@ -386,17 +291,11 @@ export function getServiceCapacity(
 
     const dayMap = dMap.get(dayType);
     if (!dayMap) {
-        // Try fallback? "Monday" -> "Weekday"? CSV doesn't seem to have Weekday.
-        // It has specific days.
-        // If "Public Holiday", we map Sunday.
         return null;
     }
 
     const sMap = dayMap.get(normStopName);
     if (!sMap) {
-        // Try fuzzy match?
-        // "1 - Domestic Terminal" -> "domestic terminal" matched "Domestic Terminal Station"?
-        // Remove "Station" suffix
         const cleanName = normStopName.replace(" station", "").replace(" platform", "").trim();
         const sMap2 = dayMap.get(cleanName);
         if (sMap2) return sMap2.get(timeBucket) || null;
