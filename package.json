@@ -6,10 +6,7 @@
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "devDependencies": {
-        "@types/better-sqlite3": "^7.6.13",
         "@types/node": "^24.0.14",
-        "@types/readline-sync": "^1.4.8",
-        "inquirer": "^12.8.2",
         "prettier": "^3.6.2",
         "tsx": "^3.12.7",
         "typescript": "^5.9.3"
@@ -17,7 +14,6 @@
     "dependencies": {
         "chalk": "^5.4.1",
         "qdf-gtfs": "github:SysPoe/QDF-GTFS",
-        "readline-sync": "^1.4.10",
         "strip-ansi": "^7.1.2"
     },
     "scripts": {
