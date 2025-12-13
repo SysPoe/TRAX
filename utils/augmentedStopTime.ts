@@ -51,6 +51,9 @@ export type AugmentedStopTime = {
 	actual_departure_dates: string[];
 	scheduled_departure_date_offset: number;
 	actual_departure_date_offset: number;
+
+	// Methods
+	getServiceCapacity: (date: string) => string | null;
 } & (
 		| {
 			realtime: true;
@@ -79,6 +82,7 @@ export type SerializableAugmentedStopTime = Omit<
 	actual_parent_station: string | null;
 	scheduled_stop: string | null;
 	scheduled_parent_station: string | null;
+	getServiceCapacity: undefined;
 };
 
 export function toSerializableAugmentedStopTime(
@@ -92,6 +96,7 @@ export function toSerializableAugmentedStopTime(
 		scheduled_parent_station: st.scheduled_parent_station?.stop_id ?? null,
 		// @ts-expect-error
 		toSerializable: undefined,
+		getServiceCapacity: undefined,
 	};
 }
 
@@ -689,6 +694,7 @@ export function augmentStopTimes(
 			actual_departure_dates,
 			scheduled_departure_date_offset: currentOffsets.schedDep - dateOffsets.schedDep,
 			actual_departure_date_offset: currentOffsets.actDep - dateOffsets.actDep,
+			getServiceCapacity: () => null, // Placeholder, updated later
 		});
 	}
 
