@@ -152,8 +152,8 @@ export function getCalendars(filter?: Partial<Calendar>, ctx?: CacheContext): Ca
 	// simple filter implementation
 	return raw.calendars.filter((c) => {
 		for (const key of Object.keys(filter)) {
-			// @ts-ignore
-			if (c[key] !== filter[key]) return false;
+			const k = key as keyof typeof c;
+			if (c[k] !== filter[k]) return false;
 		}
 		return true;
 	});
@@ -166,8 +166,8 @@ export function getCalendarDates(filter?: Partial<CalendarDate>, ctx?: CacheCont
 	if (!filter) return raw.calendarDates;
 	return raw.calendarDates.filter((c) => {
 		for (const key of Object.keys(filter)) {
-			// @ts-ignore
-			if (c[key] !== filter[key]) return false;
+			const k = key as keyof typeof c;
+			if (c[k] !== filter[k]) return false;
 		}
 		return true;
 	});
