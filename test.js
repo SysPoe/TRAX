@@ -40,6 +40,7 @@ async function main() {
 	TRAX.logger.info(`GTFS loading took ${(end_static - start_static) / 1000} seconds.`);
 	TRAX.logger.info(`Realtime updates took ${(end_realtime - start_realtime) / 1000} seconds.`);
 	TRAX.logger.info("Done!");
+	process.exit(0);
 }
 
 main().catch(console.error);
