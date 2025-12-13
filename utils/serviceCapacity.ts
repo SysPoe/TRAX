@@ -240,7 +240,7 @@ function getTripDirection(trip: AugmentedTrip, currentStopSequence: number): "In
     );
 
     if (centralIndex !== -1) {
-        if (currentStopSequence < (stopTimes[centralIndex] as any)._stopTime?.stop_sequence) return "Inbound";
+        if (currentStopSequence < stopTimes[centralIndex]._stopTime?.stop_sequence!) return "Inbound";
         return "Outbound";
     }
 
@@ -248,7 +248,7 @@ function getTripDirection(trip: AugmentedTrip, currentStopSequence: number): "In
         (st.scheduled_parent_station?.stop_id === "place_romsta" || st.scheduled_stop?.stop_id === "place_romsta")
     );
      if (romaIndex !== -1) {
-        if (currentStopSequence < (stopTimes[romaIndex] as any)._stopTime?.stop_sequence) return "Inbound";
+        if (currentStopSequence < stopTimes[romaIndex]._stopTime?.stop_sequence!) return "Inbound";
         return "Outbound";
     }
 
@@ -269,7 +269,7 @@ export function getServiceCapacity(
     const routeName = route?.route_long_name;
     if (!routeName) return null;
 
-    const seq = (stopTime as any)._stopTime?.stop_sequence ?? 0;
+    const seq = stopTime._stopTime?.stop_sequence ?? 0;
     const direction = getTripDirection(trip, seq);
     if (!direction) return null;
 
