@@ -32,37 +32,54 @@ export async function loadGTFS(
 
 	if (!autoRefresh) return;
 
-	realtimeInterval = setInterval(() => {
-		traxEmitter.emit("realtime-update-start");
-		updateRealtime().finally(() => {
-			traxEmitter.emit("realtime-update-end");
-		});
-	}, realtimeIntervalMs);
-	staticInterval = setInterval(async () => {
-		traxEmitter.emit("static-update-start");
-		try {
-			await createGtfs();
-			await cache.refreshStaticCache(true);
-			await cache.refreshRealtimeCache();
-		} catch (error: any) {
-			logger.error("Error refreshing static GTFS data", {
-				module: "index",
-				function: "loadGTFS",
-				error: error.message || error,
-			});
-		} finally {
-			traxEmitter.emit("static-update-end");
-		}
-	}, staticIntervalMs);
+	const scheduleNextRealtime = () => {
+		realtimeInterval = setTimeout(async () => {
+			traxEmitter.emit("realtime-update-start");
+			try {
+				await updateRealtime();
+			} catch (error: any) {
+				logger.error("Error updating realtime GTFS data: " + (error.message || error), {
+					module: "index",
+					function: "loadGTFS - scheduleNextRealtime",
+				});
+			} finally {
+				traxEmitter.emit("realtime-update-end");
+				scheduleNextRealtime();
+			}
+		}, realtimeIntervalMs);
+	}
+
+	const scheduleNextStatic = () => {
+		staticInterval = setTimeout(async () => {
+			traxEmitter.emit("static-update-start");
+			try {
+				await createGtfs();
+				await cache.refreshStaticCache(true);
+				await cache.refreshRealtimeCache();
+			} catch (error: any) {
+				logger.error("Error refreshing static GTFS data", {
+					module: "index",
+					function: "loadGTFS - scheduleNextStatic",
+					error: error.message || error,
+				});
+			} finally {
+				traxEmitter.emit("static-update-end");
+				scheduleNextStatic();
+			}
+		}, staticIntervalMs);
+	}
+
+	scheduleNextRealtime();
+	scheduleNextStatic();
 }
 
 export function clearIntervals(): void {
 	if (realtimeInterval) {
-		clearInterval(realtimeInterval);
+		clearTimeout(realtimeInterval);
 		realtimeInterval = null;
 	}
 	if (staticInterval) {
-		clearInterval(staticInterval);
+		clearTimeout(staticInterval);
 		staticInterval = null;
 	}
 }
