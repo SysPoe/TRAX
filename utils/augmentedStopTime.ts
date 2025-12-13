@@ -75,7 +75,7 @@ type IntermediateAST = Omit<AugmentedStopTime, "actual_exit_side" | "scheduled_e
 
 export type SerializableAugmentedStopTime = Omit<
 	AugmentedStopTime,
-	"actual_stop" | "actual_parent_station" | "scheduled_stop" | "scheduled_parent_station" | "toSerializable"
+	"actual_stop" | "actual_parent_station" | "scheduled_stop" | "scheduled_parent_station" | "toSerializable" | "getServiceCapacity"
 > & {
 	actual_stop: string | null;
 	actual_parent_station: string | null;
@@ -428,15 +428,6 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 		let schSide: "left" | "right" | "both" | null = null;
 
 		if (!item.passing) {
-			// Side logic relies on next/prev connectivity
-			// We need a lookahead/lookbehind.
-			// Ideally this should be done after the full path is built, but we do it iteratively here
-			// utilizing the incomplete array for "prev" and the source array for "next".
-
-			// Note: The original code utilized `intA` (the growing result) for prev checks.
-			// We replicate that by passing `st` (source) and `i` (index) to a helper,
-			// acknowledging that `st` has the correct sequence of stops.
-
 			if (actPlat) actSide = resolveExitSide(st, i, actData ?? [], actPlat.platform_code);
 			if (schPlat) schSide = resolveExitSide(st, i, schData ?? [], schPlat.platform_code);
 		}
