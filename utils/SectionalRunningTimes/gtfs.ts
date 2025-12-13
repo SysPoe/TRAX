@@ -1,4 +1,10 @@
-From,To,EMU
+// Sectional Running Times data for QR's rail network
+
+import { getStations } from "../stations.js";
+import logger from "../logger.js";
+import { CacheContext } from "../../cache.js";
+
+let rawSRT = `From,To,EMU
 Roma Street,Exhibition,5
 Exhibition,Fortitude Valley,3
 Roma Street,Central,2
@@ -117,11 +123,13 @@ Bethania,Edens Landing,1
 Edens Landing,Holmview,1
 Holmview,Beenleigh,2
 Beenleigh,Ormeau,7
-Ormeau,Coomera,5
+Ormeau,Pimpama,3
+Pimpama,Coomera,3
 Coomera,Helensvale,5
 Helensvale,Nerang,5
 Nerang,Robina,5
 Robina,Varsity Lakes,4
+Varsity Lakes,Robina,4
 Boggo,Buranda,2
 Park Road,Buranda,2
 Buranda,Coorparoo,1
@@ -157,3 +165,68 @@ Rothwell,Kippa-Ring,4
 Darra,Richlands,3
 Richlands,Springfield station,5
 Springfield station,Springfield Central,3
+`;
+
+export type SRTMatrix = {
+	[from: string]: {
+		[to: string]: number;
+	};
+};
+
+function parseSRTtoMatrix(srtString: string, ctx?: CacheContext): SRTMatrix {
+	const stations = getStations(ctx);
+
+	const lines = srtString.trim().split("\n");
+	const startIdx = lines[0].startsWith("From,To,EMU") ? 1 : 0;
+	const matrix: SRTMatrix = {};
+
+	for (let i = startIdx; i < lines.length; i++) {
+		let [from, to, emu] = lines[i].split(",");
+
+		if (from === "Exhibition") from = "place_exhsta";
+		else
+			from =
+				stations.find((v) => v.stop_name?.toLowerCase().trim().startsWith(from.toLowerCase().trim()))
+					?.stop_id ?? "";
+
+		if (to === "Exhibition") to = "place_exhsta";
+		else
+			to =
+				stations.find((v) => v.stop_name?.toLowerCase().trim().startsWith(to.toLowerCase().trim()))?.stop_id ??
+				"";
+
+		if (!from || from.length === 0) {
+			logger.warn(`Invalid SRT from: ${lines[i]}`, {
+				module: "srt",
+				function: "parseSRTtoMatrix",
+			});
+			continue;
+		}
+		if (!to || to.length === 0) {
+			logger.warn(`Invalid SRT to: ${lines[i]}`, {
+				module: "srt",
+				function: "parseSRTtoMatrix",
+			});
+			continue;
+		}
+
+		if (!matrix[from]) matrix[from] = {};
+		matrix[from][to] = Number(emu);
+	}
+	return matrix;
+}
+
+let _matrix: SRTMatrix;
+
+function getSRTMatrix(ctx?: CacheContext): SRTMatrix {
+	if (!_matrix) {
+		_matrix = parseSRTtoMatrix(rawSRT, ctx);
+	}
+	return _matrix;
+}
+
+export function getSRT(from: string, to: string, ctx?: CacheContext): number | undefined {
+	let matrix = getSRTMatrix(ctx);
+	if ((from == "place_exhsta" && to == "place_bowsta") || (from == "place_bowsta" && to == "place_exhsta")) return 3; // Exhibition to Bowen Hills is 3 minutes, but not in the SRT data
+	return matrix[from]?.[to] || matrix[to]?.[from];
+}

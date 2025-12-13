@@ -168,6 +168,6 @@ export type {
 
 export type { ExpressInfo } from "./utils/express.js";
 
-export type { SRTStop } from "./utils/SectionalRunningTimes/metroSRTTravelTrain.js";
+export type { SRTStop } from "./utils/SectionalRunningTimes/qrt.js";
 
 export { Logger, LogLevel } from "./utils/logger.js"; // Export logger types

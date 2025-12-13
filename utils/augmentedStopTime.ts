@@ -2,7 +2,7 @@ import * as qdf from "qdf-gtfs";
 import { AugmentedStop } from "./augmentedStop.js";
 import * as cache from "../cache.js";
 import { findExpress } from "./express.js";
-import { getSRT } from "./srt.js";
+import { getSRT } from "./SectionalRunningTimes/gtfs.js";
 import { today } from "../index.js";
 import platformData from "./platformData/data.js";
 import logger from "./logger.js";
@@ -362,29 +362,13 @@ function resolveExitSide(
 	if (matchesNext || matchesPrev) {
 		return platform.exitSide;
 	}
-	// If it doesn't match logical flow, swap side (legacy logic from original code)
 	return swap[platform.exitSide as keyof typeof swap];
 }
 
 function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
-	// We track three versions of the list to handle track code continuity
-	// This replaces the complex intA/AltB/AltA swapping logic with a state object approach
-	// However, to keep it structurally similar to the robust original logic while cleaning it:
-
-	let resultList: AugmentedStopTime[] = [];
-
 	// Track codes to maintain continuity preference
 	let prevActualTrack = "";
 	let prevScheduledTrack = "";
-
-	// We'll build the list progressively.
-	// The original code used retrospective replacement of the whole list array pointer.
-	// We will simplify: calculate both current platforms, check continuity against previous,
-	// and update "prev" trackers.
-
-	// Note: The original logic allowed "backtracking" by swapping the whole array 'intA'.
-	// That is highly unusual. Assuming the intent is to prefer the track path that is consistent.
-	// We will simulate the "winning path" logic.
 
 	let pathBuffer: AugmentedStopTime[] = []; // Current committed path
 	let candidatePathB: AugmentedStopTime[] = []; // Both consistent

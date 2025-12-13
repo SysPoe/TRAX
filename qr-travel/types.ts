@@ -105,7 +105,7 @@ export interface TravelStopTime {
 	departureDelayString?: "on time" | string;
 }
 
-import type { SRTStop } from "../utils/SectionalRunningTimes/metroSRTTravelTrain.js";
+import type { SRTStop } from "../utils/SectionalRunningTimes/qrt.js";
 export interface TravelTrip {
 	serviceId: string;
 	serviceName: string;

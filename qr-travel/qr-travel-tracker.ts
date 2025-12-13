@@ -1,5 +1,5 @@
 // For SRT passing stop expansion
-import { expandWithSRTPassingStops } from "../utils/SectionalRunningTimes/metroSRTTravelTrain.js";
+import { expandWithSRTPassingStops } from "../utils/SectionalRunningTimes/qrt.js";
 import logger from "../utils/logger.js";
 import { getGtfsStations } from "../utils/stations.js";
 import { parseBrisbaneTime } from "../utils/time.js";
