@@ -36,57 +36,43 @@ function getMap<K, V>(map: Map<K, V>, key: K, factory: () => V): V {
 	return val;
 }
 
+import zlib from "zlib";
+import { pipeline } from "stream";
+import { promisify } from "util";
+
+const pipe = promisify(pipeline);
+
+// ... (existing code) ...
+
 export async function ensureServiceCapacityData(): Promise<void> {
-	if (!fs.existsSync(CACHE_DIR)) {
-		fs.mkdirSync(CACHE_DIR, { recursive: true });
-	}
+    if (!fs.existsSync(CACHE_DIR)) {
+        fs.mkdirSync(CACHE_DIR, { recursive: true });
+    }
 
-	let shouldDownload = true;
+    if (!fs.existsSync(FILE_PATH)) {
+        logger.info("Extracting service capacity data from local archive...", { module: "serviceCapacity" });
+        try {
+            const zipPath = path.join("utils", "capacity", "service_capacity.csv.gz");
+            if (!fs.existsSync(zipPath)) {
+                throw new Error(`Local archive not found at ${zipPath}`);
+            }
+            
+            await pipe(
+                fs.createReadStream(zipPath),
+                zlib.createGunzip(),
+                fs.createWriteStream(FILE_PATH)
+            );
+            logger.info("Service capacity data extracted.", { module: "serviceCapacity" });
+        } catch (e) {
+            logger.error(`Failed to extract service capacity data: ${e}`, { module: "serviceCapacity" });
+        }
+    }
 
-	if (fs.existsSync(FILE_PATH)) {
-		const stats = fs.statSync(FILE_PATH);
-		const age = Date.now() - stats.mtimeMs;
-		if (age < MAX_AGE_MS) {
-			shouldDownload = false;
-		} else {
-			logger.info("Service capacity data expired, downloading new file...", { module: "serviceCapacity" });
-		}
-	} else {
-		logger.info("Service capacity data missing, downloading...", { module: "serviceCapacity" });
-	}
-
-	if (shouldDownload) {
-		try {
-			await downloadFile(TRAX_CONFIG.serviceCapacityUrl, FILE_PATH);
-			logger.info("Service capacity data downloaded.", { module: "serviceCapacity" });
-		} catch (e) {
-			logger.error(`Failed to download service capacity data: ${e}`, { module: "serviceCapacity" });
-		}
-	}
-
-	loadServiceCapacityData();
+    loadServiceCapacityData();
 }
 
-function downloadFile(url: string, dest: string): Promise<void> {
-	return new Promise((resolve, reject) => {
-		const file = fs.createWriteStream(dest);
-		https
-			.get(url, (response) => {
-				if (response.statusCode !== 200) {
-					reject(new Error(`Failed to download file: status code ${response.statusCode}`));
-					return;
-				}
-				response.pipe(file);
-				file.on("finish", () => {
-					file.close(() => resolve());
-				});
-			})
-			.on("error", (err) => {
-				fs.unlink(dest, () => {});
-				reject(err);
-			});
-	});
-}
+// Remove downloadFile function as it is no longer used
+
 
 function loadServiceCapacityData() {
 	if (!fs.existsSync(FILE_PATH)) {
