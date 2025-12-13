@@ -364,10 +364,6 @@ async function processService(
 				// Expand with SRT passing stops
 				const expanded = expandWithSRTPassingStops(trainMovements);
 				// Return the trip
-				logger.debug(`Successfully processed service ${service.ServiceId}`, {
-					module: "qr-travel-tracker",
-					function: "getCurrentQRTravelTrains",
-				});
 				return {
 					...travelTrip,
 					stopsWithPassing: expanded,

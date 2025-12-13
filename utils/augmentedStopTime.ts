@@ -172,7 +172,7 @@ function findPassingStops(stops: string[], ctx?: cache.CacheContext): { stop_id:
 
 	for (const segment of expressSegments) {
 		if (segment.type === "unknown_segment") {
-			logger.error(`Unknown segment between ${segment.from} and ${segment.to}: ${segment.message}`, {
+			logger.warn(`Unknown segment between ${segment.from} and ${segment.to}: ${segment.message}`, {
 				module: "augmentedStopTime",
 				function: "findPassingStops",
 			});
@@ -214,7 +214,7 @@ function findPassingStopSRTs(stops: string[], ctx?: cache.CacheContext): Passing
 		if (srt === undefined) {
 			const key = `${from}|${to}`;
 			if (!loggedMissingSRT.has(key)) {
-				logger.error(`No SRT found between ${from} and ${to}`, {
+				logger.warn(`No SRT found between ${from} and ${to}`, {
 					module: "augmentedStopTime",
 					function: "findPassingStopSRTs",
 				});
@@ -246,7 +246,7 @@ function findPassingStopTimes(stopTimes: qdf.StopTime[], ctx?: cache.CacheContex
 
 	const passingSRTs = findPassingStopSRTs(stops, ctx);
 	if (!passingSRTs.length) {
-		logger.error(`No passing SRTs found for stops ${stops.join(", ")}`, {
+		logger.warn(`No passing SRTs found for stops ${stops.join(", ")}`, {
 			module: "augmentedStopTime",
 			function: "findPassingStopTimes",
 		});
@@ -273,7 +273,7 @@ function findPassingStopTimes(stopTimes: qdf.StopTime[], ctx?: cache.CacheContex
 		const endTime = idsToTimes[srt.to];
 
 		if (!startTime?.departure_time || !endTime?.departure_time) {
-			logger.error("Missing departure times for interpolation", {
+			logger.warn("Missing departure times for interpolation", {
 				module: "augmentedStopTime",
 				function: "findPassingStopTimes",
 				start: startTime,
@@ -472,7 +472,7 @@ export function augmentStopTimes(
 
 	const tripId = stopTimes[0].trip_id;
 	if (!stopTimes.every((v) => v.trip_id === tripId)) {
-		logger.error(`Mixed trip IDs in stopTimes: ${tripId}`, {
+		logger.warn(`Mixed trip IDs in stopTimes: ${tripId}`, {
 			module: "augmentedStopTime",
 			function: "augmentStopTimes",
 		});

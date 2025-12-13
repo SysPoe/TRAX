@@ -426,67 +426,38 @@ export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): 
 	const newAugmentedCache = createEmptyAugmentedCache();
 	const ctx: CacheContext = { raw: newRawCache, augmented: newAugmentedCache };
 
-	logger.debug("Loading QRT places...", {
-		module: "cache",
-		function: "refreshStaticCache",
-	});
 	newRawCache.qrtPlaces = await getPlaces();
 	logger.debug(`Loaded ${newRawCache.qrtPlaces.length} QRT places.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
-	logger.debug("Loading stops...", {
-		module: "cache",
-		function: "refreshStaticCache",
-	});
 	newRawCache.stops = gtfs.getStops();
 	logger.debug(`Loaded ${newRawCache.stops.length} stops.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
-	logger.debug("Loading calendars...", {
-		module: "cache",
-		function: "refreshStaticCache",
-	});
 	newRawCache.calendars = gtfs.getCalendars();
 	logger.debug(`Loaded ${newRawCache.calendars.length} calendars.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
-	logger.debug("Loading calendar dates...", {
-		module: "cache",
-		function: "refreshStaticCache",
-	});
 	newRawCache.calendarDates = gtfs.getCalendarDates();
 	logger.debug(`Loaded ${newRawCache.calendarDates.length} calendar dates.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
-	logger.debug("Loading routes...", {
-		module: "cache",
-		function: "refreshStaticCache",
-	});
 	newRawCache.routes = gtfs.getRoutes();
 	logger.debug(`Loaded ${newRawCache.routes.length} routes.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
-	logger.debug("Loading trips...", {
-		module: "cache",
-		function: "refreshStaticCache",
-	});
 	newRawCache.trips = gtfs.getTrips().filter((v) => v.trip_id.includes("-QR "));
 	logger.debug(`Loaded ${newRawCache.trips.length} trips.`, {
-		module: "cache",
-		function: "refreshStaticCache",
-	});
-
-	logger.debug("Building raw cache records...", {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
@@ -497,17 +468,8 @@ export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): 
 	for (const stop of newRawCache.stops) newRawCache.stopsRec.set(stop.stop_id, stop);
 	for (const route of newRawCache.routes) newRawCache.routesRec.set(route.route_id, route);
 
-	logger.debug("Augmenting stops...", {
-		module: "cache",
-		function: "refreshStaticCache",
-	});
 	newAugmentedCache.stops = newRawCache.stops.map((s) => augmentStop(s, ctx));
 	logger.debug(`Augmented ${newAugmentedCache.stops.length} stops.`, {
-		module: "cache",
-		function: "refreshStaticCache",
-	});
-
-	logger.debug("Augmenting trips...", {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
@@ -525,11 +487,6 @@ export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): 
 	});
 
 	newAugmentedCache.trips = Array.from(newAugmentedCache.tripsRec.values());
-
-	logger.debug("Building augmented cache records...", {
-		module: "cache",
-		function: "refreshStaticCache",
-	});
 
 	for (const trip of newAugmentedCache.trips) {
 		newAugmentedCache.tripsRec.set(trip._trip.trip_id, trip);

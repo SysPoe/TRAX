@@ -190,14 +190,14 @@ function parseSRTtoMatrix(srtString: string, ctx?: CacheContext): SRTMatrix {
 		else to = stations.find((v) => v.stop_name?.toLowerCase().trim().startsWith(to.toLowerCase().trim()))?.stop_id ?? "";
 
 		if (!from || from.length === 0) {
-			logger.error(`Invalid SRT from: ${lines[i]}`, {
+			logger.warn(`Invalid SRT from: ${lines[i]}`, {
 				module: "srt",
 				function: "parseSRTtoMatrix",
 			});
 			continue;
 		}
 		if (!to || to.length === 0) {
-			logger.error(`Invalid SRT to: ${lines[i]}`, {
+			logger.warn(`Invalid SRT to: ${lines[i]}`, {
 				module: "srt",
 				function: "parseSRTtoMatrix",
 			});
