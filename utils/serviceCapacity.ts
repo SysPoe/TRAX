@@ -17,7 +17,6 @@ const __dirname = path.dirname(__filename);
 const CACHE_DIR = ".TRAXCACHE";
 const FILE_NAME = "service_capacity.csv";
 const FILE_PATH = path.join(CACHE_DIR, FILE_NAME);
-const MAX_AGE_MS = 28 * 24 * 60 * 60 * 1000;
 
 export type ServiceCapacityData = {
 	_id: string;
@@ -52,10 +51,20 @@ export async function ensureServiceCapacityData(): Promise<void> {
 	if (!fs.existsSync(FILE_PATH)) {
 		logger.info("Extracting service capacity data from local archive...", { module: "serviceCapacity" });
 		try {
-			// Locate the archive relative to this file
-			const zipPath = path.join(__dirname, "capacity", "service_capacity.csv.gz");
-			if (!fs.existsSync(zipPath)) {
-				throw new Error(`Local archive not found at ${zipPath}`);
+			// Locate the archive. It might be in the same folder (if running via tsx/source)
+			// or in the project root's utils/capacity if running from dist/
+			const candidates = [
+				path.join(__dirname, "capacity", "service_capacity.csv.gz"),
+				path.join(__dirname, "..", "utils", "capacity", "service_capacity.csv.gz"),
+				path.join(__dirname, "..", "..", "utils", "capacity", "service_capacity.csv.gz"),
+			];
+
+			const zipPath = candidates.find((p) => fs.existsSync(p));
+
+			if (!zipPath) {
+				throw new Error(
+					`Local archive not found. Searched at: ${candidates.join(", ")}`
+				);
 			}
 
 			await pipe(
