@@ -1,6 +1,6 @@
 import chalk from "chalk";
 import stripAnsi from "strip-ansi";
-import fs from "fs";
+import fs from "fs/promises";
 import { ProgressInfo } from "qdf-gtfs";
 
 export enum LogLevel {
@@ -30,12 +30,16 @@ class Logger {
 		this.level = level;
 	}
 
-	private writeLog(message: string): void {
+	private async writeLog(message: string): Promise<void> {
 		const logFilePath = "./TRAX.log";
-		if (!fs.existsSync(logFilePath)) fs.writeFileSync(logFilePath, "");
-		// Dangerous!!! Clear the log file if it exceeds 10 MB. Disable when debug is done.
-		if (fs.statSync(logFilePath).size > 10 * 1024 * 1024) fs.truncateSync(logFilePath, 0);
-		fs.writeFileSync(logFilePath, message + "\n", { flag: "a" });
+		try {
+			await fs.access(logFilePath);
+		} catch {
+			await fs.writeFile(logFilePath, "");
+		}
+		// TODO Dangerous!!! Clear the log file if it exceeds 10 MB. Disable when debug is done.
+		if ((await fs.stat(logFilePath)).size > 10 * 1024 * 1024) await fs.truncate(logFilePath, 0);
+		await fs.writeFile(logFilePath, message + "\n", { flag: "a" });
 	}
 
 	debug(message: string, context?: LogContext): void {
