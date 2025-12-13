@@ -468,25 +468,25 @@ export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): 
 	for (const stop of newRawCache.stops) newRawCache.stopsRec.set(stop.stop_id, stop);
 	for (const route of newRawCache.routes) newRawCache.routesRec.set(route.route_id, route);
 
-	newAugmentedCache.stops = newRawCache.stops.map((s) => augmentStop(s, ctx));
+	newAugmentedCache.stops = await processWithProgress(newRawCache.stops, "Augmenting stops", (s) =>
+		augmentStop(s, ctx),
+	);
 	logger.debug(`Augmented ${newAugmentedCache.stops.length} stops.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
-	for (const tripId of newRawCache.tripsRec.keys()) {
-		const rawTrip = newRawCache.tripsRec.get(tripId);
-		if (rawTrip) {
-			const augmentedTrip = augmentTrip(rawTrip, ctx);
-			newAugmentedCache.tripsRec.set(tripId, augmentedTrip);
-		}
+	newAugmentedCache.trips = await processWithProgress(newRawCache.trips, "Augmenting trips", (trip) =>
+		augmentTrip(trip, ctx),
+	);
+	for (const trip of newAugmentedCache.trips) {
+		newAugmentedCache.tripsRec.set(trip._trip.trip_id, trip);
 	}
+
 	logger.debug(`Augmented ${newAugmentedCache.tripsRec.size} trips.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
-
-	newAugmentedCache.trips = Array.from(newAugmentedCache.tripsRec.values());
 
 	for (const trip of newAugmentedCache.trips) {
 		newAugmentedCache.tripsRec.set(trip._trip.trip_id, trip);
@@ -603,12 +603,18 @@ export async function refreshRealtimeCache(): Promise<void> {
 	});
 
 	// Only re-augment trips that have updates
-	for (const tripId of updatedTripIds) {
-		const rawTrip = rawCache.tripsRec.get(tripId);
-		if (rawTrip) {
-			const augmentedTrip = augmentTrip(rawTrip);
-			augmentedCache.tripsRec.set(tripId, augmentedTrip);
-		}
+	const tripsToUpdate: Trip[] = [];
+	for (const id of updatedTripIds) {
+		const t = rawCache.tripsRec.get(id);
+		if (t) tripsToUpdate.push(t);
+	}
+
+	const updatedAugmented = await processWithProgress(tripsToUpdate, "Re-augmenting updated trips", (t) =>
+		augmentTrip(t),
+	);
+
+	for (const at of updatedAugmented) {
+		augmentedCache.tripsRec.set(at._trip.trip_id, at);
 	}
 
 	augmentedCache.trips = Array.from(augmentedCache.tripsRec.values());
@@ -661,4 +667,55 @@ export async function refreshRealtimeCache(): Promise<void> {
 		module: "cache",
 		function: "refreshRealtimeCache",
 	});
+}
+
+async function processWithProgress<T, U>(
+	items: T[],
+	taskName: string,
+	processFn: (item: T) => U,
+	chunkSize = 1000,
+): Promise<U[]> {
+	const results: U[] = [];
+	let current = 0;
+	const total = items.length;
+	const startTime = Date.now();
+
+	if (total === 0) return results;
+
+	// Initial progress update
+	logger.progress({
+		task: taskName,
+		current: 0,
+		total,
+		speed: 0,
+		eta: 0,
+		percent: 0,
+		unit: "items",
+	});
+
+	for (let i = 0; i < total; i += chunkSize) {
+		const chunk = items.slice(i, i + chunkSize);
+		for (const item of chunk) {
+			results.push(processFn(item));
+		}
+		current += chunk.length;
+
+		// Yield to event loop
+		await new Promise((resolve) => setImmediate(resolve));
+
+		const elapsed = (Date.now() - startTime) / 1000;
+		const speed = elapsed > 0 ? current / elapsed : 0;
+
+		logger.progress({
+			task: taskName,
+			current,
+			total,
+			speed,
+			eta: speed > 0 ? (total - current) / speed : 0,
+			percent: (current / total) * 100,
+			unit: "items",
+		});
+	}
+
+	return results;
 }

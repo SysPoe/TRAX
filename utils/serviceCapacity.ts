@@ -296,39 +296,26 @@ export function getServiceCapacity(
     dateStr: string,
 	_dirOverride?: string
 ): string | null {
-    if (!loaded) {
-		logger.debug(`Service capacity data not loaded.`, { module: "serviceCapacity" });
-		return null;
-	}
+    if (!loaded) return null;
 
     const route = getRawRoutes(trip._trip.route_id)[0];
     const routeName = route?.route_long_name;
-    if (!routeName) {
-		logger.debug(`Route name not found for route ID ${trip._trip.route_id}.`, { module: "serviceCapacity" });
-		return null;
-	}
+    if (!routeName) return null;
 
     const seq = stopTime._stopTime?.stop_sequence ?? 0;
     const direction = _dirOverride ?? getTripDirection(trip, seq);
-    if (!direction) {
-		logger.debug(`Could not determine direction for trip ID ${trip._trip.trip_id}.`, { module: "serviceCapacity" });
-		return null;
-	}
+    if (!direction) return null;
 
     const dayType = getDayType(dateStr);
 
     const stopName = stopTime.scheduled_parent_station?.stop_name || stopTime.scheduled_stop?.stop_name;
-    if (!stopName) {
-		logger.debug(`Stop name not found for stop time in trip ID ${trip._trip.trip_id}.`, { module: "serviceCapacity" });
-		return null;
-	}
+    if (!stopName) return null;
+	
     const normStopName = stopName.toLowerCase().trim();
 
     const departureTime = stopTime.scheduled_departure_time;
-    if (departureTime === null) {
-		logger.debug(`Departure time not found for stop time in trip ID ${trip._trip.trip_id}.`, { module: "serviceCapacity" });
-		return null;
-	}
+    if (departureTime === null) return null;
+
     const timeBucket = formatTimeBucket(departureTime);
 
     // Map routeName (e.g. "Brisbane City - Ferny Grove") to potential lines (e.g. "Ferny Grove Line")
@@ -342,10 +329,7 @@ export function getServiceCapacity(
         }
     }
 
-    if (candidateLines.size === 0) {
-        logger.debug(`No candidate lines found for route name ${routeName}.`, { module: "serviceCapacity" });
-        return null;
-    }
+    if (candidateLines.size === 0) return null;
 
     for (const lineName of candidateLines) {
         const rMap = capacityIndex.get(lineName);
@@ -373,8 +357,6 @@ export function getServiceCapacity(
     }
     
     // If we loop through all candidates and find nothing, we return null.
-    logger.debug(`Capacity data not found for ${routeName} (mapped: ${Array.from(candidateLines).join(", ")}) at ${normStopName} (${timeBucket})`, { module: "serviceCapacity" });
-
     return null;
 }
 
