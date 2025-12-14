@@ -16,6 +16,7 @@ export type AugmentedTrip = qdf.Trip & {
 	expressInfo: ExpressInfo[];
 	run: string;
 	scheduleRelationship: qdf.TripScheduleRelationship | null;
+	rt_start_date: string | null;
 	toSerializable: () => SerializableAugmentedTrip;
 };
 
@@ -65,8 +66,10 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 	for (const serviceDate of serviceDates) {
 		_runSeries[serviceDate] = null;
 	}
-
-	let scheduleRelationship = cache.getTripUpdates(trip.trip_id, ctx)[0]?.trip.schedule_relationship ?? null;
+	
+	let tu = cache.getTripUpdates(trip.trip_id, ctx)[0];
+	let scheduleRelationship = tu?.trip.schedule_relationship ?? null;
+	let rt_start_date = tu?.trip.start_date ?? null;
 
 	const ensureCachedStopTimes = () => {
 		if (!cachedStopTimes) {
@@ -140,9 +143,11 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 				runSeries: this.runSeries,
 				run: trip.trip_id.slice(-4),
 				scheduleRelationship,
+				rt_start_date,
 			});
 		},
 		scheduleRelationship,
+		rt_start_date
 	};
 	return result;
 }
