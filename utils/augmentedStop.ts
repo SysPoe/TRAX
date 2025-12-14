@@ -2,8 +2,8 @@ import type * as qdf from "qdf-gtfs";
 import * as cache from "../cache.js";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { getAugmentedTrips, getPassingTrips } from "../cache.js";
-import { findExpressString } from "./express.js";
 import { getGtfs } from "../gtfsInterfaceLayer.js";
+import { findExpressString } from "./SectionalRunningTimes/gtfs.js";
 
 export type AugmentedStop = qdf.Stop & {
 	qrt_Place: boolean;
@@ -161,9 +161,9 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 					const expressString = findExpressString(
 						trip.expressInfo,
 						st.actual_parent_station?.stop_id ||
-							st.actual_stop?.parent_station ||
-							st.actual_stop?.stop_id ||
-							"",
+						st.actual_stop?.parent_station ||
+						st.actual_stop?.stop_id ||
+						"",
 					);
 					return {
 						...st,
@@ -213,9 +213,9 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 					const expressString = findExpressString(
 						trip.expressInfo,
 						st.actual_parent_station?.stop_id ||
-							st.actual_stop?.parent_station ||
-							st.actual_stop?.stop_id ||
-							"",
+						st.actual_stop?.parent_station ||
+						st.actual_stop?.stop_id ||
+						"",
 					);
 					return {
 						...st,

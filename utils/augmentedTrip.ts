@@ -1,11 +1,11 @@
 import type * as qdf from "qdf-gtfs";
 import { getServiceDatesByTrip } from "./calendar.js";
 import { AugmentedStopTime, augmentStopTimes, SerializableAugmentedStopTime } from "./augmentedStopTime.js";
-import { ExpressInfo, findExpress } from "./express.js";
 import * as cache from "../cache.js";
 import { formatTimestamp } from "../index.js";
 import { getGtfs } from "../gtfsInterfaceLayer.js";
 import { getServiceCapacity } from "./serviceCapacity.js";
+import { ExpressInfo, findExpress } from "./SectionalRunningTimes/gtfs.js";
 
 export type AugmentedTrip = {
 	_trip: qdf.Trip;

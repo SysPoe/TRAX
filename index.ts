@@ -1,13 +1,13 @@
 import * as cache from "./cache.js";
 import * as calendar from "./utils/calendar.js";
 import * as stations from "./utils/stations.js";
-import * as express from "./utils/express.js";
 import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
 import * as timeUtils from "./utils/time.js";
 import { EventEmitter } from "events";
 import { createGtfs, getGtfs, hasGtfs } from "./gtfsInterfaceLayer.js";
 import logger from "./utils/logger.js";
 import { TRAX_CONFIG } from "./config.js";
+import { findExpressString } from "./utils/SectionalRunningTimes/gtfs.js";
 
 interface TRAXEvent {
 	"realtime-update-start": [];
@@ -146,8 +146,8 @@ const TRAX = {
 	cache,
 	stations,
 	calendar,
-	express,
 	qrTravel,
+	express: { findExpressString },
 
 	// Utilities and config
 	utils: {
@@ -182,8 +182,6 @@ export type {
 	TravelStopTime,
 	TravelTrip,
 } from "./qr-travel/types.js";
-
-export type { ExpressInfo } from "./utils/express.js";
 
 export type { SRTStop } from "./utils/SectionalRunningTimes/qrt.js";
 
