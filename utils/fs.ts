@@ -10,6 +10,11 @@ export function loadDataFile(filePath: string): string {
     return fs.readFileSync(path, "utf-8");
 }
 
+export function writeDataFile(filePath: string, data: string): void {
+    const fullPath = getDataFilePath(filePath);
+    fs.writeFileSync(fullPath, data, "utf-8");
+}
+
 export async function loadDataFileAsync(filePath: string): Promise<string> {
     const candidates = [
         filePath,

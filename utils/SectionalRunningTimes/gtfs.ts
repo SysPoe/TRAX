@@ -1,5 +1,7 @@
 import logger from "../logger.js";
+import fs from "fs";
 import { getGtfs } from '../../gtfsInterfaceLayer.js';
+import { getDataFilePath, loadDataFile } from "../fs.js";
 
 export type SRTMatrix = {
 	[from: string]: {
@@ -7,7 +9,15 @@ export type SRTMatrix = {
 	};
 };
 
-let _matrix: SRTMatrix | null = null;
+let _matrix: SRTMatrix | null = fs.existsSync(getDataFilePath("srt_matrix.json")) ? JSON.parse(loadDataFile("srt_matrix.json")) : null;
+if (_matrix) {
+	const stats = fs.statSync(getDataFilePath("srt_matrix.json"));
+	const mtime = new Date(stats.mtime);
+	const ageDays = (Date.now() - mtime.getTime()) / (1000 * 60 * 60 * 24);
+	if (ageDays > 7) {
+		_matrix = null;
+	}
+}
 
 function getPatternSignature(stopTimes: any[]): string {
 	return stopTimes.map(st => st.stop_id).join('|');
