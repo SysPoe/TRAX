@@ -13,6 +13,7 @@ export const TRAX_CONFIG = {
 	sqlitePath: "./.TRAXCACHE.sqlite",
 	verbose: DEBUG,
 	db: undefined,
+	cacheDir: ".TRAXCACHE",
 	logFunction: (message: string) => logger.debug(message, { module: "gtfs" }),
 	progressLog: (info: ProgressInfo) => logger.progress(info),
 };

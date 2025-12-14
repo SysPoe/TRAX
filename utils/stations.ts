@@ -3,12 +3,12 @@ import { getGtfs } from "../gtfsInterfaceLayer.js";
 import { AugmentedStop } from "./augmentedStop.js";
 import * as qdf from "qdf-gtfs";
 import logger from "./logger.js";
-import { getDataFilePath, loadDataFile, writeDataFile } from "./fs.js";
+import { cacheFileExists, getCacheFilePath, loadCacheFile, writeCacheFile } from "./fs.js";
 import fs from "fs";
 
-let rail_stations: string[] | null = fs.existsSync(getDataFilePath("considered_stations.json")) ? JSON.parse(loadDataFile("considered_stations.json")) : null;
+let rail_stations: string[] | null = cacheFileExists("considered_stations.json") ? JSON.parse(loadCacheFile("considered_stations.json")) : null;
 if (rail_stations) {
-	const stats = fs.statSync(getDataFilePath("considered_stations.json"));
+	const stats = fs.statSync(getCacheFilePath("considered_stations.json"));
 	const mtime = new Date(stats.mtime);
 	const ageDays = (Date.now() - mtime.getTime()) / (1000 * 60 * 60 * 24);
 	if (ageDays > 2) {
@@ -48,7 +48,7 @@ export function getRailStations(): qdf.Stop[] {
 			});
 		});
 
-		writeDataFile("considered_stations.json", JSON.stringify(rail_stations));
+		writeCacheFile("considered_stations.json", JSON.stringify(rail_stations));
 
 		logger.debug(`Loaded considered_stations in ${Date.now() - startTime}ms`, { module: "SRT" });
 	}

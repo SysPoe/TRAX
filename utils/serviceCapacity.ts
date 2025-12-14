@@ -7,13 +7,12 @@ import { getRawRoutes } from "../cache.js";
 import zlib from "zlib";
 import { pipeline } from "stream";
 import { promisify } from "util";
-import { getDataFilePath } from "./fs.js";
+import { getCacheFilePath, getDataFilePath } from "./fs.js";
+import { TRAX_CONFIG } from "../config.js";
 
 const pipe = promisify(pipeline);
 
-const CACHE_DIR = ".TRAXCACHE";
-const FILE_NAME = "service_capacity.csv";
-const FILE_PATH = path.join(CACHE_DIR, FILE_NAME);
+const FILE_PATH = getCacheFilePath("service_capacity.csv");
 
 export type ServiceCapacityData = {
 	_id: string;
@@ -40,8 +39,8 @@ function getMap<K, V>(map: Map<K, V>, key: K, factory: () => V): V {
 }
 
 export async function ensureServiceCapacityData(): Promise<void> {
-	if (!fs.existsSync(CACHE_DIR)) {
-		fs.mkdirSync(CACHE_DIR, { recursive: true });
+	if (!fs.existsSync(TRAX_CONFIG.cacheDir)) {
+		fs.mkdirSync(TRAX_CONFIG.cacheDir, { recursive: true });
 	}
 
 	// If file doesn't exist, extract from embedded archive

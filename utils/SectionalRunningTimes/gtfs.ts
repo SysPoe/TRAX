@@ -1,7 +1,7 @@
 import logger from "../logger.js";
 import fs from "fs";
 import { getGtfs } from '../../gtfsInterfaceLayer.js';
-import { getDataFilePath, loadDataFile } from "../fs.js";
+import { cacheFileExists, getCacheFilePath, loadCacheFile } from "../fs.js";
 
 export type SRTMatrix = {
 	[from: string]: {
@@ -9,9 +9,9 @@ export type SRTMatrix = {
 	};
 };
 
-let _matrix: SRTMatrix | null = fs.existsSync(getDataFilePath("srt_matrix.json")) ? JSON.parse(loadDataFile("srt_matrix.json")) : null;
+let _matrix: SRTMatrix | null = cacheFileExists("srt_matrix.json") ? JSON.parse(loadCacheFile("srt_matrix.json")) : null;
 if (_matrix) {
-	const stats = fs.statSync(getDataFilePath("srt_matrix.json"));
+	const stats = fs.statSync(getCacheFilePath("srt_matrix.json"));
 	const mtime = new Date(stats.mtime);
 	const ageDays = (Date.now() - mtime.getTime()) / (1000 * 60 * 60 * 24);
 	if (ageDays > 7) {
