@@ -53,7 +53,7 @@ export type AugmentedStopTime = {
 
 	getServiceCapacity: (date: string) => string | null;
 } & (
-	| {
+		| {
 			realtime: true;
 			realtime_info: {
 				delay_secs: number;
@@ -61,13 +61,14 @@ export type AugmentedStopTime = {
 				delay_class: "on-time" | "scheduled" | "late" | "very-late" | "early";
 				schedule_relationship: qdf.StopTimeScheduleRelationship;
 				propagated: boolean;
+				rt_start_date: string;
 			};
-	  }
-	| {
+		}
+		| {
 			realtime: false;
 			realtime_info: null;
-	  }
-);
+		}
+	);
 
 // Internal type for data before platform/exit side calculation
 type IntermediateAST = Omit<AugmentedStopTime, "actual_exit_side" | "scheduled_exit_side" | "toSerializable">;
@@ -424,6 +425,7 @@ export function augmentStopTimes(
 				delay_class: cls,
 				schedule_relationship: scheduleRelationship,
 				propagated: propagated && !isPassing,
+				rt_start_date: tripUpdate?.trip.start_date ?? today(),
 			};
 		}
 
