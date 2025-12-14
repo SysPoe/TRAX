@@ -425,7 +425,7 @@ export function augmentStopTimes(
 				delay_class: cls,
 				schedule_relationship: scheduleRelationship,
 				propagated: propagated && !isPassing,
-				rt_start_date: tripUpdate?.trip.start_date ?? today(),
+				rt_start_date: rtUpdate?.start_date ?? tripUpdate.trip.start_date,
 			};
 		}
 
