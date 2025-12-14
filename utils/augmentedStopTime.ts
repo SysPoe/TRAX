@@ -214,7 +214,7 @@ function findPassingStopSRTs(stops: string[], ctx?: cache.CacheContext): Passing
 	for (let i = 0; i < allStops.length - 1; i++) {
 		const from = allStops[i].stop_id;
 		const to = allStops[i + 1].stop_id;
-		const srt = getSRT(from, to, ctx);
+		const srt = getSRT(from, to);
 
 		if (srt === undefined) {
 			const key = `${from}|${to}`;

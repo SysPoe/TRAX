@@ -1,11 +1,5 @@
-// Sectional Running Times data for QR's rail network
-
-import { getStations } from "../stations.js";
 import logger from "../logger.js";
-import { CacheContext } from "../../cache.js";
-import { loadDataFile } from "../fs.js";
-
-let rawSRT = loadDataFile("SRT_gtfs.csv");
+import { getGtfs } from '../../gtfsInterfaceLayer.js';
 
 export type SRTMatrix = {
 	[from: string]: {
@@ -13,60 +7,116 @@ export type SRTMatrix = {
 	};
 };
 
-function parseSRTtoMatrix(srtString: string, ctx?: CacheContext): SRTMatrix {
-	const stations = getStations(ctx);
+let _matrix: SRTMatrix | null = null;
 
-	const lines = srtString.trim().split("\n");
-	const startIdx = lines[0].startsWith("From,To,EMU") ? 1 : 0;
+function getPatternSignature(stopTimes: any[]): string {
+	return stopTimes.map(st => st.stop_id).join('|');
+}
+
+function generateSRTMatrix(): SRTMatrix {
+	const gtfs = getGtfs();
+
+	const trips = gtfs.getTrips();
+
+	const uniquePatterns: any[][] = [];
+	const seenSignatures = new Set<string>();
+
+	logger.info("SRT: Extracting unique stopping patterns from GTFS...");
+
+	trips.forEach((trip) => {
+		if (gtfs.getRoute(trip.route_id)?.route_type !== 2) return;
+
+		const stopTimes = gtfs.getStopTimesForTrip(trip.trip_id);
+		const signature = getPatternSignature(stopTimes);
+
+		if (seenSignatures.has(signature)) return;
+		seenSignatures.add(signature);
+
+		const stops = stopTimes.map((st, i) => {
+			const stop = gtfs.getStop(st.stop_id);
+			const id = stop ? stop.parent_station ?? stop.stop_id : st.stop_id;
+
+			let timeFromPrev = 0;
+			if (i > 0) {
+				const prev = stopTimes[i - 1];
+				const currTime = st.arrival_time ?? st.departure_time ?? 0;
+				const prevTime = prev.departure_time ?? prev.arrival_time ?? 0;
+				timeFromPrev = (currTime - prevTime) / 60;
+			}
+
+			return {
+				id, timeFromPrev
+			};
+		});
+
+		uniquePatterns.push(stops);
+	});
+
+	const validEdges = new Set<string>();
+
+	uniquePatterns.forEach(pattern => {
+		for (let i = 0; i < pattern.length - 1; i++) {
+			const from = pattern[i].id;
+			const to = pattern[i + 1].id;
+			validEdges.add(`${from}|${to}`);
+		}
+	});
+
+	logger.info(`SRT: Found ${validEdges.size} potential edges. Pruning express skips...`);
+
+	uniquePatterns.forEach(pattern => {
+		for (let i = 0; i < pattern.length - 2; i++) {
+			const startNode = pattern[i].id;
+
+			for (let j = i + 2; j < pattern.length; j++) {
+				const endNode = pattern[j].id;
+				const skipKey = `${startNode}|${endNode}`;
+
+				if (validEdges.has(skipKey)) {
+					validEdges.delete(skipKey);
+				}
+			}
+		}
+	});
+
+	logger.info(`SRT: Reduced to ${validEdges.size} physical edges. Calculating averages...`);
+
 	const matrix: SRTMatrix = {};
+	const segmentStats = new Map<string, { total: number; count: number }>();
 
-	for (let i = startIdx; i < lines.length; i++) {
-		let [from, to, emu] = lines[i].split(",");
+	uniquePatterns.forEach(pattern => {
+		for (let i = 0; i < pattern.length - 1; i++) {
+			const from = pattern[i].id;
+			const to = pattern[i + 1].id;
+			const key = `${from}|${to}`;
 
-		if (from === "Exhibition") from = "place_exhsta";
-		else
-			from =
-				stations.find((v) => v.stop_name?.toLowerCase().trim().startsWith(from.toLowerCase().trim()))
-					?.stop_id ?? "";
+			if (validEdges.has(key)) {
+				const time = pattern[i + 1].timeFromPrev;
+				if (time <= 0) continue;
 
-		if (to === "Exhibition") to = "place_exhsta";
-		else
-			to =
-				stations.find((v) => v.stop_name?.toLowerCase().trim().startsWith(to.toLowerCase().trim()))?.stop_id ??
-				"";
-
-		if (!from || from.length === 0) {
-			logger.warn(`Invalid SRT from: ${lines[i]}`, {
-				module: "srt",
-				function: "parseSRTtoMatrix",
-			});
-			continue;
+				const entry = segmentStats.get(key);
+				if (entry) {
+					entry.total += time;
+					entry.count++;
+				} else {
+					segmentStats.set(key, { total: time, count: 1 });
+				}
+			}
 		}
-		if (!to || to.length === 0) {
-			logger.warn(`Invalid SRT to: ${lines[i]}`, {
-				module: "srt",
-				function: "parseSRTtoMatrix",
-			});
-			continue;
-		}
+	});
+
+	for (const [key, stats] of segmentStats.entries()) {
+		const [from, to] = key.split('|');
+		const avg = stats.total / stats.count;
 
 		if (!matrix[from]) matrix[from] = {};
-		matrix[from][to] = Number(emu);
+		matrix[from][to] = parseFloat(avg.toFixed(2));
 	}
+
 	return matrix;
 }
 
-let _matrix: SRTMatrix;
-
-function getSRTMatrix(ctx?: CacheContext): SRTMatrix {
-	if (!_matrix) {
-		_matrix = parseSRTtoMatrix(rawSRT, ctx);
-	}
-	return _matrix;
-}
-
-export function getSRT(from: string, to: string, ctx?: CacheContext): number | undefined {
-	let matrix = getSRTMatrix(ctx);
-	if ((from == "place_exhsta" && to == "place_bowsta") || (from == "place_bowsta" && to == "place_exhsta")) return 3; // Exhibition to Bowen Hills is 3 minutes, but not in the SRT data
-	return matrix[from]?.[to] || matrix[to]?.[from];
+export function getSRT(from: string, to: string): number | undefined {
+	if (!_matrix) _matrix = generateSRTMatrix();
+	return _matrix[from]?.[to] || _matrix[to]?.[from];
 }
