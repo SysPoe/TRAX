@@ -1,7 +1,7 @@
 // For SRT passing stop expansion
 import { expandWithSRTPassingStops } from "../utils/SectionalRunningTimes/qrt.js";
 import logger from "../utils/logger.js";
-import { getGtfsStations } from "../utils/stations.js";
+import { getRailStations } from "../utils/stations.js";
 import { parseBrisbaneTime } from "../utils/time.js";
 import type {
 	GetServiceResponse,
@@ -161,7 +161,7 @@ function convertQRTServiceToTravelTrip(
 ): TravelTrip {
 	// Find the Service object for more info
 	const serviceMeta = serviceResponse;
-	const gtfsStops = getGtfsStations();
+	const gtfsStops = getRailStations();
 	const stops: TravelStopTime[] = (serviceResponse.TrainMovements as TrainMovementDTO[]).map((movement) => {
 		// Calculate arrival and departure delays
 		let arrivalDelaySeconds: number | null = null;
@@ -317,7 +317,7 @@ async function processService(
 	try {
 		// Get detailed service information
 		const serviceResponse = await trackTrain(service.ServiceId, service.ServiceDate);
-		const gtfsStops = getGtfsStations();
+		const gtfsStops = getRailStations();
 
 		if (serviceResponse.Success) {
 			// Find the corresponding QRT service for additional metadata

@@ -126,7 +126,7 @@ const TRAX = {
 	getAugmentedStopTimes: cache.getAugmentedStopTimes,
 	getBaseStopTimes: cache.getBaseStopTimes,
 	getRunSeries: cache.getRunSeries,
-	getStations: stations.getStations,
+	getStations: stations.getAugmentedRailStations,
 	getRawTrips: cache.getRawTrips,
 	getRawStops: cache.getRawStops,
 	getRawRoutes: cache.getRawRoutes,
