@@ -198,7 +198,7 @@ function getTripDirection(trip: AugmentedTrip, currentStopSequence: number): "In
 	}
 
 	if (firstCityIndex === -1) {
-		const dirId = trip._trip.direction_id;
+		const dirId = trip.direction_id;
 		if (dirId === 0) return "Inbound";
 		if (dirId === 1) return "Outbound";
 		return null;
@@ -239,7 +239,7 @@ function getTripDirection(trip: AugmentedTrip, currentStopSequence: number): "In
 		return "Outbound";
 	}
 
-	const dirId = trip._trip.direction_id;
+	const dirId = trip.direction_id;
 	if (dirId === 0) return "Inbound";
 	if (dirId === 1) return "Outbound";
 	return "Inbound";
@@ -273,7 +273,7 @@ export function getServiceCapacity(
 ): string | null {
 	if (!loaded) return null;
 
-	const route = getRawRoutes(trip._trip.route_id)[0];
+	const route = getRawRoutes(trip.route_id)[0];
 	const routeName = route?.route_long_name;
 	if (!routeName) return null;
 

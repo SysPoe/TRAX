@@ -152,7 +152,6 @@ Represents a station or stop, enriched with methods to query live departures.
 Represents a transit trip with live status.
 
 - **Properties:**
-    - `_trip`: Raw GTFS Trip object.
     - `stopTimes`: `AugmentedStopTime[]` - The sequence of stops for this trip, including live times.
     - `expressInfo`: `ExpressInfo[]` - Calculated express segments (where the train skips stops).
     - `runSeries`: `RunSeries` - Information about the sequence of trips this train performs.

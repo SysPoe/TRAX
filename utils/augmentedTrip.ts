@@ -2,14 +2,11 @@ import type * as qdf from "qdf-gtfs";
 import { getServiceDatesByTrip } from "./calendar.js";
 import { AugmentedStopTime, augmentStopTimes, SerializableAugmentedStopTime } from "./augmentedStopTime.js";
 import * as cache from "../cache.js";
-import { formatTimestamp } from "../index.js";
 import { getGtfs } from "../gtfsInterfaceLayer.js";
 import { getServiceCapacity } from "./serviceCapacity.js";
 import { ExpressInfo, findExpress } from "./SectionalRunningTimes/gtfs.js";
 
-export type AugmentedTrip = {
-	_trip: qdf.Trip;
-	trip_id: string;
+export type AugmentedTrip = qdf.Trip & {
 	scheduledStartServiceDates: string[]; // Days on which the trip is scheduled to start
 	scheduledTripDates: string[]; // Days on which the trip is scheduled to have stops
 	actualTripDates: string[]; // Days on which the trip actually has stops (with real-time updates)
@@ -41,8 +38,7 @@ export function toSerializableAugmentedTrip(
 	trip: AugmentedTrip | Omit<AugmentedTrip, "toSerializable" | "toSerializable" | "_runSeries">,
 ): SerializableAugmentedTrip {
 	return {
-		_trip: trip._trip,
-		trip_id: trip.trip_id,
+		...trip,
 		scheduledStartServiceDates: trip.scheduledStartServiceDates,
 		scheduledTripDates: trip.scheduledTripDates,
 		actualTripDates: trip.actualTripDates,
@@ -83,8 +79,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 	};
 
 	const result: AugmentedTrip = {
-		_trip: trip,
-		trip_id: trip.trip_id,
+		...trip,
 		scheduledStartServiceDates: serviceDates,
 		get scheduledTripDates() {
 			let stopTimes = cache.getAugmentedStopTimes(trip.trip_id, ctx);
@@ -136,8 +131,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 				stopTimes = ensureCachedStopTimes();
 			}
 			return toSerializableAugmentedTrip({
-				_trip: trip,
-				trip_id: trip.trip_id,
+				...trip,
 				scheduledStartServiceDates: serviceDates,
 				scheduledTripDates: this.scheduledTripDates,
 				actualTripDates: this.actualTripDates,
