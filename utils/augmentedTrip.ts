@@ -9,6 +9,7 @@ import { ExpressInfo, findExpress } from "./SectionalRunningTimes/gtfs.js";
 
 export type AugmentedTrip = {
 	_trip: qdf.Trip;
+	trip_id: string;
 	scheduledStartServiceDates: string[]; // Days on which the trip is scheduled to start
 	scheduledTripDates: string[]; // Days on which the trip is scheduled to have stops
 	actualTripDates: string[]; // Days on which the trip actually has stops (with real-time updates)
@@ -41,6 +42,7 @@ export function toSerializableAugmentedTrip(
 ): SerializableAugmentedTrip {
 	return {
 		_trip: trip._trip,
+		trip_id: trip.trip_id,
 		scheduledStartServiceDates: trip.scheduledStartServiceDates,
 		scheduledTripDates: trip.scheduledTripDates,
 		actualTripDates: trip.actualTripDates,
@@ -82,6 +84,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 
 	const result: AugmentedTrip = {
 		_trip: trip,
+		trip_id: trip.trip_id,
 		scheduledStartServiceDates: serviceDates,
 		get scheduledTripDates() {
 			let stopTimes = cache.getAugmentedStopTimes(trip.trip_id, ctx);
@@ -134,6 +137,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 			}
 			return toSerializableAugmentedTrip({
 				_trip: trip,
+				trip_id: trip.trip_id,
 				scheduledStartServiceDates: serviceDates,
 				scheduledTripDates: this.scheduledTripDates,
 				actualTripDates: this.actualTripDates,
@@ -197,10 +201,10 @@ function trackBackwards(trip: AugmentedTrip, serviceDate: string, ctx?: cache.Ca
 	let rs = cache.getRunSeries(serviceDate, run, false, ctx);
 	for (const prevTrip of prevTrips) {
 		prevTrip._runSeries[serviceDate] = run;
-		if (!rs.trips.some((v) => v.trip_id === prevTrip._trip.trip_id))
+		if (!rs.trips.some((v) => v.trip_id === prevTrip.trip_id))
 			rs.trips = [
 				{
-					trip_id: prevTrip._trip.trip_id,
+					trip_id: prevTrip.trip_id,
 					trip_start_time:
 						prevTrip.stopTimes[0].scheduled_departure_time ||
 						prevTrip.stopTimes[0].scheduled_arrival_time ||
@@ -252,9 +256,9 @@ function trackForwards(trip: AugmentedTrip, serviceDate: string, runSeries: stri
 		if (deps[0]?._stopTime?.stop_sequence != 1) break;
 		newTrip._runSeries[serviceDate] = runSeries;
 		run = newTrip.run;
-		if (!rs.trips.some((v) => v.trip_id === newTrip._trip.trip_id))
+		if (!rs.trips.some((v) => v.trip_id === newTrip.trip_id))
 			rs.trips.push({
-				trip_id: newTrip._trip.trip_id,
+				trip_id: newTrip.trip_id,
 				trip_start_time:
 					newTrip.stopTimes[0].scheduled_departure_time || newTrip.stopTimes[0].scheduled_arrival_time || 0,
 				run,

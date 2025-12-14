@@ -480,7 +480,7 @@ export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): 
 		augmentTrip(trip, ctx),
 	);
 	for (const trip of newAugmentedCache.trips) {
-		newAugmentedCache.tripsRec.set(trip._trip.trip_id, trip);
+		newAugmentedCache.tripsRec.set(trip.trip_id, trip);
 	}
 
 	logger.debug(`Augmented ${newAugmentedCache.tripsRec.size} trips.`, {
@@ -489,11 +489,11 @@ export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): 
 	});
 
 	for (const trip of newAugmentedCache.trips) {
-		newAugmentedCache.tripsRec.set(trip._trip.trip_id, trip);
+		newAugmentedCache.tripsRec.set(trip.trip_id, trip);
 
 		// Store both current stop times and base stop times (without realtime)
-		newAugmentedCache.stopTimes[trip._trip.trip_id] = trip.stopTimes;
-		newAugmentedCache.baseStopTimes[trip._trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
+		newAugmentedCache.stopTimes[trip.trip_id] = trip.stopTimes;
+		newAugmentedCache.baseStopTimes[trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
 
 		for (const serviceDate of trip.actualTripDates) {
 			let tripIds = newAugmentedCache.serviceDateTrips.get(serviceDate);
@@ -501,7 +501,7 @@ export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): 
 				tripIds = [];
 				newAugmentedCache.serviceDateTrips.set(serviceDate, tripIds);
 			}
-			tripIds.push(trip._trip.trip_id);
+			tripIds.push(trip.trip_id);
 		}
 
 		// Populate passingTrips
@@ -513,7 +513,7 @@ export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): 
 					tripIds = [];
 					newAugmentedCache.passingTrips.set(stopId, tripIds);
 				}
-				tripIds.push(trip._trip.trip_id);
+				tripIds.push(trip.trip_id);
 			}
 		}
 	}
@@ -614,7 +614,7 @@ export async function refreshRealtimeCache(): Promise<void> {
 	);
 
 	for (const at of updatedAugmented) {
-		augmentedCache.tripsRec.set(at._trip.trip_id, at);
+		augmentedCache.tripsRec.set(at.trip_id, at);
 	}
 
 	augmentedCache.trips = Array.from(augmentedCache.tripsRec.values());
@@ -635,8 +635,8 @@ export async function refreshRealtimeCache(): Promise<void> {
 		if (!trip) continue;
 
 		// Store both current stop times and base stop times (without realtime)
-		augmentedCache.stopTimes[trip._trip.trip_id] = trip.stopTimes;
-		augmentedCache.baseStopTimes[trip._trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
+		augmentedCache.stopTimes[trip.trip_id] = trip.stopTimes;
+		augmentedCache.baseStopTimes[trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
 
 		for (const serviceDate of trip.actualTripDates) {
 			let tripIds = augmentedCache.serviceDateTrips.get(serviceDate);
@@ -644,7 +644,7 @@ export async function refreshRealtimeCache(): Promise<void> {
 				tripIds = [];
 				augmentedCache.serviceDateTrips.set(serviceDate, tripIds);
 			}
-			tripIds.push(trip._trip.trip_id);
+			tripIds.push(trip.trip_id);
 		}
 
 		// Populate passingTrips for updated trips
@@ -656,7 +656,7 @@ export async function refreshRealtimeCache(): Promise<void> {
 					tripIds = [];
 					augmentedCache.passingTrips.set(stopId, tripIds);
 				}
-				tripIds.push(trip._trip.trip_id);
+				tripIds.push(trip.trip_id);
 			}
 		}
 	}
