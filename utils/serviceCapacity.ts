@@ -267,7 +267,7 @@ export function getServiceCapacity(
 	dateStr: string,
 	_dirOverride?: string,
 ): string {
-	if (!loaded) return "unknown";
+	if (!loaded || stopTime.passing) return "unknown";
 
 	const route = getRawRoutes(inst.route_id)[0];
 	const routeName = route?.route_long_name;
