@@ -96,8 +96,8 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 		update: qdf.RealtimeTripUpdate | null,
 		scheduleRelationship: qdf.TripScheduleRelationship
 	): AugmentedTripInstance => {
-		const startDate = update?.trip.start_date || serviceDate;
-		const startTime = update?.trip.start_time || "";
+		const startDate = update?.trip.start_date ?? serviceDate;
+		const startTime = update?.trip.start_time ?? "";
 
 		const instance_id = btoa(JSON.stringify([trip.trip_id, startDate, startTime, scheduleRelationship]));
 
@@ -170,12 +170,12 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 		if (rel === qdf.TripScheduleRelationship.SCHEDULED) {
 			coveredServiceDates.add(startDate);
 			instances.push(createInstance(startDate, update, rel));
-		} else if (rel === qdf.TripScheduleRelationship.ADDED || rel === qdf.TripScheduleRelationship.UNSCHEDULED) {
+		} else if (rel === qdf.TripScheduleRelationship.UNSCHEDULED) {
 			instances.push(createInstance(startDate, update, rel));
 		} else if (rel === qdf.TripScheduleRelationship.CANCELED) {
 			coveredServiceDates.add(startDate);
 			instances.push(createInstance(startDate, update, rel));
-		} else if (rel === qdf.TripScheduleRelationship.REPLACEMENT) {
+		} else if (rel === qdf.TripScheduleRelationship.REPLACEMENT || rel === qdf.TripScheduleRelationship.ADDED) {
 			coveredServiceDates.add(startDate);
 			instances.push(createInstance(startDate, update, rel));
 		}
