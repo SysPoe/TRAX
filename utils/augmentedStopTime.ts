@@ -355,7 +355,7 @@ export function augmentStopTimes(
 	let lastDelay = 0;
 	let lastScheduleRelationship = qdf.StopTimeScheduleRelationship.NO_DATA;
 	// If it's ADDED, we don't "propagate on time" in the same way, as the schedule IS the realtime.
-	let propagateOnTime = scheduleRelationship === qdf.TripScheduleRelationship.SCHEDULED;
+	let propagateOnTime = scheduleRelationship === qdf.TripScheduleRelationship.SCHEDULED && (tripUpdate !== null && tripUpdate !== undefined);
 
 	const intermediateStops: IntermediateAST[] = [];
 
@@ -459,7 +459,7 @@ export function augmentStopTimes(
 
 		// 4. Construct Realtime Info Object
 		let realtimeInfo = null;
-		const hasRealtime = rtUpdate != undefined || propagated || tripUpdate != undefined;
+		const hasRealtime = (rtUpdate != undefined && rtUpdate != null) || propagated || (tripUpdate != undefined && tripUpdate != null);
 
 		if (hasRealtime) {
 			const { str, cls } = calculateDelayClass(delaySecs);
