@@ -9,7 +9,7 @@ import { ExpressInfo, findExpress } from "./SectionalRunningTimes/gtfs.js";
 // --- Types ---
 
 export type AugmentedTripInstance = {
-	unique_instance_id: string; // composite of trip_id, start_date, start_time, duplication_id
+	instance_id: string; // composite of trip_id, start_date, start_time, duplication_id
 	trip_id: string;
 	serviceDate: string;
 	schedule_relationship: qdf.TripScheduleRelationship;
@@ -60,7 +60,7 @@ export function toSerializableAugmentedTripInstance(
 	inst: AugmentedTripInstance
 ): SerializableAugmentedTripInstance {
 	return {
-		unique_instance_id: inst.unique_instance_id,
+		instance_id: inst.instance_id,
 		trip_id: inst.trip_id,
 		serviceDate: inst.serviceDate,
 		schedule_relationship: inst.schedule_relationship,
@@ -105,7 +105,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 		const startDate = update?.trip.start_date || serviceDate;
 		const startTime = update?.trip.start_time || "";
 
-		const unique_instance_id = JSON.stringify([trip.trip_id, startDate, startTime, scheduleRelationship]);
+		const instance_id = JSON.stringify([trip.trip_id, startDate, startTime, scheduleRelationship]);
 
 
 		const stopTimes = augmentStopTimes(
@@ -135,7 +135,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 		].sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
 
 		const instance: AugmentedTripInstance = {
-			unique_instance_id,
+			instance_id,
 			trip_id: trip.trip_id,
 			serviceDate,
 			schedule_relationship: scheduleRelationship,
@@ -156,7 +156,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 			st.service_capacity = getServiceCapacity(partialTrip, st, serviceDate);
 
 			// Bake in instance info
-			st.instance_id = instance.unique_instance_id;
+			st.instance_id = instance.instance_id;
 			st.service_date = instance.serviceDate;
 			st.schedule_relationship = instance.schedule_relationship;
 		}
