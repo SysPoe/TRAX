@@ -8,7 +8,7 @@ import { ExpressInfo, findExpress } from "./SectionalRunningTimes/gtfs.js";
 
 // --- Types ---
 
-export type AugmentedTripInstance = {
+export type AugmentedTripInstance = qdf.Trip & {
 	instance_id: string; // composite of trip_id, start_date, start_time, duplication_id
 	trip_id: string;
 	serviceDate: string;
@@ -60,17 +60,11 @@ export function toSerializableAugmentedTripInstance(
 	inst: AugmentedTripInstance
 ): SerializableAugmentedTripInstance {
 	return {
-		instance_id: inst.instance_id,
-		trip_id: inst.trip_id,
-		serviceDate: inst.serviceDate,
-		schedule_relationship: inst.schedule_relationship,
-		expressInfo: inst.expressInfo,
-		run: inst.run,
-		scheduledTripDates: inst.scheduledTripDates,
-		actualTripDates: inst.actualTripDates,
-		runSeries: inst.runSeries,
-		rt_start_date: inst.rt_start_date,
-		stopTimes: inst.stopTimes.map(st => st.toSerializable()),
+		...inst,
+		stopTimes: inst.stopTimes.map((st) => st.toSerializable()),
+		// @ts-expect-error
+		realtime_update: undefined,
+		toSerializable: undefined,
 	};
 }
 
@@ -135,8 +129,8 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 		].sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
 
 		const instance: AugmentedTripInstance = {
+			...trip,
 			instance_id,
-			trip_id: trip.trip_id,
 			serviceDate,
 			schedule_relationship: scheduleRelationship,
 			stopTimes,
