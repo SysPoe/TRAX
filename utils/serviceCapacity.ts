@@ -266,21 +266,21 @@ export function getServiceCapacity(
 	stopTime: AugmentedStopTime,
 	dateStr: string,
 	_dirOverride?: string,
-): string | null {
-	if (!loaded) return null;
+): string {
+	if (!loaded) return "unknown";
 
 	const route = getRawRoutes(inst.route_id)[0];
 	const routeName = route?.route_long_name;
-	if (!routeName) return null;
+	if (!routeName) return "unknown";
 
 	const seq = stopTime._stopTime?.stop_sequence ?? 0;
 	const direction = _dirOverride ?? getTripDirection(inst, seq);
-	if (!direction) return null;
+	if (!direction) return "unknown";
 
 	const dayType = getDayType(dateStr);
 
 	let stopName = stopTime.scheduled_parent_station?.stop_name ?? stopTime.scheduled_stop?.stop_name;
-	if (!stopName) return null;
+	if (!stopName) return "unknown";
 	if (stopName.trim().toLowerCase().startsWith("boggo")) stopName = "Park Road";
 	if (stopName.trim().toLowerCase().startsWith("international")) stopName = "International Terminal";
 	if (stopName.trim().toLowerCase().startsWith("domestic")) stopName = "Domestic Terminal";
@@ -288,7 +288,7 @@ export function getServiceCapacity(
 	const normStopName = stopName.toLowerCase().trim();
 
 	const departureTime = stopTime.actual_departure_time ?? stopTime.actual_arrival_time ?? stopTime.scheduled_departure_time ?? stopTime.scheduled_arrival_time;
-	if (departureTime === null) return null;
+	if (departureTime === null) return "unknown";
 
 	const timeBucket = formatTimeBucket(departureTime);
 
@@ -301,7 +301,7 @@ export function getServiceCapacity(
 		if (ROUTE_KEYWORD_MAP[trimmed]) candidateLines.add(ROUTE_KEYWORD_MAP[trimmed]);
 	}
 
-	if (candidateLines.size === 0) return null;
+	if (candidateLines.size === 0) return "unknown";
 
 	for (const lineName of candidateLines) {
 		const rMap = capacityIndex.get(lineName);
@@ -328,8 +328,24 @@ export function getServiceCapacity(
 		}
 	}
 
-	// If we loop through all candidates and find nothing, we return null.
-	return null;
+	// If we loop through all candidates and find nothing, we return "unknown".
+	return "unknown";
+}
+
+export function addSCI(inst: AugmentedTripInstance): AugmentedTripInstance {
+	let prevSC: string | null = null;
+	inst.stopTimes.forEach(st => {
+		if (st.passing || st.service_capacity !== null) return;
+		st.service_capacity = getServiceCapacity(inst, st, inst.serviceDate);
+		if (st.service_capacity !== null) prevSC = st.service_capacity;
+		else st.service_capacity = prevSC;
+	});
+	return inst;
+}
+
+export function addSC(trip: AugmentedTrip): AugmentedTrip {
+	trip.instances = trip.instances.map(v => addSCI(v));
+	return trip;
 }
 
 export const _test = {

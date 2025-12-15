@@ -5,6 +5,7 @@ import { getAugmentedTrips, getPassingTrips } from "../cache.js";
 import { getGtfs } from "../gtfsInterfaceLayer.js";
 import { findExpressString } from "./SectionalRunningTimes/gtfs.js";
 import { AugmentedTripInstance } from "./augmentedTrip.js";
+import { getServiceCapacity } from "./serviceCapacity.js";
 
 export type AugmentedStop = qdf.Stop & {
 	qrt_Place: boolean;
@@ -96,7 +97,7 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 			const childIds = getChildren().map((c) => c.stop_id);
 			const validStops = new Set<string>([stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]);
 			const tripCache = new Map<string, ReturnType<typeof getAugmentedTrips>[0]>();
-			const results: { st: AugmentedStopTime; trip: any }[] = [];
+			const results: { st: AugmentedStopTime; inst: AugmentedTripInstance }[] = [];
 
 			let daysForwardStart = Math.floor(startSec / 86400);
 			let daysForwardEnd = Math.floor(endSec / 86400);
@@ -152,16 +153,16 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 							(toDate(matchingDate).getTime() - toDate(date).getTime()) / 1000;
 						if (ts == null || ts < startSec || ts > endSec) continue;
 
-						results.push({ st, trip: instance });
+						results.push({ st, inst: instance });
 					}
 				}
 			}
 			return results
 				.sort((a, b) => (a.st.actual_departure_time ?? 0) - (b.st.actual_departure_time ?? 0))
-				.map(({ st, trip }) => {
+				.map(({ st, inst }) => {
 					// Use instance expressInfo
 					const expressString = findExpressString(
-						(trip as AugmentedTripInstance).expressInfo,
+						inst.expressInfo,
 						st.actual_parent_station?.stop_id ||
 						st.actual_stop?.parent_station ||
 						st.actual_stop?.stop_id ||
@@ -170,7 +171,8 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 					return {
 						...st,
 						express_string: expressString,
-						instance_id: (trip as AugmentedTripInstance).instance_id,
+						instance_id: inst.instance_id,
+						service_capacity: getServiceCapacity(inst, st, inst.serviceDate)
 					};
 				});
 		},
@@ -179,7 +181,7 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 			const childIds = getChildren().map((c) => c.stop_id);
 			const validStops = new Set<string>([stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]);
 			const tripCache = new Map<string, ReturnType<typeof getAugmentedTrips>[0]>();
-			const results: { st: AugmentedStopTime; trip: any }[] = [];
+			const results: { st: AugmentedStopTime; inst: AugmentedTripInstance }[] = [];
 
 			// Query static GTFS for stop times at this station (optimized)
 			const rawStopTimes = Array.from(validStops).flatMap((id) => getGtfs().queryStopTimes({ stop_id: id }));
@@ -211,15 +213,15 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 					for (const st of matchingStopTimes) {
 						const ts = st.actual_departure_time;
 						if (ts == null || ts < start_time_secs || ts > end_time_secs) continue;
-						results.push({ st, trip: instance });
+						results.push({ st, inst: instance });
 					}
 				}
 			}
 			return results
 				.sort((a, b) => (a.st.actual_departure_time ?? 0) - (b.st.actual_departure_time ?? 0))
-				.map(({ st, trip }) => {
+				.map(({ st, inst }) => {
 					const expressString = findExpressString(
-						(trip as AugmentedTripInstance).expressInfo,
+						inst.expressInfo,
 						st.actual_parent_station?.stop_id ||
 						st.actual_stop?.parent_station ||
 						st.actual_stop?.stop_id ||
@@ -228,6 +230,8 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 					return {
 						...st,
 						express_string: expressString,
+						instance_id: inst.instance_id,
+						service_capacity: st.service_capacity === null ? getServiceCapacity(inst, st, inst.serviceDate) : st.service_capacity
 					};
 				});
 		},
