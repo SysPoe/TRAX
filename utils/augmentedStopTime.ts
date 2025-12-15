@@ -588,7 +588,6 @@ export function augmentStopTimes(
 			actDep: getOffset(actDep),
 		};
 
-		const tripUpdateStartDate = tripUpdate?.trip.start_date ?? serviceDate;
 		const datesServiceDate = serviceDate;
 
 		finalStops.push({
