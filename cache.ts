@@ -427,7 +427,7 @@ function resetRealtimeCacheIncremental(updatedTripIds: Set<string>): void {
 	}
 }
 
-export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): Promise<void> {
+export async function refreshStaticCache(): Promise<void> {
 	const gtfs = getGtfs();
 	logger.debug("Refreshing static GTFS cache...", {
 		module: "cache",

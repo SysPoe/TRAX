@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import logger from "./logger.js";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
-import { AugmentedTrip } from "./augmentedTrip.js";
+import { AugmentedTrip, AugmentedTripInstance } from "./augmentedTrip.js";
 import { getRawRoutes } from "../cache.js";
 import zlib from "zlib";
 import { pipeline } from "stream";
@@ -183,28 +183,22 @@ function formatTimeBucket(seconds: number): string {
 	return `${h12}:${mStr} ${ampm}`;
 }
 
-function getTripDirection(trip: AugmentedTrip, currentStopSequence: number, currentStopTime: AugmentedStopTime): "Inbound" | "Outbound" | null {
-	const instance = trip.instances.find(i => i.stopTimes.includes(currentStopTime));
-	const stopTimes = instance ? instance.stopTimes : [];
+function getTripDirection(inst: AugmentedTripInstance, currentStopSequence: number): "Inbound" | "Outbound" | null {
+	const stopTimes = inst.stopTimes;
 
-	if (stopTimes.length === 0) {
-		return null;
-	}
+	if (stopTimes.length === 0) return null;
 
 	let firstCityIndex = -1;
-	let lastCityIndex = -1;
 
 	for (let i = 0; i < stopTimes.length; i++) {
 		const st = stopTimes[i];
 		const stopId = st.scheduled_parent_station?.stop_id || st.scheduled_stop?.stop_id;
-		if (stopId && CITY_STATIONS.includes(stopId)) {
-			if (firstCityIndex === -1) firstCityIndex = i;
-			lastCityIndex = i;
-		}
+		if (stopId && CITY_STATIONS.includes(stopId) && firstCityIndex === -1)
+			firstCityIndex = i;
 	}
 
 	if (firstCityIndex === -1) {
-		const dirId = trip.direction_id;
+		const dirId = inst.direction_id;
 		if (dirId === 0) return "Inbound";
 		if (dirId === 1) return "Outbound";
 		return null;
@@ -219,9 +213,8 @@ function getTripDirection(trip: AugmentedTrip, currentStopSequence: number, curr
 		if (currentStopSequence < stopTimes[centralIndex]._stopTime?.stop_sequence!) {
 			const firstStopId =
 				stopTimes[0]?.scheduled_parent_station?.stop_id || stopTimes[0]?.scheduled_stop?.stop_id;
-			if (firstStopId && CITY_STATIONS.includes(firstStopId)) {
+			if (firstStopId && CITY_STATIONS.includes(firstStopId))
 				return "Outbound";
-			}
 			return "Inbound";
 		}
 		return "Outbound";
@@ -235,15 +228,14 @@ function getTripDirection(trip: AugmentedTrip, currentStopSequence: number, curr
 		if (currentStopSequence < stopTimes[romaIndex]._stopTime?.stop_sequence!) {
 			const firstStopId =
 				stopTimes[0]?.scheduled_parent_station?.stop_id || stopTimes[0]?.scheduled_stop?.stop_id;
-			if (firstStopId && CITY_STATIONS.includes(firstStopId)) {
+			if (firstStopId && CITY_STATIONS.includes(firstStopId))
 				return "Outbound";
-			}
 			return "Inbound";
 		}
 		return "Outbound";
 	}
 
-	const dirId = trip.direction_id;
+	const dirId = inst.direction_id;
 	if (dirId === 0) return "Inbound";
 	if (dirId === 1) return "Outbound";
 	return "Inbound";
@@ -270,19 +262,19 @@ const ROUTE_KEYWORD_MAP: Record<string, string> = {
 };
 
 export function getServiceCapacity(
-	trip: AugmentedTrip,
+	inst: AugmentedTripInstance,
 	stopTime: AugmentedStopTime,
 	dateStr: string,
 	_dirOverride?: string,
 ): string | null {
 	if (!loaded) return null;
 
-	const route = getRawRoutes(trip.route_id)[0];
+	const route = getRawRoutes(inst.route_id)[0];
 	const routeName = route?.route_long_name;
 	if (!routeName) return null;
 
 	const seq = stopTime._stopTime?.stop_sequence ?? 0;
-	const direction = _dirOverride ?? getTripDirection(trip, seq, stopTime);
+	const direction = _dirOverride ?? getTripDirection(inst, seq);
 	if (!direction) return null;
 
 	const dayType = getDayType(dateStr);
@@ -295,7 +287,7 @@ export function getServiceCapacity(
 
 	const normStopName = stopName.toLowerCase().trim();
 
-	const departureTime = stopTime.scheduled_departure_time;
+	const departureTime = stopTime.actual_departure_time ?? stopTime.actual_arrival_time ?? stopTime.scheduled_departure_time ?? stopTime.scheduled_arrival_time;
 	if (departureTime === null) return null;
 
 	const timeBucket = formatTimeBucket(departureTime);
@@ -306,9 +298,7 @@ export function getServiceCapacity(
 
 	for (const part of routeParts) {
 		const trimmed = part.trim();
-		if (ROUTE_KEYWORD_MAP[trimmed]) {
-			candidateLines.add(ROUTE_KEYWORD_MAP[trimmed]);
-		}
+		if (ROUTE_KEYWORD_MAP[trimmed]) candidateLines.add(ROUTE_KEYWORD_MAP[trimmed]);
 	}
 
 	if (candidateLines.size === 0) return null;

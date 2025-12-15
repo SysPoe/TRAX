@@ -8,6 +8,7 @@ import { createGtfs, getGtfs, hasGtfs } from "./gtfsInterfaceLayer.js";
 import logger from "./utils/logger.js";
 import { TRAX_CONFIG } from "./config.js";
 import { findExpressString } from "./utils/SectionalRunningTimes/gtfs.js";
+import { getServiceCapacity } from "./utils/serviceCapacity.js";
 
 interface TRAXEvent {
 	"realtime-update-start": [];
@@ -27,7 +28,7 @@ export async function loadGTFS(
 	staticIntervalMs: number = 24 * 60 * 60 * 1000, // 24 hours
 ): Promise<void> {
 	await createGtfs();
-	await cache.refreshStaticCache(true);
+	await cache.refreshStaticCache();
 	await cache.refreshRealtimeCache();
 
 	if (!autoRefresh) return;
@@ -54,7 +55,7 @@ export async function loadGTFS(
 			traxEmitter.emit("static-update-start");
 			try {
 				await createGtfs();
-				await cache.refreshStaticCache(true);
+				await cache.refreshStaticCache();
 				await cache.refreshRealtimeCache();
 			} catch (error: any) {
 				logger.error("Error refreshing static GTFS data", {
@@ -149,6 +150,7 @@ const TRAX = {
 	calendar,
 	qrTravel,
 	express: { findExpressString },
+	getServiceCapacity,
 
 	// Utilities and config
 	utils: {

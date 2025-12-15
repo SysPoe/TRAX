@@ -144,10 +144,15 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 			toSerializable: function () { return toSerializableAugmentedTripInstance(this); }
 		};
 
-		for (const st of stopTimes) {
-			const partialTrip = { ...trip, instances: [instance] } as unknown as AugmentedTrip;
-			// Bake in the service capacity string (or null)
-			st.service_capacity = getServiceCapacity(partialTrip, st, serviceDate);
+		let prev_cap = null;
+
+		for (let i = 0; i < instance.stopTimes.length; i++) {
+			const st = instance.stopTimes[i];
+			if (!st.passing) {
+				st.service_capacity = getServiceCapacity(instance, st, serviceDate);
+				if (st.service_capacity) prev_cap = st.service_capacity;
+				else st.service_capacity = prev_cap
+			}
 
 			// Bake in instance info
 			st.instance_id = instance.instance_id;

@@ -513,7 +513,7 @@ export function augmentStopTimes(
 			instance_id: "",
 			service_date: "",
 			schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED,
-			service_capacity: null,
+			service_capacity: "BYA",
 
 			actual_arrival_time: actArr ? actArr % 86400 : null,
 			actual_departure_time: actDep ? actDep % 86400 : null,
