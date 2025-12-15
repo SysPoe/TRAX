@@ -61,7 +61,7 @@ export type AugmentedStopTime = {
 				delay_class: "on-time" | "scheduled" | "late" | "very-late" | "early";
 				schedule_relationship: qdf.StopTimeScheduleRelationship;
 				propagated: boolean;
-				rt_start_date: string;
+				rt_start_date: string | null;
 			};
 		}
 		| {
