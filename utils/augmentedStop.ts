@@ -170,6 +170,7 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 					return {
 						...st,
 						express_string: expressString,
+						instance_id: (trip as AugmentedTripInstance).instance_id,
 					};
 				});
 		},

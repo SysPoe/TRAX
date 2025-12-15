@@ -99,7 +99,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 		const startDate = update?.trip.start_date || serviceDate;
 		const startTime = update?.trip.start_time || "";
 
-		const instance_id = JSON.stringify([trip.trip_id, startDate, startTime, scheduleRelationship]);
+		const instance_id = btoa(JSON.stringify([trip.trip_id, startDate, startTime, scheduleRelationship]));
 
 
 		const stopTimes = augmentStopTimes(

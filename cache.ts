@@ -263,7 +263,11 @@ export function getAugmentedTrips(trip_id?: string, ctx?: CacheContext): Augment
 }
 
 export function getAugmentedTripInstance(instance_id: string, ctx?: CacheContext): AugmentedTripInstance | null {
-	return getAugmentedTrips(JSON.parse(instance_id)[0], ctx)[0].instances.find(v => v.instance_id === instance_id) ?? null;
+	try {
+		return getAugmentedTrips(JSON.parse(atob(instance_id))[0], ctx)[0].instances.find(v => v.instance_id === instance_id) ?? null;
+	} catch {
+		return null;
+	}
 }
 
 export function getAugmentedStops(stop_id?: string, ctx?: CacheContext): AugmentedStop[] {

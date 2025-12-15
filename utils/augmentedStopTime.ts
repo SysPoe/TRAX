@@ -74,7 +74,7 @@ export type AugmentedStopTime = {
 	);
 
 // Internal type for data before platform/exit side calculation
-type IntermediateAST = Omit<AugmentedStopTime, "actual_exit_side" | "scheduled_exit_side" | "toSerializable">;
+type IntermediateAST = Omit<AugmentedStopTime, "actual_exit_side" | "scheduled_exit_side">;
 
 export type SerializableAugmentedStopTime = Omit<
 	AugmentedStopTime,
@@ -244,7 +244,6 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 			scheduled_exit_side: schSide,
 			actual_platform_code: actPlat?.platform_code?.toString() ?? item.actual_platform_code,
 			scheduled_platform_code: schPlat?.platform_code?.toString() ?? item.scheduled_platform_code,
-			toSerializable: () => toSerializableAugmentedStopTime(newEntry), // Circular ref handled in closure
 		} as AugmentedStopTime;
 
 		// Push to buffer
@@ -261,8 +260,7 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 	}
 
 	return pathBuffer.map((v) => ({
-		...v,
-		toSerializable: () => toSerializableAugmentedStopTime(v),
+		...v
 	}));
 }
 
@@ -546,6 +544,7 @@ export function augmentStopTimes(
 			actual_departure_dates,
 			scheduled_departure_date_offset: currentOffsets.schedDep - dateOffsets.schedDep,
 			actual_departure_date_offset: currentOffsets.actDep - dateOffsets.actDep,
+			toSerializable: function () { return toSerializableAugmentedStopTime(this as AugmentedStopTime); }
 		});
 	}
 
