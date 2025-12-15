@@ -45,12 +45,12 @@ export async function ensureServiceCapacityData(): Promise<void> {
 
 	// If file doesn't exist, extract from embedded archive
 	if (!fs.existsSync(FILE_PATH)) {
-		logger.info("Extracting service capacity data from local archive...", { module: "serviceCapacity" });
+		logger.debug("Extracting service capacity data from local archive...", { module: "serviceCapacity" });
 		try {
 			const zipPath = getDataFilePath("service_capacity.csv.gz");
 
 			await pipe(fs.createReadStream(zipPath), zlib.createGunzip(), fs.createWriteStream(FILE_PATH));
-			logger.info("Service capacity data extracted.", { module: "serviceCapacity" });
+			logger.debug("Service capacity data extracted.", { module: "serviceCapacity" });
 		} catch (e) {
 			logger.error(`Failed to extract service capacity data: ${e}`, { module: "serviceCapacity" });
 		}
@@ -103,7 +103,7 @@ function loadServiceCapacityData() {
 		count++;
 	}
 	loaded = true;
-	logger.info(`Loaded ${count} service capacity entries.`, { module: "serviceCapacity" });
+	logger.debug(`Loaded ${count} service capacity entries.`, { module: "serviceCapacity" });
 }
 
 function parseCSVLine(line: string): string[] {

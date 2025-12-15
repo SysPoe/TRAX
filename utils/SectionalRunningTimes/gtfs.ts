@@ -50,7 +50,7 @@ function loadNetworkData(): NetworkData | null {
 			if (ageDays < MAX_CACHE_AGE_DAYS) {
 				return data;
 			}
-			logger.info("Network topology cache expired, regenerating...");
+			logger.debug("Network topology cache expired, regenerating...");
 		} catch (e) {
 			logger.error("Failed to parse network topology cache: " + (e as Error).message);
 		}
@@ -80,7 +80,7 @@ function generateNetworkData(): NetworkData {
 	const uniquePatterns: any[][] = [];
 	const seenSignatures = new Set<string>();
 
-	logger.info("Topology: Extracting unique stopping patterns...");
+	logger.debug("Topology: Extracting unique stopping patterns...");
 
 	railTrips.forEach((trip) => {
 		const stopTimes = gtfs.getStopTimesForTrip(trip.trip_id);
@@ -116,7 +116,7 @@ function generateNetworkData(): NetworkData {
 		}
 	});
 
-	logger.info(`Topology: Found ${validEdges.size} potential edges. Pruning express skips...`);
+	logger.debug(`Topology: Found ${validEdges.size} potential edges. Pruning express skips...`);
 
 	// 2. Prune edges that are actually express skips
 	// If we see A->B->C, we remove the edge A->C if it exists
@@ -133,7 +133,7 @@ function generateNetworkData(): NetworkData {
 		}
 	});
 
-	logger.info(`Topology: Reduced to ${validEdges.size} physical edges. Building graph and matrix...`);
+	logger.debug(`Topology: Reduced to ${validEdges.size} physical edges. Building graph and matrix...`);
 
 	const matrix: SRTMatrix = {};
 	const adjacency: Record<string, string[]> = {};

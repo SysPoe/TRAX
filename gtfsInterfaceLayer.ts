@@ -1,7 +1,24 @@
 import { GTFS } from "qdf-gtfs";
 import { TRAX_CONFIG } from "./config.js";
+import logger from "./utils/logger.js";
 
 let currentGtfs: GTFS | null = null;
+
+async function loadStatic(gtfs: GTFS) {
+	logger.info("Loading GTFS data...");
+	await gtfs.loadFromUrl(TRAX_CONFIG.url);
+	logger.info("GTFS data loaded.")
+}
+
+async function loadRealtime(gtfs: GTFS) {
+	logger.info("Loading realtime data...")
+	await gtfs.updateRealtimeFromUrl(
+		TRAX_CONFIG.realtimeAlerts,
+		TRAX_CONFIG.realtimeTripUpdates,
+		TRAX_CONFIG.realtimeVehiclePositions,
+	);
+	logger.info("Realtime data loaded.");
+}
 
 export async function createGtfs() {
 	let gtfs = new GTFS({
@@ -11,12 +28,7 @@ export async function createGtfs() {
 		cache: true,
 		cacheDir: ".TRAXCACHE",
 	});
-	await gtfs.loadFromUrl(TRAX_CONFIG.url);
-	await gtfs.updateRealtimeFromUrl(
-		TRAX_CONFIG.realtimeAlerts,
-		TRAX_CONFIG.realtimeTripUpdates,
-		TRAX_CONFIG.realtimeVehiclePositions,
-	);
+	await Promise.all([loadStatic(gtfs), loadRealtime(gtfs)]);
 	currentGtfs = gtfs;
 }
 
