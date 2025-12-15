@@ -197,7 +197,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 	return augmentedTrip;
 }
 
-const RS_TOLLERATE_SECS = 30 * 60;
+const RS_TOLERATE_SECS = 30 * 60;
 
 function trackBackwards(instance: AugmentedTripInstance, ctx?: cache.CacheContext): string {
 	const gtfs = getGtfs();
