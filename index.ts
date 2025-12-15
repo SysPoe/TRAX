@@ -122,6 +122,7 @@ const TRAX = {
 
 	// Data access functions
 	getAugmentedTrips: cache.getAugmentedTrips,
+	getAugmentedTripInstance: cache.getAugmentedTripInstance,
 	getAugmentedStops: cache.getAugmentedStops,
 	getAugmentedStopTimes: cache.getAugmentedStopTimes,
 	getBaseStopTimes: cache.getBaseStopTimes,
@@ -185,4 +186,4 @@ export type {
 
 export type { SRTStop } from "./utils/SectionalRunningTimes/qrt.js";
 
-export { Logger, LogLevel } from "./utils/logger.js"; // Export logger types
+export { Logger as TraxLogger, LogLevel } from "./utils/logger.js"; // Export logger types

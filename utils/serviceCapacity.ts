@@ -183,11 +183,17 @@ function formatTimeBucket(seconds: number): string {
 	return `${h12}:${mStr} ${ampm}`;
 }
 
-function getTripDirection(trip: AugmentedTrip, currentStopSequence: number): "Inbound" | "Outbound" | null {
+function getTripDirection(trip: AugmentedTrip, currentStopSequence: number, currentStopTime: AugmentedStopTime): "Inbound" | "Outbound" | null {
+	const instance = trip.instances.find(i => i.stopTimes.includes(currentStopTime));
+	const stopTimes = instance ? instance.stopTimes : [];
+
+	if (stopTimes.length === 0) {
+		return null;
+	}
+
 	let firstCityIndex = -1;
 	let lastCityIndex = -1;
 
-	const stopTimes = trip.stopTimes;
 	for (let i = 0; i < stopTimes.length; i++) {
 		const st = stopTimes[i];
 		const stopId = st.scheduled_parent_station?.stop_id || st.scheduled_stop?.stop_id;
@@ -211,8 +217,6 @@ function getTripDirection(trip: AugmentedTrip, currentStopSequence: number): "In
 
 	if (centralIndex !== -1) {
 		if (currentStopSequence < stopTimes[centralIndex]._stopTime?.stop_sequence!) {
-			// If the trip starts in the city (e.g. Roma Street), it's likely an Outbound trip
-			// even before it hits Central.
 			const firstStopId =
 				stopTimes[0]?.scheduled_parent_station?.stop_id || stopTimes[0]?.scheduled_stop?.stop_id;
 			if (firstStopId && CITY_STATIONS.includes(firstStopId)) {
@@ -278,7 +282,7 @@ export function getServiceCapacity(
 	if (!routeName) return null;
 
 	const seq = stopTime._stopTime?.stop_sequence ?? 0;
-	const direction = _dirOverride ?? getTripDirection(trip, seq);
+	const direction = _dirOverride ?? getTripDirection(trip, seq, stopTime);
 	if (!direction) return null;
 
 	const dayType = getDayType(dateStr);
