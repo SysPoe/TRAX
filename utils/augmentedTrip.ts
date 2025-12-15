@@ -105,7 +105,8 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 		const startDate = update?.trip.start_date || serviceDate;
 		const startTime = update?.trip.start_time || "";
 
-		const unique_instance_id = `${trip.trip_id}_${startDate}_${startTime}_${scheduleRelationship}`;
+		const unique_instance_id = JSON.stringify([trip.trip_id, startDate, startTime, scheduleRelationship]);
+
 
 		const stopTimes = augmentStopTimes(
 			scheduleRelationship === qdf.TripScheduleRelationship.ADDED || scheduleRelationship === qdf.TripScheduleRelationship.UNSCHEDULED ? null : rawStopTimes,
@@ -146,7 +147,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 			actualTripDates,
 			runSeries: null,
 			rt_start_date: update?.trip.start_date || null,
-			toSerializable: function() { return toSerializableAugmentedTripInstance(this); }
+			toSerializable: function () { return toSerializableAugmentedTripInstance(this); }
 		};
 
 		for (const st of stopTimes) {
@@ -196,7 +197,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 		...trip,
 		scheduledStartServiceDates: serviceDates,
 		instances,
-		toSerializable: function() { return toSerializableAugmentedTrip(this); }
+		toSerializable: function () { return toSerializableAugmentedTrip(this); }
 	};
 
 	return augmentedTrip;

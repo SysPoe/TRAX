@@ -262,6 +262,10 @@ export function getAugmentedTrips(trip_id?: string, ctx?: CacheContext): Augment
 	return Array.from(augmented.tripsRec.values());
 }
 
+export function getAugmentedTripInstance(unique_instance_id: string, ctx?: CacheContext): AugmentedTripInstance | null {
+	return getAugmentedTrips(JSON.parse(unique_instance_id)[0], ctx)[0].instances.find(v => v.unique_instance_id === unique_instance_id) ?? null;
+}
+
 export function getAugmentedStops(stop_id?: string, ctx?: CacheContext): AugmentedStop[] {
 	const context = getContext(ctx);
 	const { raw, augmented } = context;
