@@ -332,6 +332,22 @@ export function getServiceCapacity(
 	return null;
 }
 
+export function addSCI(inst: AugmentedTripInstance): AugmentedTripInstance {
+	let prevSC: string | null = null;
+	inst.stopTimes.forEach(st => {
+		if (st.passing) return;
+		st.service_capacity = getServiceCapacity(inst, st, inst.serviceDate);
+		if (st.service_capacity !== null) prevSC = st.service_capacity;
+		else st.service_capacity = prevSC;
+	});
+	return inst;
+}
+
+export function addSC(trip: AugmentedTrip): AugmentedTrip {
+	trip.instances = trip.instances.map(v => addSCI(v));
+	return trip;
+}
+
 export const _test = {
 	getDayType,
 	formatTimeBucket,

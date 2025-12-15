@@ -17,7 +17,7 @@ import { getCurrentQRTravelTrains, getPlaces } from "./qr-travel/qr-travel-track
 import logger from "./utils/logger.js";
 import { getGtfs } from "./gtfsInterfaceLayer.js";
 import * as qdf from "qdf-gtfs";
-import { ensureServiceCapacityData } from "./utils/serviceCapacity.js";
+import { addSC, addSCI, ensureServiceCapacityData } from "./utils/serviceCapacity.js";
 
 class LRUCache<K, V> {
 	private cache = new Map<K, V>();
@@ -249,22 +249,23 @@ export function getAugmentedTrips(trip_id?: string, ctx?: CacheContext): Augment
 	const { raw, augmented } = context;
 	if (trip_id) {
 		const trip = augmented.tripsRec.get(trip_id);
-		if (trip) return [trip];
+		if (trip) return [addSC(trip)];
 		const rawTrip = raw.tripsRec.get(trip_id);
 		if (rawTrip) {
 			const augmentedTrip = augmentTrip(rawTrip, context);
 			augmented.tripsRec.set(trip_id, augmentedTrip);
-			return [augmentedTrip];
+			return [addSC(augmentedTrip)];
 		}
 		return [];
 	}
 	// Build from tripsRec to ensure we have current data
-	return Array.from(augmented.tripsRec.values());
+	return Array.from(augmented.tripsRec.values()).map(v => addSC(v));
 }
 
 export function getAugmentedTripInstance(instance_id: string, ctx?: CacheContext): AugmentedTripInstance | null {
 	try {
-		return getAugmentedTrips(JSON.parse(atob(instance_id))[0], ctx)[0].instances.find(v => v.instance_id === instance_id) ?? null;
+		let res = getAugmentedTrips(JSON.parse(atob(instance_id))[0], ctx)[0].instances.find(v => v.instance_id === instance_id);
+		return res ? addSCI(res) : null;
 	} catch {
 		return null;
 	}
