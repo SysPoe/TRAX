@@ -122,6 +122,7 @@ const TRAX = {
 
 	// Data access functions
 	getAugmentedTrips: cache.getAugmentedTrips,
+	getAugmentedTripInstance: cache.getAugmentedTripInstance,
 	getAugmentedStops: cache.getAugmentedStops,
 	getAugmentedStopTimes: cache.getAugmentedStopTimes,
 	getBaseStopTimes: cache.getBaseStopTimes,
