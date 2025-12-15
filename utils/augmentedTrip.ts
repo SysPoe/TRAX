@@ -214,12 +214,12 @@ function trackBackwards(instance: AugmentedTripInstance, ctx?: cache.CacheContex
 		const time = st.scheduled_departure_time || st.scheduled_arrival_time;
 		if (time === null) break;
 
-		if ((time || 0) < RS_TOLLERATE_SECS) break;
+		if ((time || 0) < RS_TOLERATE_SECS) break;
 
 		let deps_ids = gtfs.queryStopTimes({
 			stop_id: st.scheduled_stop?.stop_id,
 			date: serviceDate.toString(),
-			start_time: (time || 0) - RS_TOLLERATE_SECS,
+			start_time: (time || 0) - RS_TOLERATE_SECS,
 			end_time: time || 0,
 		});
 
@@ -298,7 +298,7 @@ function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx?:
 			stop_id: st.scheduled_stop?.stop_id,
 			date: serviceDate.toString(),
 			start_time: time || 0,
-			end_time: (time || 0) + RS_TOLLERATE_SECS,
+			end_time: (time || 0) + RS_TOLERATE_SECS,
 		});
 
 		let candidateInstances: AugmentedTripInstance[] = [];
