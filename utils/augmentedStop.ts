@@ -172,7 +172,7 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 						...st,
 						express_string: expressString,
 						instance_id: inst.instance_id,
-						service_capacity: getServiceCapacity(inst, st, inst.serviceDate)
+						service_capacity: st.service_capacity === null ? getServiceCapacity(inst, st, inst.serviceDate) : st.service_capacity
 					};
 				});
 		},
