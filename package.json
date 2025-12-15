@@ -12,7 +12,9 @@
         "typescript": "^5.9.3"
     },
     "dependencies": {
+        "@types/cli-progress": "^3.11.6",
         "chalk": "^5.4.1",
+        "cli-progress": "^3.12.0",
         "qdf-gtfs": "github:SysPoe/QDF-GTFS",
         "strip-ansi": "^7.1.2"
     },

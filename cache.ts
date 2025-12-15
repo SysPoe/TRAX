@@ -10,7 +10,7 @@ import type {
 	Trip,
 } from "qdf-gtfs";
 import { AugmentedStop, augmentStop } from "./utils/augmentedStop.js";
-import { AugmentedTrip, augmentTrip, calculateRunSeries, RunSeries } from "./utils/augmentedTrip.js";
+import { AugmentedTrip, AugmentedTripInstance, augmentTrip, calculateRunSeries, RunSeries } from "./utils/augmentedTrip.js";
 import { AugmentedStopTime } from "./utils/augmentedStopTime.js";
 import { QRTPlace, TravelTrip } from "./index.js";
 import { getCurrentQRTravelTrains, getPlaces } from "./qr-travel/qr-travel-tracker.js";
@@ -214,7 +214,7 @@ export function getTripUpdates(trip_id?: string, ctx?: CacheContext): RealtimeTr
 	const { raw } = getContext(ctx);
 	const gtfs = getGtfs();
 	if (raw.tripUpdates.length === 0) raw.tripUpdates = gtfs.getRealtimeTripUpdates();
-	if (trip_id) return raw.tripUpdates.filter((v) => v.trip.trip_id == trip_id); // TODO make better
+	if (trip_id) return raw.tripUpdates.filter((v) => v.trip.trip_id == trip_id);
 	return raw.tripUpdates;
 }
 
@@ -222,7 +222,7 @@ export function getVehiclePositions(trip_id?: string, ctx?: CacheContext): Realt
 	const { raw } = getContext(ctx);
 	const gtfs = getGtfs();
 	if (raw.vehiclePositions.length === 0) raw.vehiclePositions = gtfs.getRealtimeVehiclePositions();
-	if (trip_id) return raw.vehiclePositions.filter((v) => v.trip.trip_id == trip_id); // TODO make better
+	if (trip_id) return raw.vehiclePositions.filter((v) => v.trip.trip_id == trip_id);
 	return raw.vehiclePositions;
 }
 
@@ -292,12 +292,15 @@ export function queryAugmentedStopTimes(query: qdf.StopTimeQuery, ctx?: CacheCon
 	gtfs.queryStopTimes(query).forEach((st) => {
 		const augmentedTrip = getAugmentedTrips(st.trip_id, context)[0];
 		if (augmentedTrip) {
-			const augmentedStopTime = augmentedTrip.stopTimes.find(
-				(ast) =>
-					ast._stopTime?.stop_sequence === st.stop_sequence && ast.scheduled_stop?.stop_id === st.stop_id,
-			);
-			if (augmentedStopTime) {
-				results.push(augmentedStopTime);
+			// Search across all instances
+			for (const instance of augmentedTrip.instances) {
+				const augmentedStopTime = instance.stopTimes.find(
+					(ast) =>
+						ast._stopTime?.stop_sequence === st.stop_sequence && ast.scheduled_stop?.stop_id === st.stop_id,
+				);
+				if (augmentedStopTime) {
+					results.push(augmentedStopTime);
+				}
 			}
 		}
 	});
@@ -353,13 +356,15 @@ export function getRunSeries(
 		calcIfNotFound &&
 		augmented.serviceDateTrips.get(date)?.find((v) => v.endsWith(runSeries))
 	) {
-		calculateRunSeries(
-			getAugmentedTrips(
-				augmented.serviceDateTrips.get(date)?.find((v) => v.endsWith(runSeries)),
-				context,
-			)[0],
-			context,
-		);
+		const tripId = augmented.serviceDateTrips.get(date)?.find((v) => v.endsWith(runSeries));
+		if (tripId) {
+			const trip = getAugmentedTrips(tripId, context)[0];
+			// Find relevant instance for date
+			const instance = trip.instances.find(i => i.serviceDate === date);
+			if (instance) {
+				calculateRunSeries(instance, context);
+			}
+		}
 	} else if (!dateMap.get(runSeries))
 		dateMap.set(runSeries, {
 			trips: [],
@@ -492,28 +497,35 @@ export async function refreshStaticCache(skipRealtimeOverlap: boolean = false): 
 		newAugmentedCache.tripsRec.set(trip.trip_id, trip);
 
 		// Store both current stop times and base stop times (without realtime)
-		newAugmentedCache.stopTimes[trip.trip_id] = trip.stopTimes;
-		newAugmentedCache.baseStopTimes[trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
+		const allStopTimes = trip.instances.flatMap(i => i.stopTimes);
 
-		for (const serviceDate of trip.actualTripDates) {
-			let tripIds = newAugmentedCache.serviceDateTrips.get(serviceDate);
-			if (!tripIds) {
-				tripIds = [];
-				newAugmentedCache.serviceDateTrips.set(serviceDate, tripIds);
-			}
-			tripIds.push(trip.trip_id);
-		}
+		newAugmentedCache.stopTimes[trip.trip_id] = allStopTimes;
+		// Deep copy for base
+		newAugmentedCache.baseStopTimes[trip.trip_id] = [...allStopTimes];
 
-		// Populate passingTrips
-		for (const st of trip.stopTimes) {
-			if (st.passing && st.actual_stop) {
-				const stopId = st.actual_stop.stop_id;
-				let tripIds = newAugmentedCache.passingTrips.get(stopId);
+		// Update serviceDateTrips
+		for (const instance of trip.instances) {
+			// Each instance has dates
+			for (const date of instance.actualTripDates) {
+				let tripIds = newAugmentedCache.serviceDateTrips.get(date);
 				if (!tripIds) {
 					tripIds = [];
-					newAugmentedCache.passingTrips.set(stopId, tripIds);
+					newAugmentedCache.serviceDateTrips.set(date, tripIds);
 				}
-				tripIds.push(trip.trip_id);
+				if (!tripIds.includes(trip.trip_id)) tripIds.push(trip.trip_id);
+			}
+
+			// Populate passingTrips
+			for (const st of instance.stopTimes) {
+				if (st.passing && st.actual_stop) {
+					const stopId = st.actual_stop.stop_id;
+					let tripIds = newAugmentedCache.passingTrips.get(stopId);
+					if (!tripIds) {
+						tripIds = [];
+						newAugmentedCache.passingTrips.set(stopId, tripIds);
+					}
+					if (!tripIds.includes(trip.trip_id)) tripIds.push(trip.trip_id);
+				}
 			}
 		}
 	}
@@ -634,29 +646,32 @@ export async function refreshRealtimeCache(): Promise<void> {
 		const trip = augmentedCache.tripsRec.get(tripId);
 		if (!trip) continue;
 
-		// Store both current stop times and base stop times (without realtime)
-		augmentedCache.stopTimes[trip.trip_id] = trip.stopTimes;
-		augmentedCache.baseStopTimes[trip.trip_id] = [...trip.stopTimes]; // Deep copy for base
+		const allStopTimes = trip.instances.flatMap(i => i.stopTimes);
 
-		for (const serviceDate of trip.actualTripDates) {
-			let tripIds = augmentedCache.serviceDateTrips.get(serviceDate);
-			if (!tripIds) {
-				tripIds = [];
-				augmentedCache.serviceDateTrips.set(serviceDate, tripIds);
-			}
-			tripIds.push(trip.trip_id);
-		}
+		augmentedCache.stopTimes[trip.trip_id] = allStopTimes;
+		augmentedCache.baseStopTimes[trip.trip_id] = [...allStopTimes];
 
-		// Populate passingTrips for updated trips
-		for (const st of trip.stopTimes) {
-			if (st.passing && st.actual_stop) {
-				const stopId = st.actual_stop.stop_id;
-				let tripIds = augmentedCache.passingTrips.get(stopId);
+		for (const instance of trip.instances) {
+			for (const serviceDate of instance.actualTripDates) {
+				let tripIds = augmentedCache.serviceDateTrips.get(serviceDate);
 				if (!tripIds) {
 					tripIds = [];
-					augmentedCache.passingTrips.set(stopId, tripIds);
+					augmentedCache.serviceDateTrips.set(serviceDate, tripIds);
 				}
-				tripIds.push(trip.trip_id);
+				if (!tripIds.includes(trip.trip_id)) tripIds.push(trip.trip_id);
+			}
+
+			// Populate passingTrips for updated trips
+			for (const st of instance.stopTimes) {
+				if (st.passing && st.actual_stop) {
+					const stopId = st.actual_stop.stop_id;
+					let tripIds = augmentedCache.passingTrips.get(stopId);
+					if (!tripIds) {
+						tripIds = [];
+						augmentedCache.passingTrips.set(stopId, tripIds);
+					}
+					if (!tripIds.includes(trip.trip_id)) tripIds.push(trip.trip_id);
+				}
 			}
 		}
 	}
