@@ -4,6 +4,7 @@ import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { getAugmentedTrips, getPassingTrips } from "../cache.js";
 import { getGtfs } from "../gtfsInterfaceLayer.js";
 import { findExpressString } from "./SectionalRunningTimes/gtfs.js";
+import { AugmentedTripInstance } from "./augmentedTrip.js";
 
 export type AugmentedStop = qdf.Stop & {
 	qrt_Place: boolean;
@@ -133,33 +134,34 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 				if (!trip) continue;
 
 				// 2. Resolve Augmented Stop Time
-				// We need to find all stop times for this trip that match one of our valid stops
-				// This handles loops where a trip visits the station multiple times
-				const matchingStopTimes = trip.stopTimes.filter(
-					(s) => s.actual_stop && validStops.has(s.actual_stop.stop_id),
-				);
-
-				for (const st of matchingStopTimes) {
-					// 4. Date Logic
-					let matchingDate = getMatchingTripDate(
-						(st?.actual_departure_dates || []).concat(st?.actual_arrival_dates || []),
+				for (const instance of trip.instances) {
+					const matchingStopTimes = instance.stopTimes.filter(
+						(s) => s.actual_stop && validStops.has(s.actual_stop.stop_id),
 					);
-					if (matchingDate === null) continue;
 
-					// 5. Time Logic
-					const ts =
-						(st.actual_departure_time ?? st.actual_arrival_time ?? 0) +
-						(toDate(matchingDate).getTime() - toDate(date).getTime()) / 1000;
-					if (ts == null || ts < startSec || ts > endSec) continue;
+					for (const st of matchingStopTimes) {
+						// 4. Date Logic
+						let matchingDate = getMatchingTripDate(
+							(st?.actual_departure_dates || []).concat(st?.actual_arrival_dates || []),
+						);
+						if (matchingDate === null) continue;
 
-					results.push({ st, trip });
+						// 5. Time Logic
+						const ts =
+							(st.actual_departure_time ?? st.actual_arrival_time ?? 0) +
+							(toDate(matchingDate).getTime() - toDate(date).getTime()) / 1000;
+						if (ts == null || ts < startSec || ts > endSec) continue;
+
+						results.push({ st, trip: instance });
+					}
 				}
 			}
 			return results
 				.sort((a, b) => (a.st.actual_departure_time ?? 0) - (b.st.actual_departure_time ?? 0))
 				.map(({ st, trip }) => {
+					// Use instance expressInfo
 					const expressString = findExpressString(
-						trip.expressInfo,
+						(trip as AugmentedTripInstance).expressInfo,
 						st.actual_parent_station?.stop_id ||
 						st.actual_stop?.parent_station ||
 						st.actual_stop?.stop_id ||
@@ -168,6 +170,7 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 					return {
 						...st,
 						express_string: expressString,
+						instance_id: (trip as AugmentedTripInstance).instance_id,
 					};
 				});
 		},
@@ -197,21 +200,26 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 				if (!trip?.scheduledStartServiceDates?.includes(serviceDate)) continue;
 
 				// Resolve Augmented Stop Time
-				const matchingStopTimes = trip.stopTimes.filter(
-					(s) => s.actual_stop && validStops.has(s.actual_stop.stop_id),
-				);
+				// Iterate instances that match serviceDate
+				for (const instance of trip.instances) {
+					if (instance.serviceDate !== serviceDate) continue;
 
-				for (const st of matchingStopTimes) {
-					const ts = st.actual_departure_time;
-					if (ts == null || ts < start_time_secs || ts > end_time_secs) continue;
-					results.push({ st, trip });
+					const matchingStopTimes = instance.stopTimes.filter(
+						(s) => s.actual_stop && validStops.has(s.actual_stop.stop_id),
+					);
+
+					for (const st of matchingStopTimes) {
+						const ts = st.actual_departure_time;
+						if (ts == null || ts < start_time_secs || ts > end_time_secs) continue;
+						results.push({ st, trip: instance });
+					}
 				}
 			}
 			return results
 				.sort((a, b) => (a.st.actual_departure_time ?? 0) - (b.st.actual_departure_time ?? 0))
 				.map(({ st, trip }) => {
 					const expressString = findExpressString(
-						trip.expressInfo,
+						(trip as AugmentedTripInstance).expressInfo,
 						st.actual_parent_station?.stop_id ||
 						st.actual_stop?.parent_station ||
 						st.actual_stop?.stop_id ||
