@@ -1,6 +1,6 @@
 import * as qdf from "qdf-gtfs";
 import { getServiceDatesByTrip } from "./calendar.js";
-import { AugmentedStopTime, augmentStopTimes, SerializableAugmentedStopTime } from "./augmentedStopTime.js";
+import { AugmentedStopTime, augmentStopTimes } from "./augmentedStopTime.js";
 import * as cache from "../cache.js";
 import { getGtfs } from "../gtfsInterfaceLayer.js";
 import { getServiceCapacity } from "./serviceCapacity.js";
@@ -23,19 +23,13 @@ export type AugmentedTripInstance = qdf.Trip & {
 	actualTripDates: string[];
 
 	runSeries: string | null;
-	toSerializable: () => SerializableAugmentedTripInstance;
 
 	rt_start_date: string | null;
-};
-
-export type SerializableAugmentedTripInstance = Omit<AugmentedTripInstance, "stopTimes" | "toSerializable" | "realtime_update"> & {
-	stopTimes: SerializableAugmentedStopTime[];
 };
 
 export type AugmentedTrip = qdf.Trip & {
 	scheduledStartServiceDates: string[];
 	instances: AugmentedTripInstance[];
-	toSerializable: () => SerializableAugmentedTrip;
 };
 
 export type RunSeries = {
@@ -48,37 +42,6 @@ export type RunSeries = {
 	series: string;
 	date: string;
 };
-
-export type SerializableAugmentedTrip = qdf.Trip & {
-	scheduledStartServiceDates: string[];
-	instances: SerializableAugmentedTripInstance[];
-};
-
-// --- Serialization ---
-
-export function toSerializableAugmentedTripInstance(
-	inst: AugmentedTripInstance
-): SerializableAugmentedTripInstance {
-	return {
-		...inst,
-		stopTimes: inst.stopTimes.map((st) => st.toSerializable()),
-		// @ts-expect-error
-		realtime_update: undefined,
-		toSerializable: undefined,
-	};
-}
-
-export function toSerializableAugmentedTrip(
-	trip: AugmentedTrip
-): SerializableAugmentedTrip {
-	return {
-		...trip,
-		scheduledStartServiceDates: trip.scheduledStartServiceDates,
-		instances: trip.instances.map(i => i.toSerializable()),
-		// @ts-expect-error
-		toSerializable: undefined,
-	};
-}
 
 // --- Augmentation Logic ---
 
@@ -141,7 +104,6 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 			actualTripDates,
 			runSeries: null,
 			rt_start_date: update?.trip.start_date || null,
-			toSerializable: function () { return toSerializableAugmentedTripInstance(this); }
 		};
 
 		let prev_cap = null;
@@ -196,7 +158,6 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 		...trip,
 		scheduledStartServiceDates: serviceDates,
 		instances,
-		toSerializable: function () { return toSerializableAugmentedTrip(this); }
 	};
 
 	return augmentedTrip;
@@ -222,7 +183,7 @@ function trackBackwards(instance: AugmentedTripInstance, ctx?: cache.CacheContex
 		if ((time || 0) < RS_TOLERATE_SECS) break;
 
 		let deps_ids = gtfs.queryStopTimes({
-			stop_id: st.scheduled_stop?.stop_id,
+			stop_id: st.scheduled_stop_id ?? undefined,
 			date: serviceDate.toString(),
 			start_time: (time || 0) - RS_TOLERATE_SECS,
 			end_time: time || 0,
@@ -238,7 +199,7 @@ function trackBackwards(instance: AugmentedTripInstance, ctx?: cache.CacheContex
 		}
 
 		let deps = candidateInstances
-			.map((inst) => inst.stopTimes.find((v) => v.scheduled_stop?.stop_id == st.scheduled_stop?.stop_id))
+			.map((inst) => inst.stopTimes.find((v) => v.scheduled_stop_id === st.scheduled_stop_id))
 			.filter((v): v is AugmentedStopTime => !!v);
 
 		deps = deps.filter((v) => v.trip_id.slice(-4)[0] == run[0] && v.trip_id.slice(-4) != run);
@@ -300,7 +261,7 @@ function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx?:
 		if (time === null) break;
 
 		let deps_ids = gtfs.queryStopTimes({
-			stop_id: st.scheduled_stop?.stop_id,
+			stop_id: st.scheduled_stop_id ?? undefined,
 			date: serviceDate.toString(),
 			start_time: time || 0,
 			end_time: (time || 0) + RS_TOLERATE_SECS,
@@ -315,7 +276,7 @@ function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx?:
 		}
 
 		let deps = candidateInstances
-			.map((inst) => inst.stopTimes.find((v) => v.scheduled_stop?.stop_id == st.scheduled_stop?.stop_id))
+			.map((inst) => inst.stopTimes.find((v) => v.scheduled_stop_id === st.scheduled_stop_id))
 			.filter((v): v is AugmentedStopTime => !!v);
 
 		deps = deps.filter((v) => v.trip_id.slice(-4)[0] == run[0] && v.trip_id.slice(-4) != run);

@@ -3,7 +3,7 @@ import path from "path";
 import logger from "./logger.js";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { AugmentedTrip, AugmentedTripInstance } from "./augmentedTrip.js";
-import { getRawRoutes } from "../cache.js";
+import { getAugmentedStops, getRawRoutes } from "../cache.js";
 import zlib from "zlib";
 import { pipeline } from "stream";
 import { promisify } from "util";
@@ -192,7 +192,7 @@ function getTripDirection(inst: AugmentedTripInstance, currentStopSequence: numb
 
 	for (let i = 0; i < stopTimes.length; i++) {
 		const st = stopTimes[i];
-		const stopId = st.scheduled_parent_station?.stop_id || st.scheduled_stop?.stop_id;
+		const stopId = st.scheduled_parent_station_id || st.scheduled_stop_id;
 		if (stopId && CITY_STATIONS.includes(stopId) && firstCityIndex === -1)
 			firstCityIndex = i;
 	}
@@ -204,15 +204,11 @@ function getTripDirection(inst: AugmentedTripInstance, currentStopSequence: numb
 		return null;
 	}
 
-	const centralIndex = stopTimes.findIndex(
-		(st) =>
-			st.scheduled_parent_station?.stop_id === "place_censta" || st.scheduled_stop?.stop_id === "place_censta",
-	);
+	const centralIndex = stopTimes.findIndex((st) => st.scheduled_parent_station_id === "place_censta" || st.scheduled_stop_id === "place_censta");
 
 	if (centralIndex !== -1) {
 		if (currentStopSequence < stopTimes[centralIndex]._stopTime?.stop_sequence!) {
-			const firstStopId =
-				stopTimes[0]?.scheduled_parent_station?.stop_id || stopTimes[0]?.scheduled_stop?.stop_id;
+			const firstStopId = stopTimes[0]?.scheduled_parent_station_id || stopTimes[0]?.scheduled_stop_id;
 			if (firstStopId && CITY_STATIONS.includes(firstStopId))
 				return "Outbound";
 			return "Inbound";
@@ -220,14 +216,10 @@ function getTripDirection(inst: AugmentedTripInstance, currentStopSequence: numb
 		return "Outbound";
 	}
 
-	const romaIndex = stopTimes.findIndex(
-		(st) =>
-			st.scheduled_parent_station?.stop_id === "place_romsta" || st.scheduled_stop?.stop_id === "place_romsta",
-	);
+	const romaIndex = stopTimes.findIndex((st) => st.scheduled_parent_station_id === "place_romsta" || st.scheduled_stop_id === "place_romsta");
 	if (romaIndex !== -1) {
 		if (currentStopSequence < stopTimes[romaIndex]._stopTime?.stop_sequence!) {
-			const firstStopId =
-				stopTimes[0]?.scheduled_parent_station?.stop_id || stopTimes[0]?.scheduled_stop?.stop_id;
+			const firstStopId = stopTimes[0]?.scheduled_parent_station_id || stopTimes[0]?.scheduled_stop_id;
 			if (firstStopId && CITY_STATIONS.includes(firstStopId))
 				return "Outbound";
 			return "Inbound";
@@ -279,7 +271,8 @@ export function getServiceCapacity(
 
 	const dayType = getDayType(dateStr);
 
-	let stopName = stopTime.scheduled_parent_station?.stop_name ?? stopTime.scheduled_stop?.stop_name;
+	const stopLookupId = stopTime.scheduled_parent_station_id ?? stopTime.scheduled_stop_id;
+	let stopName = stopLookupId ? getAugmentedStops(stopLookupId)[0]?.stop_name : undefined;
 	if (!stopName) return "unknown";
 	if (stopName.trim().toLowerCase().startsWith("boggo")) stopName = "Park Road";
 	if (stopName.trim().toLowerCase().startsWith("international")) stopName = "International Terminal";

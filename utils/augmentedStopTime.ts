@@ -7,7 +7,6 @@ import platformData from "./platformData.js";
 // --- Types & Exports ---
 
 export type AugmentedStopTime = {
-	toSerializable: () => SerializableAugmentedStopTime;
 	_stopTime: qdf.StopTime | null;
 	trip_id: string;
 	passing: boolean;
@@ -26,8 +25,8 @@ export type AugmentedStopTime = {
 	// Seconds since midnight of the offset day
 	actual_arrival_time: number | null;
 	actual_departure_time: number | null;
-	actual_stop: AugmentedStop | null;
-	actual_parent_station: AugmentedStop | null;
+	actual_stop_id: string | null;
+	actual_parent_station_id: string | null;
 	actual_platform_code: string | null;
 
 	// Realtime updates metadata
@@ -40,8 +39,8 @@ export type AugmentedStopTime = {
 	// Scheduled times
 	scheduled_arrival_time: number | null;
 	scheduled_departure_time: number | null;
-	scheduled_stop: AugmentedStop | null;
-	scheduled_parent_station: AugmentedStop | null;
+	scheduled_stop_id: string | null;
+	scheduled_parent_station_id: string | null;
 	scheduled_platform_code: string | null;
 
 	// Date handling
@@ -70,37 +69,32 @@ export type AugmentedStopTime = {
 			realtime: false;
 			realtime_info: null;
 		}
-	);
+	) & {
+		// Non-enumerable helpers added at runtime
+			actual_stop?: AugmentedStop | null;
+			actual_parent_station?: AugmentedStop | null;
+			scheduled_stop?: AugmentedStop | null;
+			scheduled_parent_station?: AugmentedStop | null;
+		};
 
-// Internal type for data before platform/exit side calculation
-type IntermediateAST = Omit<AugmentedStopTime, "actual_exit_side" | "scheduled_exit_side">;
+	// Internal type for data before platform/exit side calculation
+	type IntermediateAST = Omit<AugmentedStopTime, "actual_exit_side" | "scheduled_exit_side">;
 
-export type SerializableAugmentedStopTime = Omit<
-	AugmentedStopTime,
-	| "actual_stop"
-	| "actual_parent_station"
-	| "scheduled_stop"
-	| "scheduled_parent_station"
-	| "toSerializable"
-> & {
-	actual_stop: string | null;
-	actual_parent_station: string | null;
-	scheduled_stop: string | null;
-	scheduled_parent_station: string | null;
-};
-
-export function toSerializableAugmentedStopTime(
-	st: Omit<AugmentedStopTime, "toSerializable">,
-): SerializableAugmentedStopTime {
-	return {
-		...st,
-		actual_stop: st.actual_stop?.stop_id ?? null,
-		actual_parent_station: st.actual_parent_station?.stop_id ?? null,
-		scheduled_stop: st.scheduled_stop?.stop_id ?? null,
-		scheduled_parent_station: st.scheduled_parent_station?.stop_id ?? null,
-		// @ts-expect-error
-		toSerializable: undefined,
-	};
+function attachStopReferences(
+	ast: AugmentedStopTime,
+	refs: {
+		actualStop?: AugmentedStop | null;
+		actualParent?: AugmentedStop | null;
+		scheduledStop?: AugmentedStop | null;
+		scheduledParent?: AugmentedStop | null;
+	},
+): void {
+	Object.defineProperties(ast, {
+		actual_stop: { value: refs.actualStop ?? null, enumerable: false, writable: true },
+		actual_parent_station: { value: refs.actualParent ?? null, enumerable: false, writable: true },
+		scheduled_stop: { value: refs.scheduledStop ?? null, enumerable: false, writable: true },
+		scheduled_parent_station: { value: refs.scheduledParent ?? null, enumerable: false, writable: true },
+	});
 }
 
 // --- Helper Functions ---
@@ -144,11 +138,9 @@ function resolveExitSide(
 	if (!platform) return null;
 
 	const prevId =
-		index > 0 ? stops[index - 1].actual_parent_station?.stop_id || stops[index - 1].actual_stop?.stop_id : "";
+			index > 0 ? stops[index - 1].actual_parent_station_id || stops[index - 1].actual_stop_id : "";
 	const nextId =
-		index < stops.length - 1
-			? stops[index + 1].actual_parent_station?.stop_id || stops[index + 1].actual_stop?.stop_id
-			: "";
+			index < stops.length - 1 ? stops[index + 1].actual_parent_station_id || stops[index + 1].actual_stop_id : "";
 
 	const matchesNext = platform.next.includes(nextId);
 	const matchesPrev = platform.from.includes(prevId);
@@ -174,12 +166,20 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 		const item = st[i];
 		// Skip sides for SKIPPED stops
 		if (item.realtime && item.realtime_info?.schedule_relationship === qdf.StopTimeScheduleRelationship.SKIPPED) {
-			pathBuffer.push({ ...item, actual_exit_side: null, scheduled_exit_side: null } as AugmentedStopTime);
+			const refs = {
+				actualStop: (item as any).actual_stop ?? null,
+				actualParent: (item as any).actual_parent_station ?? null,
+				scheduledStop: (item as any).scheduled_stop ?? null,
+				scheduledParent: (item as any).scheduled_parent_station ?? null,
+			};
+			const skippedWithSides = { ...item, actual_exit_side: null, scheduled_exit_side: null } as AugmentedStopTime;
+			attachStopReferences(skippedWithSides, refs);
+			pathBuffer.push(skippedWithSides);
 			continue;
 		}
 
-		const actId = item.actual_parent_station?.stop_id ?? item.actual_stop?.stop_id;
-		const schId = item.scheduled_parent_station?.stop_id ?? item.scheduled_stop?.stop_id;
+		const actId = item.actual_parent_station_id ?? item.actual_stop_id;
+		const schId = item.scheduled_parent_station_id ?? item.scheduled_stop_id;
 
 		const actData = getPlatformData(actId);
 		const schData = getPlatformData(schId);
@@ -213,6 +213,12 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 			if (schPlat) schSide = resolveExitSide(st, i, schData ?? [], schPlat.platform_code);
 		}
 
+		const refs = {
+			actualStop: (item as any).actual_stop ?? null,
+			actualParent: (item as any).actual_parent_station ?? null,
+			scheduledStop: (item as any).scheduled_stop ?? null,
+			scheduledParent: (item as any).scheduled_parent_station ?? null,
+		};
 		const newEntry: AugmentedStopTime = {
 			...item,
 			actual_exit_side: actSide,
@@ -220,6 +226,7 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 			actual_platform_code: actPlat?.platform_code?.toString() ?? item.actual_platform_code,
 			scheduled_platform_code: schPlat?.platform_code?.toString() ?? item.scheduled_platform_code,
 		} as AugmentedStopTime;
+		attachStopReferences(newEntry, refs);
 
 		pathBuffer.push(newEntry);
 		candidatePathB = [...pathBuffer];
@@ -373,7 +380,8 @@ export function augmentStopTimes(
 		if (originalMergeItem._isSkipped) {
 			// Construct a "Skipped" AugmentedStopTime
 			const scheduledStop = cache.getAugmentedStops(originalMergeItem.stop_id, ctx)[0];
-			finalStops.push({
+			const scheduledParent = scheduledStop?.parent_stop_id ? cache.getAugmentedStops(scheduledStop.parent_stop_id, ctx)[0] : null;
+			const skipped: AugmentedStopTime = {
 				_stopTime: originalMergeItem,
 				trip_id: tripId,
 				passing: false,
@@ -381,11 +389,13 @@ export function augmentStopTimes(
 				service_date: "",
 				schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED,
 				service_capacity: null,
+				actual_exit_side: null,
+				scheduled_exit_side: null,
 
 				actual_arrival_time: null,
 				actual_departure_time: null,
-				actual_stop: scheduledStop,
-				actual_parent_station: scheduledStop?.parent_station ? cache.getAugmentedStops(scheduledStop.parent_station, ctx)[0] : null,
+				actual_stop_id: scheduledStop?.stop_id ?? null,
+				actual_parent_station_id: scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null,
 				actual_platform_code: null,
 
 				rt_stop_updated: true,
@@ -396,8 +406,8 @@ export function augmentStopTimes(
 
 				scheduled_arrival_time: originalMergeItem.arrival_time,
 				scheduled_departure_time: originalMergeItem.departure_time,
-				scheduled_stop: scheduledStop,
-				scheduled_parent_station: scheduledStop?.parent_station ? cache.getAugmentedStops(scheduledStop.parent_station, ctx)[0] : null,
+				scheduled_stop_id: scheduledStop?.stop_id ?? null,
+				scheduled_parent_station_id: scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null,
 				scheduled_platform_code: scheduledStop?.platform_code ?? null,
 
 				realtime: true,
@@ -417,9 +427,15 @@ export function augmentStopTimes(
 				scheduled_departure_dates: [],
 				actual_departure_dates: [],
 				scheduled_departure_date_offset: 0,
-				actual_departure_date_offset: 0,
-				toSerializable: function () { return toSerializableAugmentedStopTime(this as AugmentedStopTime); }
+				actual_departure_date_offset: 0
+			};
+			attachStopReferences(skipped, {
+				actualStop: scheduledStop,
+				actualParent: scheduledParent,
+				scheduledStop: scheduledStop,
+				scheduledParent: scheduledParent,
 			});
+			finalStops.push(skipped);
 			continue;
 		}
 
@@ -462,19 +478,36 @@ export function augmentStopTimes(
 				const originalMergeItem = mergedList.find(m => m.stop_sequence === s);
 				if (originalMergeItem) {
 					const scheduledStop = cache.getAugmentedStops(originalMergeItem.stop_id, ctx)[0];
-					finalStops.push({
+					const scheduledParent = scheduledStop?.parent_stop_id ? cache.getAugmentedStops(scheduledStop.parent_stop_id, ctx)[0] : null;
+					const skipped: AugmentedStopTime = {
 						_stopTime: originalMergeItem,
 						trip_id: tripId,
 						passing: false,
 						instance_id: "", service_date: "", schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED, service_capacity: null,
-						actual_arrival_time: null, actual_departure_time: null, actual_stop: scheduledStop, actual_parent_station: scheduledStop?.parent_station ? cache.getAugmentedStops(scheduledStop.parent_station, ctx)[0] : null, actual_platform_code: null,
+						actual_exit_side: null,
+						scheduled_exit_side: null,
+						actual_arrival_time: null,
+						actual_departure_time: null,
+						actual_stop_id: scheduledStop?.stop_id ?? null,
+						actual_parent_station_id: scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null,
+						actual_platform_code: null,
 						rt_stop_updated: true, rt_parent_station_updated: false, rt_platform_code_updated: false, rt_arrival_updated: false, rt_departure_updated: false,
-						scheduled_arrival_time: originalMergeItem.arrival_time, scheduled_departure_time: originalMergeItem.departure_time, scheduled_stop: scheduledStop, scheduled_parent_station: scheduledStop?.parent_station ? cache.getAugmentedStops(scheduledStop.parent_station, ctx)[0] : null, scheduled_platform_code: scheduledStop?.platform_code ?? null,
+						scheduled_arrival_time: originalMergeItem.arrival_time,
+						scheduled_departure_time: originalMergeItem.departure_time,
+						scheduled_stop_id: scheduledStop?.stop_id ?? null,
+						scheduled_parent_station_id: scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null,
+						scheduled_platform_code: scheduledStop?.platform_code ?? null,
 						realtime: true,
 						realtime_info: { delay_secs: 0, delay_string: "Skipped", delay_class: "scheduled", schedule_relationship: qdf.StopTimeScheduleRelationship.SKIPPED, propagated: false, rt_start_date: tripUpdate?.trip.start_date ?? serviceDate },
-						scheduled_arrival_dates: [], actual_arrival_dates: [], scheduled_arrival_date_offset: 0, actual_arrival_date_offset: 0, scheduled_departure_dates: [], actual_departure_dates: [], scheduled_departure_date_offset: 0, actual_departure_date_offset: 0,
-						toSerializable: function () { return toSerializableAugmentedStopTime(this as AugmentedStopTime); }
+						scheduled_arrival_dates: [], actual_arrival_dates: [], scheduled_arrival_date_offset: 0, actual_arrival_date_offset: 0, scheduled_departure_dates: [], actual_departure_dates: [], scheduled_departure_date_offset: 0, actual_departure_date_offset: 0
+					};
+					attachStopReferences(skipped, {
+						actualStop: scheduledStop,
+						actualParent: scheduledParent,
+						scheduledStop: scheduledStop,
+						scheduledParent: scheduledParent,
 					});
+					finalStops.push(skipped);
 				}
 			}
 		}
@@ -486,7 +519,8 @@ export function augmentStopTimes(
 			|| (isPassing ? undefined : stopTimeUpdates.find(u => u.stop_id === stopId)); // Fallback to ID match if sequence match fails (unlikely given how we built merged)
 
 		const scheduledStop = cache.getAugmentedStops(stopId, ctx)[0];
-		const scheduledParent = scheduledStop?.parent_station ? cache.getAugmentedStops(scheduledStop.parent_station, ctx)[0] : null;
+		const scheduledParentId = scheduledStop?.parent_stop_id ?? scheduledStop?.parent_station ?? null;
+		const scheduledParent = scheduledParentId ? cache.getAugmentedStops(scheduledParentId, ctx)[0] : null;
 
 		// Timing Logic
 		const schedArr = stopTime.arrival_time;
@@ -579,6 +613,10 @@ export function augmentStopTimes(
 			};
 		}
 
+		const realtimeDetails = hasRealtime
+			? { realtime: true as const, realtime_info: realtimeInfo! }
+			: { realtime: false as const, realtime_info: null };
+
 		// Dates
 		const getOffset = (secs: number) => Math.floor(secs / 86400);
 		const currentOffsets = {
@@ -590,16 +628,18 @@ export function augmentStopTimes(
 
 		const datesServiceDate = serviceDate;
 
-		finalStops.push({
+		const augmented: AugmentedStopTime = {
 			_stopTime: isPassing ? null : stopTime,
 			trip_id: tripId,
 			passing: isPassing,
 			instance_id: "", service_date: "", schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED, service_capacity: "BYA",
+			actual_exit_side: null,
+			scheduled_exit_side: null,
 
 			actual_arrival_time: actArr % 86400,
 			actual_departure_time: actDep % 86400,
-			actual_stop: actualStop,
-			actual_parent_station: actualParent,
+			actual_stop_id: actualStop?.stop_id ?? stopId ?? null,
+			actual_parent_station_id: actualParent?.stop_id ?? actualStop?.parent_stop_id ?? scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null,
 			actual_platform_code: isPassing ? null : (platformCode ?? scheduledStop?.platform_code ?? null),
 
 			rt_stop_updated: rtFlags.stop,
@@ -610,23 +650,30 @@ export function augmentStopTimes(
 
 			scheduled_arrival_time: schedArr % 86400,
 			scheduled_departure_time: schedDep % 86400,
-			scheduled_stop: scheduledStop,
-			scheduled_parent_station: scheduledParent,
+			scheduled_stop_id: scheduledStop?.stop_id ?? null,
+			scheduled_parent_station_id: scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null,
 			scheduled_platform_code: isPassing ? null : (scheduledStop?.platform_code ?? null),
 
-			realtime: hasRealtime,
-			realtime_info: realtimeInfo,
+			...realtimeDetails,
 
 			scheduled_arrival_dates: [addDaysToDateString(datesServiceDate, currentOffsets.schedArr - dateOffsets.schedArr)],
-			actual_arrival_dates: [addDaysToDateString(datesServiceDate, currentOffsets.actArr - dateOffsets.actArr)], // Simplified for brevity in this complex rewrite
+			actual_arrival_dates: [addDaysToDateString(datesServiceDate, currentOffsets.actArr - dateOffsets.actArr)],
 			scheduled_arrival_date_offset: currentOffsets.schedArr - dateOffsets.schedArr,
 			actual_arrival_date_offset: currentOffsets.actArr - dateOffsets.actArr,
 			scheduled_departure_dates: [addDaysToDateString(datesServiceDate, currentOffsets.schedDep - dateOffsets.schedDep)],
 			actual_departure_dates: [addDaysToDateString(datesServiceDate, currentOffsets.actDep - dateOffsets.actDep)],
 			scheduled_departure_date_offset: currentOffsets.schedDep - dateOffsets.schedDep,
-			actual_departure_date_offset: currentOffsets.actDep - dateOffsets.actDep,
-			toSerializable: function () { return toSerializableAugmentedStopTime(this as AugmentedStopTime); }
+			actual_departure_date_offset: currentOffsets.actDep - dateOffsets.actDep
+		};
+
+		attachStopReferences(augmented, {
+			actualStop,
+			actualParent,
+			scheduledStop,
+			scheduledParent,
 		});
+
+		finalStops.push(augmented);
 	}
 
 	return assignPlatformSides(finalStops);

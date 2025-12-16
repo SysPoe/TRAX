@@ -9,6 +9,11 @@ import logger from "./utils/logger.js";
 import { TRAX_CONFIG } from "./config.js";
 import { findExpressString } from "./utils/SectionalRunningTimes/gtfs.js";
 import { getServiceCapacity } from "./utils/serviceCapacity.js";
+import {
+	attachDeparturesHelpers,
+	getDeparturesForStop,
+	getServiceDateDeparturesForStop,
+} from "./utils/departures.js";
 
 interface TRAXEvent {
 	"realtime-update-start": [];
@@ -158,6 +163,7 @@ const TRAX = {
 		formatTimestamp,
 		hasGtfs,
 		getGtfs,
+		departures: { attachDeparturesHelpers, getDeparturesForStop, getServiceDateDeparturesForStop },
 	},
 	TRAX_CONFIG,
 	logger,
@@ -165,11 +171,13 @@ const TRAX = {
 
 export default TRAX;
 
-export type { AugmentedTrip, SerializableAugmentedTrip, RunSeries } from "./utils/augmentedTrip.js";
+export type { AugmentedTrip, RunSeries } from "./utils/augmentedTrip.js";
 
-export type { AugmentedStopTime, SerializableAugmentedStopTime } from "./utils/augmentedStopTime.js";
+export type { AugmentedStopTime } from "./utils/augmentedStopTime.js";
 
-export type { AugmentedStop, SerializableAugmentedStop } from "./utils/augmentedStop.js";
+export type { AugmentedStop } from "./utils/augmentedStop.js";
+
+export { attachDeparturesHelpers, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
 
 export type {
 	TrainMovementDTO,
