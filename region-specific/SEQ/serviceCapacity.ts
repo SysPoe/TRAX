@@ -274,7 +274,7 @@ export function getServiceCapacity(
 
 		const dayType = getDayType(dateStr);
 
-		const stopLookupId = stopTime.scheduled_parent_station_id ?? stopTime.scheduled_stop_id;
+		const stopLookupId = stopTime.actual_parent_station_id ?? stopTime.scheduled_stop_id ?? stopTime.scheduled_parent_station_id ?? stopTime.scheduled_stop_id;
 		let stopName = stopLookupId ? getAugmentedStops(stopLookupId)[0]?.stop_name : undefined;
 		if (!stopName) return "unknown";
 		if (stopName.trim().toLowerCase().startsWith("boggo")) stopName = "Park Road";
