@@ -1,4 +1,4 @@
-export interface TrainMovementDTO {
+export interface QRTTrainMovementDTO {
 	PlaceCode: string;
 	PlaceName: string;
 	gtfsStopId: string | null;
@@ -11,7 +11,7 @@ export interface TrainMovementDTO {
 	ActualDeparture: "0001-01-01T00:00:00" | string;
 }
 
-export interface ServiceDisruption {
+export interface QRTServiceDisruption {
 	SummaryText: string;
 	PageURL: string;
 	HideViziRailData: string | boolean;
@@ -21,10 +21,10 @@ export interface ServiceDisruption {
 	Title: string;
 }
 
-export interface GetServiceResponse {
+export interface QRTGetServiceResponse {
 	ServiceId: string;
-	ServiceDisruption: ServiceDisruption;
-	TrainMovements: TrainMovementDTO[];
+	QRTServiceDisruption: QRTServiceDisruption;
+	TrainMovements: QRTTrainMovementDTO[];
 	Modified: string;
 	Success: string | boolean;
 }
@@ -34,7 +34,7 @@ export interface QRTPlace {
 	qrt_PlaceCode: string;
 }
 
-export interface Service {
+export interface QRTService {
 	ServiceId: string;
 	ServiceName: string;
 	Status: string;
@@ -43,25 +43,25 @@ export interface Service {
 	DepartureDate: string;
 }
 
-export interface Direction {
+export interface QRTDirection {
 	DirectionName: string;
 	TerminalStart: string;
 	TerminalEnd: string;
 	Status: string;
-	Services: Service[];
+	Services: QRTService[];
 }
 
-export interface ServiceLine {
+export interface QRTServiceLine {
 	ServiceLineName: string;
 	ServiceLineIcon: string;
 	StyleClass: string;
 	OrderNumber: number;
 	Status: string;
-	Directions: Direction[];
+	Directions: QRTDirection[];
 }
 
-export interface AllServicesResponse {
-	ServiceLines: ServiceLine[];
+export interface QRTAllServicesResponse {
+	ServiceLines: QRTServiceLine[];
 	Success: boolean;
 	Error: any;
 }
@@ -74,7 +74,7 @@ export interface QRTService {
 	qrt_Origin: string; // e.g. "10;#Brisbane - Roma Street"
 }
 
-export interface ServiceUpdate {
+export interface QRTServiceUpdate {
 	Title: string; // e.g. "V8 Supercar Event - Townsville"
 	qrt_StartServiceDate: string; // e.g. "7/4/2025 12:00:00 AM"
 	qrt_EndServiceDate: string; // e.g. "7/14/2025 11:00:00 PM"
@@ -86,7 +86,7 @@ export interface ServiceUpdate {
 	qrt_SummaryMessage: string; // e.g. "Restricted access to Townsville railway station"
 }
 
-export interface TravelStopTime {
+export interface QRTTravelStopTime {
 	placeCode: string;
 	placeName: string;
 	gtfsStopId: string | null;
@@ -105,8 +105,8 @@ export interface TravelStopTime {
 	departureDelayString?: "on time" | string;
 }
 
-import type { SRTStop } from "../utils/SectionalRunningTimes/qrt.js";
-export interface TravelTrip {
+import type { QRTSRTStop } from "./srt.js";
+export interface QRTTravelTrip {
 	serviceId: string;
 	serviceName: string;
 	run: string;
@@ -116,7 +116,7 @@ export interface TravelTrip {
 	offersGoldClass: boolean;
 	serviceDate: string;
 	departureDate: string;
-	stops: TravelStopTime[];
-	stopsWithPassing?: SRTStop[];
-	disruption?: ServiceDisruption;
+	stops: QRTTravelStopTime[];
+	stopsWithPassing?: QRTSRTStop[];
+	disruption?: QRTServiceDisruption;
 }

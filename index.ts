@@ -1,13 +1,13 @@
 import * as cache from "./cache.js";
 import * as calendar from "./utils/calendar.js";
 import * as stations from "./utils/stations.js";
-import * as qrTravel from "./qr-travel/qr-travel-tracker.js";
+import * as qrTravel from "./region-specific/SEQ/qr-travel/qr-travel-tracker.js";
 import * as timeUtils from "./utils/time.js";
 import { EventEmitter } from "events";
 import { createGtfs, getGtfs, hasGtfs } from "./gtfsInterfaceLayer.js";
 import logger from "./utils/logger.js";
 import { TRAX_CONFIG } from "./config.js";
-import { findExpressString } from "./utils/SectionalRunningTimes/gtfs.js";
+import { findExpressString } from "./utils/SRT.js";
 import { getServiceCapacity } from "./utils/serviceCapacity.js";
 import {
 	attachDeparturesHelpers,
@@ -75,7 +75,7 @@ export async function loadGTFS(
 		}, staticIntervalMs);
 	}
 
-	scheduleNextRealtime();
+	if (TRAX_CONFIG.hasRealtime) scheduleNextRealtime();
 	scheduleNextStatic();
 }
 
@@ -98,6 +98,7 @@ export function formatTimestamp(ts?: number | null): string {
 }
 
 export async function updateRealtime(): Promise<void> {
+	if (!TRAX_CONFIG.hasRealtime) return;
 	const gtfs = getGtfs();
 	try {
 		await gtfs.updateRealtimeFromUrl(
@@ -142,8 +143,8 @@ const TRAX = {
 	getStopTimeUpdates: cache.getStopTimeUpdates,
 	getTripUpdates: cache.getTripUpdates,
 	getVehiclePositions: cache.getVehiclePositions,
-	getQRTPlaces: cache.getQRTPlaces,
-	getQRTTrains: cache.getQRTTrains,
+	getQRTPlaces: cache.SEQgetQRTPlaces,
+	getQRTTrains: cache.SEQgetQRTTrains,
 
 	// Event handling
 	on: traxEmitter.on.bind(traxEmitter),
@@ -180,20 +181,20 @@ export type { AugmentedStop } from "./utils/augmentedStop.js";
 export { attachDeparturesHelpers, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
 
 export type {
-	TrainMovementDTO,
-	ServiceDisruption,
-	GetServiceResponse,
+	QRTTrainMovementDTO,
+	QRTServiceDisruption,
+	QRTGetServiceResponse,
 	QRTPlace,
-	Service,
-	Direction,
-	ServiceLine,
-	AllServicesResponse,
+	QRTService as Service,
+	QRTDirection as Direction,
+	QRTServiceLine as ServiceLine,
+	QRTAllServicesResponse as AllServicesResponse,
 	QRTService,
-	ServiceUpdate,
-	TravelStopTime,
-	TravelTrip,
-} from "./qr-travel/types.js";
+	QRTServiceUpdate as ServiceUpdate,
+	QRTTravelStopTime as TravelStopTime,
+	QRTTravelTrip as TravelTrip,
+} from "./region-specific/SEQ/qr-travel/types.js";
 
-export type { SRTStop } from "./utils/SectionalRunningTimes/qrt.js";
+export type { QRTSRTStop as SRTStop } from "./region-specific/SEQ/qr-travel/srt.js";
 
 export { Logger as TraxLogger, LogLevel } from "./utils/logger.js"; // Export logger types

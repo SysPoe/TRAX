@@ -1,6 +1,6 @@
 import * as cache from "../cache.js";
 import { getGtfs } from "../gtfsInterfaceLayer.js";
-import { findExpressString } from "./SectionalRunningTimes/gtfs.js";
+import { findExpressString } from "./SRT.js";
 import { getServiceCapacity } from "./serviceCapacity.js";
 import { AugmentedStop } from "./augmentedStop.js";
 import { AugmentedStopTime } from "./augmentedStopTime.js";

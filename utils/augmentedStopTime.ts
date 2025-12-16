@@ -1,7 +1,7 @@
 import * as qdf from "qdf-gtfs";
 import { AugmentedStop } from "./augmentedStop.js";
 import * as cache from "../cache.js";
-import { findPassingStopTimes } from "./SectionalRunningTimes/gtfs.js";
+import { findPassingStopTimes } from "./SRT.js";
 import platformData from "./platformData.js";
 
 // --- Types & Exports ---

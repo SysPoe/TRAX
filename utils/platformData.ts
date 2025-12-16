@@ -1,4 +1,5 @@
-import { loadDataFile } from "./fs.js";
+import { TRAX_CONFIG } from "../config.js";
+import { hasDataFile, loadDataFile } from "./fs.js";
 
 export type Platform = {
 	platform_code: number;
@@ -13,7 +14,9 @@ export type PlatformData = {
 	[gtfs_stop_id: string]: Platform[];
 };
 
-export const platformData: PlatformData = JSON.parse(loadDataFile("platforms.json"));
+const DATA_PATH = `region-specific/${TRAX_CONFIG.region}/platforms.json`;
+
+export const platformData: PlatformData = TRAX_CONFIG.region && hasDataFile(DATA_PATH) ? JSON.parse(loadDataFile(DATA_PATH)) : [];
 
 
 /*

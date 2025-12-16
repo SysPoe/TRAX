@@ -1,24 +1,25 @@
 // For SRT passing stop expansion
-import { expandWithSRTPassingStops } from "../utils/SectionalRunningTimes/qrt.js";
-import logger from "../utils/logger.js";
-import { getRailStations } from "../utils/stations.js";
-import { parseBrisbaneTime } from "../utils/time.js";
+import { expandWithSRTPassingStops } from "./srt.js";
+import logger from "../../../utils/logger.js";
+import { getConsideredStations } from "../../../utils/stations.js";
+import { parseBrisbaneTime } from "../../../utils/time.js";
 import type {
-	GetServiceResponse,
+	QRTGetServiceResponse,
 	QRTPlace,
-	ServiceLine,
+	QRTServiceLine,
 	QRTService,
-	ServiceUpdate,
-	TrainMovementDTO,
-	TravelStopTime,
-	TravelTrip,
+	QRTServiceUpdate,
+	QRTTrainMovementDTO,
+	QRTTravelStopTime,
+	QRTTravelTrip,
 } from "./types.js";
+import ensureQRTEnabled from "./enabled.js";
 
 // Main function to fetch and parse the XML file
-export async function trackTrain(serviceID: string, serviceDate: string): Promise<GetServiceResponse> {
-	const url = `https://www.queenslandrailtravel.com.au/SPWebApp/api/ServiceUpdates/GetService?serviceId=${serviceID}&serivceDate=${serviceDate}${
-		serviceDate.includes("T") ? "" : "T00:00:00.000Z"
-	}`;
+export async function trackTrain(serviceID: string, serviceDate: string): Promise<QRTGetServiceResponse> {
+	ensureQRTEnabled();
+	const url = `https://www.queenslandrailtravel.com.au/SPWebApp/api/ServiceUpdates/GetService?serviceId=${serviceID}&serivceDate=${serviceDate}${serviceDate.includes("T") ? "" : "T00:00:00.000Z"
+		}`;
 
 	const response = await fetch(url);
 	if (!response.ok) {
@@ -35,10 +36,11 @@ export async function trackTrain(serviceID: string, serviceDate: string): Promis
 		throw new Error(`Failed to fetch: ${response.status} ${response.statusText} ${url}. ${errorText}`);
 	}
 	const jsonObj = await response.json();
-	return jsonObj as GetServiceResponse;
+	return jsonObj as QRTGetServiceResponse;
 }
 
 export async function getPlaces() {
+	ensureQRTEnabled();
 	let res = await fetch("https://www.queenslandrailtravel.com.au/SPWebApp/api/ContentQuery/GetItems", {
 		method: "POST",
 		headers: {
@@ -58,6 +60,7 @@ export async function getPlaces() {
 }
 
 export async function getServiceLines() {
+	ensureQRTEnabled();
 	let res = await fetch("https://www.queenslandrailtravel.com.au/SPWebApp/api/ServiceUpdates/AllServices");
 	if (!res.ok) {
 		logger.error(`Failed to fetch service lines: ${res.status} ${res.statusText}`, {
@@ -69,10 +72,11 @@ export async function getServiceLines() {
 		throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
 	}
 	let json = await res.json();
-	return json.ServiceLines as ServiceLine[];
+	return json.ServiceLines as QRTServiceLine[];
 }
 
 export async function getAllServices() {
+	ensureQRTEnabled();
 	let res = await fetch("https://www.queenslandrailtravel.com.au/SPWebApp/api/ContentQuery/GetItems", {
 		body: JSON.stringify({
 			WebUrl: "https://www.queenslandrailtravel.com.au",
@@ -95,7 +99,8 @@ export async function getAllServices() {
 	return json as QRTService[];
 }
 
-export async function getServiceUpdates(startDate?: string, endDate?: string): Promise<ServiceUpdate[]> {
+export async function getServiceUpdates(startDate?: string, endDate?: string): Promise<QRTServiceUpdate[]> {
+	ensureQRTEnabled();
 	// Default startDate: first day of current month
 	// Default endDate: one year after startDate
 	const now = new Date(Date.now() + 36000000); // Brisbane time (+10h)
@@ -150,19 +155,19 @@ export async function getServiceUpdates(startDate?: string, endDate?: string): P
 		function: "getServiceUpdates",
 		count: json.length,
 	});
-	return json as ServiceUpdate[];
+	return json as QRTServiceUpdate[];
 }
 
 function convertQRTServiceToTravelTrip(
 	service: QRTService,
-	serviceResponse: GetServiceResponse,
+	serviceResponse: QRTGetServiceResponse,
 	direction: string,
 	line: string,
-): TravelTrip {
+): QRTTravelTrip {
 	// Find the Service object for more info
 	const serviceMeta = serviceResponse;
-	const gtfsStops = getRailStations();
-	const stops: TravelStopTime[] = (serviceResponse.TrainMovements as TrainMovementDTO[]).map((movement) => {
+	const gtfsStops = getConsideredStations();
+	const stops: QRTTravelStopTime[] = (serviceResponse.TrainMovements as QRTTrainMovementDTO[]).map((movement) => {
 		// Calculate arrival and departure delays
 		let arrivalDelaySeconds: number | null = null;
 		let departureDelaySeconds: number | null = null;
@@ -232,7 +237,7 @@ function convertQRTServiceToTravelTrip(
 		if (findRes) gtfsStopId = findRes.stop_id;
 		if (movement.PlaceName.toLowerCase().includes("roma st")) gtfsStopId = "place_romsta";
 
-		let toRet: TravelStopTime = {
+		let toRet: QRTTravelStopTime = {
 			placeCode: movement.PlaceCode,
 			placeName: movement.PlaceName,
 			gtfsStopId,
@@ -269,12 +274,12 @@ function convertQRTServiceToTravelTrip(
 		serviceName: service.Title,
 		direction,
 		line,
-		status: serviceMeta.ServiceDisruption?.Status || "Scheduled",
+		status: serviceMeta.QRTServiceDisruption?.Status || "Scheduled",
 		offersGoldClass: false, // Not available in QRTService, could be added if needed
 		serviceDate: serviceMeta.Modified,
 		departureDate: stops[0]?.plannedDeparture || "",
 		stops,
-		disruption: serviceMeta.ServiceDisruption,
+		disruption: serviceMeta.QRTServiceDisruption,
 	};
 }
 
@@ -289,10 +294,10 @@ function getDelay(delaySecs: number | null = null, departureTime: string | null)
 			? delaySecs == 0
 				? "on time"
 				: `${Math.floor(roundedDelay / 3600)}h ${Math.floor(
-						(Math.abs(roundedDelay) % 3600) / 60,
-					)}m ${delaySecs > 0 ? "late" : "early"}`
-						.replace(/^0h/, "")
-						.trim()
+					(Math.abs(roundedDelay) % 3600) / 60,
+				)}m ${delaySecs > 0 ? "late" : "early"}`
+					.replace(/^0h/, "")
+					.trim()
 			: "scheduled";
 	const delayClass: "very-late" | "late" | "early" | "on-time" | "scheduled" =
 		delaySecs != null && roundedDelay != null
@@ -309,15 +314,15 @@ function getDelay(delaySecs: number | null = null, departureTime: string | null)
 
 // Process each service line to get current services in parallel
 async function processService(
-	serviceLine: ServiceLine,
+	serviceLine: QRTServiceLine,
 	direction: any,
 	service: any,
 	services: QRTService[],
-): Promise<TravelTrip | null> {
+): Promise<QRTTravelTrip | null> {
 	try {
 		// Get detailed service information
 		const serviceResponse = await trackTrain(service.ServiceId, service.ServiceDate);
-		const gtfsStops = getRailStations();
+		const gtfsStops = getConsideredStations();
 
 		if (serviceResponse.Success) {
 			// Find the corresponding QRT service for additional metadata
@@ -336,8 +341,8 @@ async function processService(
 				);
 
 				// Add SRT passing stops expansion
-				// Map TravelStopTime[] to TrainMovementDTO[]
-				const trainMovements: TrainMovementDTO[] = travelTrip.stops.map((s) => {
+				// Map TravelStopTime[] to QRTTrainMovementDTO[]
+				const trainMovements: QRTTrainMovementDTO[] = travelTrip.stops.map((s) => {
 					let gtfsStopId: string | null = null;
 					let findRes = gtfsStops.find(
 						(v) =>
@@ -391,12 +396,13 @@ async function processService(
 	}
 }
 
-export async function getCurrentQRTravelTrains(retries = 5): Promise<TravelTrip[]> {
+export async function getCurrentQRTravelTrains(retries = 5): Promise<QRTTravelTrip[]> {
+	ensureQRTEnabled();
 	try {
 		// Get all the required data
 		const [services, serviceLines] = await Promise.all([getAllServices(), getServiceLines()]);
 
-		const tasks: Promise<TravelTrip | null>[] = [];
+		const tasks: Promise<QRTTravelTrip | null>[] = [];
 		for (const serviceLine of serviceLines) {
 			for (const direction of serviceLine.Directions) {
 				for (const service of direction.Services) {
@@ -406,7 +412,7 @@ export async function getCurrentQRTravelTrains(retries = 5): Promise<TravelTrip[
 		}
 
 		const results = await Promise.all(tasks);
-		const travelTrips = results.filter((trip): trip is TravelTrip => trip !== null);
+		const travelTrips = results.filter((trip): trip is QRTTravelTrip => trip !== null);
 
 		return travelTrips;
 	} catch (error: any) {

@@ -29,7 +29,7 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 		return cache.getAugmentedStops(parentId, ctx)[0] ?? null;
 	};
 
-	const qrt_Places = cache.getQRTPlaces(ctx);
+	const qrt_Places = cache.SEQgetQRTPlaces(ctx);
 	const trimmedStopName = stop.stop_name?.toLowerCase().replace("station", "").trim();
 	const myPlace = qrt_Places.find(
 		(v) =>

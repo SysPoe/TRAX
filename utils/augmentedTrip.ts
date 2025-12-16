@@ -4,7 +4,7 @@ import { AugmentedStopTime, augmentStopTimes } from "./augmentedStopTime.js";
 import * as cache from "../cache.js";
 import { getGtfs } from "../gtfsInterfaceLayer.js";
 import { getServiceCapacity } from "./serviceCapacity.js";
-import { ExpressInfo, findExpress } from "./SectionalRunningTimes/gtfs.js";
+import { ExpressInfo, findExpress } from "./SRT.js";
 
 // --- Types ---
 

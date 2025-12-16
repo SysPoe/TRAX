@@ -1,7 +1,7 @@
-import logger from "../logger.js";
-import { getGtfs } from '../../gtfsInterfaceLayer.js';
-import { cacheFileExists, loadCacheFile, writeCacheFile } from "../fs.js";
-import * as cache from "../../cache.js";
+import logger from "./logger.js";
+import { getGtfs } from '../gtfsInterfaceLayer.js';
+import { cacheFileExists, loadCacheFile, writeCacheFile } from "./fs.js";
+import * as cache from "../cache.js";
 import * as qdf from "qdf-gtfs";
 // Assuming 'qdf' types are available globally or imported. 
 // If not, you may need to import them from your types definition file.

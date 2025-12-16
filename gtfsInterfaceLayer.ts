@@ -11,6 +11,7 @@ async function loadStatic(gtfs: GTFS) {
 }
 
 async function loadRealtime(gtfs: GTFS) {
+	if (!TRAX_CONFIG.hasRealtime) return;
 	logger.info("Loading realtime data...")
 	await gtfs.updateRealtimeFromUrl(
 		TRAX_CONFIG.realtimeAlerts,

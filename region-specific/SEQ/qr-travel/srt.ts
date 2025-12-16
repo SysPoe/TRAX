@@ -1,5 +1,5 @@
 export type SRTEntry = { from: string; to: string; travelTrain: number };
-export let SRT_DATA: SRTEntry[] = JSON.parse(loadDataFile("SRT_qrt.json"));
+export let SRT_DATA: SRTEntry[] = JSON.parse(loadDataFile("region-specific/SEQ/SRT_qrt.json"));
 
 SRT_DATA = SRT_DATA.concat(
 	SRT_DATA.map((v) => ({
@@ -9,12 +9,12 @@ SRT_DATA = SRT_DATA.concat(
 	})),
 );
 
-import type { TrainMovementDTO } from "../../qr-travel/types.js";
-import { loadDataFile } from "../fs.js";
-import { parseBrisbaneTime } from "../time.js";
+import type { QRTTrainMovementDTO } from "./types.js";
+import { loadDataFile } from "../../../utils/fs.js";
+import { parseBrisbaneTime } from "../../../utils/time.js";
 
 // Output type for each stop (stopping or passing)
-export interface SRTStop {
+export interface QRTSRTStop {
 	placeName: string;
 	placeCode: string;
 	gtfsStopId: string | null;
@@ -63,8 +63,8 @@ function getDelay(delaySecs: number | null = null, departureTime: string | null)
 }
 
 function pushSRT(
-	arr: SRTStop[],
-	stop: Exclude<SRTStop, "departureDelayClass" | "departureDelayString" | "arrivalDelayClass" | "arrivalDelayString">,
+	arr: QRTSRTStop[],
+	stop: Exclude<QRTSRTStop, "departureDelayClass" | "departureDelayString" | "arrivalDelayClass" | "arrivalDelayString">,
 ) {
 	let arrivalDelayInfo = getDelay(stop.arrivalDelaySeconds ?? null, stop.actualArrival ?? null);
 	let departureDelayInfo = getDelay(stop.departureDelaySeconds ?? null, stop.actualDeparture ?? null);
@@ -90,7 +90,7 @@ function pushSRT(
 	});
 }
 
-export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[]): SRTStop[] {
+export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO[]): QRTSRTStop[] {
 	function calcDelay(actual?: string, planned?: string): number | null {
 		if (!actual || !planned || actual === "0001-01-01T00:00:00" || planned === "0001-01-01T00:00:00") return null;
 		const a = parseBrisbaneTime(actual, "Z");
@@ -112,7 +112,7 @@ export function expandWithSRTPassingStops(stoppingMovements: TrainMovementDTO[])
 			departureDelaySeconds: calcDelay(m.ActualDeparture, m.PlannedDeparture),
 		}));
 
-	const result: SRTStop[] = [];
+	const result: QRTSRTStop[] = [];
 	let prevTime: number | null = null;
 	for (let i = 0; i < stoppingMovements.length - 1; ++i) {
 		const from = stoppingMovements[i];

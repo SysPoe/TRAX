@@ -6,6 +6,15 @@ import { TRAX_CONFIG } from "../config.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+export function hasDataFile(filePath: string): boolean {
+    try {
+        getDataFilePath(filePath);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 export function loadDataFile(filePath: string): string {
     const path = getDataFilePath(filePath);
     return fs.readFileSync(path, "utf-8");

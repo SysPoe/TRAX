@@ -20,7 +20,7 @@ function getPatternSignature(stopTimes: any[]): string {
 	return stopTimes.map(st => st.stop_id).join('|');
 }
 
-export function getRailStations(): qdf.Stop[] {
+export function getConsideredStations(): qdf.Stop[] {
 	const gtfs = getGtfs();
 	if (rail_stations === null) {
 		rail_stations = [];
@@ -56,5 +56,5 @@ export function getRailStations(): qdf.Stop[] {
 }
 
 export function getAugmentedRailStations(ctx?: CacheContext): AugmentedStop[] {
-	return getRailStations().map((stop) => getAugmentedStops(stop.stop_id, ctx)[0]).filter((v) => v);
+	return getConsideredStations().map((stop) => getAugmentedStops(stop.stop_id, ctx)[0]).filter((v) => v);
 }
