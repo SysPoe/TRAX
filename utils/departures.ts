@@ -95,7 +95,9 @@ export function getDeparturesForStop(
 				express_string: expressString,
 				instance_id: inst.instance_id,
 				service_capacity:
-					st.service_capacity === null ? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx) : st.service_capacity,
+					st.service_capacity === null
+						? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx)
+						: st.service_capacity,
 			};
 		});
 }
@@ -156,7 +158,9 @@ export function getServiceDateDeparturesForStop(
 				express_string: expressString,
 				instance_id: inst.instance_id,
 				service_capacity:
-					st.service_capacity === null ? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx) : st.service_capacity,
+					st.service_capacity === null
+						? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx)
+						: st.service_capacity,
 			};
 		});
 }

@@ -12,7 +12,7 @@ export function getServiceCapacity(
 	stopTime: AugmentedStopTime,
 	dateStr: string,
 	_dirOverride?: string,
-	ctx?: CacheContext
+	ctx?: CacheContext,
 ): string {
 	switch (TRAX_CONFIG.region) {
 		case "SEQ":
