@@ -255,12 +255,12 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 					let estPassStr = estPassDate ? estPassDate.toISOString().slice(0, 19) : undefined;
 
 					pushSRT(result, {
-						placeCode: orig?.PlaceCode || "",
-						gtfsStopId: orig?.gtfsStopId ?? null,
-						placeName: stopName,
-						isStop: false,
-						plannedArrival: orig?.PlannedArrival || "",
-						plannedDeparture: orig?.PlannedDeparture || "",
+					placeCode: orig?.PlaceCode ?? "",
+					gtfsStopId: orig?.gtfsStopId ?? null,
+					placeName: stopName,
+					isStop: false,
+					plannedArrival: orig?.PlannedArrival ?? "",
+					plannedDeparture: orig?.PlannedDeparture ?? "",
 						actualArrival: orig?.ActualArrival,
 						actualDeparture: orig?.ActualDeparture,
 						srtMinutes: foundSeg.travelTrain,
@@ -304,12 +304,12 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 		}
 		// else: no SRT path found, include the stop
 		pushSRT(result, {
-			placeCode: to.PlaceCode,
+			placeCode: to.PlaceCode ?? "",
 			gtfsStopId: to.gtfsStopId ?? null,
 			placeName: to.PlaceName,
 			isStop: true,
-			plannedArrival: to.PlannedArrival,
-			plannedDeparture: to.PlannedDeparture,
+			plannedArrival: to.PlannedArrival ?? "",
+			plannedDeparture: to.PlannedDeparture ?? "",
 			actualArrival: to.ActualArrival,
 			actualDeparture: to.ActualDeparture,
 			arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),

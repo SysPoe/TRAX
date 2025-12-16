@@ -84,7 +84,7 @@ class Logger {
 
 	progress(info: ProgressInfo & { unit?: "bytes" | "items" }): void {
 		const { task, current, total, speed } = info;
-		const unit = info.unit || "bytes";
+		const unit = info.unit ?? "bytes";
 
 		// Initialize multibar if needed
 		if (!this.multibar) {

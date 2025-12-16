@@ -24,7 +24,7 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 	const resolveChildren = (): AugmentedStop[] => {
 		if (cachedChildren) return cachedChildren;
 		cachedChildren = childIds
-			.map((id) => cache.getAugmentedStops(id, ctx)[0] || augmentStop(cache.getRawStops(id, ctx)[0], ctx))
+			.map((id) => cache.getAugmentedStops(id, ctx)[0] ?? augmentStop(cache.getRawStops(id, ctx)[0], ctx))
 			.filter((s): s is AugmentedStop => !!s);
 		return cachedChildren;
 	};

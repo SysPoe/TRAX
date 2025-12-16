@@ -46,7 +46,7 @@ function loadNetworkData(): NetworkData | null {
 	if (cacheFileExists(CACHE_FILE)) {
 		try {
 			const data = JSON.parse(loadCacheFile(CACHE_FILE));
-			const ageDays = (Date.now() - (data.lastUpdated || 0)) / (1000 * 60 * 60 * 24);
+			const ageDays = (Date.now() - (data.lastUpdated ?? 0)) / (1000 * 60 * 60 * 24);
 			if (ageDays < MAX_CACHE_AGE_DAYS) {
 				return data;
 			}
@@ -204,7 +204,7 @@ export function getSRT(from: string, to: string): number | undefined {
 	// Special case for Exhibition loop which is often missing from scheduled logic
 	if ((from == "place_exhsta" && to == "place_bowsta") || (from == "place_bowsta" && to == "place_exhsta")) return 3;
 
-	return _networkData!.matrix[from]?.[to] || _networkData!.matrix[to]?.[from];
+	return _networkData!.matrix[from]?.[to] ?? _networkData!.matrix[to]?.[from];
 }
 
 function getGraph(): Record<string, string[]> {

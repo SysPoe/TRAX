@@ -137,9 +137,9 @@ function resolveExitSide(
 	const platform = platformDataList?.find((v) => v.platform_code === platformCode);
 	if (!platform) return null;
 
-	const prevId = index > 0 ? stops[index - 1].actual_parent_station_id || stops[index - 1].actual_stop_id : "";
+	const prevId = index > 0 ? (stops[index - 1].actual_parent_station_id ?? stops[index - 1].actual_stop_id) : "";
 	const nextId =
-		index < stops.length - 1 ? stops[index + 1].actual_parent_station_id || stops[index + 1].actual_stop_id : "";
+		index < stops.length - 1 ? (stops[index + 1].actual_parent_station_id ?? stops[index + 1].actual_stop_id) : "";
 
 	const matchesNext = platform.next.includes(nextId);
 	const matchesPrev = platform.from.includes(prevId);
@@ -260,10 +260,10 @@ export function augmentStopTimes(
 	ctx?: cache.CacheContext,
 ): AugmentedStopTime[] {
 	const { serviceDate, tripUpdate, scheduleRelationship } = instanceContext;
-	const tripId = tripUpdate?.trip.trip_id || staticStopTimes?.[0]?.trip_id || "";
+	const tripId = tripUpdate?.trip.trip_id ?? staticStopTimes?.[0]?.trip_id ?? "";
 
 	// 1. Gather all sequences from Static and RT
-	const stopTimeUpdates = tripUpdate?.stop_time_updates || [];
+	const stopTimeUpdates = tripUpdate?.stop_time_updates ?? [];
 	const sequenceMap = new Map<number, { static?: qdf.StopTime; rt?: qdf.RealtimeStopTimeUpdate }>();
 
 	// Map Static
@@ -313,7 +313,7 @@ export function augmentStopTimes(
 		const isSkipped = r?.schedule_relationship === qdf.StopTimeScheduleRelationship.SKIPPED;
 
 		// Base object
-		let stopId = s?.stop_id || r?.stop_id || "";
+		let stopId = s?.stop_id ?? r?.stop_id ?? "";
 		let arr = s?.arrival_time ?? 0;
 		let dep = s?.departure_time ?? 0;
 
@@ -333,7 +333,7 @@ export function augmentStopTimes(
 			stop_id: stopId,
 			arrival_time: arr,
 			departure_time: dep,
-			stop_headsign: s?.stop_headsign || "",
+			stop_headsign: s?.stop_headsign ?? "",
 			pickup_type: s?.pickup_type ?? 0,
 			drop_off_type: s?.drop_off_type ?? 0,
 			shape_dist_traveled: s?.shape_dist_traveled ?? 0,
@@ -545,7 +545,7 @@ export function augmentStopTimes(
 		// Process the Active Stop (stopTime)
 		const stopId = stopTime.stop_id;
 		const rtUpdate =
-			stopTimeUpdates.find((u) => u.stop_sequence === seq && !isPassing) ||
+			stopTimeUpdates.find((u) => u.stop_sequence === seq && !isPassing) ??
 			(isPassing ? undefined : stopTimeUpdates.find((u) => u.stop_id === stopId)); // Fallback to ID match if sequence match fails (unlikely given how we built merged)
 
 		const scheduledStop = cache.getAugmentedStops(stopId, ctx)[0];

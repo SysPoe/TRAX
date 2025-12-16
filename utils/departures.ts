@@ -69,7 +69,7 @@ export function getDeparturesForStop(
 
 			for (const st of matchingStopTimes) {
 				const matchingDate = getMatchingTripDate(
-					(st?.actual_departure_dates || []).concat(st?.actual_arrival_dates || []),
+					(st?.actual_departure_dates ?? []).concat(st?.actual_arrival_dates ?? []),
 				);
 				if (matchingDate === null) continue;
 
@@ -88,14 +88,14 @@ export function getDeparturesForStop(
 		.map(({ st, inst }) => {
 			const expressString = findExpressString(
 				inst.expressInfo,
-				st.actual_parent_station_id || st.actual_stop_id || "",
+				st.actual_parent_station_id ?? st.actual_stop_id ?? "",
 			);
 			return {
 				...st,
 				express_string: expressString,
 				instance_id: inst.instance_id,
 				service_capacity:
-					st.service_capacity === null ? getServiceCapacity(inst, st, inst.serviceDate) : st.service_capacity,
+					st.service_capacity === null ? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx) : st.service_capacity,
 			};
 		});
 }
@@ -149,14 +149,14 @@ export function getServiceDateDeparturesForStop(
 		.map(({ st, inst }) => {
 			const expressString = findExpressString(
 				inst.expressInfo,
-				st.actual_parent_station_id || st.actual_stop_id || "",
+				st.actual_parent_station_id ?? st.actual_stop_id ?? "",
 			);
 			return {
 				...st,
 				express_string: expressString,
 				instance_id: inst.instance_id,
 				service_capacity:
-					st.service_capacity === null ? getServiceCapacity(inst, st, inst.serviceDate) : st.service_capacity,
+					st.service_capacity === null ? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx) : st.service_capacity,
 			};
 		});
 }

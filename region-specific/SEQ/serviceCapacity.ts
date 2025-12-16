@@ -1,9 +1,8 @@
 import fs from "fs";
-import path from "path";
 import logger from "../../utils/logger.js";
 import { AugmentedStopTime } from "../../utils/augmentedStopTime.js";
 import { AugmentedTrip, AugmentedTripInstance } from "../../utils/augmentedTrip.js";
-import { getAugmentedStops, getRawRoutes } from "../../cache.js";
+import { CacheContext, getAugmentedStops, getRawRoutes } from "../../cache.js";
 import zlib from "zlib";
 import { pipeline } from "stream";
 import { promisify } from "util";
@@ -47,7 +46,7 @@ export async function ensureServiceCapacityData(): Promise<void> {
 	if (!fs.existsSync(FILE_PATH)) {
 		logger.debug("Extracting service capacity data from local archive...", { module: "serviceCapacity" });
 		try {
-			const zipPath = getDataFilePath("region-specific/SEQ/service_capacity.csv.gz");
+			const zipPath = getDataFilePath("service_capacity.csv.gz");
 
 			await pipe(fs.createReadStream(zipPath), zlib.createGunzip(), fs.createWriteStream(FILE_PATH));
 			logger.debug("Service capacity data extracted.", { module: "serviceCapacity" });
@@ -192,8 +191,9 @@ function getTripDirection(inst: AugmentedTripInstance, currentStopSequence: numb
 
 	for (let i = 0; i < stopTimes.length; i++) {
 		const st = stopTimes[i];
-		const stopId = st.scheduled_parent_station_id || st.scheduled_stop_id;
-		if (stopId && CITY_STATIONS.includes(stopId) && firstCityIndex === -1) firstCityIndex = i;
+		const stopId = st.scheduled_parent_station_id ?? st.scheduled_stop_id;
+		if (stopId && CITY_STATIONS.includes(stopId) && firstCityIndex === -1)
+			firstCityIndex = i;
 	}
 
 	if (firstCityIndex === -1) {
@@ -203,26 +203,24 @@ function getTripDirection(inst: AugmentedTripInstance, currentStopSequence: numb
 		return null;
 	}
 
-	const centralIndex = stopTimes.findIndex(
-		(st) => st.scheduled_parent_station_id === "place_censta" || st.scheduled_stop_id === "place_censta",
-	);
+	const centralIndex = stopTimes.findIndex((st) => st.scheduled_parent_station_id === "place_censta" || st.scheduled_stop_id === "place_censta");
 
 	if (centralIndex !== -1) {
 		if (currentStopSequence < stopTimes[centralIndex]._stopTime?.stop_sequence!) {
-			const firstStopId = stopTimes[0]?.scheduled_parent_station_id || stopTimes[0]?.scheduled_stop_id;
-			if (firstStopId && CITY_STATIONS.includes(firstStopId)) return "Outbound";
+			const firstStopId = stopTimes[0]?.scheduled_parent_station_id ?? stopTimes[0]?.scheduled_stop_id;
+			if (firstStopId && CITY_STATIONS.includes(firstStopId))
+				return "Outbound";
 			return "Inbound";
 		}
 		return "Outbound";
 	}
 
-	const romaIndex = stopTimes.findIndex(
-		(st) => st.scheduled_parent_station_id === "place_romsta" || st.scheduled_stop_id === "place_romsta",
-	);
+	const romaIndex = stopTimes.findIndex((st) => st.scheduled_parent_station_id === "place_romsta" || st.scheduled_stop_id === "place_romsta");
 	if (romaIndex !== -1) {
 		if (currentStopSequence < stopTimes[romaIndex]._stopTime?.stop_sequence!) {
-			const firstStopId = stopTimes[0]?.scheduled_parent_station_id || stopTimes[0]?.scheduled_stop_id;
-			if (firstStopId && CITY_STATIONS.includes(firstStopId)) return "Outbound";
+			const firstStopId = stopTimes[0]?.scheduled_parent_station_id ?? stopTimes[0]?.scheduled_stop_id;
+			if (firstStopId && CITY_STATIONS.includes(firstStopId))
+				return "Outbound";
 			return "Inbound";
 		}
 		return "Outbound";
@@ -259,80 +257,94 @@ export function getServiceCapacity(
 	stopTime: AugmentedStopTime,
 	dateStr: string,
 	_dirOverride?: string,
+	ctx?: CacheContext,
 ): string {
-	let direction;
-	let get = () => {
-		if (!loaded || stopTime.passing) return "unknown";
+	if (!loaded || stopTime.passing) return "unknown";
 
-		const route = getRawRoutes(inst.route_id)[0];
-		const routeName = route?.route_long_name;
-		if (!routeName) return "unknown";
+	const route = getRawRoutes(inst.route_id, ctx)[0];
+	const routeName = route?.route_long_name;
+	if (!routeName) return "unknown";
 
-		const seq = stopTime._stopTime?.stop_sequence ?? 0;
-		direction = _dirOverride ?? getTripDirection(inst, seq);
-		if (!direction) return "unknown";
+	const seq = stopTime._stopTime?.stop_sequence ?? 0;
+	const direction = _dirOverride ?? getTripDirection(inst, seq);
+	if (!direction) return "unknown";
 
-		const dayType = getDayType(dateStr);
+	const dayType = getDayType(dateStr);
 
-		const stopLookupId = stopTime.actual_parent_station_id ?? stopTime.scheduled_stop_id ?? stopTime.scheduled_parent_station_id ?? stopTime.scheduled_stop_id;
-		let stopName = stopLookupId ? getAugmentedStops(stopLookupId)[0]?.stop_name : undefined;
-		if (!stopName) return "unknown";
-		if (stopName.trim().toLowerCase().startsWith("boggo")) stopName = "Park Road";
-		if (stopName.trim().toLowerCase().startsWith("international")) stopName = "International Terminal";
-		if (stopName.trim().toLowerCase().startsWith("domestic")) stopName = "Domestic Terminal";
+	const stopLookupId = stopTime.scheduled_parent_station_id ?? stopTime.scheduled_stop_id;
+	let stopName = stopLookupId ? getAugmentedStops(stopLookupId, ctx)[0]?.stop_name : undefined;
+	if (!stopName) return "unknown";
+	if (stopName.trim().toLowerCase().startsWith("boggo")) stopName = "Park Road";
+	if (stopName.trim().toLowerCase().startsWith("international")) stopName = "International Terminal";
+	if (stopName.trim().toLowerCase().startsWith("domestic")) stopName = "Domestic Terminal";
 
-		const normStopName = stopName.toLowerCase().trim();
+	const normStopName = stopName.toLowerCase().trim();
 
-		const departureTime =
-			stopTime.actual_departure_time ??
-			stopTime.actual_arrival_time ??
-			stopTime.scheduled_departure_time ??
-			stopTime.scheduled_arrival_time;
-		if (departureTime === null) return "unknown";
+	const departureTime = stopTime.actual_departure_time ?? stopTime.actual_arrival_time ?? stopTime.scheduled_departure_time ?? stopTime.scheduled_arrival_time;
+	if (departureTime === null) return "unknown";
 
-		const timeBucket = formatTimeBucket(departureTime);
+	const timeBucket = formatTimeBucket(departureTime);
 
-		// Map routeName (e.g. "Brisbane City - Ferny Grove") to potential lines (e.g. "Ferny Grove Line")
-		const routeParts = routeName.split(" - ");
-		const candidateLines = new Set<string>();
+	// Map routeName (e.g. "Brisbane City - Ferny Grove") to potential lines (e.g. "Ferny Grove Line")
+	const routeParts = routeName.split(" - ");
+	const candidateLines = new Set<string>();
 
-		for (const part of routeParts) {
-			const trimmed = part.trim();
-			if (ROUTE_KEYWORD_MAP[trimmed]) candidateLines.add(ROUTE_KEYWORD_MAP[trimmed]);
+	for (const part of routeParts) {
+		const trimmed = part.trim();
+		if (ROUTE_KEYWORD_MAP[trimmed]) candidateLines.add(ROUTE_KEYWORD_MAP[trimmed]);
+	}
+
+	if (candidateLines.size === 0) return "unknown";
+
+	for (const lineName of candidateLines) {
+		const rMap = capacityIndex.get(lineName);
+		if (!rMap) continue;
+
+		const dMap = rMap.get(direction);
+		if (!dMap) continue;
+
+		const dayMap = dMap.get(dayType);
+		if (!dayMap) continue;
+
+		// Try exact match
+		let sMap = dayMap.get(normStopName);
+
+		// Try clean match
+		if (!sMap) {
+			const cleanName = normStopName.replace(" station", "").replace(" platform", "").trim();
+			sMap = dayMap.get(cleanName);
 		}
 
-		if (candidateLines.size === 0) return "unknown";
-
-		for (const lineName of candidateLines) {
-			const rMap = capacityIndex.get(lineName);
-			if (!rMap) continue;
-
-			const dMap = rMap.get(direction);
-			if (!dMap) continue;
-
-			const dayMap = dMap.get(dayType);
-			if (!dayMap) continue;
-
-			// Try exact match
-			let sMap = dayMap.get(normStopName);
-
-			// Try clean match
-			if (!sMap) {
-				const cleanName = normStopName.replace(" station", "").replace(" platform", "").trim();
-				sMap = dayMap.get(cleanName);
-			}
-
-			if (sMap) {
-				const val = sMap.get(timeBucket);
-				if (val) return val;
-			}
+		if (sMap) {
+			const val = sMap.get(timeBucket);
+			if (val) return val;
 		}
+	}
 
-		// If we loop through all candidates and find nothing, we return "unknown".
-		return "unknown";
-	};
-	let res = get();
-	if (res === "unknown" && _dirOverride === undefined)
-		return getServiceCapacity(inst, stopTime, dateStr, direction === "Inbound" ? "Outbound" : "Inbound");
-	return res;
+	// If we loop through all candidates and find nothing, we return "unknown".
+	return "unknown";
 }
+
+export function addSCI(inst: AugmentedTripInstance, ctx?: CacheContext): AugmentedTripInstance {
+	let prevSC: string | null = null;
+	inst.stopTimes.forEach(st => {
+		if (st.passing || st.service_capacity !== null) return;
+		st.service_capacity = getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx);
+		if (st.service_capacity !== null) prevSC = st.service_capacity;
+		else st.service_capacity = prevSC;
+	});
+	return inst;
+}
+
+export function addSC(trip: AugmentedTrip, ctx?: CacheContext): AugmentedTrip {
+	trip.instances = trip.instances.map(v => addSCI(v, ctx));
+	return trip;
+}
+
+export const _test = {
+	getDayType,
+	formatTimeBucket,
+	getTripDirection,
+	loadServiceCapacityData,
+	capacityIndex,
+};

@@ -40,7 +40,7 @@ export async function loadGTFS(
 			try {
 				await updateRealtime();
 			} catch (error: any) {
-				logger.error("Error updating realtime GTFS data: " + (error.message || error), {
+				logger.error("Error updating realtime GTFS data: " + (error.message ?? error), {
 					module: "index",
 					function: "loadGTFS - scheduleNextRealtime",
 				});
@@ -62,7 +62,7 @@ export async function loadGTFS(
 				logger.error("Error refreshing static GTFS data", {
 					module: "index",
 					function: "loadGTFS - scheduleNextStatic",
-					error: error.message || error,
+					error: error.message ?? error,
 				});
 			} finally {
 				traxEmitter.emit("static-update-end");
@@ -104,7 +104,7 @@ export async function updateRealtime(): Promise<void> {
 		);
 		await cache.refreshRealtimeCache();
 	} catch (error: any) {
-		logger.error("Error updating realtime GTFS data: " + error.message || error, {
+		logger.error("Error updating realtime GTFS data: " + (error.message ?? error), {
 			module: "index",
 			function: "updateRealtime",
 		});

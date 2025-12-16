@@ -108,8 +108,8 @@ export async function getServiceUpdates(startDate?: string, endDate?: string): P
 	const defaultEnd = new Date(defaultStart);
 	defaultEnd.setUTCFullYear(defaultEnd.getUTCFullYear() + 1);
 
-	const start = startDate || defaultStart.toISOString().slice(0, 10);
-	const end = endDate || defaultEnd.toISOString().slice(0, 10);
+	const start = startDate ?? defaultStart.toISOString().slice(0, 10);
+	const end = endDate ?? defaultEnd.toISOString().slice(0, 10);
 
 	let res = await fetch("https://www.queenslandrailtravel.com.au/SPWebApp/api/ContentQuery/GetItems", {
 		body: JSON.stringify({
@@ -274,10 +274,10 @@ function convertQRTServiceToTravelTrip(
 		serviceName: service.Title,
 		direction,
 		line,
-		status: serviceMeta.QRTServiceDisruption?.Status || "Scheduled",
+		status: serviceMeta.QRTServiceDisruption?.Status ?? "Scheduled",
 		offersGoldClass: false, // Not available in QRTService, could be added if needed
 		serviceDate: serviceMeta.Modified,
-		departureDate: stops[0]?.plannedDeparture || "",
+		departureDate: stops[0]?.plannedDeparture ?? "",
 		stops,
 		disruption: serviceMeta.QRTServiceDisruption,
 	};
@@ -362,8 +362,8 @@ async function processService(
 						PlannedDeparture: s.plannedDeparture,
 						ActualArrival: s.actualArrival,
 						ActualDeparture: s.actualDeparture,
-						ArrivalDelaySeconds: s.arrivalDelaySeconds || 0,
-						DepartureDelaySeconds: s.departureDelaySeconds || 0,
+				ArrivalDelaySeconds: s.arrivalDelaySeconds ?? 0,
+				DepartureDelaySeconds: s.departureDelaySeconds ?? 0,
 					};
 				});
 				// Expand with SRT passing stops
@@ -388,7 +388,7 @@ async function processService(
 			return null;
 		}
 	} catch (error: any) {
-		logger.warn(`Failed to track service ${service.ServiceId}: ${error.message || error}`, {
+		logger.warn(`Failed to track service ${service.ServiceId}: ${error.message ?? error}`, {
 			module: "qr-travel-tracker",
 			function: "getCurrentQRTravelTrains",
 		});
@@ -418,11 +418,11 @@ export async function getCurrentQRTravelTrains(retries = 5): Promise<QRTTravelTr
 	} catch (error: any) {
 		let secs = 5 * (6 - retries);
 		logger.error(
-			`Failed to get current QR Travel trains: ${error.message || error}. Retrying in ${secs} seconds.`,
+			`Failed to get current QR Travel trains: ${error.message ?? error}. Retrying in ${secs} seconds.`,
 			{
 				module: "qr-travel-tracker",
 				function: "getCurrentQRTravelTrains",
-				error: error.message || error,
+				error: error.message ?? error,
 			},
 		);
 		retries--;
@@ -430,7 +430,7 @@ export async function getCurrentQRTravelTrains(retries = 5): Promise<QRTTravelTr
 			await new Promise((resolve) => setTimeout(resolve, secs * 1000));
 			return getCurrentQRTravelTrains(retries);
 		} else {
-			throw new Error(`Failed to get current QR Travel trains after multiple retries: ${error.message || error}`);
+			throw new Error(`Failed to get current QR Travel trains after multiple retries: ${error.message ?? error}`);
 		}
 	}
 }

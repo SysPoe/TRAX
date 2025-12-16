@@ -11,7 +11,7 @@ export function getServiceDates(
 		const { service_id, monday, tuesday, wednesday, thursday, friday, saturday, sunday, start_date, end_date } =
 			calendar;
 
-		serviceDates[service_id] = serviceDates[service_id] || [];
+		serviceDates[service_id] = serviceDates[service_id] ?? [];
 
 		// Parse date components manually to treat them as UTC
 		const sDateStr = String(start_date);
@@ -54,7 +54,7 @@ export function getServiceDates(
 
 	for (const calendarDate of calendarDates) {
 		const { service_id, date, exception_type } = calendarDate;
-		serviceDates[service_id] = serviceDates[service_id] || [];
+		serviceDates[service_id] = serviceDates[service_id] ?? [];
 
 		if (exception_type === 1) {
 			// Service added
@@ -84,5 +84,5 @@ export function getServiceDatesByTrip(trip_id: string, ctx?: CacheContext): stri
 	const calendars = getCalendars({ service_id: trip.service_id });
 	const calendarDates = getCalendarDates({ service_id: trip.service_id });
 	const serviceDatesMap = getServiceDates(calendars, calendarDates);
-	return serviceDatesMap[trip.service_id] || [];
+	return serviceDatesMap[trip.service_id] ?? [];
 }

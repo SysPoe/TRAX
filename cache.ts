@@ -256,17 +256,17 @@ export function getAugmentedTrips(trip_id?: string, ctx?: CacheContext): Augment
 	const { raw, augmented } = context;
 	if (trip_id) {
 		const trip = augmented.tripsRec.get(trip_id);
-		if (trip) return [addSC(trip)];
+		if (trip) return [addSC(trip, ctx)];
 		const rawTrip = raw.tripsRec.get(trip_id);
 		if (rawTrip) {
 			const augmentedTrip = augmentTrip(rawTrip, context);
 			augmented.tripsRec.set(trip_id, augmentedTrip);
-			return [addSC(augmentedTrip)];
+			return [addSC(augmentedTrip, ctx)];
 		}
 		return [];
 	}
 	// Build from tripsRec to ensure we have current data
-	return Array.from(augmented.tripsRec.values()).map((v) => addSC(v));
+	return Array.from(augmented.tripsRec.values()).map((v) => addSC(v, ctx));
 }
 
 export function getAugmentedTripInstance(instance_id: string, ctx?: CacheContext): AugmentedTripInstance | null {
@@ -274,7 +274,7 @@ export function getAugmentedTripInstance(instance_id: string, ctx?: CacheContext
 		let res = getAugmentedTrips(JSON.parse(atob(instance_id))[0], ctx)[0].instances.find(
 			(v) => v.instance_id === instance_id,
 		);
-		return res ? addSCI(res) : null;
+		return res ? addSCI(res, ctx) : null;
 	} catch {
 		return null;
 	}

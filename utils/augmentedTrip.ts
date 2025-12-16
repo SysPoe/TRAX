@@ -80,7 +80,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 		const scheduledTripDates = [
 			...new Set(
 				stopTimes
-					.map((st) => [...(st.scheduled_arrival_dates || []), ...(st.scheduled_departure_dates || [])])
+					.map((st) => [...(st.scheduled_arrival_dates ?? []), ...(st.scheduled_departure_dates ?? [])])
 					.flat(),
 			),
 		].sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
@@ -88,7 +88,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 		const actualTripDates = [
 			...new Set(
 				stopTimes
-					.map((st) => [...(st.actual_arrival_dates || []), ...(st.actual_departure_dates || [])])
+					.map((st) => [...(st.actual_arrival_dates ?? []), ...(st.actual_departure_dates ?? [])])
 					.flat(),
 			),
 		].sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
@@ -105,7 +105,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 			scheduledTripDates,
 			actualTripDates,
 			runSeries: null,
-			rt_start_date: update?.trip.start_date || null,
+			rt_start_date: update?.trip.start_date ?? null,
 		};
 
 		let prev_cap = null;
@@ -113,7 +113,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 		for (let i = 0; i < instance.stopTimes.length; i++) {
 			const st = instance.stopTimes[i];
 			if (!st.passing) {
-				st.service_capacity = getServiceCapacity(instance, st, serviceDate);
+				st.service_capacity = getServiceCapacity(instance, st, serviceDate, undefined, ctx);
 				if (st.service_capacity) prev_cap = st.service_capacity;
 				else st.service_capacity = prev_cap;
 			}
@@ -179,16 +179,16 @@ function trackBackwards(instance: AugmentedTripInstance, ctx?: cache.CacheContex
 		if (currentInstance.stopTimes.length === 0) break;
 		let st = currentInstance.stopTimes[0];
 
-		const time = st.scheduled_departure_time || st.scheduled_arrival_time;
+		const time = st.scheduled_departure_time ?? st.scheduled_arrival_time;
 		if (time === null) break;
 
-		if ((time || 0) < RS_TOLERATE_SECS) break;
+		if ((time ?? 0) < RS_TOLERATE_SECS) break;
 
 		let deps_ids = gtfs.queryStopTimes({
 			stop_id: st.scheduled_stop_id ?? undefined,
 			date: serviceDate.toString(),
-			start_time: (time || 0) - RS_TOLERATE_SECS,
-			end_time: time || 0,
+			start_time: (time ?? 0) - RS_TOLERATE_SECS,
+			end_time: time ?? 0,
 		});
 
 		let candidateInstances: AugmentedTripInstance[] = [];
@@ -211,8 +211,8 @@ function trackBackwards(instance: AugmentedTripInstance, ctx?: cache.CacheContex
 
 		deps = deps.sort(
 			(a, b) =>
-				(a.scheduled_departure_time || a.scheduled_arrival_time || Infinity) -
-				(b.scheduled_departure_time || b.scheduled_arrival_time || Infinity),
+				(a.scheduled_departure_time ?? a.scheduled_arrival_time ?? Infinity) -
+				(b.scheduled_departure_time ?? b.scheduled_arrival_time ?? Infinity),
 		);
 
 		if (deps.length === 0) break;
@@ -240,8 +240,8 @@ function trackBackwards(instance: AugmentedTripInstance, ctx?: cache.CacheContex
 				{
 					trip_id: prevInst.trip_id,
 					trip_start_time:
-						prevInst.stopTimes[0].scheduled_departure_time ||
-						prevInst.stopTimes[0].scheduled_arrival_time ||
+						prevInst.stopTimes[0].scheduled_departure_time ??
+						prevInst.stopTimes[0].scheduled_arrival_time ??
 						0,
 					run: prevInst.run,
 				},
@@ -263,14 +263,14 @@ function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx?:
 	for (let _break = 0; _break < 100; _break++) {
 		if (currentInstance.stopTimes.length === 0) break;
 		let st = currentInstance.stopTimes.at(-1) as AugmentedStopTime;
-		const time = st.scheduled_departure_time || st.scheduled_arrival_time;
+		const time = st.scheduled_departure_time ?? st.scheduled_arrival_time;
 		if (time === null) break;
 
 		let deps_ids = gtfs.queryStopTimes({
 			stop_id: st.scheduled_stop_id ?? undefined,
 			date: serviceDate.toString(),
-			start_time: time || 0,
-			end_time: (time || 0) + RS_TOLERATE_SECS,
+			start_time: time ?? 0,
+			end_time: (time ?? 0) + RS_TOLERATE_SECS,
 		});
 
 		let candidateInstances: AugmentedTripInstance[] = [];
@@ -292,8 +292,8 @@ function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx?:
 
 		deps = deps.sort(
 			(a, b) =>
-				(a.scheduled_departure_time || a.scheduled_arrival_time || Infinity) -
-				(b.scheduled_departure_time || b.scheduled_arrival_time || Infinity),
+				(a.scheduled_departure_time ?? a.scheduled_arrival_time ?? Infinity) -
+				(b.scheduled_departure_time ?? b.scheduled_arrival_time ?? Infinity),
 		);
 
 		if (deps.length === 0) break;
@@ -312,8 +312,8 @@ function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx?:
 			rs.trips.push({
 				trip_id: matchInstance.trip_id,
 				trip_start_time:
-					matchInstance.stopTimes[0].scheduled_departure_time ||
-					matchInstance.stopTimes[0].scheduled_arrival_time ||
+					matchInstance.stopTimes[0].scheduled_departure_time ??
+					matchInstance.stopTimes[0].scheduled_arrival_time ??
 					0,
 				run,
 			});
