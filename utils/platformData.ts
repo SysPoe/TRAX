@@ -16,8 +16,8 @@ export type PlatformData = {
 
 const DATA_PATH = `region-specific/${TRAX_CONFIG.region}/platforms.json`;
 
-export const platformData: PlatformData = TRAX_CONFIG.region && hasDataFile(DATA_PATH) ? JSON.parse(loadDataFile(DATA_PATH)) : [];
-
+export const platformData: PlatformData =
+	TRAX_CONFIG.region && hasDataFile(DATA_PATH) ? JSON.parse(loadDataFile(DATA_PATH)) : [];
 
 /*
 	TODO:

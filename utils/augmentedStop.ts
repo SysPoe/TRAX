@@ -7,8 +7,8 @@ export type AugmentedStop = qdf.Stop & {
 		SEQ?: {
 			qrt_Place: boolean;
 			qrt_PlaceCode?: string;
-		}
-	},
+		};
+	};
 	parent_stop_id: string | null;
 	child_stop_ids: string[];
 	parent?: AugmentedStop | null;
@@ -50,10 +50,9 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 		);
 		augmented.regionSpecific = {
 			SEQ: {
-
 				qrt_Place: !!myPlace,
 				qrt_PlaceCode: myPlace?.qrt_PlaceCode,
-			}
+			},
 		};
 	}
 

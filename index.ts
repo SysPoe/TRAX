@@ -9,11 +9,7 @@ import logger from "./utils/logger.js";
 import { TRAX_CONFIG } from "./config.js";
 import { findExpressString } from "./utils/SRT.js";
 import { getServiceCapacity } from "./utils/serviceCapacity.js";
-import {
-	attachDeparturesHelpers,
-	getDeparturesForStop,
-	getServiceDateDeparturesForStop,
-} from "./utils/departures.js";
+import { attachDeparturesHelpers, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
 
 interface TRAXEvent {
 	"realtime-update-start": [];
@@ -53,7 +49,7 @@ export async function loadGTFS(
 				scheduleNextRealtime();
 			}
 		}, realtimeIntervalMs);
-	}
+	};
 
 	const scheduleNextStatic = () => {
 		staticInterval = setTimeout(async () => {
@@ -73,7 +69,7 @@ export async function loadGTFS(
 				scheduleNextStatic();
 			}
 		}, staticIntervalMs);
-	}
+	};
 
 	if (TRAX_CONFIG.hasRealtime) scheduleNextRealtime();
 	scheduleNextStatic();
@@ -161,7 +157,7 @@ const TRAX = {
 			getQRTPlaces: cache.SEQgetQRTPlaces,
 			getQRTTrains: cache.SEQgetQRTTrains,
 			qrTravel,
-		}
+		},
 	},
 
 	// Utilities and config

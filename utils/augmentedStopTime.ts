@@ -54,7 +54,7 @@ export type AugmentedStopTime = {
 	scheduled_departure_date_offset: number;
 	actual_departure_date_offset: number;
 } & (
-		| {
+	| {
 			realtime: true;
 			realtime_info: {
 				delay_secs: number;
@@ -64,21 +64,21 @@ export type AugmentedStopTime = {
 				propagated: boolean;
 				rt_start_date: string | null;
 			};
-		}
-		| {
+	  }
+	| {
 			realtime: false;
 			realtime_info: null;
-		}
-	) & {
+	  }
+) & {
 		// Non-enumerable helpers added at runtime
-			actual_stop?: AugmentedStop | null;
-			actual_parent_station?: AugmentedStop | null;
-			scheduled_stop?: AugmentedStop | null;
-			scheduled_parent_station?: AugmentedStop | null;
-		};
+		actual_stop?: AugmentedStop | null;
+		actual_parent_station?: AugmentedStop | null;
+		scheduled_stop?: AugmentedStop | null;
+		scheduled_parent_station?: AugmentedStop | null;
+	};
 
-	// Internal type for data before platform/exit side calculation
-	type IntermediateAST = Omit<AugmentedStopTime, "actual_exit_side" | "scheduled_exit_side">;
+// Internal type for data before platform/exit side calculation
+type IntermediateAST = Omit<AugmentedStopTime, "actual_exit_side" | "scheduled_exit_side">;
 
 function attachStopReferences(
 	ast: AugmentedStopTime,
@@ -137,10 +137,9 @@ function resolveExitSide(
 	const platform = platformDataList?.find((v) => v.platform_code === platformCode);
 	if (!platform) return null;
 
-	const prevId =
-			index > 0 ? stops[index - 1].actual_parent_station_id || stops[index - 1].actual_stop_id : "";
+	const prevId = index > 0 ? stops[index - 1].actual_parent_station_id || stops[index - 1].actual_stop_id : "";
 	const nextId =
-			index < stops.length - 1 ? stops[index + 1].actual_parent_station_id || stops[index + 1].actual_stop_id : "";
+		index < stops.length - 1 ? stops[index + 1].actual_parent_station_id || stops[index + 1].actual_stop_id : "";
 
 	const matchesNext = platform.next.includes(nextId);
 	const matchesPrev = platform.from.includes(prevId);
@@ -172,7 +171,11 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 				scheduledStop: (item as any).scheduled_stop ?? null,
 				scheduledParent: (item as any).scheduled_parent_station ?? null,
 			};
-			const skippedWithSides = { ...item, actual_exit_side: null, scheduled_exit_side: null } as AugmentedStopTime;
+			const skippedWithSides = {
+				...item,
+				actual_exit_side: null,
+				scheduled_exit_side: null,
+			} as AugmentedStopTime;
 			attachStopReferences(skippedWithSides, refs);
 			pathBuffer.push(skippedWithSides);
 			continue;
@@ -194,7 +197,8 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 			if (!schPlat) prevScheduledTrack = "";
 		} else {
 			actPlat = actData?.find((v: any) => v.platform_code === parseInt(item.actual_platform_code ?? "0")) ?? null;
-			schPlat = schData?.find((v: any) => v.platform_code === parseInt(item.scheduled_platform_code ?? "0")) ?? null;
+			schPlat =
+				schData?.find((v: any) => v.platform_code === parseInt(item.scheduled_platform_code ?? "0")) ?? null;
 		}
 
 		if (actPlat?.trackCode === prevActualTrack && schPlat?.trackCode === prevScheduledTrack) {
@@ -344,7 +348,7 @@ export function augmentStopTimes(
 	// 4. Calculate Passing Times (Interpolation)
 	// We only want to run SRT logic on stops that are NOT skipped.
 	// If a stop is skipped, the train doesn't go there (or passes through without stopping in a way that implies a different path/timing).
-	const activeStops = mergedList.filter(s => !s._isSkipped);
+	const activeStops = mergedList.filter((s) => !s._isSkipped);
 
 	// findPassingStopTimes returns qdf.StopTime[], effectively stripping our extra metadata.
 	// We need to re-match the results back to our mergedList structure.
@@ -380,7 +384,9 @@ export function augmentStopTimes(
 		if (originalMergeItem._isSkipped) {
 			// Construct a "Skipped" AugmentedStopTime
 			const scheduledStop = cache.getAugmentedStops(originalMergeItem.stop_id, ctx)[0];
-			const scheduledParent = scheduledStop?.parent_stop_id ? cache.getAugmentedStops(scheduledStop.parent_stop_id, ctx)[0] : null;
+			const scheduledParent = scheduledStop?.parent_stop_id
+				? cache.getAugmentedStops(scheduledStop.parent_stop_id, ctx)[0]
+				: null;
 			const skipped: AugmentedStopTime = {
 				_stopTime: originalMergeItem,
 				trip_id: tripId,
@@ -417,7 +423,7 @@ export function augmentStopTimes(
 					delay_class: "scheduled",
 					schedule_relationship: qdf.StopTimeScheduleRelationship.SKIPPED,
 					propagated: false,
-					rt_start_date: tripUpdate?.trip.start_date ?? serviceDate
+					rt_start_date: tripUpdate?.trip.start_date ?? serviceDate,
 				},
 
 				scheduled_arrival_dates: [],
@@ -427,7 +433,7 @@ export function augmentStopTimes(
 				scheduled_departure_dates: [],
 				actual_departure_dates: [],
 				scheduled_departure_date_offset: 0,
-				actual_departure_date_offset: 0
+				actual_departure_date_offset: 0,
 			};
 			attachStopReferences(skipped, {
 				actualStop: scheduledStop,
@@ -441,7 +447,7 @@ export function augmentStopTimes(
 
 		// It's an active stop (either original or interpolated)
 		// We need to grab the *interpolated* version which might be passing
-		// Note: activeStops was fed to findPassingStopTimes. 
+		// Note: activeStops was fed to findPassingStopTimes.
 		// interpolatedActiveStops contains the result, which might contain MORE items (passing nodes) than activeStops.
 		// However, findPassingStopTimes returns items in order.
 		// Wait - findPassingStopTimes INSERTS nodes. So 1:1 mapping with mergedList breaks if we iterate mergedList.
@@ -475,15 +481,20 @@ export function augmentStopTimes(
 			const missed = sequenceMap.get(s);
 			if (missed && missed.rt?.schedule_relationship === qdf.StopTimeScheduleRelationship.SKIPPED) {
 				// Insert Skipped Stop
-				const originalMergeItem = mergedList.find(m => m.stop_sequence === s);
+				const originalMergeItem = mergedList.find((m) => m.stop_sequence === s);
 				if (originalMergeItem) {
 					const scheduledStop = cache.getAugmentedStops(originalMergeItem.stop_id, ctx)[0];
-					const scheduledParent = scheduledStop?.parent_stop_id ? cache.getAugmentedStops(scheduledStop.parent_stop_id, ctx)[0] : null;
+					const scheduledParent = scheduledStop?.parent_stop_id
+						? cache.getAugmentedStops(scheduledStop.parent_stop_id, ctx)[0]
+						: null;
 					const skipped: AugmentedStopTime = {
 						_stopTime: originalMergeItem,
 						trip_id: tripId,
 						passing: false,
-						instance_id: "", service_date: "", schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED, service_capacity: null,
+						instance_id: "",
+						service_date: "",
+						schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED,
+						service_capacity: null,
 						actual_exit_side: null,
 						scheduled_exit_side: null,
 						actual_arrival_time: null,
@@ -491,15 +502,33 @@ export function augmentStopTimes(
 						actual_stop_id: scheduledStop?.stop_id ?? null,
 						actual_parent_station_id: scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null,
 						actual_platform_code: null,
-						rt_stop_updated: true, rt_parent_station_updated: false, rt_platform_code_updated: false, rt_arrival_updated: false, rt_departure_updated: false,
+						rt_stop_updated: true,
+						rt_parent_station_updated: false,
+						rt_platform_code_updated: false,
+						rt_arrival_updated: false,
+						rt_departure_updated: false,
 						scheduled_arrival_time: originalMergeItem.arrival_time,
 						scheduled_departure_time: originalMergeItem.departure_time,
 						scheduled_stop_id: scheduledStop?.stop_id ?? null,
 						scheduled_parent_station_id: scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null,
 						scheduled_platform_code: scheduledStop?.platform_code ?? null,
 						realtime: true,
-						realtime_info: { delay_secs: 0, delay_string: "Skipped", delay_class: "scheduled", schedule_relationship: qdf.StopTimeScheduleRelationship.SKIPPED, propagated: false, rt_start_date: tripUpdate?.trip.start_date ?? serviceDate },
-						scheduled_arrival_dates: [], actual_arrival_dates: [], scheduled_arrival_date_offset: 0, actual_arrival_date_offset: 0, scheduled_departure_dates: [], actual_departure_dates: [], scheduled_departure_date_offset: 0, actual_departure_date_offset: 0
+						realtime_info: {
+							delay_secs: 0,
+							delay_string: "Skipped",
+							delay_class: "scheduled",
+							schedule_relationship: qdf.StopTimeScheduleRelationship.SKIPPED,
+							propagated: false,
+							rt_start_date: tripUpdate?.trip.start_date ?? serviceDate,
+						},
+						scheduled_arrival_dates: [],
+						actual_arrival_dates: [],
+						scheduled_arrival_date_offset: 0,
+						actual_arrival_date_offset: 0,
+						scheduled_departure_dates: [],
+						actual_departure_dates: [],
+						scheduled_departure_date_offset: 0,
+						actual_departure_date_offset: 0,
 					};
 					attachStopReferences(skipped, {
 						actualStop: scheduledStop,
@@ -515,8 +544,9 @@ export function augmentStopTimes(
 
 		// Process the Active Stop (stopTime)
 		const stopId = stopTime.stop_id;
-		const rtUpdate = stopTimeUpdates.find(u => u.stop_sequence === seq && !isPassing)
-			|| (isPassing ? undefined : stopTimeUpdates.find(u => u.stop_id === stopId)); // Fallback to ID match if sequence match fails (unlikely given how we built merged)
+		const rtUpdate =
+			stopTimeUpdates.find((u) => u.stop_sequence === seq && !isPassing) ||
+			(isPassing ? undefined : stopTimeUpdates.find((u) => u.stop_id === stopId)); // Fallback to ID match if sequence match fails (unlikely given how we built merged)
 
 		const scheduledStop = cache.getAugmentedStops(stopId, ctx)[0];
 		const scheduledParentId = scheduledStop?.parent_stop_id ?? scheduledStop?.parent_station ?? null;
@@ -581,15 +611,17 @@ export function augmentStopTimes(
 			// Stop Change
 			if (rtUpdate.stop_id && rtUpdate.stop_id !== stopId) {
 				actualStop = cache.getAugmentedStops(rtUpdate.stop_id, ctx)[0];
-				actualParent = actualStop?.parent_station ? cache.getAugmentedStops(actualStop.parent_station, ctx)[0] : null;
+				actualParent = actualStop?.parent_station
+					? cache.getAugmentedStops(actualStop.parent_station, ctx)[0]
+					: null;
 				rtFlags.stop = true;
 				rtFlags.parent = true;
 			}
 		} else {
 			// Propagation Logic
 			if (lastDelay !== 0) {
-				if (schedArr !== undefined) actArr = schedArr + lastDelay;
-				if (schedDep !== undefined) actDep = schedDep + lastDelay;
+				if (schedArr !== null) actArr = schedArr + lastDelay;
+				if (schedDep !== null) actDep = schedDep + lastDelay;
 				propagated = true;
 			} else if (propagateOnTime) {
 				delaySecs = 0;
@@ -599,7 +631,8 @@ export function augmentStopTimes(
 
 		// Construct Realtime Info
 		let realtimeInfo = null;
-		const hasRealtime = (!!rtUpdate) || propagated || (!!tripUpdate && scheduleRelationship === qdf.TripScheduleRelationship.ADDED);
+		const hasRealtime =
+			!!rtUpdate || propagated || (!!tripUpdate && scheduleRelationship === qdf.TripScheduleRelationship.ADDED);
 
 		if (hasRealtime) {
 			const { str, cls } = calculateDelayClass(delaySecs);
@@ -620,10 +653,10 @@ export function augmentStopTimes(
 		// Dates
 		const getOffset = (secs: number) => Math.floor(secs / 86400);
 		const currentOffsets = {
-			schedArr: getOffset(schedArr),
-			schedDep: getOffset(schedDep),
-			actArr: getOffset(actArr),
-			actDep: getOffset(actDep),
+			schedArr: schedArr ? getOffset(schedArr) : null,
+			schedDep: schedDep ? getOffset(schedDep) : null,
+			actArr: actArr ? getOffset(actArr) : null,
+			actDep: actDep ? getOffset(actDep) : null,
 		};
 
 		const datesServiceDate = serviceDate;
@@ -632,14 +665,22 @@ export function augmentStopTimes(
 			_stopTime: isPassing ? null : stopTime,
 			trip_id: tripId,
 			passing: isPassing,
-			instance_id: "", service_date: "", schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED, service_capacity: "BYA",
+			instance_id: "",
+			service_date: "",
+			schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED,
+			service_capacity: "BYA",
 			actual_exit_side: null,
 			scheduled_exit_side: null,
 
-			actual_arrival_time: actArr % 86400,
-			actual_departure_time: actDep % 86400,
+			actual_arrival_time: actArr ? actArr % 86400 : null,
+			actual_departure_time: actDep ? actDep % 86400 : null,
 			actual_stop_id: actualStop?.stop_id ?? stopId ?? null,
-			actual_parent_station_id: actualParent?.stop_id ?? actualStop?.parent_stop_id ?? scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null,
+			actual_parent_station_id:
+				actualParent?.stop_id ??
+				actualStop?.parent_stop_id ??
+				scheduledParent?.stop_id ??
+				scheduledStop?.parent_stop_id ??
+				null,
 			actual_platform_code: isPassing ? null : (platformCode ?? scheduledStop?.platform_code ?? null),
 
 			rt_stop_updated: rtFlags.stop,
@@ -648,22 +689,46 @@ export function augmentStopTimes(
 			rt_arrival_updated: rtFlags.arr,
 			rt_departure_updated: rtFlags.dep,
 
-			scheduled_arrival_time: schedArr % 86400,
-			scheduled_departure_time: schedDep % 86400,
+			scheduled_arrival_time: schedArr ? schedArr % 86400 : null,
+			scheduled_departure_time: schedDep ? schedDep % 86400 : null,
 			scheduled_stop_id: scheduledStop?.stop_id ?? null,
 			scheduled_parent_station_id: scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null,
 			scheduled_platform_code: isPassing ? null : (scheduledStop?.platform_code ?? null),
 
 			...realtimeDetails,
 
-			scheduled_arrival_dates: [addDaysToDateString(datesServiceDate, currentOffsets.schedArr - dateOffsets.schedArr)],
-			actual_arrival_dates: [addDaysToDateString(datesServiceDate, currentOffsets.actArr - dateOffsets.actArr)],
-			scheduled_arrival_date_offset: currentOffsets.schedArr - dateOffsets.schedArr,
-			actual_arrival_date_offset: currentOffsets.actArr - dateOffsets.actArr,
-			scheduled_departure_dates: [addDaysToDateString(datesServiceDate, currentOffsets.schedDep - dateOffsets.schedDep)],
-			actual_departure_dates: [addDaysToDateString(datesServiceDate, currentOffsets.actDep - dateOffsets.actDep)],
-			scheduled_departure_date_offset: currentOffsets.schedDep - dateOffsets.schedDep,
-			actual_departure_date_offset: currentOffsets.actDep - dateOffsets.actDep
+			scheduled_arrival_dates: [
+				addDaysToDateString(
+					datesServiceDate,
+					(currentOffsets.schedArr ?? currentOffsets.schedDep ?? dateOffsets.schedArr) - dateOffsets.schedArr,
+				),
+			],
+			actual_arrival_dates: [
+				addDaysToDateString(
+					datesServiceDate,
+					(currentOffsets.actArr ?? currentOffsets.actDep ?? dateOffsets.actArr) - dateOffsets.actArr,
+				),
+			],
+			scheduled_arrival_date_offset:
+				(currentOffsets.schedArr ?? currentOffsets.schedDep ?? dateOffsets.schedArr) - dateOffsets.schedArr,
+			actual_arrival_date_offset:
+				(currentOffsets.actArr ?? currentOffsets.actDep ?? dateOffsets.actArr) - dateOffsets.actArr,
+			scheduled_departure_dates: [
+				addDaysToDateString(
+					datesServiceDate,
+					(currentOffsets.schedDep ?? currentOffsets.schedArr ?? dateOffsets.schedDep) - dateOffsets.schedDep,
+				),
+			],
+			actual_departure_dates: [
+				addDaysToDateString(
+					datesServiceDate,
+					(currentOffsets.actDep ?? currentOffsets.actArr ?? dateOffsets.actDep) - dateOffsets.actDep,
+				),
+			],
+			scheduled_departure_date_offset:
+				(currentOffsets.schedDep ?? currentOffsets.schedArr ?? dateOffsets.schedDep) - dateOffsets.schedDep,
+			actual_departure_date_offset:
+				(currentOffsets.actDep ?? currentOffsets.actArr ?? dateOffsets.actDep) - dateOffsets.actDep,
 		};
 
 		attachStopReferences(augmented, {

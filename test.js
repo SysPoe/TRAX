@@ -25,7 +25,10 @@ async function main() {
 	if (deps.length > 0) {
 		const firstDep = deps[0];
 		console.log("First departure service_capacity:", firstDep.service_capacity);
-		console.log("First stopTime service_capacity:", TRAX.getAugmentedTripInstance(firstDep.instance_id).stopTimes[1].service_capacity);
+		console.log(
+			"First stopTime service_capacity:",
+			TRAX.getAugmentedTripInstance(firstDep.instance_id).stopTimes[1].service_capacity,
+		);
 	}
 
 	TRAX.logger.info(`GTFS loading took ${(end_static - start_static) / 1000} seconds.`);

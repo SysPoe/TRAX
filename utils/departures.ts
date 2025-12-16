@@ -63,10 +63,14 @@ export function getDeparturesForStop(
 		if (!trip) continue;
 
 		for (const instance of trip.instances) {
-			const matchingStopTimes = instance.stopTimes.filter((s) => s.actual_stop_id && validStops.has(s.actual_stop_id));
+			const matchingStopTimes = instance.stopTimes.filter(
+				(s) => s.actual_stop_id && validStops.has(s.actual_stop_id),
+			);
 
 			for (const st of matchingStopTimes) {
-				const matchingDate = getMatchingTripDate((st?.actual_departure_dates || []).concat(st?.actual_arrival_dates || []));
+				const matchingDate = getMatchingTripDate(
+					(st?.actual_departure_dates || []).concat(st?.actual_arrival_dates || []),
+				);
 				if (matchingDate === null) continue;
 
 				const ts =
@@ -82,12 +86,16 @@ export function getDeparturesForStop(
 	return results
 		.sort((a, b) => (a.st.actual_departure_time ?? 0) - (b.st.actual_departure_time ?? 0))
 		.map(({ st, inst }) => {
-			const expressString = findExpressString(inst.expressInfo, st.actual_parent_station_id || st.actual_stop_id || "");
+			const expressString = findExpressString(
+				inst.expressInfo,
+				st.actual_parent_station_id || st.actual_stop_id || "",
+			);
 			return {
 				...st,
 				express_string: expressString,
 				instance_id: inst.instance_id,
-				service_capacity: st.service_capacity === null ? getServiceCapacity(inst, st, inst.serviceDate) : st.service_capacity,
+				service_capacity:
+					st.service_capacity === null ? getServiceCapacity(inst, st, inst.serviceDate) : st.service_capacity,
 			};
 		});
 }
@@ -125,7 +133,9 @@ export function getServiceDateDeparturesForStop(
 		for (const instance of trip.instances) {
 			if (instance.serviceDate !== serviceDate) continue;
 
-			const matchingStopTimes = instance.stopTimes.filter((s) => s.actual_stop_id && validStops.has(s.actual_stop_id));
+			const matchingStopTimes = instance.stopTimes.filter(
+				(s) => s.actual_stop_id && validStops.has(s.actual_stop_id),
+			);
 
 			for (const st of matchingStopTimes) {
 				const ts = st.actual_departure_time;
@@ -137,12 +147,16 @@ export function getServiceDateDeparturesForStop(
 	return results
 		.sort((a, b) => (a.st.actual_departure_time ?? 0) - (b.st.actual_departure_time ?? 0))
 		.map(({ st, inst }) => {
-			const expressString = findExpressString(inst.expressInfo, st.actual_parent_station_id || st.actual_stop_id || "");
+			const expressString = findExpressString(
+				inst.expressInfo,
+				st.actual_parent_station_id || st.actual_stop_id || "",
+			);
 			return {
 				...st,
 				express_string: expressString,
 				instance_id: inst.instance_id,
-				service_capacity: st.service_capacity === null ? getServiceCapacity(inst, st, inst.serviceDate) : st.service_capacity,
+				service_capacity:
+					st.service_capacity === null ? getServiceCapacity(inst, st, inst.serviceDate) : st.service_capacity,
 			};
 		});
 }

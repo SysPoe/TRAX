@@ -11,7 +11,13 @@ import type {
 } from "qdf-gtfs";
 import { isConsideredTrip } from "./utils/considered.js";
 import { AugmentedStop, augmentStop } from "./utils/augmentedStop.js";
-import { AugmentedTrip, AugmentedTripInstance, augmentTrip, calculateRunSeries, RunSeries } from "./utils/augmentedTrip.js";
+import {
+	AugmentedTrip,
+	AugmentedTripInstance,
+	augmentTrip,
+	calculateRunSeries,
+	RunSeries,
+} from "./utils/augmentedTrip.js";
 import { AugmentedStopTime } from "./utils/augmentedStopTime.js";
 import { QRTPlace, QRTTravelTrip } from "./index.js";
 import { getCurrentQRTravelTrains, getPlaces } from "./region-specific/SEQ/qr-travel/qr-travel-tracker.js";
@@ -83,8 +89,8 @@ export type RawCache = {
 		SEQ: {
 			qrtPlaces: QRTPlace[];
 			qrtTrains: QRTTravelTrip[];
-		}
-	}
+		};
+	};
 };
 
 export type AugmentedCache = {
@@ -126,8 +132,8 @@ export function createEmptyRawCache(): RawCache {
 			SEQ: {
 				qrtPlaces: [],
 				qrtTrains: [],
-			}
-		}
+			},
+		},
 	};
 }
 
@@ -260,12 +266,14 @@ export function getAugmentedTrips(trip_id?: string, ctx?: CacheContext): Augment
 		return [];
 	}
 	// Build from tripsRec to ensure we have current data
-	return Array.from(augmented.tripsRec.values()).map(v => addSC(v));
+	return Array.from(augmented.tripsRec.values()).map((v) => addSC(v));
 }
 
 export function getAugmentedTripInstance(instance_id: string, ctx?: CacheContext): AugmentedTripInstance | null {
 	try {
-		let res = getAugmentedTrips(JSON.parse(atob(instance_id))[0], ctx)[0].instances.find(v => v.instance_id === instance_id);
+		let res = getAugmentedTrips(JSON.parse(atob(instance_id))[0], ctx)[0].instances.find(
+			(v) => v.instance_id === instance_id,
+		);
 		return res ? addSCI(res) : null;
 	} catch {
 		return null;
@@ -369,7 +377,7 @@ export function getRunSeries(
 		if (tripId) {
 			const trip = getAugmentedTrips(tripId, context)[0];
 			// Find relevant instance for date
-			const instance = trip.instances.find(i => i.serviceDate === date);
+			const instance = trip.instances.find((i) => i.serviceDate === date);
 			if (instance) {
 				calculateRunSeries(instance, context);
 			}
@@ -523,7 +531,7 @@ export async function refreshStaticCache(): Promise<void> {
 		newAugmentedCache.tripsRec.set(trip.trip_id, trip);
 
 		// Store both current stop times and base stop times (without realtime)
-		const allStopTimes = trip.instances.flatMap(i => i.stopTimes);
+		const allStopTimes = trip.instances.flatMap((i) => i.stopTimes);
 
 		newAugmentedCache.stopTimes[trip.trip_id] = allStopTimes;
 		// Deep copy for base
@@ -581,16 +589,18 @@ export async function refreshRealtimeCache(): Promise<void> {
 			module: "cache",
 			function: "refreshRealtimeCache",
 		});
-		additionalPromises.push(new Promise<void>((rs) => {
-			getCurrentQRTravelTrains().then((trains) => {
-				rawCache.regionSpecific.SEQ.qrtTrains = trains;
-				logger.debug(`Loaded ${rawCache.regionSpecific.SEQ.qrtTrains.length} QRT trains.`, {
-					module: "cache",
-					function: "refreshRealtimeCache",
+		additionalPromises.push(
+			new Promise<void>((rs) => {
+				getCurrentQRTravelTrains().then((trains) => {
+					rawCache.regionSpecific.SEQ.qrtTrains = trains;
+					logger.debug(`Loaded ${rawCache.regionSpecific.SEQ.qrtTrains.length} QRT trains.`, {
+						module: "cache",
+						function: "refreshRealtimeCache",
+					});
+					rs();
 				});
-				rs();
-			});
-		}));
+			}),
+		);
 	}
 
 	logger.debug("Loading realtime updates...", {
@@ -675,7 +685,7 @@ export async function refreshRealtimeCache(): Promise<void> {
 		const trip = augmentedCache.tripsRec.get(tripId);
 		if (!trip) continue;
 
-		const allStopTimes = trip.instances.flatMap(i => i.stopTimes);
+		const allStopTimes = trip.instances.flatMap((i) => i.stopTimes);
 
 		augmentedCache.stopTimes[trip.trip_id] = allStopTimes;
 		augmentedCache.baseStopTimes[trip.trip_id] = [...allStopTimes];

@@ -1,9 +1,9 @@
 import logger from "./logger.js";
-import { getGtfs } from '../gtfsInterfaceLayer.js';
+import { getGtfs } from "../gtfsInterfaceLayer.js";
 import { cacheFileExists, loadCacheFile, writeCacheFile } from "./fs.js";
 import * as cache from "../cache.js";
 import * as qdf from "qdf-gtfs";
-// Assuming 'qdf' types are available globally or imported. 
+// Assuming 'qdf' types are available globally or imported.
 // If not, you may need to import them from your types definition file.
 
 // --- Types ---
@@ -61,7 +61,7 @@ function loadNetworkData(): NetworkData | null {
 // --- Generation Logic ---
 
 function getPatternSignature(stopTimes: any[]): string {
-	return stopTimes.map(st => st.stop_id).join('|');
+	return stopTimes.map((st) => st.stop_id).join("|");
 }
 
 /**
@@ -75,7 +75,7 @@ function generateNetworkData(): NetworkData {
 
 	// We strictly want Rail (route_type 2)
 	// You might need to adjust this filter based on your specific GTFS data
-	const railTrips = trips.filter(t => gtfs.getRoute(t.route_id)?.route_type === 2);
+	const railTrips = trips.filter((t) => gtfs.getRoute(t.route_id)?.route_type === 2);
 
 	const uniquePatterns: any[][] = [];
 	const seenSignatures = new Set<string>();
@@ -92,7 +92,7 @@ function generateNetworkData(): NetworkData {
 		const stops = stopTimes.map((st, i) => {
 			const stop = gtfs.getStop(st.stop_id);
 			// Use parent station if available to unify platforms
-			const id = stop ? stop.parent_station ?? stop.stop_id : st.stop_id;
+			const id = stop ? (stop.parent_station ?? stop.stop_id) : st.stop_id;
 
 			let timeFromPrev = 0;
 			if (i > 0) {
@@ -110,7 +110,7 @@ function generateNetworkData(): NetworkData {
 
 	// 1. Identify all POTENTIAL edges (including Express skips)
 	const validEdges = new Set<string>();
-	uniquePatterns.forEach(pattern => {
+	uniquePatterns.forEach((pattern) => {
 		for (let i = 0; i < pattern.length - 1; i++) {
 			validEdges.add(`${pattern[i].id}|${pattern[i + 1].id}`);
 		}
@@ -120,7 +120,7 @@ function generateNetworkData(): NetworkData {
 
 	// 2. Prune edges that are actually express skips
 	// If we see A->B->C, we remove the edge A->C if it exists
-	uniquePatterns.forEach(pattern => {
+	uniquePatterns.forEach((pattern) => {
 		for (let i = 0; i < pattern.length - 2; i++) {
 			const startNode = pattern[i].id;
 			for (let j = i + 2; j < pattern.length; j++) {
@@ -140,7 +140,7 @@ function generateNetworkData(): NetworkData {
 	const segmentStats = new Map<string, { total: number; count: number }>();
 
 	// 3. Build Adjacency List & Accumulate Stats
-	uniquePatterns.forEach(pattern => {
+	uniquePatterns.forEach((pattern) => {
 		for (let i = 0; i < pattern.length - 1; i++) {
 			const from = pattern[i].id;
 			const to = pattern[i + 1].id;
@@ -172,7 +172,7 @@ function generateNetworkData(): NetworkData {
 
 	// 4. Finalize Matrix
 	for (const [key, stats] of segmentStats.entries()) {
-		const [from, to] = key.split('|');
+		const [from, to] = key.split("|");
 		const avg = stats.total / stats.count;
 
 		if (!matrix[from]) matrix[from] = {};
@@ -266,7 +266,7 @@ export function findExpress(givenStops: string[]): ExpressInfo[] {
 					type: "express",
 					from: startStop,
 					to: endStop,
-					skipping: skippedStops
+					skipping: skippedStops,
 				});
 			}
 		} else {
@@ -274,7 +274,7 @@ export function findExpress(givenStops: string[]): ExpressInfo[] {
 				type: "unknown_segment",
 				from: startStop,
 				to: endStop,
-				message: "No physical track connection found."
+				message: "No physical track connection found.",
 			});
 		}
 	}
@@ -424,7 +424,10 @@ function getStopOrParentId(stopId: string, ctx?: cache.CacheContext): string | u
 	return s ? (s.parent_station ?? s.stop_id) : undefined;
 }
 
-export function findPassingStopTimes(stopTimes: qdf.StopTime[], ctx?: cache.CacheContext): (qdf.StopTime & { _passing: boolean })[] {
+export function findPassingStopTimes(
+	stopTimes: qdf.StopTime[],
+	ctx?: cache.CacheContext,
+): (qdf.StopTime & { _passing: boolean })[] {
 	if (stopTimes.length === 0) return [];
 
 	// Extract parent stations for SRT lookup, sorted by sequence
@@ -442,7 +445,7 @@ export function findPassingStopTimes(stopTimes: qdf.StopTime[], ctx?: cache.Cach
 	const passingSRTs = findPassingStopSRTs(stops, ctx);
 	if (!passingSRTs.length) {
 		// Fallback or warning if we couldn't determine path
-		return sortedStopTimes.map(v => ({ ...v, _passing: false }));
+		return sortedStopTimes.map((v) => ({ ...v, _passing: false }));
 	}
 
 	// We define a new Interface for result items which might be 'Passing' (virtual)
@@ -495,11 +498,14 @@ export function findPassingStopTimes(stopTimes: qdf.StopTime[], ctx?: cache.Cach
 				_passing: true,
 				stop_id: run.to,
 				trip_id: stopTimes[0].trip_id,
-				stop_sequence: (startTime.stop_sequence ?? 0) + (i + 1) * ((endTime.stop_sequence ?? 0) - (startTime.stop_sequence ?? 0)) / (currentPassingRun.length + 1),
+				stop_sequence:
+					(startTime.stop_sequence ?? 0) +
+					((i + 1) * ((endTime.stop_sequence ?? 0) - (startTime.stop_sequence ?? 0))) /
+						(currentPassingRun.length + 1),
 				departure_time: interpolatedTime,
 				arrival_time: interpolatedTime,
 				drop_off_type: 1, // None
-				pickup_type: 1,   // None
+				pickup_type: 1, // None
 				continuous_drop_off: 0,
 				continuous_pickup: 0,
 				shape_dist_traveled: -1,
@@ -519,5 +525,5 @@ export default {
 	findExpress,
 	findExpressString,
 	getSRT,
-	findPassingStopTimes
+	findPassingStopTimes,
 };

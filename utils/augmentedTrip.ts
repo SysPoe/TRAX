@@ -57,22 +57,24 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 	const createInstance = (
 		serviceDate: string,
 		update: qdf.RealtimeTripUpdate | null,
-		scheduleRelationship: qdf.TripScheduleRelationship
+		scheduleRelationship: qdf.TripScheduleRelationship,
 	): AugmentedTripInstance => {
 		const startDate = update?.trip.start_date ?? serviceDate;
 		const startTime = update?.trip.start_time ?? "";
 
 		const instance_id = btoa(JSON.stringify([trip.trip_id, startDate, startTime, scheduleRelationship]));
 
-
 		const stopTimes = augmentStopTimes(
-			scheduleRelationship === qdf.TripScheduleRelationship.ADDED || scheduleRelationship === qdf.TripScheduleRelationship.UNSCHEDULED ? null : rawStopTimes,
+			scheduleRelationship === qdf.TripScheduleRelationship.ADDED ||
+				scheduleRelationship === qdf.TripScheduleRelationship.UNSCHEDULED
+				? null
+				: rawStopTimes,
 			{
 				serviceDate,
 				tripUpdate: update,
-				scheduleRelationship
+				scheduleRelationship,
 			},
-			ctx
+			ctx,
 		);
 
 		const scheduledTripDates = [
@@ -113,7 +115,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 			if (!st.passing) {
 				st.service_capacity = getServiceCapacity(instance, st, serviceDate);
 				if (st.service_capacity) prev_cap = st.service_capacity;
-				else st.service_capacity = prev_cap
+				else st.service_capacity = prev_cap;
 			}
 
 			// Bake in instance info
@@ -194,7 +196,10 @@ function trackBackwards(instance: AugmentedTripInstance, ctx?: cache.CacheContex
 			const trips = cache.getAugmentedTrips(d.trip_id, ctx);
 			if (!trips.length) continue;
 			const t = trips[0];
-			const inst = t.instances.find(i => i.serviceDate === serviceDate && i.schedule_relationship === qdf.TripScheduleRelationship.SCHEDULED);
+			const inst = t.instances.find(
+				(i) =>
+					i.serviceDate === serviceDate && i.schedule_relationship === qdf.TripScheduleRelationship.SCHEDULED,
+			);
 			if (inst) candidateInstances.push(inst);
 		}
 
@@ -216,10 +221,11 @@ function trackBackwards(instance: AugmentedTripInstance, ctx?: cache.CacheContex
 		if (!bestMatchStopTime) break;
 
 		const matchTrip = cache.getAugmentedTrips(bestMatchStopTime.trip_id, ctx)[0];
-		const matchInstance = matchTrip.instances.find(i => i.serviceDate === serviceDate);
+		const matchInstance = matchTrip.instances.find((i) => i.serviceDate === serviceDate);
 
 		if (!matchInstance) break;
-		if (bestMatchStopTime._stopTime?.stop_sequence != matchInstance.stopTimes.at(-1)?._stopTime?.stop_sequence) break;
+		if (bestMatchStopTime._stopTime?.stop_sequence != matchInstance.stopTimes.at(-1)?._stopTime?.stop_sequence)
+			break;
 
 		prevInstances.push(matchInstance);
 		run = matchInstance.run;
@@ -271,7 +277,10 @@ function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx?:
 		for (const d of deps_ids) {
 			const trips = cache.getAugmentedTrips(d.trip_id, ctx);
 			if (!trips.length) continue;
-			const inst = trips[0].instances.find(i => i.serviceDate === serviceDate && i.schedule_relationship === qdf.TripScheduleRelationship.SCHEDULED);
+			const inst = trips[0].instances.find(
+				(i) =>
+					i.serviceDate === serviceDate && i.schedule_relationship === qdf.TripScheduleRelationship.SCHEDULED,
+			);
 			if (inst) candidateInstances.push(inst);
 		}
 
@@ -291,7 +300,7 @@ function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx?:
 
 		const bestMatchStopTime = deps[0];
 		const matchTrip = cache.getAugmentedTrips(bestMatchStopTime.trip_id, ctx)[0];
-		const matchInstance = matchTrip.instances.find(i => i.serviceDate === serviceDate);
+		const matchInstance = matchTrip.instances.find((i) => i.serviceDate === serviceDate);
 
 		if (!matchInstance) break;
 		if (bestMatchStopTime._stopTime?.stop_sequence != 1) break;
@@ -303,7 +312,9 @@ function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx?:
 			rs.trips.push({
 				trip_id: matchInstance.trip_id,
 				trip_start_time:
-					matchInstance.stopTimes[0].scheduled_departure_time || matchInstance.stopTimes[0].scheduled_arrival_time || 0,
+					matchInstance.stopTimes[0].scheduled_departure_time ||
+					matchInstance.stopTimes[0].scheduled_arrival_time ||
+					0,
 				run,
 			});
 

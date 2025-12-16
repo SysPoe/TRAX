@@ -193,8 +193,7 @@ function getTripDirection(inst: AugmentedTripInstance, currentStopSequence: numb
 	for (let i = 0; i < stopTimes.length; i++) {
 		const st = stopTimes[i];
 		const stopId = st.scheduled_parent_station_id || st.scheduled_stop_id;
-		if (stopId && CITY_STATIONS.includes(stopId) && firstCityIndex === -1)
-			firstCityIndex = i;
+		if (stopId && CITY_STATIONS.includes(stopId) && firstCityIndex === -1) firstCityIndex = i;
 	}
 
 	if (firstCityIndex === -1) {
@@ -204,24 +203,26 @@ function getTripDirection(inst: AugmentedTripInstance, currentStopSequence: numb
 		return null;
 	}
 
-	const centralIndex = stopTimes.findIndex((st) => st.scheduled_parent_station_id === "place_censta" || st.scheduled_stop_id === "place_censta");
+	const centralIndex = stopTimes.findIndex(
+		(st) => st.scheduled_parent_station_id === "place_censta" || st.scheduled_stop_id === "place_censta",
+	);
 
 	if (centralIndex !== -1) {
 		if (currentStopSequence < stopTimes[centralIndex]._stopTime?.stop_sequence!) {
 			const firstStopId = stopTimes[0]?.scheduled_parent_station_id || stopTimes[0]?.scheduled_stop_id;
-			if (firstStopId && CITY_STATIONS.includes(firstStopId))
-				return "Outbound";
+			if (firstStopId && CITY_STATIONS.includes(firstStopId)) return "Outbound";
 			return "Inbound";
 		}
 		return "Outbound";
 	}
 
-	const romaIndex = stopTimes.findIndex((st) => st.scheduled_parent_station_id === "place_romsta" || st.scheduled_stop_id === "place_romsta");
+	const romaIndex = stopTimes.findIndex(
+		(st) => st.scheduled_parent_station_id === "place_romsta" || st.scheduled_stop_id === "place_romsta",
+	);
 	if (romaIndex !== -1) {
 		if (currentStopSequence < stopTimes[romaIndex]._stopTime?.stop_sequence!) {
 			const firstStopId = stopTimes[0]?.scheduled_parent_station_id || stopTimes[0]?.scheduled_stop_id;
-			if (firstStopId && CITY_STATIONS.includes(firstStopId))
-				return "Outbound";
+			if (firstStopId && CITY_STATIONS.includes(firstStopId)) return "Outbound";
 			return "Inbound";
 		}
 		return "Outbound";
@@ -282,7 +283,11 @@ export function getServiceCapacity(
 
 		const normStopName = stopName.toLowerCase().trim();
 
-		const departureTime = stopTime.actual_departure_time ?? stopTime.actual_arrival_time ?? stopTime.scheduled_departure_time ?? stopTime.scheduled_arrival_time;
+		const departureTime =
+			stopTime.actual_departure_time ??
+			stopTime.actual_arrival_time ??
+			stopTime.scheduled_departure_time ??
+			stopTime.scheduled_arrival_time;
 		if (departureTime === null) return "unknown";
 
 		const timeBucket = formatTimeBucket(departureTime);
@@ -325,7 +330,7 @@ export function getServiceCapacity(
 
 		// If we loop through all candidates and find nothing, we return "unknown".
 		return "unknown";
-	}
+	};
 	let res = get();
 	if (res === "unknown" && _dirOverride === undefined)
 		return getServiceCapacity(inst, stopTime, dateStr, direction === "Inbound" ? "Outbound" : "Inbound");
