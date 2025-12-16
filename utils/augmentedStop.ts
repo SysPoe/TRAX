@@ -1,9 +1,14 @@
 import type * as qdf from "qdf-gtfs";
 import * as cache from "../cache.js";
+import { TRAX_CONFIG } from "../config.js";
 
 export type AugmentedStop = qdf.Stop & {
-	qrt_Place: boolean;
-	qrt_PlaceCode?: string;
+	regionSpecific?: {
+		SEQ?: {
+			qrt_Place: boolean;
+			qrt_PlaceCode?: string;
+		}
+	},
 	parent_stop_id: string | null;
 	child_stop_ids: string[];
 	parent?: AugmentedStop | null;
@@ -29,21 +34,28 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 		return cache.getAugmentedStops(parentId, ctx)[0] ?? null;
 	};
 
-	const qrt_Places = cache.SEQgetQRTPlaces(ctx);
-	const trimmedStopName = stop.stop_name?.toLowerCase().replace("station", "").trim();
-	const myPlace = qrt_Places.find(
-		(v) =>
-			v.Title?.toLowerCase().trim() === trimmedStopName ||
-			(trimmedStopName === "roma street" && v.Title?.toLowerCase().trim().includes("roma street")),
-	);
-
 	const augmented: AugmentedStop = {
 		...stop,
-		qrt_Place: !!myPlace,
-		qrt_PlaceCode: myPlace?.qrt_PlaceCode,
-		parent_stop_id: parentId,
+		parent_stop_id: parentId === "" ? null : parentId,
 		child_stop_ids: childIds,
 	};
+
+	if (TRAX_CONFIG.region === "SEQ") {
+		const qrt_Places = cache.SEQgetQRTPlaces(ctx);
+		const trimmedStopName = stop.stop_name?.toLowerCase().replace("station", "").trim();
+		const myPlace = qrt_Places.find(
+			(v) =>
+				v.Title?.toLowerCase().trim() === trimmedStopName ||
+				(trimmedStopName === "roma street" && v.Title?.toLowerCase().trim().includes("roma street")),
+		);
+		augmented.regionSpecific = {
+			SEQ: {
+
+				qrt_Place: !!myPlace,
+				qrt_PlaceCode: myPlace?.qrt_PlaceCode,
+			}
+		};
+	}
 
 	Object.defineProperties(augmented, {
 		parent: {

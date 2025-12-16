@@ -259,68 +259,75 @@ export function getServiceCapacity(
 	dateStr: string,
 	_dirOverride?: string,
 ): string {
-	if (!loaded || stopTime.passing) return "unknown";
+	let direction;
+	let get = () => {
+		if (!loaded || stopTime.passing) return "unknown";
 
-	const route = getRawRoutes(inst.route_id)[0];
-	const routeName = route?.route_long_name;
-	if (!routeName) return "unknown";
+		const route = getRawRoutes(inst.route_id)[0];
+		const routeName = route?.route_long_name;
+		if (!routeName) return "unknown";
 
-	const seq = stopTime._stopTime?.stop_sequence ?? 0;
-	const direction = _dirOverride ?? getTripDirection(inst, seq);
-	if (!direction) return "unknown";
+		const seq = stopTime._stopTime?.stop_sequence ?? 0;
+		direction = _dirOverride ?? getTripDirection(inst, seq);
+		if (!direction) return "unknown";
 
-	const dayType = getDayType(dateStr);
+		const dayType = getDayType(dateStr);
 
-	const stopLookupId = stopTime.scheduled_parent_station_id ?? stopTime.scheduled_stop_id;
-	let stopName = stopLookupId ? getAugmentedStops(stopLookupId)[0]?.stop_name : undefined;
-	if (!stopName) return "unknown";
-	if (stopName.trim().toLowerCase().startsWith("boggo")) stopName = "Park Road";
-	if (stopName.trim().toLowerCase().startsWith("international")) stopName = "International Terminal";
-	if (stopName.trim().toLowerCase().startsWith("domestic")) stopName = "Domestic Terminal";
+		const stopLookupId = stopTime.scheduled_parent_station_id ?? stopTime.scheduled_stop_id;
+		let stopName = stopLookupId ? getAugmentedStops(stopLookupId)[0]?.stop_name : undefined;
+		if (!stopName) return "unknown";
+		if (stopName.trim().toLowerCase().startsWith("boggo")) stopName = "Park Road";
+		if (stopName.trim().toLowerCase().startsWith("international")) stopName = "International Terminal";
+		if (stopName.trim().toLowerCase().startsWith("domestic")) stopName = "Domestic Terminal";
 
-	const normStopName = stopName.toLowerCase().trim();
+		const normStopName = stopName.toLowerCase().trim();
 
-	const departureTime = stopTime.actual_departure_time ?? stopTime.actual_arrival_time ?? stopTime.scheduled_departure_time ?? stopTime.scheduled_arrival_time;
-	if (departureTime === null) return "unknown";
+		const departureTime = stopTime.actual_departure_time ?? stopTime.actual_arrival_time ?? stopTime.scheduled_departure_time ?? stopTime.scheduled_arrival_time;
+		if (departureTime === null) return "unknown";
 
-	const timeBucket = formatTimeBucket(departureTime);
+		const timeBucket = formatTimeBucket(departureTime);
 
-	// Map routeName (e.g. "Brisbane City - Ferny Grove") to potential lines (e.g. "Ferny Grove Line")
-	const routeParts = routeName.split(" - ");
-	const candidateLines = new Set<string>();
+		// Map routeName (e.g. "Brisbane City - Ferny Grove") to potential lines (e.g. "Ferny Grove Line")
+		const routeParts = routeName.split(" - ");
+		const candidateLines = new Set<string>();
 
-	for (const part of routeParts) {
-		const trimmed = part.trim();
-		if (ROUTE_KEYWORD_MAP[trimmed]) candidateLines.add(ROUTE_KEYWORD_MAP[trimmed]);
-	}
-
-	if (candidateLines.size === 0) return "unknown";
-
-	for (const lineName of candidateLines) {
-		const rMap = capacityIndex.get(lineName);
-		if (!rMap) continue;
-
-		const dMap = rMap.get(direction);
-		if (!dMap) continue;
-
-		const dayMap = dMap.get(dayType);
-		if (!dayMap) continue;
-
-		// Try exact match
-		let sMap = dayMap.get(normStopName);
-
-		// Try clean match
-		if (!sMap) {
-			const cleanName = normStopName.replace(" station", "").replace(" platform", "").trim();
-			sMap = dayMap.get(cleanName);
+		for (const part of routeParts) {
+			const trimmed = part.trim();
+			if (ROUTE_KEYWORD_MAP[trimmed]) candidateLines.add(ROUTE_KEYWORD_MAP[trimmed]);
 		}
 
-		if (sMap) {
-			const val = sMap.get(timeBucket);
-			if (val) return val;
-		}
-	}
+		if (candidateLines.size === 0) return "unknown";
 
-	// If we loop through all candidates and find nothing, we return "unknown".
-	return "unknown";
+		for (const lineName of candidateLines) {
+			const rMap = capacityIndex.get(lineName);
+			if (!rMap) continue;
+
+			const dMap = rMap.get(direction);
+			if (!dMap) continue;
+
+			const dayMap = dMap.get(dayType);
+			if (!dayMap) continue;
+
+			// Try exact match
+			let sMap = dayMap.get(normStopName);
+
+			// Try clean match
+			if (!sMap) {
+				const cleanName = normStopName.replace(" station", "").replace(" platform", "").trim();
+				sMap = dayMap.get(cleanName);
+			}
+
+			if (sMap) {
+				const val = sMap.get(timeBucket);
+				if (val) return val;
+			}
+		}
+
+		// If we loop through all candidates and find nothing, we return "unknown".
+		return "unknown";
+	}
+	let res = get();
+	if (res === "unknown" && _dirOverride === undefined)
+		return getServiceCapacity(inst, stopTime, dateStr, direction === "Inbound" ? "Outbound" : "Inbound");
+	return res;
 }

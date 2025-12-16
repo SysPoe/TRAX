@@ -363,10 +363,12 @@ function findPassingStops(stops: string[], ctx?: cache.CacheContext): { stop_id:
 
 	for (const segment of expressSegments) {
 		if (segment.type === "unknown_segment") {
-			logger.warn(`Unknown segment between ${segment.from} and ${segment.to}: ${segment.message}`, {
-				module: "augmentedStopTime",
-				function: "findPassingStops",
-			});
+			if (segment.from && segment.from.trim() !== "" && segment.to && segment.to.trim() !== "")
+				logger.warn(`Unknown segment between ${segment.from} and ${segment.to}: ${segment.message}`, {
+					module: "augmentedStopTime",
+					function: "findPassingStops",
+				});
+
 			continue;
 		}
 

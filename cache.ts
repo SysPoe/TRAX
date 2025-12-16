@@ -13,7 +13,7 @@ import { isConsideredTrip } from "./utils/considered.js";
 import { AugmentedStop, augmentStop } from "./utils/augmentedStop.js";
 import { AugmentedTrip, AugmentedTripInstance, augmentTrip, calculateRunSeries, RunSeries } from "./utils/augmentedTrip.js";
 import { AugmentedStopTime } from "./utils/augmentedStopTime.js";
-import { QRTPlace, TravelTrip } from "./index.js";
+import { QRTPlace, QRTTravelTrip } from "./index.js";
 import { getCurrentQRTravelTrains, getPlaces } from "./region-specific/SEQ/qr-travel/qr-travel-tracker.js";
 import logger from "./utils/logger.js";
 import { getGtfs } from "./gtfsInterfaceLayer.js";
@@ -82,7 +82,7 @@ export type RawCache = {
 	regionSpecific: {
 		SEQ: {
 			qrtPlaces: QRTPlace[];
-			qrtTrains: TravelTrip[];
+			qrtTrains: QRTTravelTrip[];
 		}
 	}
 };
@@ -401,7 +401,7 @@ export function SEQgetQRTPlaces(ctx?: CacheContext): QRTPlace[] {
 	return raw.regionSpecific.SEQ.qrtPlaces;
 }
 
-export function SEQgetQRTTrains(ctx?: CacheContext): TravelTrip[] {
+export function SEQgetQRTTrains(ctx?: CacheContext): QRTTravelTrip[] {
 	ensureQRTEnabled();
 	const { raw } = getContext(ctx);
 	return raw.regionSpecific.SEQ.qrtTrains;
@@ -574,14 +574,13 @@ export async function refreshRealtimeCache(): Promise<void> {
 		function: "refreshRealtimeCache",
 	});
 
-	logger.debug("Refreshing qrtTrains cache...", {
-		module: "cache",
-		function: "refreshRealtimeCache",
-	});
-
 	let additionalPromises: Promise<any>[] = [];
 
 	if (TRAX_CONFIG.region === "SEQ") {
+		logger.debug("Refreshing qrtTrains cache...", {
+			module: "cache",
+			function: "refreshRealtimeCache",
+		});
 		additionalPromises.push(new Promise<void>((rs) => {
 			getCurrentQRTravelTrains().then((trains) => {
 				rawCache.regionSpecific.SEQ.qrtTrains = trains;

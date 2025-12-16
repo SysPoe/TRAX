@@ -143,8 +143,6 @@ const TRAX = {
 	getStopTimeUpdates: cache.getStopTimeUpdates,
 	getTripUpdates: cache.getTripUpdates,
 	getVehiclePositions: cache.getVehiclePositions,
-	getQRTPlaces: cache.SEQgetQRTPlaces,
-	getQRTTrains: cache.SEQgetQRTTrains,
 
 	// Event handling
 	on: traxEmitter.on.bind(traxEmitter),
@@ -157,6 +155,14 @@ const TRAX = {
 	qrTravel,
 	express: { findExpressString },
 	getServiceCapacity,
+
+	regionSpecific: {
+		SEQ: {
+			getQRTPlaces: cache.SEQgetQRTPlaces,
+			getQRTTrains: cache.SEQgetQRTTrains,
+			qrTravel,
+		}
+	},
 
 	// Utilities and config
 	utils: {
@@ -185,16 +191,15 @@ export type {
 	QRTServiceDisruption,
 	QRTGetServiceResponse,
 	QRTPlace,
-	QRTService as Service,
-	QRTDirection as Direction,
-	QRTServiceLine as ServiceLine,
-	QRTAllServicesResponse as AllServicesResponse,
 	QRTService,
-	QRTServiceUpdate as ServiceUpdate,
-	QRTTravelStopTime as TravelStopTime,
-	QRTTravelTrip as TravelTrip,
+	QRTDirection,
+	QRTServiceLine,
+	QRTAllServicesResponse,
+	QRTServiceUpdate,
+	QRTTravelStopTime,
+	QRTTravelTrip,
 } from "./region-specific/SEQ/qr-travel/types.js";
 
-export type { QRTSRTStop as SRTStop } from "./region-specific/SEQ/qr-travel/srt.js";
+export type { QRTSRTStop } from "./region-specific/SEQ/qr-travel/srt.js";
 
 export { Logger as TraxLogger, LogLevel } from "./utils/logger.js"; // Export logger types
