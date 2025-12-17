@@ -49,6 +49,6 @@ export function resolveConfig(options: TraxConfigOptions = {}): TraxConfig {
 	return {
 		...defaults,
 		...options,
-		realtime: options.realtime !== undefined ? options.realtime : defaults.realtime,
+		realtime: options.realtime || options.url ? options.realtime ?? null : defaults.realtime,
 	};
 }
