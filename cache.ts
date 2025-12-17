@@ -279,6 +279,52 @@ export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string)
 	}
 }
 
+export function getVehicleTripInstance(ctx: CacheContext, vehicle: RealtimeVehiclePosition): AugmentedTripInstance | null {
+	const tripId = vehicle.trip.trip_id;
+	if (!tripId) return null;
+
+	const augmentedTrips = getAugmentedTrips(ctx, tripId);
+	if (augmentedTrips.length === 0) return null;
+	const augmentedTrip = augmentedTrips[0];
+
+	const startDate = vehicle.trip.start_date;
+	if (startDate) {
+		return augmentedTrip.instances.find((i) => i.serviceDate === startDate) || null;
+	}
+
+	const now = Date.now() / 1000;
+	let bestInstance: AugmentedTripInstance | null = null;
+	let minDiff = Infinity;
+
+	for (const instance of augmentedTrip.instances) {
+		if (instance.stopTimes.length === 0) continue;
+
+		const y = parseInt(instance.serviceDate.slice(0, 4));
+		const m = parseInt(instance.serviceDate.slice(4, 6)) - 1;
+		const d = parseInt(instance.serviceDate.slice(6, 8));
+		const serviceDayStart = new Date(Date.UTC(y, m, d) - 10 * 3600 * 1000).getTime() / 1000;
+
+		const startTime =
+			serviceDayStart +
+			(instance.stopTimes[0].actual_departure_time ?? instance.stopTimes[0].actual_arrival_time ?? 0);
+		const endTime =
+			serviceDayStart +
+			(instance.stopTimes.at(-1)!.actual_arrival_time ?? instance.stopTimes.at(-1)!.actual_departure_time ?? 0);
+
+		if (now >= startTime && now <= endTime) {
+			return instance;
+		}
+
+		const diff = Math.min(Math.abs(now - startTime), Math.abs(now - endTime));
+		if (diff < minDiff) {
+			minDiff = diff;
+			bestInstance = instance;
+		}
+	}
+
+	return bestInstance;
+}
+
 export function getAugmentedStops(ctx: CacheContext, stop_id?: string): AugmentedStop[] {
 	const context = ctx;
 	const { raw, augmented } = context;

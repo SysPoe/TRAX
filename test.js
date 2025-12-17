@@ -36,6 +36,15 @@ async function main() {
 		);
 	}
 
+	// Test getVehicleTripInstance
+	const vps = TRAX.getVehiclePositions().filter(v => v.trip.trip_id?.includes("QR "));
+	if (vps.length > 0) {
+		const inst = TRAX.getVehicleTripInstance(vps[0]);
+		console.log(`Vehicle ${vps[0].vehicle.id} (Trip: ${vps[0].trip.trip_id}) matched trip instance: ${inst?.instance_id}`);
+	} else {
+		console.log('No rail vehicle positions ("QR ") to test getVehicleTripInstance.');
+	}
+
 	console.log(`GTFS loading took ${(end_static - start_static) / 1000} seconds.`);
 	console.log(`Realtime updates took ${(end_realtime - start_realtime) / 1000} seconds.`);
 	console.log("Done!");

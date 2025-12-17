@@ -4,7 +4,7 @@ import * as stations from "./utils/stations.js";
 import * as qrTravel from "./region-specific/SEQ/qr-travel/qr-travel-tracker.js";
 import * as timeUtils from "./utils/time.js";
 import { EventEmitter } from "events";
-import { GTFS } from "qdf-gtfs";
+import { GTFS, RealtimeVehiclePosition } from "qdf-gtfs";
 import logger from "./utils/logger.js";
 import { TraxConfig, TraxConfigOptions, resolveConfig } from "./config.js";
 import { findExpressString } from "./utils/SRT.js";
@@ -156,6 +156,7 @@ export class TRAX {
 
 	public getAugmentedTrips = (trip_id?: string) => cache.getAugmentedTrips(this.ctx, trip_id);
 	public getAugmentedTripInstance = (instance_id: string) => cache.getAugmentedTripInstance(this.ctx, instance_id);
+	public getVehicleTripInstance = (vehicle: RealtimeVehiclePosition) => cache.getVehicleTripInstance(this.ctx, vehicle);
 	public getAugmentedStops = (stop_id?: string) => cache.getAugmentedStops(this.ctx, stop_id);
 	public getAugmentedStopTimes = (trip_id?: string) => cache.getAugmentedStopTimes(this.ctx, trip_id);
 	public getBaseStopTimes = (trip_id: string) => cache.getBaseStopTimes(this.ctx, trip_id);
