@@ -1,7 +1,6 @@
 import fs from "fs";
 import { fileURLToPath } from "url";
 import path from "path";
-import { TRAX_CONFIG } from "../config.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,27 +59,27 @@ export function getDataFilePath(filePath: string): string {
 	throw new Error(`Data file not found: ${filePath}`);
 }
 
-export function getCacheFilePath(filePath: string): string {
-	return path.join(TRAX_CONFIG.cacheDir, filePath);
+export function getCacheFilePath(filePath: string, cacheDir: string): string {
+	return path.join(cacheDir, filePath);
 }
 
-export function loadCacheFile(filePath: string): string {
-	const path = getCacheFilePath(filePath);
+export function loadCacheFile(filePath: string, cacheDir: string): string {
+	const path = getCacheFilePath(filePath, cacheDir);
 	return fs.readFileSync(path, "utf-8");
 }
 
-export function loadCacheFileAsync(filePath: string): Promise<string> {
-	const path = getCacheFilePath(filePath);
+export function loadCacheFileAsync(filePath: string, cacheDir: string): Promise<string> {
+	const path = getCacheFilePath(filePath, cacheDir);
 	return fs.promises.readFile(path, "utf-8");
 }
 
-export function cacheFileExists(filePath: string): boolean {
-	const path = getCacheFilePath(filePath);
+export function cacheFileExists(filePath: string, cacheDir: string): boolean {
+	const path = getCacheFilePath(filePath, cacheDir);
 	return fs.existsSync(path);
 }
 
-export function writeCacheFile(filePath: string, data: string): void {
-	const fullPath = getCacheFilePath(filePath);
+export function writeCacheFile(filePath: string, data: string, cacheDir: string): void {
+	const fullPath = getCacheFilePath(filePath, cacheDir);
 	fs.writeFileSync(fullPath, data, "utf-8");
 }
 

@@ -8,6 +8,7 @@ import type {
 	Stop,
 	StopTime,
 	Trip,
+    GTFS
 } from "qdf-gtfs";
 import { isConsideredTrip } from "./utils/considered.js";
 import { AugmentedStop, augmentStop } from "./utils/augmentedStop.js";
@@ -25,7 +26,7 @@ import logger from "./utils/logger.js";
 import { getGtfs } from "./gtfsInterfaceLayer.js";
 import * as qdf from "qdf-gtfs";
 import { addSC, addSCI, ensureServiceCapacityData } from "./utils/serviceCapacity.js";
-import { TRAX_CONFIG } from "./config.js";
+import { TraxConfig } from "./config.js";
 import ensureQRTEnabled from "./region-specific/SEQ/qr-travel/enabled.js";
 
 class LRUCache<K, V> {
@@ -39,7 +40,6 @@ class LRUCache<K, V> {
 	get(key: K): V | undefined {
 		const value = this.cache.get(key);
 		if (value !== undefined) {
-			// Move to end (most recently used)
 			this.cache.delete(key);
 			this.cache.set(key, value);
 		}
@@ -52,7 +52,6 @@ class LRUCache<K, V> {
 		}
 		this.cache.set(key, value);
 
-		// Evict oldest entries if over max size
 		while (this.cache.size > this.maxSize) {
 			const firstKey = this.cache.keys().next().value;
 			if (firstKey !== undefined) {
@@ -89,6 +88,7 @@ export type RawCache = {
 		SEQ: {
 			qrtPlaces: QRTPlace[];
 			qrtTrains: QRTTravelTrip[];
+			platformData?: any;
 		};
 	};
 };
@@ -96,16 +96,16 @@ export type RawCache = {
 export type AugmentedCache = {
 	trips: AugmentedTrip[];
 	stops: AugmentedStop[];
+	railStations: Stop[];
 
 	stopTimes: { [trip_id: string]: AugmentedStopTime[] };
-	baseStopTimes: { [trip_id: string]: AugmentedStopTime[] }; // Cached base stop times without realtime
+	baseStopTimes: { [trip_id: string]: AugmentedStopTime[] };
 	tripsRec: Map<string, AugmentedTrip>;
 	stopsRec: Map<string, AugmentedStop>;
 
-	serviceDateTrips: Map<string, string[]>; // Maps serviceDate to trip IDs
-	passingTrips: Map<string, string[]>; // Maps stopId to list of trip IDs that pass through it
+	serviceDateTrips: Map<string, string[]>;
+	passingTrips: Map<string, string[]>;
 
-	// Performance caches with LRU eviction
 	expressInfoCache: LRUCache<string, any[]>;
 	passingStopsCache: LRUCache<string, any[]>;
 	runSeriesCache: Map<string, Map<string, RunSeries>>;
@@ -114,6 +114,8 @@ export type AugmentedCache = {
 export type CacheContext = {
 	raw: RawCache;
 	augmented: AugmentedCache;
+	config: TraxConfig;
+	gtfs?: GTFS;
 };
 
 export function createEmptyRawCache(): RawCache {
@@ -132,6 +134,7 @@ export function createEmptyRawCache(): RawCache {
 			SEQ: {
 				qrtPlaces: [],
 				qrtTrains: [],
+				platformData: undefined,
 			},
 		},
 	};
@@ -141,14 +144,15 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 	return {
 		trips: [],
 		stops: [],
+		railStations: [],
 		stopTimes: {},
 		baseStopTimes: {},
 		tripsRec: new Map(),
 		stopsRec: new Map(),
 		serviceDateTrips: new Map(),
 		passingTrips: new Map(),
-		expressInfoCache: new LRUCache<string, any[]>(1000), // Max 1000 express info entries
-		passingStopsCache: new LRUCache<string, any[]>(5000), // Max 5000 passing stops entries
+		expressInfoCache: new LRUCache<string, any[]>(1000),
+		passingStopsCache: new LRUCache<string, any[]>(5000),
 		runSeriesCache: new Map(),
 	};
 }
@@ -158,15 +162,14 @@ let augmentedCache: AugmentedCache = createEmptyAugmentedCache();
 
 function getContext(ctx?: CacheContext): CacheContext {
 	if (ctx) return ctx;
-	return { raw: rawCache, augmented: augmentedCache };
+	throw new Error("TRAX: CacheContext is required. Please use instance methods.");
 }
 
 export function getCalendars(filter?: Partial<Calendar>, ctx?: CacheContext): Calendar[] {
-	const { raw } = getContext(ctx);
-	const gtfs = getGtfs();
+	const { raw, gtfs: ctxGtfs } = getContext(ctx);
+	const gtfs = ctxGtfs ?? getGtfs();
 	if (!raw.calendars || raw.calendars.length === 0) raw.calendars = gtfs.getCalendars();
 	if (!filter) return raw.calendars;
-	// simple filter implementation
 	return raw.calendars.filter((c) => {
 		for (const key of Object.keys(filter)) {
 			const k = key as keyof typeof c;
@@ -177,8 +180,8 @@ export function getCalendars(filter?: Partial<Calendar>, ctx?: CacheContext): Ca
 }
 
 export function getCalendarDates(filter?: Partial<CalendarDate>, ctx?: CacheContext): CalendarDate[] {
-	const { raw } = getContext(ctx);
-	const gtfs = getGtfs();
+	const { raw, gtfs: ctxGtfs } = getContext(ctx);
+	const gtfs = ctxGtfs ?? getGtfs();
 	if (!raw.calendarDates || raw.calendarDates.length === 0) raw.calendarDates = gtfs.getCalendarDates();
 	if (!filter) return raw.calendarDates;
 	return raw.calendarDates.filter((c) => {
@@ -228,16 +231,16 @@ export function getRawCalendarDates(ctx?: CacheContext): CalendarDate[] {
 }
 
 export function getTripUpdates(trip_id?: string, ctx?: CacheContext): RealtimeTripUpdate[] {
-	const { raw } = getContext(ctx);
-	const gtfs = getGtfs();
+	const { raw, gtfs: ctxGtfs } = getContext(ctx);
+	const gtfs = ctxGtfs ?? getGtfs();
 	if (raw.tripUpdates.length === 0) raw.tripUpdates = gtfs.getRealtimeTripUpdates();
 	if (trip_id) return raw.tripUpdates.filter((v) => v.trip.trip_id == trip_id);
 	return raw.tripUpdates;
 }
 
 export function getVehiclePositions(trip_id?: string, ctx?: CacheContext): RealtimeVehiclePosition[] {
-	const { raw } = getContext(ctx);
-	const gtfs = getGtfs();
+	const { raw, gtfs: ctxGtfs } = getContext(ctx);
+	const gtfs = ctxGtfs ?? getGtfs();
 	if (raw.vehiclePositions.length === 0) raw.vehiclePositions = gtfs.getRealtimeVehiclePositions();
 	if (trip_id) return raw.vehiclePositions.filter((v) => v.trip.trip_id == trip_id);
 	return raw.vehiclePositions;
@@ -247,8 +250,9 @@ export function getStopTimeUpdates(trip_id: string, ctx?: CacheContext): Realtim
 	return getTripUpdates(trip_id, ctx)[0]?.stop_time_updates ?? [];
 }
 
-export function getRawStopTimes(trip_id: string): StopTime[] {
-	return getGtfs().getStopTimesForTrip(trip_id);
+export function getRawStopTimes(trip_id: string, ctx?: CacheContext): StopTime[] {
+	const { gtfs: ctxGtfs } = getContext(ctx);
+	return (ctxGtfs ?? getGtfs()).getStopTimesForTrip(trip_id);
 }
 
 export function getAugmentedTrips(trip_id?: string, ctx?: CacheContext): AugmentedTrip[] {
@@ -256,25 +260,25 @@ export function getAugmentedTrips(trip_id?: string, ctx?: CacheContext): Augment
 	const { raw, augmented } = context;
 	if (trip_id) {
 		const trip = augmented.tripsRec.get(trip_id);
-		if (trip) return [addSC(trip, ctx)];
+		if (trip) return [addSC(trip, ctx, context.config)];
 		const rawTrip = raw.tripsRec.get(trip_id);
 		if (rawTrip) {
 			const augmentedTrip = augmentTrip(rawTrip, context);
 			augmented.tripsRec.set(trip_id, augmentedTrip);
-			return [addSC(augmentedTrip, ctx)];
+			return [addSC(augmentedTrip, ctx, context.config)];
 		}
 		return [];
 	}
-	// Build from tripsRec to ensure we have current data
-	return Array.from(augmented.tripsRec.values()).map((v) => addSC(v, ctx));
+	return Array.from(augmented.tripsRec.values()).map((v) => addSC(v, ctx, context.config));
 }
 
 export function getAugmentedTripInstance(instance_id: string, ctx?: CacheContext): AugmentedTripInstance | null {
+	const context = getContext(ctx);
 	try {
 		let res = getAugmentedTrips(JSON.parse(atob(instance_id))[0], ctx)[0].instances.find(
 			(v) => v.instance_id === instance_id,
 		);
-		return res ? addSCI(res, ctx) : null;
+		return res ? addSCI(res, ctx, context.config) : null;
 	} catch {
 		return null;
 	}
@@ -305,12 +309,12 @@ export function getAugmentedStopTimes(trip_id?: string, ctx?: CacheContext): Aug
 
 export function queryAugmentedStopTimes(query: qdf.StopTimeQuery, ctx?: CacheContext): AugmentedStopTime[] {
 	const context = getContext(ctx);
+	const { gtfs: ctxGtfs } = context;
 	const results: AugmentedStopTime[] = [];
-	const gtfs = getGtfs();
+	const gtfs = ctxGtfs ?? getGtfs();
 	gtfs.queryStopTimes(query).forEach((st) => {
 		const augmentedTrip = getAugmentedTrips(st.trip_id, context)[0];
 		if (augmentedTrip) {
-			// Search across all instances
 			for (const instance of augmentedTrip.instances) {
 				const augmentedStopTime = instance.stopTimes.find(
 					(ast) => ast._stopTime?.stop_sequence === st.stop_sequence && ast.scheduled_stop_id === st.stop_id,
@@ -376,7 +380,6 @@ export function getRunSeries(
 		const tripId = augmented.serviceDateTrips.get(date)?.find((v) => v.endsWith(runSeries));
 		if (tripId) {
 			const trip = getAugmentedTrips(tripId, context)[0];
-			// Find relevant instance for date
 			const instance = trip.instances.find((i) => i.serviceDate === date);
 			if (instance) {
 				calculateRunSeries(instance, context);
@@ -402,35 +405,33 @@ export function setRunSeries(date: string, runSeries: string, data: RunSeries, c
 	dateMap.set(runSeries, data);
 }
 
-// Region Specific getters
 export function SEQgetQRTPlaces(ctx?: CacheContext): QRTPlace[] {
-	ensureQRTEnabled();
+	ensureQRTEnabled(getContext(ctx).config);
 	const { raw } = getContext(ctx);
 	return raw.regionSpecific.SEQ.qrtPlaces;
 }
 
 export function SEQgetQRTTrains(ctx?: CacheContext): QRTTravelTrip[] {
-	ensureQRTEnabled();
+	ensureQRTEnabled(getContext(ctx).config);
 	const { raw } = getContext(ctx);
 	return raw.regionSpecific.SEQ.qrtTrains;
 }
 
-function resetRealtimeCacheIncremental(updatedTripIds: Set<string>): void {
+function resetRealtimeCacheIncremental(updatedTripIds: Set<string>, ctx: CacheContext): void {
+	const { raw: rawCache, augmented: augmentedCache, config } = ctx;
 	rawCache.tripUpdates = [];
 	rawCache.vehiclePositions = [];
 
-	if (TRAX_CONFIG.region === "SEQ") {
+	if (config.region === "SEQ") {
 		rawCache.regionSpecific.SEQ.qrtTrains = [];
 	}
 
-	// Clear only affected augmented data
 	for (const tripId of updatedTripIds) {
 		augmentedCache.tripsRec.delete(tripId);
 		delete augmentedCache.stopTimes[tripId];
 		delete augmentedCache.baseStopTimes[tripId];
 	}
 
-	// Remove affected trips from serviceDateTrips
 	for (const [serviceDate, tripIds] of augmentedCache.serviceDateTrips) {
 		const filteredTripIds = tripIds.filter((id) => !updatedTripIds.has(id));
 		if (filteredTripIds.length === 0) {
@@ -440,7 +441,6 @@ function resetRealtimeCacheIncremental(updatedTripIds: Set<string>): void {
 		}
 	}
 
-	// Remove affected trips from passingTrips
 	for (const [stopId, tripIds] of augmentedCache.passingTrips) {
 		const filteredTripIds = tripIds.filter((id) => !updatedTripIds.has(id));
 		if (filteredTripIds.length === 0) {
@@ -451,20 +451,18 @@ function resetRealtimeCacheIncremental(updatedTripIds: Set<string>): void {
 	}
 }
 
-export async function refreshStaticCache(): Promise<void> {
-	const gtfs = getGtfs();
+export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promise<CacheContext> {
 	logger.debug("Refreshing static GTFS cache...", {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
-	// Create new local caches (Double Buffering)
 	const newRawCache = createEmptyRawCache();
 	const newAugmentedCache = createEmptyAugmentedCache();
-	const ctx: CacheContext = { raw: newRawCache, augmented: newAugmentedCache };
+	const ctx: CacheContext = { raw: newRawCache, augmented: newAugmentedCache, config, gtfs };
 
-	if (TRAX_CONFIG.region === "SEQ") {
-		newRawCache.regionSpecific.SEQ.qrtPlaces = await getPlaces();
+	if (config.region === "SEQ") {
+		newRawCache.regionSpecific.SEQ.qrtPlaces = await getPlaces(config);
 		logger.debug(`Loaded ${newRawCache.regionSpecific.SEQ.qrtPlaces.length} QRT places.`, {
 			module: "cache",
 			function: "refreshStaticCache",
@@ -501,7 +499,7 @@ export async function refreshStaticCache(): Promise<void> {
 		function: "refreshStaticCache",
 	});
 
-	await ensureServiceCapacityData();
+	await ensureServiceCapacityData(config);
 
 	for (const trip of newRawCache.trips) newRawCache.tripsRec.set(trip.trip_id, trip);
 	for (const stop of newRawCache.stops) newRawCache.stopsRec.set(stop.stop_id, stop);
@@ -530,16 +528,12 @@ export async function refreshStaticCache(): Promise<void> {
 	for (const trip of newAugmentedCache.trips) {
 		newAugmentedCache.tripsRec.set(trip.trip_id, trip);
 
-		// Store both current stop times and base stop times (without realtime)
 		const allStopTimes = trip.instances.flatMap((i) => i.stopTimes);
 
 		newAugmentedCache.stopTimes[trip.trip_id] = allStopTimes;
-		// Deep copy for base
 		newAugmentedCache.baseStopTimes[trip.trip_id] = [...allStopTimes];
 
-		// Update serviceDateTrips
 		for (const instance of trip.instances) {
-			// Each instance has dates
 			for (const date of instance.actualTripDates) {
 				let tripIds = newAugmentedCache.serviceDateTrips.get(date);
 				if (!tripIds) {
@@ -549,7 +543,6 @@ export async function refreshStaticCache(): Promise<void> {
 				if (!tripIds.includes(trip.trip_id)) tripIds.push(trip.trip_id);
 			}
 
-			// Populate passingTrips
 			for (const st of instance.stopTimes) {
 				if (st.passing && st.actual_stop_id) {
 					const stopId = st.actual_stop_id;
@@ -565,7 +558,6 @@ export async function refreshStaticCache(): Promise<void> {
 	}
 	for (const stop of newAugmentedCache.stops) newAugmentedCache.stopsRec.set(stop.stop_id, stop);
 
-	// SWAP CACHE
 	rawCache = newRawCache;
 	augmentedCache = newAugmentedCache;
 
@@ -573,10 +565,13 @@ export async function refreshStaticCache(): Promise<void> {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
+
+	return ctx;
 }
 
-export async function refreshRealtimeCache(): Promise<void> {
-	const gtfs = getGtfs();
+export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: CacheContext): Promise<void> {
+	const { raw: rawCache, augmented: augmentedCache } = ctx;
+
 	logger.debug("Refreshing realtime GTFS cache...", {
 		module: "cache",
 		function: "refreshRealtimeCache",
@@ -584,14 +579,14 @@ export async function refreshRealtimeCache(): Promise<void> {
 
 	let additionalPromises: Promise<any>[] = [];
 
-	if (TRAX_CONFIG.region === "SEQ") {
+	if (config.region === "SEQ") {
 		logger.debug("Refreshing qrtTrains cache...", {
 			module: "cache",
 			function: "refreshRealtimeCache",
 		});
 		additionalPromises.push(
 			new Promise<void>((rs) => {
-				getCurrentQRTravelTrains().then((trains) => {
+				getCurrentQRTravelTrains(ctx).then((trains) => {
 					rawCache.regionSpecific.SEQ.qrtTrains = trains;
 					logger.debug(`Loaded ${rawCache.regionSpecific.SEQ.qrtTrains.length} QRT trains.`, {
 						module: "cache",
@@ -623,7 +618,6 @@ export async function refreshRealtimeCache(): Promise<void> {
 		function: "refreshRealtimeCache",
 	});
 
-	// Get only trips that have updates for incremental processing
 	const updatedTripIds = new Set([
 		...rawCache.tripUpdates.map((u) => u.trip.trip_id).filter((id) => id !== undefined),
 	]);
@@ -645,15 +639,13 @@ export async function refreshRealtimeCache(): Promise<void> {
 		return;
 	}
 
-	// Use incremental reset instead of full reset
-	resetRealtimeCacheIncremental(updatedTripIds);
+	resetRealtimeCacheIncremental(updatedTripIds, ctx);
 
 	logger.debug("Re-augmenting updated trips...", {
 		module: "cache",
 		function: "refreshRealtimeCache",
 	});
 
-	// Only re-augment trips that have updates
 	const tripsToUpdate: Trip[] = [];
 	for (const id of updatedTripIds) {
 		const t = rawCache.tripsRec.get(id);
@@ -661,7 +653,7 @@ export async function refreshRealtimeCache(): Promise<void> {
 	}
 
 	const updatedAugmented = await processWithProgress(tripsToUpdate, "Re-augmenting updated trips", (t) =>
-		augmentTrip(t),
+		augmentTrip(t, ctx),
 	);
 
 	for (const at of updatedAugmented) {
@@ -680,7 +672,6 @@ export async function refreshRealtimeCache(): Promise<void> {
 		function: "refreshRealtimeCache",
 	});
 
-	// Rebuild cache records only for updated trips
 	for (const tripId of updatedTripIds) {
 		const trip = augmentedCache.tripsRec.get(tripId);
 		if (!trip) continue;
@@ -700,7 +691,6 @@ export async function refreshRealtimeCache(): Promise<void> {
 				if (!tripIds.includes(trip.trip_id)) tripIds.push(trip.trip_id);
 			}
 
-			// Populate passingTrips for updated trips
 			for (const st of instance.stopTimes) {
 				if (st.passing && st.actual_stop_id) {
 					const stopId = st.actual_stop_id;
@@ -736,7 +726,6 @@ async function processWithProgress<T, U>(
 
 	if (total === 0) return results;
 
-	// Initial progress update
 	logger.progress({
 		task: taskName,
 		current: 0,
@@ -754,7 +743,6 @@ async function processWithProgress<T, U>(
 		}
 		current += chunk.length;
 
-		// Yield to event loop
 		await new Promise((resolve) => setImmediate(resolve));
 
 		const elapsed = (Date.now() - startTime) / 1000;

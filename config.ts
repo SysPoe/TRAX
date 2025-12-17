@@ -1,37 +1,54 @@
 import { ProgressInfo } from "qdf-gtfs";
-import logger, { LogLevel } from "./utils/logger.js";
+import logger from "./utils/logger.js";
 
-export const DEBUG = true;
-
-export const TRAX_CONFIG: {
+export interface TraxConfig {
 	url: string;
+	headers?: { [key: string]: string } | null;
 	verbose: boolean;
 	cacheDir: string;
 	logFunction: (message: string) => void;
 	progressLog: (info: ProgressInfo) => void;
 	region: "SEQ" | "none";
-} & (
-	| {
-			hasRealtime: true;
-			realtimeAlerts: string;
-			realtimeTripUpdates: string;
-			realtimeVehiclePositions: string;
-	  }
-	| {
-			hasRealtime: false;
-	  }
-) = {
-	url: "https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip",
-	hasRealtime: true,
-	realtimeAlerts: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts",
-	realtimeTripUpdates: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates",
-	realtimeVehiclePositions: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions",
-	verbose: DEBUG,
-	cacheDir: ".TRAXCACHE",
-	logFunction: (message: string) => logger.debug(message, { module: "gtfs" }),
-	progressLog: (info: ProgressInfo) => logger.progress(info),
-	region: "SEQ",
+	realtime: {
+		realtimeAlerts: { url: string; headers: { [key: string]: string } } | string | null;
+		realtimeTripUpdates: { url: string; headers: { [key: string]: string } } | string | null;
+		realtimeVehiclePositions: { url: string; headers: { [key: string]: string } } | string | null;
+	} | null;
+}
+
+export type TraxConfigOptions = Partial<TraxConfig>;
+
+export const PRESETS: Record<string, TraxConfigOptions> = {
+	SEQ: {
+		url: "https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip",
+		region: "SEQ",
+		realtime: {
+			realtimeAlerts: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts",
+			realtimeTripUpdates: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates",
+			realtimeVehiclePositions: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions",
+		},
+	},
 };
 
-if (DEBUG) logger.setLevel(LogLevel.DEBUG);
-else logger.setLevel(LogLevel.INFO);
+export function resolveConfig(options: TraxConfigOptions = {}): TraxConfig {
+	const defaults: TraxConfig = {
+		url: "https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip",
+		headers: null,
+		realtime: {
+			realtimeAlerts: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts",
+			realtimeTripUpdates: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates",
+			realtimeVehiclePositions: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions",
+		},
+		verbose: true,
+		cacheDir: ".TRAXCACHE",
+		logFunction: (message: string) => logger.debug(message, { module: "gtfs" }),
+		progressLog: (info: ProgressInfo) => logger.progress(info),
+		region: "SEQ",
+	};
+
+	return {
+		...defaults,
+		...options,
+		realtime: options.realtime !== undefined ? options.realtime : defaults.realtime,
+	};
+}

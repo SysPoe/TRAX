@@ -1,4 +1,3 @@
-// For SRT passing stop expansion
 import { expandWithSRTPassingStops } from "./srt.js";
 import logger from "../../../utils/logger.js";
 import { getConsideredStations } from "../../../utils/stations.js";
@@ -14,10 +13,11 @@ import type {
 	QRTTravelTrip,
 } from "./types.js";
 import ensureQRTEnabled from "./enabled.js";
+import { TraxConfig } from "../../../config.js";
+import { CacheContext } from "../../../cache.js";
 
-// Main function to fetch and parse the XML file
-export async function trackTrain(serviceID: string, serviceDate: string): Promise<QRTGetServiceResponse> {
-	ensureQRTEnabled();
+export async function trackTrain(serviceID: string, serviceDate: string, config: TraxConfig): Promise<QRTGetServiceResponse> {
+	ensureQRTEnabled(config);
 	const url = `https://www.queenslandrailtravel.com.au/SPWebApp/api/ServiceUpdates/GetService?serviceId=${serviceID}&serivceDate=${serviceDate}${serviceDate.includes("T") ? "" : "T00:00:00.000Z"
 		}`;
 
@@ -39,8 +39,8 @@ export async function trackTrain(serviceID: string, serviceDate: string): Promis
 	return jsonObj as QRTGetServiceResponse;
 }
 
-export async function getPlaces() {
-	ensureQRTEnabled();
+export async function getPlaces(config: TraxConfig) {
+	ensureQRTEnabled(config);
 	let res = await fetch("https://www.queenslandrailtravel.com.au/SPWebApp/api/ContentQuery/GetItems", {
 		method: "POST",
 		headers: {
@@ -54,13 +54,12 @@ export async function getPlaces() {
 			OrderByClauses: [{ Field: "Title", Direction: "Asc" }],
 		}),
 	});
-	// This returns a string containing more json for some reason, so we parse it twice.
 	let json = JSON.parse(await res.json());
 	return json as QRTPlace[];
 }
 
-export async function getServiceLines() {
-	ensureQRTEnabled();
+export async function getServiceLines(config: TraxConfig) {
+	ensureQRTEnabled(config);
 	let res = await fetch("https://www.queenslandrailtravel.com.au/SPWebApp/api/ServiceUpdates/AllServices");
 	if (!res.ok) {
 		logger.error(`Failed to fetch service lines: ${res.status} ${res.statusText}`, {
@@ -75,8 +74,8 @@ export async function getServiceLines() {
 	return json.ServiceLines as QRTServiceLine[];
 }
 
-export async function getAllServices() {
-	ensureQRTEnabled();
+export async function getAllServices(config: TraxConfig) {
+	ensureQRTEnabled(config);
 	let res = await fetch("https://www.queenslandrailtravel.com.au/SPWebApp/api/ContentQuery/GetItems", {
 		body: JSON.stringify({
 			WebUrl: "https://www.queenslandrailtravel.com.au",
@@ -88,7 +87,6 @@ export async function getAllServices() {
 		},
 		method: "POST",
 	});
-	// Return double-parsed JSON because the response is a string containing JSON.
 	const responseText = await res.json();
 	const json = JSON.parse(responseText);
 	logger.debug(`Successfully fetched ${json.length} services`, {
@@ -99,11 +97,9 @@ export async function getAllServices() {
 	return json as QRTService[];
 }
 
-export async function getServiceUpdates(startDate?: string, endDate?: string): Promise<QRTServiceUpdate[]> {
-	ensureQRTEnabled();
-	// Default startDate: first day of current month
-	// Default endDate: one year after startDate
-	const now = new Date(Date.now() + 36000000); // Brisbane time (+10h)
+export async function getServiceUpdates(config: TraxConfig, startDate?: string, endDate?: string): Promise<QRTServiceUpdate[]> {
+	ensureQRTEnabled(config);
+	const now = new Date(Date.now() + 36000000);
 	const defaultStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 	const defaultEnd = new Date(defaultStart);
 	defaultEnd.setUTCFullYear(defaultEnd.getUTCFullYear() + 1);
@@ -163,12 +159,11 @@ function convertQRTServiceToTravelTrip(
 	serviceResponse: QRTGetServiceResponse,
 	direction: string,
 	line: string,
+    ctx: CacheContext
 ): QRTTravelTrip {
-	// Find the Service object for more info
 	const serviceMeta = serviceResponse;
-	const gtfsStops = getConsideredStations();
+	const gtfsStops = getConsideredStations(ctx);
 	const stops: QRTTravelStopTime[] = (serviceResponse.TrainMovements as QRTTrainMovementDTO[]).map((movement) => {
-		// Calculate arrival and departure delays
 		let arrivalDelaySeconds: number | null = null;
 		let departureDelaySeconds: number | null = null;
 		let delayString = "scheduled";
@@ -193,7 +188,6 @@ function convertQRTServiceToTravelTrip(
 			const plannedDep = parseBrisbaneTime(movement.PlannedDeparture, "Z");
 			const actualDep = parseBrisbaneTime(movement.ActualDeparture, "Z");
 			departureDelaySeconds = Math.round((actualDep - plannedDep) / 1000);
-			// Use departure delay for delayString/class
 			const delaySecs = departureDelaySeconds;
 			if (delaySecs !== null) {
 				if (Math.abs(delaySecs) <= 60) {
@@ -275,7 +269,7 @@ function convertQRTServiceToTravelTrip(
 		direction,
 		line,
 		status: serviceMeta.QRTServiceDisruption?.Status ?? "Scheduled",
-		offersGoldClass: false, // Not available in QRTService, could be added if needed
+		offersGoldClass: false,
 		serviceDate: serviceMeta.Modified,
 		departureDate: stops[0]?.plannedDeparture ?? "",
 		stops,
@@ -312,20 +306,18 @@ function getDelay(delaySecs: number | null = null, departureTime: string | null)
 	return { delayString, delayClass };
 }
 
-// Process each service line to get current services in parallel
 async function processService(
 	serviceLine: QRTServiceLine,
 	direction: any,
 	service: any,
 	services: QRTService[],
+    ctx: CacheContext
 ): Promise<QRTTravelTrip | null> {
 	try {
-		// Get detailed service information
-		const serviceResponse = await trackTrain(service.ServiceId, service.ServiceDate);
-		const gtfsStops = getConsideredStations();
+		const serviceResponse = await trackTrain(service.ServiceId, service.ServiceDate, ctx.config);
+		const gtfsStops = getConsideredStations(ctx);
 
 		if (serviceResponse.Success) {
-			// Find the corresponding QRT service for additional metadata
 			const qrtService = services.find(
 				(s) =>
 					s.qrt_Direction == direction.DirectionName &&
@@ -338,10 +330,9 @@ async function processService(
 					serviceResponse,
 					direction.DirectionName,
 					serviceLine.ServiceLineName,
+                    ctx
 				);
 
-				// Add SRT passing stops expansion
-				// Map TravelStopTime[] to QRTTrainMovementDTO[]
 				const trainMovements: QRTTrainMovementDTO[] = travelTrip.stops.map((s) => {
 					let gtfsStopId: string | null = null;
 					let findRes = gtfsStops.find(
@@ -366,9 +357,7 @@ async function processService(
 				DepartureDelaySeconds: s.departureDelaySeconds ?? 0,
 					};
 				});
-				// Expand with SRT passing stops
-				const expanded = expandWithSRTPassingStops(trainMovements);
-				// Return the trip
+				const expanded = expandWithSRTPassingStops(trainMovements, ctx);
 				return {
 					...travelTrip,
 					stopsWithPassing: expanded,
@@ -396,17 +385,16 @@ async function processService(
 	}
 }
 
-export async function getCurrentQRTravelTrains(retries = 5): Promise<QRTTravelTrip[]> {
-	ensureQRTEnabled();
+export async function getCurrentQRTravelTrains(ctx: CacheContext, retries = 5): Promise<QRTTravelTrip[]> {
+	ensureQRTEnabled(ctx.config);
 	try {
-		// Get all the required data
-		const [services, serviceLines] = await Promise.all([getAllServices(), getServiceLines()]);
+		const [services, serviceLines] = await Promise.all([getAllServices(ctx.config), getServiceLines(ctx.config)]);
 
 		const tasks: Promise<QRTTravelTrip | null>[] = [];
 		for (const serviceLine of serviceLines) {
 			for (const direction of serviceLine.Directions) {
 				for (const service of direction.Services) {
-					tasks.push(processService(serviceLine, direction, service, services));
+					tasks.push(processService(serviceLine, direction, service, services, ctx));
 				}
 			}
 		}
@@ -428,7 +416,7 @@ export async function getCurrentQRTravelTrains(retries = 5): Promise<QRTTravelTr
 		retries--;
 		if (retries > 0) {
 			await new Promise((resolve) => setTimeout(resolve, secs * 1000));
-			return getCurrentQRTravelTrains(retries);
+			return getCurrentQRTravelTrains(ctx, retries);
 		} else {
 			throw new Error(`Failed to get current QR Travel trains after multiple retries: ${error.message ?? error}`);
 		}

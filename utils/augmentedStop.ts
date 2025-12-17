@@ -1,6 +1,5 @@
 import type * as qdf from "qdf-gtfs";
 import * as cache from "../cache.js";
-import { TRAX_CONFIG } from "../config.js";
 
 export type AugmentedStop = qdf.Stop & {
 	regionSpecific?: {
@@ -16,6 +15,7 @@ export type AugmentedStop = qdf.Stop & {
 };
 
 export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): AugmentedStop {
+	if (!ctx) throw new Error("Context required for augmentStop");
 	const parentId = stop.parent_station ?? null;
 	const childStops = cache.getRawStops(undefined, ctx).filter((s) => s.parent_station === stop.stop_id);
 	const childIds = childStops.map((s) => s.stop_id);
@@ -40,7 +40,7 @@ export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): Augmented
 		child_stop_ids: childIds,
 	};
 
-	if (TRAX_CONFIG.region === "SEQ") {
+	if (ctx.config.region === "SEQ") {
 		const qrt_Places = cache.SEQgetQRTPlaces(ctx);
 		const trimmedStopName = stop.stop_name?.toLowerCase().replace("station", "").trim();
 		const myPlace = qrt_Places.find(

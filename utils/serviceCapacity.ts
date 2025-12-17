@@ -1,4 +1,4 @@
-import { TRAX_CONFIG } from "../config.js";
+import { TraxConfig } from "../config.js";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { AugmentedTrip, AugmentedTripInstance } from "./augmentedTrip.js";
 import {
@@ -21,10 +21,11 @@ export function getServiceCapacity(
 	inst: AugmentedTripInstance,
 	stopTime: AugmentedStopTime,
 	dateStr: string,
-	_dirOverride?: string,
-	ctx?: CacheContext,
+	_dirOverride: string | undefined,
+	ctx: CacheContext | undefined,
+	config: TraxConfig,
 ): ServiceCapacity {
-	switch (TRAX_CONFIG.region) {
+	switch (config.region) {
 		case "SEQ":
 			return SEQServCap(inst, stopTime, dateStr, _dirOverride, ctx);
 		case "none":
@@ -33,25 +34,29 @@ export function getServiceCapacity(
 	}
 }
 
-export async function ensureServiceCapacityData() {
-	switch (TRAX_CONFIG.region) {
+export async function ensureServiceCapacityData(config: TraxConfig) {
+	switch (config.region) {
 		case "SEQ":
-			return SEQEnsCapData();
+			return SEQEnsCapData(config);
 	}
 }
 
-export function addSCI(inst: AugmentedTripInstance, ctx?: CacheContext): AugmentedTripInstance {
+export function addSCI(
+	inst: AugmentedTripInstance,
+	ctx: CacheContext | undefined,
+	config: TraxConfig,
+): AugmentedTripInstance {
 	let prevSC: ServiceCapacity = ServiceCapacity.UNKNOWN;
 	inst.stopTimes.forEach((st) => {
 		if (st.passing || st.service_capacity !== ServiceCapacity.NOT_CALCULATED) return;
-		st.service_capacity = getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx);
+		st.service_capacity = getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx, config);
 		if (st.service_capacity !== ServiceCapacity.NOT_CALCULATED) prevSC = st.service_capacity;
 		else st.service_capacity = prevSC;
 	});
 	return inst;
 }
 
-export function addSC(trip: AugmentedTrip, ctx?: CacheContext): AugmentedTrip {
-	trip.instances = trip.instances.map((v) => addSCI(v, ctx));
+export function addSC(trip: AugmentedTrip, ctx: CacheContext | undefined, config: TraxConfig): AugmentedTrip {
+	trip.instances = trip.instances.map((v) => addSCI(v, ctx, config));
 	return trip;
 }

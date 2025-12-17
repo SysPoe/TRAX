@@ -20,6 +20,8 @@ export function getDeparturesForStop(
 	end_time: string,
 	ctx?: cache.CacheContext,
 ): DepartureResult[] {
+	if (!ctx) throw new Error("Context required for getDeparturesForStop");
+	const gtfs = ctx.gtfs ?? getGtfs();
 	const startSec = timeSeconds(start_time);
 	const endSec = timeSeconds(end_time);
 	const parentId = stop.parent_stop_id;
@@ -47,7 +49,7 @@ export function getDeparturesForStop(
 	};
 
 	// Query static GTFS for stop times at this station (optimized)
-	const rawStopTimes = Array.from(validStops).flatMap((id) => getGtfs().queryStopTimes({ stop_id: id }));
+	const rawStopTimes = Array.from(validStops).flatMap((id) => gtfs.queryStopTimes({ stop_id: id }));
 	const passingTrips = Array.from(validStops).flatMap((id) => cache.getPassingTrips(id, ctx));
 	const allTripIds = new Set([...rawStopTimes.map((st) => st.trip_id), ...passingTrips]);
 
@@ -88,6 +90,7 @@ export function getDeparturesForStop(
 		.map(({ st, inst }) => {
 			const expressString = findExpressString(
 				inst.expressInfo,
+				ctx,
 				st.actual_parent_station_id ?? st.actual_stop_id ?? "",
 			);
 			return {
@@ -96,7 +99,7 @@ export function getDeparturesForStop(
 				instance_id: inst.instance_id,
 				service_capacity:
 					st.service_capacity === ServiceCapacity.NOT_CALCULATED
-						? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx)
+						? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx, ctx.config)
 						: st.service_capacity,
 			};
 		});
@@ -109,13 +112,15 @@ export function getServiceDateDeparturesForStop(
 	end_time_secs: number,
 	ctx?: cache.CacheContext,
 ): DepartureResult[] {
+	if (!ctx) throw new Error("Context required for getServiceDateDeparturesForStop");
+	const gtfs = ctx.gtfs ?? getGtfs();
 	const parentId = stop.parent_stop_id;
 	const childIds = stop.child_stop_ids;
 	const validStops = new Set<string>([stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]);
 	const tripCache = new Map<string, ReturnType<typeof cache.getAugmentedTrips>[0]>();
 	const results: { st: AugmentedStopTime; inst: AugmentedTripInstance }[] = [];
 
-	const rawStopTimes = Array.from(validStops).flatMap((id) => getGtfs().queryStopTimes({ stop_id: id }));
+	const rawStopTimes = Array.from(validStops).flatMap((id) => gtfs.queryStopTimes({ stop_id: id }));
 	const passingTrips = Array.from(validStops).flatMap((id) => cache.getPassingTrips(id, ctx));
 	const allTripIds = new Set([...rawStopTimes.map((st) => st.trip_id), ...passingTrips]);
 
@@ -151,6 +156,7 @@ export function getServiceDateDeparturesForStop(
 		.map(({ st, inst }) => {
 			const expressString = findExpressString(
 				inst.expressInfo,
+				ctx,
 				st.actual_parent_station_id ?? st.actual_stop_id ?? "",
 			);
 			return {
@@ -159,7 +165,7 @@ export function getServiceDateDeparturesForStop(
 				instance_id: inst.instance_id,
 				service_capacity:
 					st.service_capacity === ServiceCapacity.NOT_CALCULATED
-						? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx)
+						? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx, ctx.config)
 						: st.service_capacity,
 			};
 		});

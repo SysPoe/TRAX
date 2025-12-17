@@ -6,10 +6,8 @@ import { getGtfs } from "../gtfsInterfaceLayer.js";
 import { getServiceCapacity, ServiceCapacity } from "./serviceCapacity.js";
 import { ExpressInfo, findExpress } from "./SRT.js";
 
-// --- Types ---
-
 export type AugmentedTripInstance = qdf.Trip & {
-	instance_id: string; // composite of trip_id, start_date, start_time, duplication_id
+	instance_id: string;
 	trip_id: string;
 	serviceDate: string;
 	schedule_relationship: qdf.TripScheduleRelationship;
@@ -18,7 +16,6 @@ export type AugmentedTripInstance = qdf.Trip & {
 	expressInfo: ExpressInfo[];
 	run: string;
 
-	// Dates
 	scheduledTripDates: string[];
 	actualTripDates: string[];
 
@@ -43,14 +40,16 @@ export type RunSeries = {
 	date: string;
 };
 
-// --- Augmentation Logic ---
-
 export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): AugmentedTrip {
+	if (!ctx) throw new Error("Context required for augmentTrip");
 	const serviceDates = getServiceDatesByTrip(trip.trip_id, ctx);
-	const rawStopTimes = cache.getRawStopTimes(trip.trip_id).sort((a, b) => a.stop_sequence - b.stop_sequence);
+	const rawStopTimes = cache.getRawStopTimes(trip.trip_id, ctx).sort((a, b) => a.stop_sequence - b.stop_sequence);
 
 	let parentStops = rawStopTimes.map((st) => cache.getRawStops(st.stop_id, ctx)[0]?.parent_station ?? "");
-	let expressInfo = findExpress(parentStops.filter((id): id is string => !!id));
+	let expressInfo = findExpress(
+		parentStops.filter((id): id is string => !!id),
+		ctx,
+	);
 
 	const updates = cache.getTripUpdates(trip.trip_id, ctx);
 
@@ -113,12 +112,11 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 		for (let i = 0; i < instance.stopTimes.length; i++) {
 			const st = instance.stopTimes[i];
 			if (!st.passing) {
-				st.service_capacity = getServiceCapacity(instance, st, serviceDate, undefined, ctx);
+				st.service_capacity = getServiceCapacity(instance, st, serviceDate, undefined, ctx, ctx.config);
 				if (st.service_capacity !== ServiceCapacity.NOT_CALCULATED) prev_cap = st.service_capacity;
 				else st.service_capacity = prev_cap;
 			}
 
-			// Bake in instance info
 			st.instance_id = instance.instance_id;
 			st.service_date = instance.serviceDate;
 			st.schedule_relationship = instance.schedule_relationship;
@@ -168,7 +166,8 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 const RS_TOLERATE_SECS = 30 * 60;
 
 function trackBackwards(instance: AugmentedTripInstance, ctx?: cache.CacheContext): string {
-	const gtfs = getGtfs();
+	if (!ctx) throw new Error("Context required for trackBackwards");
+	const gtfs = ctx.gtfs ?? getGtfs();
 	let run = instance.run;
 	let prevInstances: AugmentedTripInstance[] = [instance];
 	let currentInstance = instance;
@@ -253,7 +252,8 @@ function trackBackwards(instance: AugmentedTripInstance, ctx?: cache.CacheContex
 }
 
 function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx?: cache.CacheContext): void {
-	const gtfs = getGtfs();
+	if (!ctx) throw new Error("Context required for trackForwards");
+	const gtfs = ctx.gtfs ?? getGtfs();
 	let run = instance.run;
 	const serviceDate = instance.serviceDate;
 

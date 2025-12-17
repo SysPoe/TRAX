@@ -2,49 +2,40 @@ import * as qdf from "qdf-gtfs";
 import { AugmentedStop } from "./augmentedStop.js";
 import * as cache from "../cache.js";
 import { findPassingStopTimes } from "./SRT.js";
-import platformData from "./platformData.js";
+import { getPlatformData as loadPlatformData } from "./platformData.js";
 import { ServiceCapacity } from "./serviceCapacity.js";
-
-// --- Types & Exports ---
 
 export type AugmentedStopTime = {
 	_stopTime: qdf.StopTime | null;
 	trip_id: string;
 	passing: boolean;
 
-	// Instance Metadata
 	instance_id: string;
 	service_date: string;
 	schedule_relationship: qdf.TripScheduleRelationship;
 	service_capacity: ServiceCapacity;
 
-	// Exit sides
 	actual_exit_side: "left" | "right" | "both" | null;
 	scheduled_exit_side: "left" | "right" | "both" | null;
 
-	// Actual times (Realtime if available, otherwise scheduled)
-	// Seconds since midnight of the offset day
 	actual_arrival_time: number | null;
 	actual_departure_time: number | null;
 	actual_stop_id: string | null;
 	actual_parent_station_id: string | null;
 	actual_platform_code: string | null;
 
-	// Realtime updates metadata
 	rt_stop_updated: boolean;
 	rt_parent_station_updated: boolean;
 	rt_platform_code_updated: boolean;
 	rt_arrival_updated: boolean;
 	rt_departure_updated: boolean;
 
-	// Scheduled times
 	scheduled_arrival_time: number | null;
 	scheduled_departure_time: number | null;
 	scheduled_stop_id: string | null;
 	scheduled_parent_station_id: string | null;
 	scheduled_platform_code: string | null;
 
-	// Date handling
 	scheduled_arrival_dates: string[];
 	actual_arrival_dates: string[];
 	scheduled_arrival_date_offset: number;
@@ -71,14 +62,12 @@ export type AugmentedStopTime = {
 			realtime_info: null;
 	  }
 ) & {
-		// Non-enumerable helpers added at runtime
 		actual_stop?: AugmentedStop | null;
 		actual_parent_station?: AugmentedStop | null;
 		scheduled_stop?: AugmentedStop | null;
 		scheduled_parent_station?: AugmentedStop | null;
 	};
 
-// Internal type for data before platform/exit side calculation
 type IntermediateAST = Omit<AugmentedStopTime, "actual_exit_side" | "scheduled_exit_side">;
 
 function attachStopReferences(
@@ -96,13 +85,6 @@ function attachStopReferences(
 		scheduled_stop: { value: refs.scheduledStop ?? null, enumerable: false, writable: true },
 		scheduled_parent_station: { value: refs.scheduledParent ?? null, enumerable: false, writable: true },
 	});
-}
-
-// --- Helper Functions ---
-
-function getPlatformData(stopId: string | null | undefined) {
-	if (!stopId) return null;
-	return platformData[stopId];
 }
 
 function calculateDelayClass(delaySecs: number) {
@@ -126,8 +108,6 @@ function addDaysToDateString(dateStr: string, daysToAdd: number): string {
 	const nd = date.getUTCDate().toString().padStart(2, "0");
 	return `${ny}${nm}${nd}`;
 }
-
-// --- Platform & Side Logic ---
 
 function resolveExitSide(
 	stops: IntermediateAST[],
@@ -153,7 +133,12 @@ function resolveExitSide(
 	return swap[platform.exitSide as keyof typeof swap];
 }
 
-function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
+function assignPlatformSides(st: IntermediateAST[], platformDataMap: any): AugmentedStopTime[] {
+	const getPlatformData = (stopId: string | null | undefined) => {
+		if (!stopId) return null;
+		return platformDataMap[stopId];
+	};
+
 	let prevActualTrack = "";
 	let prevScheduledTrack = "";
 
@@ -164,7 +149,6 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 
 	for (let i = 0; i < st.length; i++) {
 		const item = st[i];
-		// Skip sides for SKIPPED stops
 		if (item.realtime && item.realtime_info?.schedule_relationship === qdf.StopTimeScheduleRelationship.SKIPPED) {
 			const refs = {
 				actualStop: (item as any).actual_stop ?? null,
@@ -245,12 +229,6 @@ function assignPlatformSides(st: IntermediateAST[]): AugmentedStopTime[] {
 	return pathBuffer;
 }
 
-// --- Augmentation Logic ---
-
-/**
- * Reconciles static stops with realtime updates.
- * Handles added stops, changed stop IDs, and reordering based on sequence.
- */
 export function augmentStopTimes(
 	staticStopTimes: qdf.StopTime[] | null,
 	instanceContext: {
@@ -263,11 +241,9 @@ export function augmentStopTimes(
 	const { serviceDate, tripUpdate, scheduleRelationship } = instanceContext;
 	const tripId = tripUpdate?.trip.trip_id ?? staticStopTimes?.[0]?.trip_id ?? "";
 
-	// 1. Gather all sequences from Static and RT
 	const stopTimeUpdates = tripUpdate?.stop_time_updates ?? [];
 	const sequenceMap = new Map<number, { static?: qdf.StopTime; rt?: qdf.RealtimeStopTimeUpdate }>();
 
-	// Map Static
 	if (staticStopTimes) {
 		for (const st of staticStopTimes) {
 			const seq = st.stop_sequence;
@@ -276,22 +252,16 @@ export function augmentStopTimes(
 		}
 	}
 
-	// Map Realtime
 	for (const rt of stopTimeUpdates) {
 		const seq = rt.stop_sequence;
-		// If an update doesn't have a sequence, we can't reliably map it without strict stop_id matching logic which is prone to error on loops.
-		// GTFS-RT spec strongly encourages stop_sequence.
 		if (seq !== undefined && seq !== null) {
 			if (!sequenceMap.has(seq)) sequenceMap.set(seq, {});
 			sequenceMap.get(seq)!.rt = rt;
 		}
 	}
 
-	// 2. Sort Sequences
 	const sortedSequences = Array.from(sequenceMap.keys()).sort((a, b) => a - b);
 
-	// 3. Build Merged List (Pre-interpolation)
-	// We need to construct a list of objects that look like qdf.StopTime but contain merged info.
 	type MergedStop = qdf.StopTime & {
 		_rtUpdate?: qdf.RealtimeStopTimeUpdate;
 		_isSkipped?: boolean;
@@ -299,7 +269,6 @@ export function augmentStopTimes(
 
 	const mergedList: MergedStop[] = [];
 
-	// Helper to calculate seconds from service date
 	const y = parseInt(serviceDate.slice(0, 4));
 	const m = parseInt(serviceDate.slice(4, 6)) - 1;
 	const d = parseInt(serviceDate.slice(6, 8));
@@ -310,18 +279,13 @@ export function augmentStopTimes(
 		const s = entry.static;
 		const r = entry.rt;
 
-		// Check for SKIPPED status
 		const isSkipped = r?.schedule_relationship === qdf.StopTimeScheduleRelationship.SKIPPED;
 
-		// Base object
 		let stopId = s?.stop_id ?? r?.stop_id ?? "";
 		let arr = s?.arrival_time ?? 0;
 		let dep = s?.departure_time ?? 0;
 
-		// If this is purely an added stop via RT
 		if (!s && r) {
-			// Convert RT timestamps to relative seconds if provided, otherwise 0
-			// Note: If only delays are provided for an ADDED stop, it's ambiguous, but usually ADDED stops have absolute times.
 			if (r.arrival_time) arr = Math.floor(Number(r.arrival_time) - serviceDayStart);
 			if (r.departure_time) dep = Math.floor(Number(r.departure_time) - serviceDayStart);
 			if (arr === 0 && dep !== 0) arr = dep;
@@ -346,25 +310,14 @@ export function augmentStopTimes(
 		});
 	}
 
-	// 4. Calculate Passing Times (Interpolation)
-	// We only want to run SRT logic on stops that are NOT skipped.
-	// If a stop is skipped, the train doesn't go there (or passes through without stopping in a way that implies a different path/timing).
 	const activeStops = mergedList.filter((s) => !s._isSkipped);
-
-	// findPassingStopTimes returns qdf.StopTime[], effectively stripping our extra metadata.
-	// We need to re-match the results back to our mergedList structure.
 	const interpolatedActiveStops = findPassingStopTimes(activeStops, ctx);
-
-	// 5. Re-integrate Skipped Stops & Construct Final AST
 	const finalStops: IntermediateAST[] = [];
 
-	let activeIdx = 0;
-
-	// Initial Offsets for Date Calculation
 	const firstValid = interpolatedActiveStops[0];
 	const initialScheduledArr = firstValid?.arrival_time ?? 0;
 	const initialScheduledDep = firstValid?.departure_time ?? 0;
-	const initialActualArr = initialScheduledArr; // Start assumption
+	const initialActualArr = initialScheduledArr;
 	const initialActualDep = initialScheduledDep;
 
 	const dateOffsets = {
@@ -377,111 +330,18 @@ export function augmentStopTimes(
 	let lastDelay = 0;
 	const propagateOnTime = scheduleRelationship === qdf.TripScheduleRelationship.SCHEDULED && !!tripUpdate;
 
-	// Iterate through the original sorted sequences to maintain order (including skipped)
-	// We use sortedSequences to map back to our mergedList which might have "Active" and "Skipped" entries
-
-	// We iterate through mergedList because it aligns 1:1 with sortedSequences
-	for (const originalMergeItem of mergedList) {
-		if (originalMergeItem._isSkipped) {
-			// Construct a "Skipped" AugmentedStopTime
-			const scheduledStop = cache.getAugmentedStops(originalMergeItem.stop_id, ctx)[0];
-			const scheduledParent = scheduledStop?.parent_stop_id
-				? cache.getAugmentedStops(scheduledStop.parent_stop_id, ctx)[0]
-				: null;
-			const skipped: AugmentedStopTime = {
-				_stopTime: originalMergeItem,
-				trip_id: tripId,
-				passing: false,
-				instance_id: "",
-				service_date: "",
-				schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED,
-				service_capacity: ServiceCapacity.NOT_CALCULATED,
-				actual_exit_side: null,
-				scheduled_exit_side: null,
-
-				actual_arrival_time: null,
-				actual_departure_time: null,
-				actual_stop_id: scheduledStop?.stop_id ?? null,
-				actual_parent_station_id: scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null,
-				actual_platform_code: null,
-
-				rt_stop_updated: true,
-				rt_parent_station_updated: false,
-				rt_platform_code_updated: false,
-				rt_arrival_updated: false,
-				rt_departure_updated: false,
-
-				scheduled_arrival_time: originalMergeItem.arrival_time,
-				scheduled_departure_time: originalMergeItem.departure_time,
-				scheduled_stop_id: scheduledStop?.stop_id ?? null,
-				scheduled_parent_station_id: scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null,
-				scheduled_platform_code: scheduledStop?.platform_code ?? null,
-
-				realtime: true,
-				realtime_info: {
-					delay_secs: 0,
-					delay_string: "Skipped",
-					delay_class: "scheduled",
-					schedule_relationship: qdf.StopTimeScheduleRelationship.SKIPPED,
-					propagated: false,
-					rt_start_date: tripUpdate?.trip.start_date ?? serviceDate,
-				},
-
-				scheduled_arrival_dates: [],
-				actual_arrival_dates: [],
-				scheduled_arrival_date_offset: 0,
-				actual_arrival_date_offset: 0,
-				scheduled_departure_dates: [],
-				actual_departure_dates: [],
-				scheduled_departure_date_offset: 0,
-				actual_departure_date_offset: 0,
-			};
-			attachStopReferences(skipped, {
-				actualStop: scheduledStop,
-				actualParent: scheduledParent,
-				scheduledStop: scheduledStop,
-				scheduledParent: scheduledParent,
-			});
-			finalStops.push(skipped);
-			continue;
-		}
-
-		// It's an active stop (either original or interpolated)
-		// We need to grab the *interpolated* version which might be passing
-		// Note: activeStops was fed to findPassingStopTimes.
-		// interpolatedActiveStops contains the result, which might contain MORE items (passing nodes) than activeStops.
-		// However, findPassingStopTimes returns items in order.
-		// Wait - findPassingStopTimes INSERTS nodes. So 1:1 mapping with mergedList breaks if we iterate mergedList.
-		// Correction: We must iterate the *interpolatedActiveStops* and insert Skipped stops where their sequence implies.
-	}
-
-	// Correct Loop Strategy:
-	// We have `mergedList` (contains static+RT, including skipped, sorted by sequence).
-	// We have `interpolatedActiveStops` (contains static+RT active stops + inserted passing nodes).
-	// Passing nodes generated by SRT usually share the sequence number of the start or end, or interpolate.
-	// Let's iterate `interpolatedActiveStops` and check sequence gaps to re-insert skipped stops.
-
 	let currentSequence = -1;
 
 	for (const stopTime of interpolatedActiveStops) {
 		const seq = stopTime.stop_sequence;
 		const isPassing = (stopTime as any)._passing;
 
-		// Check if we skipped any sequences from the merged list that were marked SKIPPED
-		// We look at sortedSequences.
-		// While the next sequence in sorted list < current interpolated sequence, check if it was skipped.
-
-		// Note: Passing stops might have fractional sequences or same sequence.
-		// We only check for skipped stops that are explicitly in the sortedSequences map.
-
 		const prevWholeSeq = Math.floor(currentSequence);
 		const currWholeSeq = Math.floor(seq);
 
-		// If we jumped ahead in sequence, check if we missed any "Skipped" stops in the gap
 		for (let s = prevWholeSeq + 1; s < currWholeSeq; s++) {
 			const missed = sequenceMap.get(s);
 			if (missed && missed.rt?.schedule_relationship === qdf.StopTimeScheduleRelationship.SKIPPED) {
-				// Insert Skipped Stop
 				const originalMergeItem = mergedList.find((m) => m.stop_sequence === s);
 				if (originalMergeItem) {
 					const scheduledStop = cache.getAugmentedStops(originalMergeItem.stop_id, ctx)[0];
@@ -543,17 +403,15 @@ export function augmentStopTimes(
 		}
 		currentSequence = seq;
 
-		// Process the Active Stop (stopTime)
 		const stopId = stopTime.stop_id;
 		const rtUpdate =
 			stopTimeUpdates.find((u) => u.stop_sequence === seq && !isPassing) ??
-			(isPassing ? undefined : stopTimeUpdates.find((u) => u.stop_id === stopId)); // Fallback to ID match if sequence match fails (unlikely given how we built merged)
+			(isPassing ? undefined : stopTimeUpdates.find((u) => u.stop_id === stopId));
 
 		const scheduledStop = cache.getAugmentedStops(stopId, ctx)[0];
 		const scheduledParentId = scheduledStop?.parent_stop_id ?? scheduledStop?.parent_station ?? null;
 		const scheduledParent = scheduledParentId ? cache.getAugmentedStops(scheduledParentId, ctx)[0] : null;
 
-		// Timing Logic
 		const schedArr = stopTime.arrival_time;
 		const schedDep = stopTime.departure_time;
 		let actArr = schedArr;
@@ -570,14 +428,12 @@ export function augmentStopTimes(
 
 		if (rtUpdate) {
 			propagated = false;
-			// Departure Delay
 			if (rtUpdate.departure_delay !== null && rtUpdate.departure_delay !== undefined) {
 				actDep = (schedDep ?? 0) + rtUpdate.departure_delay;
 				delaySecs = rtUpdate.departure_delay;
 				lastDelay = delaySecs;
 				rtFlags.dep = true;
 			} else if (rtUpdate.departure_time) {
-				// Absolute time override
 				const depAbs = Math.floor(Number(rtUpdate.departure_time) - serviceDayStart);
 				delaySecs = depAbs - (schedDep ?? 0);
 				actDep = depAbs;
@@ -588,10 +444,9 @@ export function augmentStopTimes(
 				propagated = true;
 			}
 
-			// Arrival Delay
 			if (rtUpdate.arrival_delay !== null && rtUpdate.arrival_delay !== undefined) {
 				actArr = (schedArr ?? 0) + rtUpdate.arrival_delay;
-				delaySecs = rtUpdate.arrival_delay; // Update lastDelay based on arrival too? Usually departure dictates propagation.
+				delaySecs = rtUpdate.arrival_delay;
 				rtFlags.arr = true;
 			} else if (rtUpdate.arrival_time) {
 				const arrAbs = Math.floor(Number(rtUpdate.arrival_time) - serviceDayStart);
@@ -602,14 +457,12 @@ export function augmentStopTimes(
 				propagated = true;
 			}
 
-			// Platform
 			const rtRawStop = cache.getRawStops(rtUpdate.stop_id, ctx)[0];
 			if (rtRawStop?.platform_code) {
 				platformCode = rtRawStop.platform_code;
 				rtFlags.platform = true;
 			}
 
-			// Stop Change
 			if (rtUpdate.stop_id && rtUpdate.stop_id !== stopId) {
 				actualStop = cache.getAugmentedStops(rtUpdate.stop_id, ctx)[0];
 				actualParent = actualStop?.parent_station
@@ -619,7 +472,6 @@ export function augmentStopTimes(
 				rtFlags.parent = true;
 			}
 		} else {
-			// Propagation Logic
 			if (lastDelay !== 0) {
 				if (schedArr !== null) actArr = schedArr + lastDelay;
 				if (schedDep !== null) actDep = schedDep + lastDelay;
@@ -630,7 +482,6 @@ export function augmentStopTimes(
 			}
 		}
 
-		// Construct Realtime Info
 		let realtimeInfo = null;
 		const hasRealtime =
 			!!rtUpdate || propagated || (!!tripUpdate && scheduleRelationship === qdf.TripScheduleRelationship.ADDED);
@@ -651,7 +502,6 @@ export function augmentStopTimes(
 			? { realtime: true as const, realtime_info: realtimeInfo! }
 			: { realtime: false as const, realtime_info: null };
 
-		// Dates
 		const getOffset = (secs: number) => Math.floor(secs / 86400);
 		const currentOffsets = {
 			schedArr: schedArr ? getOffset(schedArr) : null,
@@ -742,5 +592,15 @@ export function augmentStopTimes(
 		finalStops.push(augmented);
 	}
 
-	return assignPlatformSides(finalStops);
+	let platformData = {};
+	if (ctx) {
+		if (ctx.raw.regionSpecific.SEQ.platformData === undefined) {
+			ctx.raw.regionSpecific.SEQ.platformData = loadPlatformData(ctx.config);
+		}
+		platformData = ctx.raw.regionSpecific.SEQ.platformData;
+	} else {
+		throw new Error("Context required for augmentStopTimes platform data loading.");
+	}
+
+	return assignPlatformSides(finalStops, platformData);
 }

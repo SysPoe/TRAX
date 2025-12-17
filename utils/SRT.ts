@@ -3,10 +3,6 @@ import { getGtfs } from "../gtfsInterfaceLayer.js";
 import { cacheFileExists, loadCacheFile, writeCacheFile } from "./fs.js";
 import * as cache from "../cache.js";
 import * as qdf from "qdf-gtfs";
-// Assuming 'qdf' types are available globally or imported.
-// If not, you may need to import them from your types definition file.
-
-// --- Types ---
 
 export type SRTMatrix = {
 	[from: string]: {
@@ -29,23 +25,21 @@ export interface PassingStopSRT {
 	passing: boolean;
 }
 
-// Internal structure for the cached data file
 interface NetworkData {
 	matrix: SRTMatrix;
-	adjacency: Record<string, string[]>; // The graph for BFS
+	adjacency: Record<string, string[]>;
 	lastUpdated: number;
 }
-
-// --- State & Caching ---
 
 let _networkData: NetworkData | null = null;
 const CACHE_FILE = "network_topology.json";
 const MAX_CACHE_AGE_DAYS = 7;
 
-function loadNetworkData(): NetworkData | null {
-	if (cacheFileExists(CACHE_FILE)) {
+function loadNetworkData(ctx: cache.CacheContext): NetworkData | null {
+	const cacheDir = ctx.config.cacheDir;
+	if (cacheFileExists(CACHE_FILE, cacheDir)) {
 		try {
-			const data = JSON.parse(loadCacheFile(CACHE_FILE));
+			const data = JSON.parse(loadCacheFile(CACHE_FILE, cacheDir));
 			const ageDays = (Date.now() - (data.lastUpdated ?? 0)) / (1000 * 60 * 60 * 24);
 			if (ageDays < MAX_CACHE_AGE_DAYS) {
 				return data;
@@ -58,23 +52,13 @@ function loadNetworkData(): NetworkData | null {
 	return null;
 }
 
-// --- Generation Logic ---
-
 function getPatternSignature(stopTimes: any[]): string {
 	return stopTimes.map((st) => st.stop_id).join("|");
 }
 
-/**
- * Scans GTFS to build:
- * 1. An Adjacency Graph (Physical connections between stations, excluding express skips).
- * 2. An SRT Matrix (Average running times between connected stations).
- */
-function generateNetworkData(): NetworkData {
-	const gtfs = getGtfs();
+function generateNetworkData(ctx: cache.CacheContext): NetworkData {
+	const gtfs = ctx.gtfs ?? getGtfs();
 	const trips = gtfs.getTrips();
-
-	// We strictly want Rail (route_type 2)
-	// You might need to adjust this filter based on your specific GTFS data
 	const railTrips = trips.filter((t) => gtfs.getRoute(t.route_id)?.route_type === 2);
 
 	const uniquePatterns: any[][] = [];
@@ -91,7 +75,6 @@ function generateNetworkData(): NetworkData {
 
 		const stops = stopTimes.map((st, i) => {
 			const stop = gtfs.getStop(st.stop_id);
-			// Use parent station if available to unify platforms
 			const id = stop ? (stop.parent_station ?? stop.stop_id) : st.stop_id;
 
 			let timeFromPrev = 0;
@@ -108,7 +91,6 @@ function generateNetworkData(): NetworkData {
 		uniquePatterns.push(stops);
 	});
 
-	// 1. Identify all POTENTIAL edges (including Express skips)
 	const validEdges = new Set<string>();
 	uniquePatterns.forEach((pattern) => {
 		for (let i = 0; i < pattern.length - 1; i++) {
@@ -118,8 +100,6 @@ function generateNetworkData(): NetworkData {
 
 	logger.debug(`Topology: Found ${validEdges.size} potential edges. Pruning express skips...`);
 
-	// 2. Prune edges that are actually express skips
-	// If we see A->B->C, we remove the edge A->C if it exists
 	uniquePatterns.forEach((pattern) => {
 		for (let i = 0; i < pattern.length - 2; i++) {
 			const startNode = pattern[i].id;
@@ -139,7 +119,6 @@ function generateNetworkData(): NetworkData {
 	const adjacency: Record<string, string[]> = {};
 	const segmentStats = new Map<string, { total: number; count: number }>();
 
-	// 3. Build Adjacency List & Accumulate Stats
 	uniquePatterns.forEach((pattern) => {
 		for (let i = 0; i < pattern.length - 1; i++) {
 			const from = pattern[i].id;
@@ -147,15 +126,12 @@ function generateNetworkData(): NetworkData {
 			const key = `${from}|${to}`;
 
 			if (validEdges.has(key)) {
-				// Add to Adjacency Graph
 				if (!adjacency[from]) adjacency[from] = [];
 				if (!adjacency[from].includes(to)) adjacency[from].push(to);
 
-				// Add reverse link for bidirectional graph traversal support
 				if (!adjacency[to]) adjacency[to] = [];
 				if (!adjacency[to].includes(from)) adjacency[to].push(from);
 
-				// Add to Stats
 				const time = pattern[i + 1].timeFromPrev;
 				if (time <= 0) continue;
 
@@ -170,7 +146,6 @@ function generateNetworkData(): NetworkData {
 		}
 	});
 
-	// 4. Finalize Matrix
 	for (const [key, stats] of segmentStats.entries()) {
 		const [from, to] = key.split("|");
 		const avg = stats.total / stats.count;
@@ -178,44 +153,38 @@ function generateNetworkData(): NetworkData {
 		if (!matrix[from]) matrix[from] = {};
 		matrix[from][to] = parseFloat(avg.toFixed(2));
 
-		// Ensure reverse mapping exists for SRT lookup if missing
 		if (!matrix[to]) matrix[to] = {};
 		if (!matrix[to][from]) matrix[to][from] = parseFloat(avg.toFixed(2));
 	}
 
 	const result = { matrix, adjacency, lastUpdated: Date.now() };
-	writeCacheFile(CACHE_FILE, JSON.stringify(result));
+	writeCacheFile(CACHE_FILE, JSON.stringify(result), ctx.config.cacheDir);
 	return result;
 }
 
-function ensureDataLoaded() {
+function ensureDataLoaded(ctx: cache.CacheContext) {
 	if (!_networkData) {
-		_networkData = loadNetworkData();
+		_networkData = loadNetworkData(ctx);
 		if (!_networkData) {
-			_networkData = generateNetworkData();
+			_networkData = generateNetworkData(ctx);
 		}
 	}
 }
 
-// --- Accessors ---
-
-export function getSRT(from: string, to: string): number | undefined {
-	ensureDataLoaded();
-	// Special case for Exhibition loop which is often missing from scheduled logic
+export function getSRT(from: string, to: string, ctx: cache.CacheContext): number | undefined {
+	ensureDataLoaded(ctx);
 	if ((from == "place_exhsta" && to == "place_bowsta") || (from == "place_bowsta" && to == "place_exhsta")) return 3;
 
 	return _networkData!.matrix[from]?.[to] ?? _networkData!.matrix[to]?.[from];
 }
 
-function getGraph(): Record<string, string[]> {
-	ensureDataLoaded();
+function getGraph(ctx: cache.CacheContext): Record<string, string[]> {
+	ensureDataLoaded(ctx);
 	return _networkData!.adjacency;
 }
 
-// --- Pathfinding & Express Logic ---
-
-function findPathBFS(start: string, end: string): string[] | null {
-	const graph = getGraph();
+function findPathBFS(start: string, end: string, ctx: cache.CacheContext): string[] | null {
+	const graph = getGraph(ctx);
 	if (!graph[start] || !graph[end]) return null;
 	if (start === end) return [start];
 
@@ -240,27 +209,23 @@ function findPathBFS(start: string, end: string): string[] | null {
 	return null;
 }
 
-export function findExpress(givenStops: string[]): ExpressInfo[] {
+export function findExpress(givenStops: string[], ctx: cache.CacheContext): ExpressInfo[] {
 	const result: ExpressInfo[] = [];
 
 	for (let i = 0; i < givenStops.length - 1; i++) {
 		const startStop = givenStops[i];
 		const endStop = givenStops[i + 1];
 
-		// Find the "Local" physical path between these two stops in our topology
-		const physicalPath = findPathBFS(startStop, endStop);
+		const physicalPath = findPathBFS(startStop, endStop, ctx);
 
 		if (physicalPath) {
-			// If the physical path is exactly [start, end], it's a local segment
 			if (physicalPath.length === 2) {
 				result.push({
 					type: "local",
 					from: startStop,
 					to: endStop,
 				});
-			}
-			// If the physical path is longer (start -> A -> B -> end), then A and B were skipped
-			else if (physicalPath.length > 2) {
+			} else if (physicalPath.length > 2) {
 				const skippedStops = physicalPath.slice(1, physicalPath.length - 1);
 				result.push({
 					type: "express",
@@ -281,13 +246,16 @@ export function findExpress(givenStops: string[]): ExpressInfo[] {
 	return result;
 }
 
-export function findExpressString(expressData: ExpressInfo[], stop_id: string | null = null): string {
+export function findExpressString(
+	expressData: ExpressInfo[],
+	ctx: cache.CacheContext,
+	stop_id: string | null = null,
+): string {
 	if (stop_id != null)
 		expressData = expressData.slice(
 			expressData.findIndex((v) => v.from === stop_id || v.skipping?.includes(stop_id) || v.to === stop_id),
 		);
 
-	// Filter out local segments, we only care about express runs for the string
 	expressData = expressData.filter((v) => v.type !== "local");
 
 	if (expressData.length === 0) return "All stops";
@@ -313,10 +281,10 @@ export function findExpressString(expressData: ExpressInfo[], stop_id: string | 
 		"Running express " +
 		segments
 			.map((run) => {
-				const startName = cache.getRawStops(run.from)[0]?.stop_name?.replace(" station", "");
-				const endName = cache.getRawStops(run.to)[0]?.stop_name?.replace(" station", "");
+				const startName = cache.getRawStops(run.from, ctx)[0]?.stop_name?.replace(" station", "");
+				const endName = cache.getRawStops(run.to, ctx)[0]?.stop_name?.replace(" station", "");
 				const stoppingAtNames = run.stoppingAt.map((stopId) =>
-					cache.getRawStops(stopId)[0]?.stop_name?.replace(" station", ""),
+					cache.getRawStops(stopId, ctx)[0]?.stop_name?.replace(" station", ""),
 				);
 				const formattedStoppingAtNames =
 					stoppingAtNames.length <= 1
@@ -326,7 +294,7 @@ export function findExpressString(expressData: ExpressInfo[], stop_id: string | 
 							: `${stoppingAtNames.slice(0, -1).join(", ")}, and ${stoppingAtNames[stoppingAtNames.length - 1]}`;
 
 				return stop_id !== null &&
-					(run.from == cache.getRawStops(stop_id)[0]?.parent_station || run.from == stop_id)
+					(run.from == cache.getRawStops(stop_id, ctx)[0]?.parent_station || run.from == stop_id)
 					? run.stoppingAt.length > 0
 						? `to ${endName}, stopping only at ${formattedStoppingAtNames}`
 						: `to ${endName}`
@@ -338,24 +306,17 @@ export function findExpressString(expressData: ExpressInfo[], stop_id: string | 
 	);
 }
 
-// --- Passing Stop Logic (Interpolation) ---
-
 const loggedMissingSRT = new Set<string>();
 
-/**
- * Helper to determine what stops are passed/skipped based on the provided list of stops.
- */
-function findPassingStops(stops: string[], ctx?: cache.CacheContext): { stop_id: string; passing: boolean }[] {
+function findPassingStops(stops: string[], ctx: cache.CacheContext): { stop_id: string; passing: boolean }[] {
 	const stopListHash = stops.join("|");
 	const cached = cache.getCachedPassingStops(stopListHash, ctx);
 	if (cached) return cached;
 
-	// Use the new graph-based express finder
-	const expressSegments = findExpress(stops);
+	const expressSegments = findExpress(stops, ctx);
 	const allStops: { stop_id: string; passing: boolean }[] = [];
 
 	const addStop = (id: string, passing: boolean) => {
-		// Prevent duplicates at segment boundaries
 		if (allStops.at(-1)?.stop_id !== id) {
 			allStops.push({ stop_id: id, passing });
 		}
@@ -374,13 +335,10 @@ function findPassingStops(stops: string[], ctx?: cache.CacheContext): { stop_id:
 
 		if (segment.type === "local") {
 			addStop(segment.from, false);
-			// Since it is local, there are no intermediate stops to add between from/to based on segment info
-			// (The BFS already confirmed they are adjacent in physical graph)
 			addStop(segment.to, false);
 			continue;
 		}
 
-		// Handle express segments
 		addStop(segment.from, false);
 		segment.skipping?.forEach((s) => addStop(s, true));
 		addStop(segment.to, false);
@@ -390,14 +348,14 @@ function findPassingStops(stops: string[], ctx?: cache.CacheContext): { stop_id:
 	return allStops;
 }
 
-function findPassingStopSRTs(stops: string[], ctx?: cache.CacheContext): PassingStopSRT[] {
+function findPassingStopSRTs(stops: string[], ctx: cache.CacheContext): PassingStopSRT[] {
 	const allStops = findPassingStops(stops, ctx);
 	const results: PassingStopSRT[] = [];
 
 	for (let i = 0; i < allStops.length - 1; i++) {
 		const from = allStops[i].stop_id;
 		const to = allStops[i + 1].stop_id;
-		const srt = getSRT(from, to); // Uses dynamic matrix
+		const srt = getSRT(from, to, ctx);
 
 		if (srt === undefined) {
 			const key = `${from}|${to}`;
@@ -408,7 +366,6 @@ function findPassingStopSRTs(stops: string[], ctx?: cache.CacheContext): Passing
 				});
 				loggedMissingSRT.add(key);
 			}
-			// Default to 1 minute if missing to prevent calculation break
 			results.push({ from, to, emu: 1, passing: allStops[i + 1].passing });
 		} else {
 			results.push({ from, to, emu: srt, passing: allStops[i + 1].passing });
@@ -417,9 +374,7 @@ function findPassingStopSRTs(stops: string[], ctx?: cache.CacheContext): Passing
 	return results;
 }
 
-// Helper to normalize stop IDs to parent IDs for consistent matrix lookup
 function getStopOrParentId(stopId: string, ctx?: cache.CacheContext): string | undefined {
-	// Assuming you have a helper or can use cache.getRawStops
 	const s = cache.getRawStops(stopId, ctx)?.[0];
 	return s ? (s.parent_station ?? s.stop_id) : undefined;
 }
@@ -428,9 +383,9 @@ export function findPassingStopTimes(
 	stopTimes: qdf.StopTime[],
 	ctx?: cache.CacheContext,
 ): (qdf.StopTime & { _passing: boolean })[] {
+	if (!ctx) throw new Error("Context required for findPassingStopTimes");
 	if (stopTimes.length === 0) return [];
 
-	// Extract parent stations for SRT lookup, sorted by sequence
 	const sortedStopTimes = [...stopTimes].sort((a, b) => (a.stop_sequence ?? 0) - (b.stop_sequence ?? 0));
 	const stops = sortedStopTimes
 		.map((st) => getStopOrParentId(st.stop_id, ctx))
@@ -444,17 +399,14 @@ export function findPassingStopTimes(
 
 	const passingSRTs = findPassingStopSRTs(stops, ctx);
 	if (!passingSRTs.length) {
-		// Fallback or warning if we couldn't determine path
 		return sortedStopTimes.map((v) => ({ ...v, _passing: false }));
 	}
 
-	// We define a new Interface for result items which might be 'Passing' (virtual)
 	type PassingResult = qdf.StopTime & { _passing: boolean };
 
 	let resultTimes: PassingResult[] = [{ ...idsToTimes[passingSRTs[0].from], _passing: false }];
 	let currentPassingRun: PassingStopSRT[] = [];
 
-	// Process segments
 	for (const srt of passingSRTs) {
 		if (srt.passing) {
 			currentPassingRun.push(srt);
@@ -462,19 +414,16 @@ export function findPassingStopTimes(
 		}
 
 		if (currentPassingRun.length === 0) {
-			// Just a normal stop
 			if (idsToTimes[srt.to]) {
 				resultTimes.push({ ...idsToTimes[srt.to], _passing: false });
 			}
 			continue;
 		}
 
-		// We have a block of passing stops to interpolate
 		const startTime = resultTimes.at(-1);
 		const endTime = idsToTimes[srt.to];
 
 		if (!startTime?.departure_time || !endTime?.departure_time) {
-			// Skip interpolation if data invalid, but add the endpoint
 			if (endTime) resultTimes.push({ ...endTime, _passing: false });
 			currentPassingRun = [];
 			continue;
@@ -486,7 +435,6 @@ export function findPassingStopTimes(
 		let accumulatedEmu = 0;
 		for (let i = 0; i < currentPassingRun.length; i++) {
 			const run = currentPassingRun[i];
-			// Rescale EMU based on actual scheduled difference
 			const scaledEmu = totalEmu > 0 ? (run.emu / totalEmu) * totalTimeDiff : 0;
 			accumulatedEmu += scaledEmu;
 
@@ -504,8 +452,8 @@ export function findPassingStopTimes(
 						(currentPassingRun.length + 1),
 				departure_time: interpolatedTime,
 				arrival_time: interpolatedTime,
-				drop_off_type: 1, // None
-				pickup_type: 1, // None
+				drop_off_type: 1,
+				pickup_type: 1,
 				continuous_drop_off: 0,
 				continuous_pickup: 0,
 				shape_dist_traveled: -1,

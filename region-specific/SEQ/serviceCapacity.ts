@@ -1,18 +1,18 @@
 import fs from "fs";
 import logger from "../../utils/logger.js";
 import { AugmentedStopTime } from "../../utils/augmentedStopTime.js";
-import { AugmentedTrip, AugmentedTripInstance } from "../../utils/augmentedTrip.js";
+import { AugmentedTripInstance, AugmentedTrip } from "../../utils/augmentedTrip.js";
 import { CacheContext, getAugmentedStops, getRawRoutes } from "../../cache.js";
 import zlib from "zlib";
 import { pipeline } from "stream";
 import { promisify } from "util";
 import { getCacheFilePath, getDataFilePath } from "../../utils/fs.js";
-import { TRAX_CONFIG } from "../../config.js";
+import { TraxConfig } from "../../config.js";
 import { ServiceCapacity } from "../../utils/serviceCapacity.js";
 
 const pipe = promisify(pipeline);
 
-const FILE_PATH = getCacheFilePath("service_capacity.csv");
+// const FILE_PATH = getCacheFilePath("service_capacity.csv");
 
 export type ServiceCapacityData = {
 	_id: string;
@@ -38,9 +38,12 @@ function getMap<K, V>(map: Map<K, V>, key: K, factory: () => V): V {
 	return val;
 }
 
-export async function ensureServiceCapacityData(): Promise<void> {
-	if (!fs.existsSync(TRAX_CONFIG.cacheDir)) {
-		fs.mkdirSync(TRAX_CONFIG.cacheDir, { recursive: true });
+export async function ensureServiceCapacityData(config: TraxConfig): Promise<void> {
+	const cacheDir = config.cacheDir;
+	const FILE_PATH = getCacheFilePath("service_capacity.csv", cacheDir);
+
+	if (!fs.existsSync(cacheDir)) {
+		fs.mkdirSync(cacheDir, { recursive: true });
 	}
 
 	// If file doesn't exist, extract from embedded archive
@@ -56,10 +59,12 @@ export async function ensureServiceCapacityData(): Promise<void> {
 		}
 	}
 
-	loadServiceCapacityData();
+	loadServiceCapacityData(cacheDir);
 }
 
-function loadServiceCapacityData() {
+function loadServiceCapacityData(cacheDir: string) {
+	const FILE_PATH = getCacheFilePath("service_capacity.csv", cacheDir);
+
 	if (!fs.existsSync(FILE_PATH)) {
 		logger.warn("Service capacity file not found.", { module: "serviceCapacity" });
 		return;
@@ -341,7 +346,11 @@ export function getServiceCapacity(
 	return ServiceCapacity.UNKNOWN;
 }
 
-export function addSCI(inst: AugmentedTripInstance, ctx?: CacheContext): AugmentedTripInstance {
+export function addSCI(
+	inst: AugmentedTripInstance,
+	ctx: CacheContext | undefined,
+	config: TraxConfig,
+): AugmentedTripInstance {
 	let prevSC: ServiceCapacity = ServiceCapacity.UNKNOWN;
 	inst.stopTimes.forEach((st) => {
 		if (st.passing || st.service_capacity !== ServiceCapacity.NOT_CALCULATED) return;
@@ -352,8 +361,8 @@ export function addSCI(inst: AugmentedTripInstance, ctx?: CacheContext): Augment
 	return inst;
 }
 
-export function addSC(trip: AugmentedTrip, ctx?: CacheContext): AugmentedTrip {
-	trip.instances = trip.instances.map((v) => addSCI(v, ctx));
+export function addSC(trip: AugmentedTrip, ctx: CacheContext | undefined, config: TraxConfig): AugmentedTrip {
+	trip.instances = trip.instances.map((v) => addSCI(v, ctx, config));
 	return trip;
 }
 
