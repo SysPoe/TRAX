@@ -10,7 +10,7 @@ export function isConsideredRoute(route: qdf.Route): boolean {
 	return valid;
 }
 
-export function isConsideredTrip(trip: qdf.Trip): boolean {
+export function isConsideredTrip(trip: qdf.Trip, gtfs?: qdf.GTFS): boolean {
 	if (routeCache.has(trip.route_id)) return routeCache.get(trip.route_id)!;
-	return isConsideredRoute(getGtfs().getRoute(trip.route_id)!);
+	return isConsideredRoute((gtfs ?? getGtfs()).getRoute(trip.route_id)!);
 }

@@ -236,7 +236,7 @@ export function augmentStopTimes(
 		tripUpdate: qdf.RealtimeTripUpdate | null;
 		scheduleRelationship: qdf.TripScheduleRelationship;
 	},
-	ctx?: cache.CacheContext,
+	ctx: cache.CacheContext,
 ): AugmentedStopTime[] {
 	const { serviceDate, tripUpdate, scheduleRelationship } = instanceContext;
 	const tripId = tripUpdate?.trip.trip_id ?? staticStopTimes?.[0]?.trip_id ?? "";
@@ -344,9 +344,9 @@ export function augmentStopTimes(
 			if (missed && missed.rt?.schedule_relationship === qdf.StopTimeScheduleRelationship.SKIPPED) {
 				const originalMergeItem = mergedList.find((m) => m.stop_sequence === s);
 				if (originalMergeItem) {
-					const scheduledStop = cache.getAugmentedStops(originalMergeItem.stop_id, ctx)[0];
+					const scheduledStop = cache.getAugmentedStops(ctx, originalMergeItem.stop_id)[0];
 					const scheduledParent = scheduledStop?.parent_stop_id
-						? cache.getAugmentedStops(scheduledStop.parent_stop_id, ctx)[0]
+						? cache.getAugmentedStops(ctx, scheduledStop.parent_stop_id)[0]
 						: null;
 					const skipped: AugmentedStopTime = {
 						_stopTime: originalMergeItem,
@@ -408,9 +408,9 @@ export function augmentStopTimes(
 			stopTimeUpdates.find((u) => u.stop_sequence === seq && !isPassing) ??
 			(isPassing ? undefined : stopTimeUpdates.find((u) => u.stop_id === stopId));
 
-		const scheduledStop = cache.getAugmentedStops(stopId, ctx)[0];
+		const scheduledStop = cache.getAugmentedStops(ctx, stopId)[0];
 		const scheduledParentId = scheduledStop?.parent_stop_id ?? scheduledStop?.parent_station ?? null;
-		const scheduledParent = scheduledParentId ? cache.getAugmentedStops(scheduledParentId, ctx)[0] : null;
+		const scheduledParent = scheduledParentId ? cache.getAugmentedStops(ctx, scheduledParentId)[0] : null;
 
 		const schedArr = stopTime.arrival_time;
 		const schedDep = stopTime.departure_time;
@@ -457,16 +457,16 @@ export function augmentStopTimes(
 				propagated = true;
 			}
 
-			const rtRawStop = cache.getRawStops(rtUpdate.stop_id, ctx)[0];
+			const rtRawStop = cache.getRawStops(ctx, rtUpdate.stop_id)[0];
 			if (rtRawStop?.platform_code) {
 				platformCode = rtRawStop.platform_code;
 				rtFlags.platform = true;
 			}
 
 			if (rtUpdate.stop_id && rtUpdate.stop_id !== stopId) {
-				actualStop = cache.getAugmentedStops(rtUpdate.stop_id, ctx)[0];
+				actualStop = cache.getAugmentedStops(ctx, rtUpdate.stop_id)[0];
 				actualParent = actualStop?.parent_station
-					? cache.getAugmentedStops(actualStop.parent_station, ctx)[0]
+					? cache.getAugmentedStops(ctx, actualStop.parent_station)[0]
 					: null;
 				rtFlags.stop = true;
 				rtFlags.parent = true;
@@ -593,14 +593,10 @@ export function augmentStopTimes(
 	}
 
 	let platformData = {};
-	if (ctx) {
-		if (ctx.raw.regionSpecific.SEQ.platformData === undefined) {
-			ctx.raw.regionSpecific.SEQ.platformData = loadPlatformData(ctx.config);
-		}
-		platformData = ctx.raw.regionSpecific.SEQ.platformData;
-	} else {
-		throw new Error("Context required for augmentStopTimes platform data loading.");
+	if (ctx.raw.regionSpecific.SEQ.platformData === undefined) {
+		ctx.raw.regionSpecific.SEQ.platformData = loadPlatformData(ctx.config);
 	}
+	platformData = ctx.raw.regionSpecific.SEQ.platformData;
 
 	return assignPlatformSides(finalStops, platformData);
 }

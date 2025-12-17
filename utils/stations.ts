@@ -10,8 +10,7 @@ function getPatternSignature(stopTimes: any[]): string {
 	return stopTimes.map((st) => st.stop_id).join("|");
 }
 
-export function getConsideredStations(ctx?: CacheContext): qdf.Stop[] {
-	if (!ctx) throw new Error("Context required for getConsideredStations");
+export function getConsideredStations(ctx: CacheContext): qdf.Stop[] {
 	if (ctx.augmented.railStations.length > 0) {
 		return ctx.augmented.railStations;
 	}
@@ -70,8 +69,8 @@ export function getConsideredStations(ctx?: CacheContext): qdf.Stop[] {
 	return result;
 }
 
-export function getAugmentedRailStations(ctx?: CacheContext): AugmentedStop[] {
+export function getAugmentedRailStations(ctx: CacheContext): AugmentedStop[] {
 	return getConsideredStations(ctx)
-		.map((stop) => getAugmentedStops(stop.stop_id, ctx)[0])
+		.map((stop) => getAugmentedStops(ctx, stop.stop_id)[0])
 		.filter((v) => v);
 }

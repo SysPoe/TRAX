@@ -22,7 +22,7 @@ export function getServiceCapacity(
 	stopTime: AugmentedStopTime,
 	dateStr: string,
 	_dirOverride: string | undefined,
-	ctx: CacheContext | undefined,
+	ctx: CacheContext,
 	config: TraxConfig,
 ): ServiceCapacity {
 	switch (config.region) {
@@ -43,7 +43,7 @@ export async function ensureServiceCapacityData(config: TraxConfig) {
 
 export function addSCI(
 	inst: AugmentedTripInstance,
-	ctx: CacheContext | undefined,
+	ctx: CacheContext,
 	config: TraxConfig,
 ): AugmentedTripInstance {
 	let prevSC: ServiceCapacity = ServiceCapacity.UNKNOWN;
@@ -56,7 +56,7 @@ export function addSCI(
 	return inst;
 }
 
-export function addSC(trip: AugmentedTrip, ctx: CacheContext | undefined, config: TraxConfig): AugmentedTrip {
+export function addSC(trip: AugmentedTrip, ctx: CacheContext, config: TraxConfig): AugmentedTrip {
 	trip.instances = trip.instances.map((v) => addSCI(v, ctx, config));
 	return trip;
 }

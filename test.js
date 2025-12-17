@@ -1,20 +1,25 @@
-import TRAX from "./dist/index.js";
+import TRAXClass from "./dist/index.js";
 
 async function main() {
-	TRAX.logger.info("Loading gtfs data...");
+	console.log("Loading gtfs data...");
+
+	const TRAX = new TRAXClass();
 
 	let start_static = Date.now();
 	await TRAX.loadGTFS(false);
 	let end_static = Date.now();
 
-	TRAX.logger.info("GTFS data loaded successfully.\n");
+	console.log("GTFS data loaded successfully.\n");
 
 	let start_realtime = Date.now();
 	await TRAX.updateRealtime();
 	let end_realtime = Date.now();
 
-	const deps = TRAX.getAugmentedStops("place_censta")[0].getDepartures(
-		new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10).replaceAll("-", ""),
+	const stop = TRAX.getAugmentedStops("place_censta")[0];
+	const date = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10).replaceAll("-", "");
+	const deps = TRAX.utils.departures.getDeparturesForStop(
+		stop,
+		date,
 		"08:00:00",
 		"23:59:59",
 	);
@@ -31,9 +36,9 @@ async function main() {
 		);
 	}
 
-	TRAX.logger.info(`GTFS loading took ${(end_static - start_static) / 1000} seconds.`);
-	TRAX.logger.info(`Realtime updates took ${(end_realtime - start_realtime) / 1000} seconds.`);
-	TRAX.logger.info("Done!");
+	console.log(`GTFS loading took ${(end_static - start_static) / 1000} seconds.`);
+	console.log(`Realtime updates took ${(end_realtime - start_realtime) / 1000} seconds.`);
+	console.log("Done!");
 	process.exit(0);
 }
 

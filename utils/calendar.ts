@@ -77,12 +77,12 @@ export function getServiceDates(
 	return serviceDates;
 }
 
-export function getServiceDatesByTrip(trip_id: string, ctx?: CacheContext): string[] {
-	const trips = getRawTrips(trip_id, ctx);
+export function getServiceDatesByTrip(trip_id: string, ctx: CacheContext): string[] {
+	const trips = getRawTrips(ctx, trip_id);
 	const trip = trips && trips.length > 0 ? trips[0] : undefined;
 	if (!trip) return [];
-	const calendars = getCalendars({ service_id: trip.service_id });
-	const calendarDates = getCalendarDates({ service_id: trip.service_id });
+	const calendars = getCalendars(ctx, { service_id: trip.service_id });
+	const calendarDates = getCalendarDates(ctx, { service_id: trip.service_id });
 	const serviceDatesMap = getServiceDates(calendars, calendarDates);
 	return serviceDatesMap[trip.service_id] ?? [];
 }

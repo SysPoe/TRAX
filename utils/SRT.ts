@@ -281,10 +281,10 @@ export function findExpressString(
 		"Running express " +
 		segments
 			.map((run) => {
-				const startName = cache.getRawStops(run.from, ctx)[0]?.stop_name?.replace(" station", "");
-				const endName = cache.getRawStops(run.to, ctx)[0]?.stop_name?.replace(" station", "");
+				const startName = cache.getRawStops(ctx, run.from)[0]?.stop_name?.replace(" station", "");
+				const endName = cache.getRawStops(ctx, run.to)[0]?.stop_name?.replace(" station", "");
 				const stoppingAtNames = run.stoppingAt.map((stopId) =>
-					cache.getRawStops(stopId, ctx)[0]?.stop_name?.replace(" station", ""),
+					cache.getRawStops(ctx, stopId)[0]?.stop_name?.replace(" station", ""),
 				);
 				const formattedStoppingAtNames =
 					stoppingAtNames.length <= 1
@@ -294,7 +294,7 @@ export function findExpressString(
 							: `${stoppingAtNames.slice(0, -1).join(", ")}, and ${stoppingAtNames[stoppingAtNames.length - 1]}`;
 
 				return stop_id !== null &&
-					(run.from == cache.getRawStops(stop_id, ctx)[0]?.parent_station || run.from == stop_id)
+					(run.from == cache.getRawStops(ctx, stop_id)[0]?.parent_station || run.from == stop_id)
 					? run.stoppingAt.length > 0
 						? `to ${endName}, stopping only at ${formattedStoppingAtNames}`
 						: `to ${endName}`
@@ -310,7 +310,7 @@ const loggedMissingSRT = new Set<string>();
 
 function findPassingStops(stops: string[], ctx: cache.CacheContext): { stop_id: string; passing: boolean }[] {
 	const stopListHash = stops.join("|");
-	const cached = cache.getCachedPassingStops(stopListHash, ctx);
+	const cached = cache.getCachedPassingStops(ctx, stopListHash);
 	if (cached) return cached;
 
 	const expressSegments = findExpress(stops, ctx);
@@ -344,7 +344,7 @@ function findPassingStops(stops: string[], ctx: cache.CacheContext): { stop_id: 
 		addStop(segment.to, false);
 	}
 
-	cache.cachePassingStops(stopListHash, allStops, ctx);
+	cache.cachePassingStops(ctx, stopListHash, allStops);
 	return allStops;
 }
 
@@ -374,16 +374,15 @@ function findPassingStopSRTs(stops: string[], ctx: cache.CacheContext): PassingS
 	return results;
 }
 
-function getStopOrParentId(stopId: string, ctx?: cache.CacheContext): string | undefined {
-	const s = cache.getRawStops(stopId, ctx)?.[0];
+function getStopOrParentId(stopId: string, ctx: cache.CacheContext): string | undefined {
+	const s = cache.getRawStops(ctx, stopId)?.[0];
 	return s ? (s.parent_station ?? s.stop_id) : undefined;
 }
 
 export function findPassingStopTimes(
 	stopTimes: qdf.StopTime[],
-	ctx?: cache.CacheContext,
+	ctx: cache.CacheContext,
 ): (qdf.StopTime & { _passing: boolean })[] {
-	if (!ctx) throw new Error("Context required for findPassingStopTimes");
 	if (stopTimes.length === 0) return [];
 
 	const sortedStopTimes = [...stopTimes].sort((a, b) => (a.stop_sequence ?? 0) - (b.stop_sequence ?? 0));

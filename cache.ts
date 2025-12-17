@@ -160,13 +160,8 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 let rawCache: RawCache = createEmptyRawCache();
 let augmentedCache: AugmentedCache = createEmptyAugmentedCache();
 
-function getContext(ctx?: CacheContext): CacheContext {
-	if (ctx) return ctx;
-	throw new Error("TRAX: CacheContext is required. Please use instance methods.");
-}
-
-export function getCalendars(filter?: Partial<Calendar>, ctx?: CacheContext): Calendar[] {
-	const { raw, gtfs: ctxGtfs } = getContext(ctx);
+export function getCalendars(ctx: CacheContext, filter?: Partial<Calendar>): Calendar[] {
+	const { raw, gtfs: ctxGtfs } = ctx;
 	const gtfs = ctxGtfs ?? getGtfs();
 	if (!raw.calendars || raw.calendars.length === 0) raw.calendars = gtfs.getCalendars();
 	if (!filter) return raw.calendars;
@@ -179,8 +174,8 @@ export function getCalendars(filter?: Partial<Calendar>, ctx?: CacheContext): Ca
 	});
 }
 
-export function getCalendarDates(filter?: Partial<CalendarDate>, ctx?: CacheContext): CalendarDate[] {
-	const { raw, gtfs: ctxGtfs } = getContext(ctx);
+export function getCalendarDates(ctx: CacheContext, filter?: Partial<CalendarDate>): CalendarDate[] {
+	const { raw, gtfs: ctxGtfs } = ctx;
 	const gtfs = ctxGtfs ?? getGtfs();
 	if (!raw.calendarDates || raw.calendarDates.length === 0) raw.calendarDates = gtfs.getCalendarDates();
 	if (!filter) return raw.calendarDates;
@@ -193,8 +188,8 @@ export function getCalendarDates(filter?: Partial<CalendarDate>, ctx?: CacheCont
 	});
 }
 
-export function getRawTrips(trip_id?: string, ctx?: CacheContext): Trip[] {
-	const { raw } = getContext(ctx);
+export function getRawTrips(ctx: CacheContext, trip_id?: string): Trip[] {
+	const { raw } = ctx;
 	if (trip_id) {
 		const trip = raw.tripsRec.get(trip_id);
 		return trip ? [trip] : [];
@@ -202,8 +197,8 @@ export function getRawTrips(trip_id?: string, ctx?: CacheContext): Trip[] {
 	return raw.trips;
 }
 
-export function getRawStops(stop_id?: string, ctx?: CacheContext): Stop[] {
-	const { raw } = getContext(ctx);
+export function getRawStops(ctx: CacheContext, stop_id?: string): Stop[] {
+	const { raw } = ctx;
 	if (stop_id) {
 		const stop = raw.stopsRec.get(stop_id);
 		return stop ? [stop] : [];
@@ -211,8 +206,8 @@ export function getRawStops(stop_id?: string, ctx?: CacheContext): Stop[] {
 	return raw.stops;
 }
 
-export function getRawRoutes(route_id?: string, ctx?: CacheContext): Route[] {
-	const { raw } = getContext(ctx);
+export function getRawRoutes(ctx: CacheContext, route_id?: string): Route[] {
+	const { raw } = ctx;
 	if (route_id) {
 		const route = raw.routesRec.get(route_id);
 		return route ? [route] : [];
@@ -220,43 +215,43 @@ export function getRawRoutes(route_id?: string, ctx?: CacheContext): Route[] {
 	return raw.routes;
 }
 
-export function getRawCalendars(ctx?: CacheContext): Calendar[] {
-	const { raw } = getContext(ctx);
+export function getRawCalendars(ctx: CacheContext): Calendar[] {
+	const { raw } = ctx;
 	return raw.calendars;
 }
 
-export function getRawCalendarDates(ctx?: CacheContext): CalendarDate[] {
-	const { raw } = getContext(ctx);
+export function getRawCalendarDates(ctx: CacheContext): CalendarDate[] {
+	const { raw } = ctx;
 	return raw.calendarDates;
 }
 
-export function getTripUpdates(trip_id?: string, ctx?: CacheContext): RealtimeTripUpdate[] {
-	const { raw, gtfs: ctxGtfs } = getContext(ctx);
+export function getTripUpdates(ctx: CacheContext, trip_id?: string): RealtimeTripUpdate[] {
+	const { raw, gtfs: ctxGtfs } = ctx;
 	const gtfs = ctxGtfs ?? getGtfs();
 	if (raw.tripUpdates.length === 0) raw.tripUpdates = gtfs.getRealtimeTripUpdates();
 	if (trip_id) return raw.tripUpdates.filter((v) => v.trip.trip_id == trip_id);
 	return raw.tripUpdates;
 }
 
-export function getVehiclePositions(trip_id?: string, ctx?: CacheContext): RealtimeVehiclePosition[] {
-	const { raw, gtfs: ctxGtfs } = getContext(ctx);
+export function getVehiclePositions(ctx: CacheContext, trip_id?: string): RealtimeVehiclePosition[] {
+	const { raw, gtfs: ctxGtfs } = ctx;
 	const gtfs = ctxGtfs ?? getGtfs();
 	if (raw.vehiclePositions.length === 0) raw.vehiclePositions = gtfs.getRealtimeVehiclePositions();
 	if (trip_id) return raw.vehiclePositions.filter((v) => v.trip.trip_id == trip_id);
 	return raw.vehiclePositions;
 }
 
-export function getStopTimeUpdates(trip_id: string, ctx?: CacheContext): RealtimeStopTimeUpdate[] {
-	return getTripUpdates(trip_id, ctx)[0]?.stop_time_updates ?? [];
+export function getStopTimeUpdates(ctx: CacheContext, trip_id: string): RealtimeStopTimeUpdate[] {
+	return getTripUpdates(ctx, trip_id)[0]?.stop_time_updates ?? [];
 }
 
-export function getRawStopTimes(trip_id: string, ctx?: CacheContext): StopTime[] {
-	const { gtfs: ctxGtfs } = getContext(ctx);
+export function getRawStopTimes(ctx: CacheContext, trip_id: string): StopTime[] {
+	const { gtfs: ctxGtfs } = ctx;
 	return (ctxGtfs ?? getGtfs()).getStopTimesForTrip(trip_id);
 }
 
-export function getAugmentedTrips(trip_id?: string, ctx?: CacheContext): AugmentedTrip[] {
-	const context = getContext(ctx);
+export function getAugmentedTrips(ctx: CacheContext, trip_id?: string): AugmentedTrip[] {
+	const context = ctx;
 	const { raw, augmented } = context;
 	if (trip_id) {
 		const trip = augmented.tripsRec.get(trip_id);
@@ -272,10 +267,10 @@ export function getAugmentedTrips(trip_id?: string, ctx?: CacheContext): Augment
 	return Array.from(augmented.tripsRec.values()).map((v) => addSC(v, ctx, context.config));
 }
 
-export function getAugmentedTripInstance(instance_id: string, ctx?: CacheContext): AugmentedTripInstance | null {
-	const context = getContext(ctx);
+export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string): AugmentedTripInstance | null {
+	const context = ctx;
 	try {
-		let res = getAugmentedTrips(JSON.parse(atob(instance_id))[0], ctx)[0].instances.find(
+		let res = getAugmentedTrips(ctx, JSON.parse(atob(instance_id))[0])[0].instances.find(
 			(v) => v.instance_id === instance_id,
 		);
 		return res ? addSCI(res, ctx, context.config) : null;
@@ -284,8 +279,8 @@ export function getAugmentedTripInstance(instance_id: string, ctx?: CacheContext
 	}
 }
 
-export function getAugmentedStops(stop_id?: string, ctx?: CacheContext): AugmentedStop[] {
-	const context = getContext(ctx);
+export function getAugmentedStops(ctx: CacheContext, stop_id?: string): AugmentedStop[] {
+	const context = ctx;
 	const { raw, augmented } = context;
 	if (stop_id) {
 		const stop = augmented.stopsRec.get(stop_id);
@@ -301,19 +296,19 @@ export function getAugmentedStops(stop_id?: string, ctx?: CacheContext): Augment
 	return augmented.stops ?? [];
 }
 
-export function getAugmentedStopTimes(trip_id?: string, ctx?: CacheContext): AugmentedStopTime[] {
-	const { augmented } = getContext(ctx);
+export function getAugmentedStopTimes(ctx: CacheContext, trip_id?: string): AugmentedStopTime[] {
+	const { augmented } = ctx;
 	if (trip_id) return augmented.stopTimes?.[trip_id] ?? [];
 	return Object.values(augmented.stopTimes ?? {}).flat();
 }
 
-export function queryAugmentedStopTimes(query: qdf.StopTimeQuery, ctx?: CacheContext): AugmentedStopTime[] {
-	const context = getContext(ctx);
+export function queryAugmentedStopTimes(ctx: CacheContext, query: qdf.StopTimeQuery): AugmentedStopTime[] {
+	const context = ctx;
 	const { gtfs: ctxGtfs } = context;
 	const results: AugmentedStopTime[] = [];
 	const gtfs = ctxGtfs ?? getGtfs();
 	gtfs.queryStopTimes(query).forEach((st) => {
-		const augmentedTrip = getAugmentedTrips(st.trip_id, context)[0];
+		const augmentedTrip = getAugmentedTrips(context, st.trip_id)[0];
 		if (augmentedTrip) {
 			for (const instance of augmentedTrip.instances) {
 				const augmentedStopTime = instance.stopTimes.find(
@@ -328,43 +323,43 @@ export function queryAugmentedStopTimes(query: qdf.StopTimeQuery, ctx?: CacheCon
 	return results;
 }
 
-export function getBaseStopTimes(trip_id: string, ctx?: CacheContext): AugmentedStopTime[] {
-	const { augmented } = getContext(ctx);
+export function getBaseStopTimes(ctx: CacheContext, trip_id: string): AugmentedStopTime[] {
+	const { augmented } = ctx;
 	return augmented.baseStopTimes?.[trip_id] ?? [];
 }
 
-export function cacheExpressInfo(stopListHash: string, expressInfo: any[], ctx?: CacheContext) {
-	const { augmented } = getContext(ctx);
+export function cacheExpressInfo(ctx: CacheContext, stopListHash: string, expressInfo: any[]) {
+	const { augmented } = ctx;
 	augmented.expressInfoCache.set(stopListHash, expressInfo);
 }
 
-export function getCachedExpressInfo(stopListHash: string, ctx?: CacheContext): any[] | undefined {
-	const { augmented } = getContext(ctx);
+export function getCachedExpressInfo(ctx: CacheContext, stopListHash: string): any[] | undefined {
+	const { augmented } = ctx;
 	return augmented.expressInfoCache.get(stopListHash);
 }
 
-export function cachePassingStops(stopListHash: string, passingStops: any[], ctx?: CacheContext) {
-	const { augmented } = getContext(ctx);
+export function cachePassingStops(ctx: CacheContext, stopListHash: string, passingStops: any[]) {
+	const { augmented } = ctx;
 	augmented.passingStopsCache.set(stopListHash, passingStops);
 }
 
-export function getCachedPassingStops(stopListHash: string, ctx?: CacheContext): any[] | undefined {
-	const { augmented } = getContext(ctx);
+export function getCachedPassingStops(ctx: CacheContext, stopListHash: string): any[] | undefined {
+	const { augmented } = ctx;
 	return augmented.passingStopsCache.get(stopListHash);
 }
 
-export function getPassingTrips(stopId: string, ctx?: CacheContext): string[] {
-	const { augmented } = getContext(ctx);
+export function getPassingTrips(ctx: CacheContext, stopId: string): string[] {
+	const { augmented } = ctx;
 	return augmented.passingTrips.get(stopId) ?? [];
 }
 
 export function getRunSeries(
+	ctx: CacheContext,
 	date: string,
 	runSeries: string,
 	calcIfNotFound: boolean = true,
-	ctx?: CacheContext,
 ): RunSeries {
-	const context = getContext(ctx);
+	const context = ctx;
 	const { augmented } = context;
 
 	let dateMap = augmented.runSeriesCache.get(date);
@@ -379,7 +374,7 @@ export function getRunSeries(
 	) {
 		const tripId = augmented.serviceDateTrips.get(date)?.find((v) => v.endsWith(runSeries));
 		if (tripId) {
-			const trip = getAugmentedTrips(tripId, context)[0];
+			const trip = getAugmentedTrips(context, tripId)[0];
 			const instance = trip.instances.find((i) => i.serviceDate === date);
 			if (instance) {
 				calculateRunSeries(instance, context);
@@ -395,8 +390,8 @@ export function getRunSeries(
 	return dateMap.get(runSeries)!;
 }
 
-export function setRunSeries(date: string, runSeries: string, data: RunSeries, ctx?: CacheContext): void {
-	const { augmented } = getContext(ctx);
+export function setRunSeries(date: string, runSeries: string, data: RunSeries, ctx: CacheContext): void {
+	const { augmented } = ctx;
 	let dateMap = augmented.runSeriesCache.get(date);
 	if (!dateMap) {
 		dateMap = new Map();
@@ -405,15 +400,15 @@ export function setRunSeries(date: string, runSeries: string, data: RunSeries, c
 	dateMap.set(runSeries, data);
 }
 
-export function SEQgetQRTPlaces(ctx?: CacheContext): QRTPlace[] {
-	ensureQRTEnabled(getContext(ctx).config);
-	const { raw } = getContext(ctx);
+export function SEQgetQRTPlaces(ctx: CacheContext): QRTPlace[] {
+	ensureQRTEnabled(ctx.config);
+	const { raw } = ctx;
 	return raw.regionSpecific.SEQ.qrtPlaces;
 }
 
-export function SEQgetQRTTrains(ctx?: CacheContext): QRTTravelTrip[] {
-	ensureQRTEnabled(getContext(ctx).config);
-	const { raw } = getContext(ctx);
+export function SEQgetQRTTrains(ctx: CacheContext): QRTTravelTrip[] {
+	ensureQRTEnabled(ctx.config);
+	const { raw } = ctx;
 	return raw.regionSpecific.SEQ.qrtTrains;
 }
 
@@ -493,7 +488,7 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 		function: "refreshStaticCache",
 	});
 
-	newRawCache.trips = gtfs.getTrips().filter((v) => isConsideredTrip(v));
+	newRawCache.trips = gtfs.getTrips().filter((v) => isConsideredTrip(v, gtfs));
 	logger.debug(`Loaded ${newRawCache.trips.length} trips.`, {
 		module: "cache",
 		function: "refreshStaticCache",
@@ -717,7 +712,7 @@ async function processWithProgress<T, U>(
 	items: T[],
 	taskName: string,
 	processFn: (item: T) => U,
-	chunkSize = 1000,
+	chunkSize = 250,
 ): Promise<U[]> {
 	const results: U[] = [];
 	let current = 0;

@@ -263,12 +263,12 @@ export function getServiceCapacity(
 	inst: AugmentedTripInstance,
 	stopTime: AugmentedStopTime,
 	dateStr: string,
-	_dirOverride?: string,
-	ctx?: CacheContext,
+	_dirOverride: string | undefined,
+	ctx: CacheContext,
 ): ServiceCapacity {
 	if (!loaded || stopTime.passing) return ServiceCapacity.UNKNOWN;
 
-	const route = getRawRoutes(inst.route_id, ctx)[0];
+	const route = getRawRoutes(ctx, inst.route_id)[0];
 	const routeName = route?.route_long_name;
 	if (!routeName) return ServiceCapacity.UNKNOWN;
 
@@ -279,7 +279,7 @@ export function getServiceCapacity(
 	const dayType = getDayType(dateStr);
 
 	const stopLookupId = stopTime.scheduled_parent_station_id ?? stopTime.scheduled_stop_id;
-	let stopName = stopLookupId ? getAugmentedStops(stopLookupId, ctx)[0]?.stop_name : undefined;
+	let stopName = stopLookupId ? getAugmentedStops(ctx, stopLookupId)[0]?.stop_name : undefined;
 	if (!stopName) return ServiceCapacity.UNKNOWN;
 	if (stopName.trim().toLowerCase().startsWith("boggo")) stopName = "Park Road";
 	if (stopName.trim().toLowerCase().startsWith("international")) stopName = "International Terminal";
@@ -348,7 +348,7 @@ export function getServiceCapacity(
 
 export function addSCI(
 	inst: AugmentedTripInstance,
-	ctx: CacheContext | undefined,
+	ctx: CacheContext,
 	config: TraxConfig,
 ): AugmentedTripInstance {
 	let prevSC: ServiceCapacity = ServiceCapacity.UNKNOWN;
@@ -361,7 +361,7 @@ export function addSCI(
 	return inst;
 }
 
-export function addSC(trip: AugmentedTrip, ctx: CacheContext | undefined, config: TraxConfig): AugmentedTrip {
+export function addSC(trip: AugmentedTrip, ctx: CacheContext, config: TraxConfig): AugmentedTrip {
 	trip.instances = trip.instances.map((v) => addSCI(v, ctx, config));
 	return trip;
 }

@@ -154,22 +154,22 @@ export class TRAX {
 		return new Date(Date.now() + 3600 * 10 * 1000).toISOString().slice(0, 10).replace(/-/g, "");
 	}
 
-	public getAugmentedTrips = (trip_id?: string) => cache.getAugmentedTrips(trip_id, this.ctx);
-	public getAugmentedTripInstance = (instance_id: string) => cache.getAugmentedTripInstance(instance_id, this.ctx);
-	public getAugmentedStops = (stop_id?: string) => cache.getAugmentedStops(stop_id, this.ctx);
-	public getAugmentedStopTimes = (trip_id?: string) => cache.getAugmentedStopTimes(trip_id, this.ctx);
-	public getBaseStopTimes = (trip_id: string) => cache.getBaseStopTimes(trip_id, this.ctx);
+	public getAugmentedTrips = (trip_id?: string) => cache.getAugmentedTrips(this.ctx, trip_id);
+	public getAugmentedTripInstance = (instance_id: string) => cache.getAugmentedTripInstance(this.ctx, instance_id);
+	public getAugmentedStops = (stop_id?: string) => cache.getAugmentedStops(this.ctx, stop_id);
+	public getAugmentedStopTimes = (trip_id?: string) => cache.getAugmentedStopTimes(this.ctx, trip_id);
+	public getBaseStopTimes = (trip_id: string) => cache.getBaseStopTimes(this.ctx, trip_id);
 	public getRunSeries = (date: string, runSeries: string, calcIfNotFound: boolean = true) =>
-		cache.getRunSeries(date, runSeries, calcIfNotFound, this.ctx);
+		cache.getRunSeries(this.ctx, date, runSeries, calcIfNotFound);
 	public getStations = () => stations.getAugmentedRailStations(this.ctx);
-	public getRawTrips = (trip_id?: string) => cache.getRawTrips(trip_id, this.ctx);
-	public getRawStops = (stop_id?: string) => cache.getRawStops(stop_id, this.ctx);
-	public getRawRoutes = (route_id?: string) => cache.getRawRoutes(route_id, this.ctx);
+	public getRawTrips = (trip_id?: string) => cache.getRawTrips(this.ctx, trip_id);
+	public getRawStops = (stop_id?: string) => cache.getRawStops(this.ctx, stop_id);
+	public getRawRoutes = (route_id?: string) => cache.getRawRoutes(this.ctx, route_id);
 	public getRawCalendars = () => cache.getRawCalendars(this.ctx);
 	public getRawCalendarDates = () => cache.getRawCalendarDates(this.ctx);
-	public getStopTimeUpdates = (trip_id: string) => cache.getStopTimeUpdates(trip_id, this.ctx);
-	public getTripUpdates = (trip_id?: string) => cache.getTripUpdates(trip_id, this.ctx);
-	public getVehiclePositions = (trip_id?: string) => cache.getVehiclePositions(trip_id, this.ctx);
+	public getStopTimeUpdates = (trip_id: string) => cache.getStopTimeUpdates(this.ctx, trip_id);
+	public getTripUpdates = (trip_id?: string) => cache.getTripUpdates(this.ctx, trip_id);
+	public getVehiclePositions = (trip_id?: string) => cache.getVehiclePositions(this.ctx, trip_id);
 
 	public on(event: keyof TRAXEvent | string | symbol, listener: (...args: any[]) => void): this {
 		this.events.on(event, listener);

@@ -40,18 +40,17 @@ export type RunSeries = {
 	date: string;
 };
 
-export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): AugmentedTrip {
-	if (!ctx) throw new Error("Context required for augmentTrip");
+export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedTrip {
 	const serviceDates = getServiceDatesByTrip(trip.trip_id, ctx);
-	const rawStopTimes = cache.getRawStopTimes(trip.trip_id, ctx).sort((a, b) => a.stop_sequence - b.stop_sequence);
+	const rawStopTimes = cache.getRawStopTimes(ctx, trip.trip_id).sort((a, b) => a.stop_sequence - b.stop_sequence);
 
-	let parentStops = rawStopTimes.map((st) => cache.getRawStops(st.stop_id, ctx)[0]?.parent_station ?? "");
+	let parentStops = rawStopTimes.map((st) => cache.getRawStops(ctx, st.stop_id)[0]?.parent_station ?? "");
 	let expressInfo = findExpress(
 		parentStops.filter((id): id is string => !!id),
 		ctx,
 	);
 
-	const updates = cache.getTripUpdates(trip.trip_id, ctx);
+	const updates = cache.getTripUpdates(ctx, trip.trip_id);
 
 	const createInstance = (
 		serviceDate: string,
@@ -165,8 +164,7 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 
 const RS_TOLERATE_SECS = 30 * 60;
 
-function trackBackwards(instance: AugmentedTripInstance, ctx?: cache.CacheContext): string {
-	if (!ctx) throw new Error("Context required for trackBackwards");
+function trackBackwards(instance: AugmentedTripInstance, ctx: cache.CacheContext): string {
 	const gtfs = ctx.gtfs ?? getGtfs();
 	let run = instance.run;
 	let prevInstances: AugmentedTripInstance[] = [instance];
@@ -192,7 +190,7 @@ function trackBackwards(instance: AugmentedTripInstance, ctx?: cache.CacheContex
 
 		let candidateInstances: AugmentedTripInstance[] = [];
 		for (const d of deps_ids) {
-			const trips = cache.getAugmentedTrips(d.trip_id, ctx);
+			const trips = cache.getAugmentedTrips(ctx, d.trip_id);
 			if (!trips.length) continue;
 			const t = trips[0];
 			const inst = t.instances.find(
@@ -219,7 +217,7 @@ function trackBackwards(instance: AugmentedTripInstance, ctx?: cache.CacheContex
 		const bestMatchStopTime = deps.at(-1);
 		if (!bestMatchStopTime) break;
 
-		const matchTrip = cache.getAugmentedTrips(bestMatchStopTime.trip_id, ctx)[0];
+		const matchTrip = cache.getAugmentedTrips(ctx, bestMatchStopTime.trip_id)[0];
 		const matchInstance = matchTrip.instances.find((i) => i.serviceDate === serviceDate);
 
 		if (!matchInstance) break;
@@ -231,7 +229,7 @@ function trackBackwards(instance: AugmentedTripInstance, ctx?: cache.CacheContex
 		currentInstance = matchInstance;
 	}
 
-	let rs = cache.getRunSeries(serviceDate, run, false, ctx);
+	let rs = cache.getRunSeries(ctx, serviceDate, run, false);
 	for (const prevInst of prevInstances) {
 		prevInst.runSeries = run;
 		if (!rs.trips.some((v) => v.trip_id === prevInst.trip_id))
@@ -251,13 +249,12 @@ function trackBackwards(instance: AugmentedTripInstance, ctx?: cache.CacheContex
 	return run;
 }
 
-function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx?: cache.CacheContext): void {
-	if (!ctx) throw new Error("Context required for trackForwards");
+function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx: cache.CacheContext): void {
 	const gtfs = ctx.gtfs ?? getGtfs();
 	let run = instance.run;
 	const serviceDate = instance.serviceDate;
 
-	let rs = cache.getRunSeries(serviceDate, runSeries, false, ctx);
+	let rs = cache.getRunSeries(ctx, serviceDate, runSeries, false);
 	let currentInstance = instance;
 
 	for (let _break = 0; _break < 100; _break++) {
@@ -275,7 +272,7 @@ function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx?:
 
 		let candidateInstances: AugmentedTripInstance[] = [];
 		for (const d of deps_ids) {
-			const trips = cache.getAugmentedTrips(d.trip_id, ctx);
+			const trips = cache.getAugmentedTrips(ctx, d.trip_id);
 			if (!trips.length) continue;
 			const inst = trips[0].instances.find(
 				(i) =>
@@ -299,7 +296,7 @@ function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx?:
 		if (deps.length === 0) break;
 
 		const bestMatchStopTime = deps[0];
-		const matchTrip = cache.getAugmentedTrips(bestMatchStopTime.trip_id, ctx)[0];
+		const matchTrip = cache.getAugmentedTrips(ctx, bestMatchStopTime.trip_id)[0];
 		const matchInstance = matchTrip.instances.find((i) => i.serviceDate === serviceDate);
 
 		if (!matchInstance) break;
@@ -323,7 +320,7 @@ function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx?:
 	cache.setRunSeries(serviceDate, runSeries, rs, ctx);
 }
 
-export function calculateRunSeries(instance: AugmentedTripInstance, ctx?: cache.CacheContext): void {
+export function calculateRunSeries(instance: AugmentedTripInstance, ctx: cache.CacheContext): void {
 	if (instance.runSeries != null) return;
 	let runSeries = trackBackwards(instance, ctx);
 	trackForwards(instance, runSeries, ctx);

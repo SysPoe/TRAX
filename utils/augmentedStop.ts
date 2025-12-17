@@ -14,24 +14,23 @@ export type AugmentedStop = qdf.Stop & {
 	children?: AugmentedStop[];
 };
 
-export function augmentStop(stop: qdf.Stop, ctx?: cache.CacheContext): AugmentedStop {
-	if (!ctx) throw new Error("Context required for augmentStop");
+export function augmentStop(stop: qdf.Stop, ctx: cache.CacheContext): AugmentedStop {
 	const parentId = stop.parent_station ?? null;
-	const childStops = cache.getRawStops(undefined, ctx).filter((s) => s.parent_station === stop.stop_id);
+	const childStops = cache.getRawStops(ctx).filter((s) => s.parent_station === stop.stop_id);
 	const childIds = childStops.map((s) => s.stop_id);
 
 	let cachedChildren: AugmentedStop[] | null = null;
 	const resolveChildren = (): AugmentedStop[] => {
 		if (cachedChildren) return cachedChildren;
 		cachedChildren = childIds
-			.map((id) => cache.getAugmentedStops(id, ctx)[0] ?? augmentStop(cache.getRawStops(id, ctx)[0], ctx))
+			.map((id) => cache.getAugmentedStops(ctx, id)[0] ?? augmentStop(cache.getRawStops(ctx, id)[0], ctx))
 			.filter((s): s is AugmentedStop => !!s);
 		return cachedChildren;
 	};
 
 	const resolveParent = (): AugmentedStop | null => {
 		if (!parentId) return null;
-		return cache.getAugmentedStops(parentId, ctx)[0] ?? null;
+		return cache.getAugmentedStops(ctx, parentId)[0] ?? null;
 	};
 
 	const augmented: AugmentedStop = {

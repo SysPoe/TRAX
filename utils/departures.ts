@@ -18,9 +18,8 @@ export function getDeparturesForStop(
 	date: string,
 	start_time: string,
 	end_time: string,
-	ctx?: cache.CacheContext,
+	ctx: cache.CacheContext,
 ): DepartureResult[] {
-	if (!ctx) throw new Error("Context required for getDeparturesForStop");
 	const gtfs = ctx.gtfs ?? getGtfs();
 	const startSec = timeSeconds(start_time);
 	const endSec = timeSeconds(end_time);
@@ -49,14 +48,15 @@ export function getDeparturesForStop(
 	};
 
 	// Query static GTFS for stop times at this station (optimized)
+	// Query static GTFS for stop times at this station (optimized)
 	const rawStopTimes = Array.from(validStops).flatMap((id) => gtfs.queryStopTimes({ stop_id: id }));
-	const passingTrips = Array.from(validStops).flatMap((id) => cache.getPassingTrips(id, ctx));
+	const passingTrips = Array.from(validStops).flatMap((id) => cache.getPassingTrips(ctx, id));
 	const allTripIds = new Set([...rawStopTimes.map((st) => st.trip_id), ...passingTrips]);
 
 	for (const tripId of allTripIds) {
 		let trip = tripCache.get(tripId);
 		if (!trip) {
-			const trips = cache.getAugmentedTrips(tripId, ctx);
+			const trips = cache.getAugmentedTrips(ctx, tripId);
 			if (trips.length > 0) {
 				trip = trips[0];
 				tripCache.set(tripId, trip);
@@ -110,9 +110,8 @@ export function getServiceDateDeparturesForStop(
 	serviceDate: string,
 	start_time_secs: number,
 	end_time_secs: number,
-	ctx?: cache.CacheContext,
+	ctx: cache.CacheContext,
 ): DepartureResult[] {
-	if (!ctx) throw new Error("Context required for getServiceDateDeparturesForStop");
 	const gtfs = ctx.gtfs ?? getGtfs();
 	const parentId = stop.parent_stop_id;
 	const childIds = stop.child_stop_ids;
@@ -120,14 +119,15 @@ export function getServiceDateDeparturesForStop(
 	const tripCache = new Map<string, ReturnType<typeof cache.getAugmentedTrips>[0]>();
 	const results: { st: AugmentedStopTime; inst: AugmentedTripInstance }[] = [];
 
+	// Query static GTFS for stop times at this station (optimized)
 	const rawStopTimes = Array.from(validStops).flatMap((id) => gtfs.queryStopTimes({ stop_id: id }));
-	const passingTrips = Array.from(validStops).flatMap((id) => cache.getPassingTrips(id, ctx));
+	const passingTrips = Array.from(validStops).flatMap((id) => cache.getPassingTrips(ctx, id));
 	const allTripIds = new Set([...rawStopTimes.map((st) => st.trip_id), ...passingTrips]);
 
 	for (const tripId of allTripIds) {
 		let trip = tripCache.get(tripId);
 		if (!trip) {
-			const trips = cache.getAugmentedTrips(tripId, ctx);
+			const trips = cache.getAugmentedTrips(ctx, tripId);
 			if (trips.length > 0) {
 				trip = trips[0];
 				tripCache.set(tripId, trip);
@@ -171,7 +171,7 @@ export function getServiceDateDeparturesForStop(
 		});
 }
 
-export function attachDeparturesHelpers(stop: AugmentedStop, ctx?: cache.CacheContext): AugmentedStop {
+export function attachDeparturesHelpers(stop: AugmentedStop, ctx: cache.CacheContext): AugmentedStop {
 	Object.defineProperties(stop, {
 		getDepartures: {
 			value: (date: string, start_time: string, end_time: string) =>
