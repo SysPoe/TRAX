@@ -1,7 +1,7 @@
 import * as cache from "../cache.js";
 import { getGtfs } from "../gtfsInterfaceLayer.js";
 import { findExpressString } from "./SRT.js";
-import { getServiceCapacity } from "./serviceCapacity.js";
+import { getServiceCapacity, ServiceCapacity } from "./serviceCapacity.js";
 import { AugmentedStop } from "./augmentedStop.js";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { AugmentedTripInstance } from "./augmentedTrip.js";
@@ -95,7 +95,7 @@ export function getDeparturesForStop(
 				express_string: expressString,
 				instance_id: inst.instance_id,
 				service_capacity:
-					st.service_capacity === null
+					st.service_capacity === ServiceCapacity.NOT_CALCULATED
 						? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx)
 						: st.service_capacity,
 			};
@@ -158,7 +158,7 @@ export function getServiceDateDeparturesForStop(
 				express_string: expressString,
 				instance_id: inst.instance_id,
 				service_capacity:
-					st.service_capacity === null
+					st.service_capacity === ServiceCapacity.NOT_CALCULATED
 						? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx)
 						: st.service_capacity,
 			};

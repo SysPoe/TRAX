@@ -3,6 +3,7 @@ import { AugmentedStop } from "./augmentedStop.js";
 import * as cache from "../cache.js";
 import { findPassingStopTimes } from "./SRT.js";
 import platformData from "./platformData.js";
+import { ServiceCapacity } from "./serviceCapacity.js";
 
 // --- Types & Exports ---
 
@@ -15,7 +16,7 @@ export type AugmentedStopTime = {
 	instance_id: string;
 	service_date: string;
 	schedule_relationship: qdf.TripScheduleRelationship;
-	service_capacity: string | null;
+	service_capacity: ServiceCapacity;
 
 	// Exit sides
 	actual_exit_side: "left" | "right" | "both" | null;
@@ -394,7 +395,7 @@ export function augmentStopTimes(
 				instance_id: "",
 				service_date: "",
 				schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED,
-				service_capacity: null,
+				service_capacity: ServiceCapacity.NOT_CALCULATED,
 				actual_exit_side: null,
 				scheduled_exit_side: null,
 
@@ -494,7 +495,7 @@ export function augmentStopTimes(
 						instance_id: "",
 						service_date: "",
 						schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED,
-						service_capacity: null,
+						service_capacity: ServiceCapacity.NOT_CALCULATED,
 						actual_exit_side: null,
 						scheduled_exit_side: null,
 						actual_arrival_time: null,
@@ -668,7 +669,7 @@ export function augmentStopTimes(
 			instance_id: "",
 			service_date: "",
 			schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED,
-			service_capacity: "BYA",
+			service_capacity: ServiceCapacity.NOT_CALCULATED,
 			actual_exit_side: null,
 			scheduled_exit_side: null,
 

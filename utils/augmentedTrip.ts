@@ -3,7 +3,7 @@ import { getServiceDatesByTrip } from "./calendar.js";
 import { AugmentedStopTime, augmentStopTimes } from "./augmentedStopTime.js";
 import * as cache from "../cache.js";
 import { getGtfs } from "../gtfsInterfaceLayer.js";
-import { getServiceCapacity } from "./serviceCapacity.js";
+import { getServiceCapacity, ServiceCapacity } from "./serviceCapacity.js";
 import { ExpressInfo, findExpress } from "./SRT.js";
 
 // --- Types ---
@@ -108,13 +108,13 @@ export function augmentTrip(trip: qdf.Trip, ctx?: cache.CacheContext): Augmented
 			rt_start_date: update?.trip.start_date ?? null,
 		};
 
-		let prev_cap = null;
+		let prev_cap: ServiceCapacity = ServiceCapacity.UNKNOWN;
 
 		for (let i = 0; i < instance.stopTimes.length; i++) {
 			const st = instance.stopTimes[i];
 			if (!st.passing) {
 				st.service_capacity = getServiceCapacity(instance, st, serviceDate, undefined, ctx);
-				if (st.service_capacity) prev_cap = st.service_capacity;
+				if (st.service_capacity !== ServiceCapacity.NOT_CALCULATED) prev_cap = st.service_capacity;
 				else st.service_capacity = prev_cap;
 			}
 

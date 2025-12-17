@@ -8,6 +8,7 @@ import { pipeline } from "stream";
 import { promisify } from "util";
 import { getCacheFilePath, getDataFilePath } from "../../utils/fs.js";
 import { TRAX_CONFIG } from "../../config.js";
+import { ServiceCapacity } from "../../utils/serviceCapacity.js";
 
 const pipe = promisify(pipeline);
 
@@ -259,22 +260,22 @@ export function getServiceCapacity(
 	dateStr: string,
 	_dirOverride?: string,
 	ctx?: CacheContext,
-): string {
-	if (!loaded || stopTime.passing) return "unknown";
+): ServiceCapacity {
+	if (!loaded || stopTime.passing) return ServiceCapacity.UNKNOWN;
 
 	const route = getRawRoutes(inst.route_id, ctx)[0];
 	const routeName = route?.route_long_name;
-	if (!routeName) return "unknown";
+	if (!routeName) return ServiceCapacity.UNKNOWN;
 
 	const seq = stopTime._stopTime?.stop_sequence ?? 0;
 	const direction = _dirOverride ?? getTripDirection(inst, seq);
-	if (!direction) return "unknown";
+	if (!direction) return ServiceCapacity.UNKNOWN;
 
 	const dayType = getDayType(dateStr);
 
 	const stopLookupId = stopTime.scheduled_parent_station_id ?? stopTime.scheduled_stop_id;
 	let stopName = stopLookupId ? getAugmentedStops(stopLookupId, ctx)[0]?.stop_name : undefined;
-	if (!stopName) return "unknown";
+	if (!stopName) return ServiceCapacity.UNKNOWN;
 	if (stopName.trim().toLowerCase().startsWith("boggo")) stopName = "Park Road";
 	if (stopName.trim().toLowerCase().startsWith("international")) stopName = "International Terminal";
 	if (stopName.trim().toLowerCase().startsWith("domestic")) stopName = "Domestic Terminal";
@@ -286,7 +287,7 @@ export function getServiceCapacity(
 		stopTime.actual_arrival_time ??
 		stopTime.scheduled_departure_time ??
 		stopTime.scheduled_arrival_time;
-	if (departureTime === null) return "unknown";
+	if (departureTime === null) return ServiceCapacity.UNKNOWN;
 
 	const timeBucket = formatTimeBucket(departureTime);
 
@@ -299,7 +300,7 @@ export function getServiceCapacity(
 		if (ROUTE_KEYWORD_MAP[trimmed]) candidateLines.add(ROUTE_KEYWORD_MAP[trimmed]);
 	}
 
-	if (candidateLines.size === 0) return "unknown";
+	if (candidateLines.size === 0) return ServiceCapacity.UNKNOWN;
 
 	for (const lineName of candidateLines) {
 		const rMap = capacityIndex.get(lineName);
@@ -322,20 +323,30 @@ export function getServiceCapacity(
 
 		if (sMap) {
 			const val = sMap.get(timeBucket);
-			if (val) return val;
+			if (val)
+				switch (val.trim()) {
+					case "Space available":
+						return ServiceCapacity.MANY_SEATS_AVAILABLE;
+					case "Some space available":
+						return ServiceCapacity.STANDING_ROOM_ONLY;
+					case "Limited space available":
+						return ServiceCapacity.FULL;
+					default:
+						return ServiceCapacity.UNKNOWN;
+				}
 		}
 	}
 
 	// If we loop through all candidates and find nothing, we return "unknown".
-	return "unknown";
+	return ServiceCapacity.UNKNOWN;
 }
 
 export function addSCI(inst: AugmentedTripInstance, ctx?: CacheContext): AugmentedTripInstance {
-	let prevSC: string | null = null;
+	let prevSC: ServiceCapacity = ServiceCapacity.UNKNOWN;
 	inst.stopTimes.forEach((st) => {
-		if (st.passing || st.service_capacity !== null) return;
+		if (st.passing || st.service_capacity !== ServiceCapacity.NOT_CALCULATED) return;
 		st.service_capacity = getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx);
-		if (st.service_capacity !== null) prevSC = st.service_capacity;
+		if (st.service_capacity !== ServiceCapacity.NOT_CALCULATED) prevSC = st.service_capacity;
 		else st.service_capacity = prevSC;
 	});
 	return inst;

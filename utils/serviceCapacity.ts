@@ -7,19 +7,29 @@ import {
 } from "../region-specific/SEQ/serviceCapacity.js";
 import { CacheContext } from "../cache.js";
 
+export enum ServiceCapacity {
+	NOT_CALCULATED = -2,
+	UNKNOWN = -1,
+	EMPTY = 0,
+	MANY_SEATS_AVAILABLE = 1,
+	FEW_SEATS_AVAILABLE = 2,
+	STANDING_ROOM_ONLY = 3,
+	FULL = 4,
+}
+
 export function getServiceCapacity(
 	inst: AugmentedTripInstance,
 	stopTime: AugmentedStopTime,
 	dateStr: string,
 	_dirOverride?: string,
 	ctx?: CacheContext,
-): string {
+): ServiceCapacity {
 	switch (TRAX_CONFIG.region) {
 		case "SEQ":
 			return SEQServCap(inst, stopTime, dateStr, _dirOverride, ctx);
 		case "none":
 		default:
-			return "unknown";
+			return ServiceCapacity.UNKNOWN;
 	}
 }
 
@@ -31,11 +41,11 @@ export async function ensureServiceCapacityData() {
 }
 
 export function addSCI(inst: AugmentedTripInstance, ctx?: CacheContext): AugmentedTripInstance {
-	let prevSC: string | null = null;
+	let prevSC: ServiceCapacity = ServiceCapacity.UNKNOWN;
 	inst.stopTimes.forEach((st) => {
-		if (st.passing || st.service_capacity !== null) return;
+		if (st.passing || st.service_capacity !== ServiceCapacity.NOT_CALCULATED) return;
 		st.service_capacity = getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx);
-		if (st.service_capacity !== null) prevSC = st.service_capacity;
+		if (st.service_capacity !== ServiceCapacity.NOT_CALCULATED) prevSC = st.service_capacity;
 		else st.service_capacity = prevSC;
 	});
 	return inst;
