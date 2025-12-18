@@ -422,24 +422,23 @@ export function findPassingStopTimes(
 		const startTime = resultTimes.at(-1);
 		const endTime = idsToTimes[srt.to];
 
-		if (!startTime?.departure_time || !endTime?.departure_time) {
+		if (startTime?.departure_time === undefined || startTime?.departure_time === null || 
+			endTime?.arrival_time === undefined || endTime?.arrival_time === null) {
 			if (endTime) resultTimes.push({ ...endTime, _passing: false });
 			currentPassingRun = [];
 			continue;
 		}
 
-		const totalTimeDiff = Math.floor((endTime.departure_time - startTime.departure_time) / 60);
-		const totalEmu = currentPassingRun.reduce((acc, curr) => acc + curr.emu, 0);
+		const totalTimeDiff = Math.floor((endTime.arrival_time - startTime.departure_time) / 60);
+		const totalEmu = currentPassingRun.reduce((acc, curr) => acc + curr.emu, 0) + srt.emu;
 
 		let accumulatedEmu = 0;
 		for (let i = 0; i < currentPassingRun.length; i++) {
 			const run = currentPassingRun[i];
-			const scaledEmu = totalEmu > 0 ? (run.emu / totalEmu) * totalTimeDiff : 0;
-			accumulatedEmu += scaledEmu;
+			accumulatedEmu += run.emu;
+			const scaledTimeOffset = totalEmu > 0 ? (accumulatedEmu / totalEmu) * totalTimeDiff : 0;
 
-			if (scaledEmu <= 0 && totalEmu > 0) continue;
-
-			const interpolatedTime = startTime.departure_time + Math.floor(accumulatedEmu * 60);
+			const interpolatedTime = startTime.departure_time + Math.floor(scaledTimeOffset * 60);
 
 			resultTimes.push({
 				_passing: true,

@@ -4,12 +4,13 @@ import * as stations from "./utils/stations.js";
 import * as qrTravel from "./region-specific/SEQ/qr-travel/qr-travel-tracker.js";
 import * as timeUtils from "./utils/time.js";
 import { EventEmitter } from "events";
-import { GTFS, RealtimeVehiclePosition } from "qdf-gtfs";
+import { GTFS, RealtimeVehiclePosition, Route, Trip } from "qdf-gtfs";
 import logger from "./utils/logger.js";
 import { TraxConfig, TraxConfigOptions, resolveConfig } from "./config.js";
 import { findExpressString } from "./utils/SRT.js";
 import { getServiceCapacity } from "./utils/serviceCapacity.js";
 import { attachDeparturesHelpers, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
+import { isConsideredRoute, isConsideredTrip, isConsideredTripId } from "./utils/considered.js";
 
 export interface TRAXEvent {
 	"realtime-update-start": [];
@@ -188,6 +189,9 @@ export class TRAX {
 			formatTimestamp: this.formatTimestamp,
 			hasGtfs: () => true,
 			getGtfs: () => this.gtfs,
+			isConsideredTrip: (trip: Trip) => isConsideredTrip(trip, this.gtfs),
+			isConsideredRoute: (route: Route) => isConsideredRoute(route),
+			isConsideredTripId: (trip_id: string) => isConsideredTripId(trip_id, this.gtfs),
 			departures: {
 				attachDeparturesHelpers: (stop: any) => attachDeparturesHelpers(stop, this.ctx),
 				getDeparturesForStop: (stop: any, date: string, st: string, et: string) =>
@@ -218,13 +222,15 @@ export class TRAX {
 
 export default TRAX;
 
+export { logger };
+
 export { resolveConfig, TraxConfig, TraxConfigOptions } from "./config.js";
 export * as cache from "./cache.js";
 export * as stations from "./utils/stations.js";
 export * as calendar from "./utils/calendar.js";
 export * as qrTravel from "./region-specific/SEQ/qr-travel/qr-travel-tracker.js";
 
-export type { AugmentedTrip, RunSeries } from "./utils/augmentedTrip.js";
+export type { AugmentedTrip, AugmentedTripInstance, RunSeries } from "./utils/augmentedTrip.js";
 export type { AugmentedStopTime } from "./utils/augmentedStopTime.js";
 export type { AugmentedStop } from "./utils/augmentedStop.js";
 export { attachDeparturesHelpers, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";

@@ -14,3 +14,10 @@ export function isConsideredTrip(trip: qdf.Trip, gtfs?: qdf.GTFS): boolean {
 	if (routeCache.has(trip.route_id)) return routeCache.get(trip.route_id)!;
 	return isConsideredRoute((gtfs ?? getGtfs()).getRoute(trip.route_id)!);
 }
+
+export function isConsideredTripId(trip_id: string, gtfs?: qdf.GTFS): boolean {
+	const route_id = (gtfs ?? getGtfs()).getTrip(trip_id)?.route_id;
+	if(!route_id) return false;
+	if (routeCache.has(route_id)) return routeCache.get(route_id)!;
+	return isConsideredRoute((gtfs ?? getGtfs()).getRoute(route_id)!);
+}

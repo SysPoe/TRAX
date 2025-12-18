@@ -28,7 +28,7 @@ function getSRTData(ctx: CacheContext): SRTEntry[] {
     if (ctx.raw.regionSpecific.SEQ.platformData?.srtData) {
         return ctx.raw.regionSpecific.SEQ.platformData.srtData;
     }
-    let data: SRTEntry[] = JSON.parse(loadDataFile("region-specific/SEQ/SRT_qrt.json"));
+    let data: SRTEntry[] = JSON.parse(loadDataFile("region-specific/seq/SRT_qrt.json"));
     data = data.concat(
         data.map((v) => ({
             from: v.to,
