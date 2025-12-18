@@ -172,6 +172,7 @@ export class TRAX {
 	public getStopTimeUpdates = (trip_id: string) => cache.getStopTimeUpdates(this.ctx, trip_id);
 	public getTripUpdates = (trip_id?: string) => cache.getTripUpdates(this.ctx, trip_id);
 	public getVehiclePositions = (trip_id?: string) => cache.getVehiclePositions(this.ctx, trip_id);
+	public getShapes = () => cache.getShapes(this.ctx);
 
 	public on(event: keyof TRAXEvent | string | symbol, listener: (...args: any[]) => void): this {
 		this.events.on(event, listener);
@@ -189,6 +190,7 @@ export class TRAX {
 			formatTimestamp: this.formatTimestamp,
 			hasGtfs: () => true,
 			getGtfs: () => this.gtfs,
+			getShapes: () => cache.getShapes(this.ctx),
 			isConsideredTrip: (trip: Trip) => isConsideredTrip(trip, this.gtfs),
 			isConsideredRoute: (route: Route) => isConsideredRoute(route),
 			isConsideredTripId: (trip_id: string) => isConsideredTripId(trip_id, this.gtfs),

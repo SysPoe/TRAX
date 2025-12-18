@@ -106,6 +106,8 @@ export type AugmentedCache = {
 	serviceDateTrips: Map<string, string[]>;
 	passingTrips: Map<string, string[]>;
 
+	shapes: { shape_id: string; route_id: string }[];
+
 	expressInfoCache: LRUCache<string, any[]>;
 	passingStopsCache: LRUCache<string, any[]>;
 	runSeriesCache: Map<string, Map<string, RunSeries>>;
@@ -151,6 +153,7 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 		stopsRec: new Map(),
 		serviceDateTrips: new Map(),
 		passingTrips: new Map(),
+		shapes: [],
 		expressInfoCache: new LRUCache<string, any[]>(1000),
 		passingStopsCache: new LRUCache<string, any[]>(5000),
 		runSeriesCache: new Map(),
@@ -399,6 +402,10 @@ export function getPassingTrips(ctx: CacheContext, stopId: string): string[] {
 	return augmented.passingTrips.get(stopId) ?? [];
 }
 
+export function getShapes(ctx: CacheContext): { shape_id: string; route_id: string }[] {
+	return ctx.augmented.shapes;
+}
+
 export function getRunSeries(
 	ctx: CacheContext,
 	date: string,
@@ -539,6 +546,14 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 		module: "cache",
 		function: "refreshStaticCache",
 	});
+
+	const shapeSet = new Set<string>();
+	for (const trip of newRawCache.trips) {
+		if (trip.shape_id && !shapeSet.has(trip.shape_id)) {
+			shapeSet.add(trip.shape_id);
+			newAugmentedCache.shapes.push({ shape_id: trip.shape_id, route_id: trip.route_id });
+		}
+	}
 
 	await ensureServiceCapacityData(config);
 

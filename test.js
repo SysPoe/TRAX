@@ -45,6 +45,13 @@ async function main() {
 		console.log('No rail vehicle positions ("QR ") to test getVehicleTripInstance.');
 	}
 
+	// Test getShapes
+	const shapes = TRAX.getShapes();
+	console.log(`Loaded ${shapes.length} unique shapes from considered trips.`);
+	if (shapes.length > 0) {
+		console.log("Example shape:", shapes[0]);
+	}
+
 	console.log(`GTFS loading took ${(end_static - start_static) / 1000} seconds.`);
 	console.log(`Realtime updates took ${(end_realtime - start_realtime) / 1000} seconds.`);
 	console.log("Done!");
