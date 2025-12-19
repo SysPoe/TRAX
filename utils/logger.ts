@@ -30,6 +30,7 @@ class Logger {
 		this.level = level;
 		this.prefix = prefix;
 		this.bars = new Map();
+		if(fs.existsSync("./TRAX.log")) fs.rmSync("./TRAX.log");
 		this.stream = fs.createWriteStream("./TRAX.log", { flags: "a" });
 	}
 

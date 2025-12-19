@@ -153,18 +153,27 @@ const CITY_STATIONS = [
 	"place_sbasta", // South Bank
 ];
 
+const dayTypeCache = new Map<string, string>();
+
 function getDayType(dateStr: string): string {
+	if (dayTypeCache.has(dateStr)) return dayTypeCache.get(dateStr)!;
+
 	const y = parseInt(dateStr.slice(0, 4));
 	const m = parseInt(dateStr.slice(4, 6)) - 1;
 	const d = parseInt(dateStr.slice(6, 8));
 	const date = new Date(y, m, d);
 	const day = date.getDay();
 
-	if (day === 0) return "Sunday/Public Holiday";
-	if (day === 6) return "Saturday";
+	let res = "";
+	if (day === 0) res = "Sunday/Public Holiday";
+	else if (day === 6) res = "Saturday";
+	else {
+		const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+		res = days[day];
+	}
 
-	const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-	return days[day];
+	dayTypeCache.set(dateStr, res);
+	return res;
 }
 
 function formatTimeBucket(seconds: number): string {
@@ -193,49 +202,67 @@ function getTripDirection(inst: AugmentedTripInstance, currentStopSequence: numb
 
 	if (stopTimes.length === 0) return null;
 
+	const cache = (inst as any)._seq_direction_data || (inst as any)._seq_direction_data === null ? (inst as any)._seq_direction_data : null;
+	
+	let centralIndex = -1;
+	let romaIndex = -1;
 	let firstCityIndex = -1;
 
-	for (let i = 0; i < stopTimes.length; i++) {
-		const st = stopTimes[i];
-		const stopId = st.scheduled_parent_station_id ?? st.scheduled_stop_id;
-		if (stopId && CITY_STATIONS.includes(stopId) && firstCityIndex === -1) firstCityIndex = i;
+	if (cache) {
+		({ centralIndex, romaIndex, firstCityIndex } = cache);
+	} else {
+		for (let i = 0; i < stopTimes.length; i++) {
+			const st = stopTimes[i];
+			const stopId = st.scheduled_parent_station_id ?? st.scheduled_stop_id;
+			if (stopId && CITY_STATIONS.includes(stopId)) {
+				if (firstCityIndex === -1) firstCityIndex = i;
+				if (stopId === "place_censta") centralIndex = i;
+				if (stopId === "place_romsta") romaIndex = i;
+			}
+		}
+		(inst as any)._seq_direction_data = { centralIndex, romaIndex, firstCityIndex };
 	}
 
 	if (firstCityIndex === -1) {
 		const dirId = inst.direction_id;
-		if (dirId === 0) return "Inbound";
-		if (dirId === 1) return "Outbound";
+		if (dirId === 0) {
+			return "Inbound";
+		}
+		if (dirId === 1) {
+			return "Outbound";
+		}
 		return null;
 	}
-
-	const centralIndex = stopTimes.findIndex(
-		(st) => st.scheduled_parent_station_id === "place_censta" || st.scheduled_stop_id === "place_censta",
-	);
 
 	if (centralIndex !== -1) {
 		if (currentStopSequence < stopTimes[centralIndex]._stopTime?.stop_sequence!) {
 			const firstStopId = stopTimes[0]?.scheduled_parent_station_id ?? stopTimes[0]?.scheduled_stop_id;
-			if (firstStopId && CITY_STATIONS.includes(firstStopId)) return "Outbound";
+			if (firstStopId && CITY_STATIONS.includes(firstStopId)) {
+				return "Outbound";
+			}
 			return "Inbound";
 		}
 		return "Outbound";
 	}
 
-	const romaIndex = stopTimes.findIndex(
-		(st) => st.scheduled_parent_station_id === "place_romsta" || st.scheduled_stop_id === "place_romsta",
-	);
 	if (romaIndex !== -1) {
 		if (currentStopSequence < stopTimes[romaIndex]._stopTime?.stop_sequence!) {
 			const firstStopId = stopTimes[0]?.scheduled_parent_station_id ?? stopTimes[0]?.scheduled_stop_id;
-			if (firstStopId && CITY_STATIONS.includes(firstStopId)) return "Outbound";
+			if (firstStopId && CITY_STATIONS.includes(firstStopId)) {
+				return "Outbound";
+			}
 			return "Inbound";
 		}
 		return "Outbound";
 	}
 
 	const dirId = inst.direction_id;
-	if (dirId === 0) return "Inbound";
-	if (dirId === 1) return "Outbound";
+	if (dirId === 0) {
+		return "Inbound";
+	}
+	if (dirId === 1) {
+		return "Outbound";
+	}
 	return "Inbound";
 }
 

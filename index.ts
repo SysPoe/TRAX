@@ -6,7 +6,7 @@ import * as timeUtils from "./utils/time.js";
 import { EventEmitter } from "events";
 import { GTFS, RealtimeVehiclePosition, Route, Trip } from "qdf-gtfs";
 import logger from "./utils/logger.js";
-import { TraxConfig, TraxConfigOptions, resolveConfig } from "./config.js";
+import { type TraxConfig, type TraxConfigOptions, resolveConfig } from "./config.js";
 import { findExpressString } from "./utils/SRT.js";
 import { getServiceCapacity } from "./utils/serviceCapacity.js";
 import { attachDeparturesHelpers, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
@@ -226,7 +226,7 @@ export default TRAX;
 
 export { logger };
 
-export { resolveConfig, TraxConfig, TraxConfigOptions } from "./config.js";
+export { resolveConfig, type TraxConfig, type TraxConfigOptions } from "./config.js";
 export * as cache from "./cache.js";
 export * as stations from "./utils/stations.js";
 export * as calendar from "./utils/calendar.js";

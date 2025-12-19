@@ -35,6 +35,8 @@ let _networkData: NetworkData | null = null;
 const CACHE_FILE = "network_topology.json";
 const MAX_CACHE_AGE_DAYS = 7;
 
+const bfsCache = new Map<string, string[] | null>();
+
 function loadNetworkData(ctx: cache.CacheContext): NetworkData | null {
 	const cacheDir = ctx.config.cacheDir;
 	if (cacheFileExists(CACHE_FILE, cacheDir)) {
@@ -184,9 +186,21 @@ function getGraph(ctx: cache.CacheContext): Record<string, string[]> {
 }
 
 function findPathBFS(start: string, end: string, ctx: cache.CacheContext): string[] | null {
+	const cacheKey = `${start}|${end}`;
+	if (bfsCache.has(cacheKey)) {
+		return bfsCache.get(cacheKey)!;
+	}
+
 	const graph = getGraph(ctx);
-	if (!graph[start] || !graph[end]) return null;
-	if (start === end) return [start];
+	if (!graph[start] || !graph[end]) {
+		bfsCache.set(cacheKey, null);
+		return null;
+	}
+	if (start === end) {
+		const res = [start];
+		bfsCache.set(cacheKey, res);
+		return res;
+	}
 
 	const queue: { stop: string; path: string[] }[] = [{ stop: start, path: [start] }];
 	const visited = new Set<string>([start]);
@@ -200,12 +214,16 @@ function findPathBFS(start: string, end: string, ctx: cache.CacheContext): strin
 				if (!visited.has(neighbor)) {
 					visited.add(neighbor);
 					const newPath = [...currentPath, neighbor];
-					if (neighbor === end) return newPath;
+					if (neighbor === end) {
+						bfsCache.set(cacheKey, newPath);
+						return newPath;
+					}
 					queue.push({ stop: neighbor, path: newPath });
 				}
 			}
 		}
 	}
+	bfsCache.set(cacheKey, null);
 	return null;
 }
 

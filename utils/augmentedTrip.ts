@@ -42,6 +42,7 @@ export type RunSeries = {
 
 export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedTrip {
 	const serviceDates = getServiceDatesByTrip(trip.trip_id, ctx);
+
 	const rawStopTimes = cache.getRawStopTimes(ctx, trip.trip_id).sort((a, b) => a.stop_sequence - b.stop_sequence);
 
 	let parentStops = rawStopTimes.map((st) => cache.getRawStops(ctx, st.stop_id)[0]?.parent_station ?? "");
