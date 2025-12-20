@@ -4,13 +4,14 @@ import * as stations from "./utils/stations.js";
 import * as qrTravel from "./region-specific/SEQ/qr-travel/qr-travel-tracker.js";
 import * as timeUtils from "./utils/time.js";
 import { EventEmitter } from "events";
-import { GTFS, RealtimeVehiclePosition, Route, Trip } from "qdf-gtfs";
+import { GTFS, RealtimeVehiclePosition, Route, Stop, Trip } from "qdf-gtfs";
 import logger from "./utils/logger.js";
 import { type TraxConfig, type TraxConfigOptions, resolveConfig } from "./config.js";
 import { findExpressString } from "./utils/SRT.js";
 import { getServiceCapacity } from "./utils/serviceCapacity.js";
 import { attachDeparturesHelpers, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
-import { isConsideredRoute, isConsideredTrip, isConsideredTripId } from "./utils/considered.js";
+import { isConsideredRoute, isConsideredStop, isConsideredStopId, isConsideredTrip, isConsideredTripId } from "./utils/considered.js";
+import { AugmentedStop } from "./utils/augmentedStop.js";
 
 export interface TRAXEvent {
 	"realtime-update-start": [];
@@ -194,6 +195,8 @@ export class TRAX {
 			isConsideredTrip: (trip: Trip) => isConsideredTrip(trip, this.gtfs),
 			isConsideredRoute: (route: Route) => isConsideredRoute(route),
 			isConsideredTripId: (trip_id: string) => isConsideredTripId(trip_id, this.gtfs),
+			isConsideredStop: (stop: AugmentedStop | Stop) => isConsideredStop(stop, this.gtfs),
+			isConsideredStopId: (stop_id: string) => isConsideredStopId(stop_id, this.gtfs),
 			departures: {
 				attachDeparturesHelpers: (stop: any) => attachDeparturesHelpers(stop, this.ctx),
 				getDeparturesForStop: (stop: any, date: string, st: string, et: string) =>
