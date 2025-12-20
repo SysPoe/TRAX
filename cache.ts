@@ -22,6 +22,8 @@ import {
 import { AugmentedStopTime } from "./utils/augmentedStopTime.js";
 import { QRTPlace, QRTTravelTrip } from "./index.js";
 import { getCurrentQRTravelTrains, getPlaces } from "./region-specific/SEQ/qr-travel/qr-travel-tracker.js";
+import { getRailwayStationFacilities } from "./region-specific/SEQ/facilities.js";
+import { RailwayStationFacility } from "./region-specific/SEQ/facilities-types.js";
 import logger from "./utils/logger.js";
 import { getGtfs } from "./gtfsInterfaceLayer.js";
 import * as qdf from "qdf-gtfs";
@@ -89,6 +91,7 @@ export type RawCache = {
 			qrtPlaces: QRTPlace[];
 			qrtTrains: QRTTravelTrip[];
 			platformData?: any;
+			railwayStationFacilities: RailwayStationFacility[];
 		};
 	};
 };
@@ -137,6 +140,7 @@ export function createEmptyRawCache(): RawCache {
 				qrtPlaces: [],
 				qrtTrains: [],
 				platformData: undefined,
+				railwayStationFacilities: [],
 			},
 		},
 	};
@@ -465,6 +469,11 @@ export function SEQgetQRTTrains(ctx: CacheContext): QRTTravelTrip[] {
 	return raw.regionSpecific.SEQ.qrtTrains;
 }
 
+export function SEQgetRailwayStationFacilities(ctx: CacheContext): RailwayStationFacility[] {
+	const { raw } = ctx;
+	return raw.regionSpecific.SEQ.railwayStationFacilities;
+}
+
 function resetRealtimeCacheIncremental(updatedTripIds: Set<string>, ctx: CacheContext): void {
 	const { raw: rawCache, augmented: augmentedCache, config } = ctx;
 	rawCache.tripUpdates = [];
@@ -512,6 +521,11 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	if (config.region === "SEQ") {
 		newRawCache.regionSpecific.SEQ.qrtPlaces = await getPlaces(config);
 		logger.debug(`Loaded ${newRawCache.regionSpecific.SEQ.qrtPlaces.length} QRT places.`, {
+			module: "cache",
+			function: "refreshStaticCache",
+		});
+		newRawCache.regionSpecific.SEQ.railwayStationFacilities = await getRailwayStationFacilities(config);
+		logger.debug(`Loaded ${newRawCache.regionSpecific.SEQ.railwayStationFacilities.length} railway station facilities.`, {
 			module: "cache",
 			function: "refreshStaticCache",
 		});

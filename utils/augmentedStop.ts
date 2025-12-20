@@ -1,11 +1,13 @@
 import type * as qdf from "qdf-gtfs";
 import * as cache from "../cache.js";
+import { RailwayStationFacility } from "../region-specific/SEQ/facilities-types.js";
 
 export type AugmentedStop = qdf.Stop & {
 	regionSpecific?: {
 		SEQ?: {
 			qrt_Place: boolean;
 			qrt_PlaceCode?: string;
+			facilities?: RailwayStationFacility;
 		};
 	};
 	parent_stop_id: string | null;
@@ -47,10 +49,16 @@ export function augmentStop(stop: qdf.Stop, ctx: cache.CacheContext): AugmentedS
 				v.Title?.toLowerCase().trim() === trimmedStopName ||
 				(trimmedStopName === "roma street" && v.Title?.toLowerCase().trim().includes("roma street")),
 		);
+		const facilities = cache.SEQgetRailwayStationFacilities(ctx);
+		const myFacility = facilities.find(
+			(f) => f.stops && (f.stops.includes(stop.stop_id) || (stop.parent_station && f.stops.includes(stop.parent_station))),
+		);
+
 		augmented.regionSpecific = {
 			SEQ: {
 				qrt_Place: !!myPlace,
 				qrt_PlaceCode: myPlace?.qrt_PlaceCode,
+				facilities: myFacility,
 			},
 		};
 	}

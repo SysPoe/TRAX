@@ -1,9 +1,10 @@
-import TRAXClass from "./dist/index.js";
+import TRAXClass, { logger, LogLevel } from "./dist/index.js";
 
 async function main() {
 	console.log("Loading gtfs data...");
 
 	const TRAX = new TRAXClass();
+	logger.setLevel(LogLevel.DEBUG);
 
 	let start_static = Date.now();
 	await TRAX.loadGTFS(false);
@@ -16,6 +17,7 @@ async function main() {
 	let end_realtime = Date.now();
 
 	const stop = TRAX.getAugmentedStops("place_censta")[0];
+	console.log("facilities", JSON.stringify(stop.regionSpecific.SEQ.facilities).length);
 	const date = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10).replaceAll("-", "");
 	const deps = TRAX.utils.departures.getDeparturesForStop(
 		stop,
