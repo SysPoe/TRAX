@@ -69,7 +69,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -182,7 +182,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -288,15 +288,15 @@
         "sginfor": {
             "1": {
                 "level": "all",
-                "note": "Platforms 1 and 2 are level with the train doors"
+                "note": "Level with the train doors"
             },
             "2": {
                 "level": "all",
-                "note": "Platforms 1 and 2 are level with the train doors"
+                "note": "Level with the train doors"
             },
             "3": {
                 "level": "none",
-                "note": "Platform 3 is lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -375,7 +375,7 @@
         "sginfor": {
             "1": {
                 "level": "none",
-                "note": "Platform 1 is lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -492,7 +492,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -619,7 +619,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -734,15 +734,15 @@
         "sginfor": {
             "1": {
                 "level": "none",
-                "note": "Platform 1 is lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "2": {
                 "level": "all",
-                "note": "Platforms 2 and 3 are level with the train doors"
+                "note": "Level with the train doors"
             },
             "3": {
                 "level": "all",
-                "note": "Platforms 2 and 3 are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -856,7 +856,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -961,7 +961,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -1031,7 +1031,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -1144,7 +1144,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -1264,7 +1264,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -1334,7 +1334,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -1447,7 +1447,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -1555,7 +1555,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -1669,7 +1669,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -1783,7 +1783,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -1897,19 +1897,19 @@
         "sginfor": {
             "1": {
                 "level": "none",
-                "note": "Platforms 1 and 2 are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "2": {
                 "level": "none",
-                "note": "Platforms 1 and 2 are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "3": {
                 "level": "all",
-                "note": "Platforms 3 and 4 are level with the train doors"
+                "note": "Level with the train doors"
             },
             "4": {
                 "level": "all",
-                "note": "Platforms 3 and 4 are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -2036,7 +2036,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -2125,7 +2125,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are levelled with train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -2245,7 +2245,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -2362,7 +2362,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are levelled with train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -2470,7 +2470,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -2589,7 +2589,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors in the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -2706,7 +2706,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -2825,27 +2825,27 @@
         "sginfor": {
             "1": {
                 "level": "none",
-                "note": "Platforms 1, 2, 3 and 4 are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "2": {
                 "level": "none",
-                "note": "Platforms 1, 2, 3 and 4 are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "3": {
                 "level": "none",
-                "note": "Platforms 1, 2, 3 and 4 are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "4": {
                 "level": "none",
-                "note": "Platforms 1, 2, 3 and 4 are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "5": {
                 "level": "all",
-                "note": "Platforms 5 and 6 are level with the train doors"
+                "note": "Level with the train doors"
             },
             "6": {
                 "level": "all",
-                "note": "Platforms 5 and 6 are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -2962,7 +2962,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -3152,7 +3152,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -3258,7 +3258,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -3373,7 +3373,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -3442,7 +3442,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -3544,7 +3544,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -3663,7 +3663,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -3776,7 +3776,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -3893,7 +3893,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -4015,7 +4015,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -4124,7 +4124,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -4238,7 +4238,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -4323,7 +4323,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -4432,7 +4432,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "The platform is level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -4536,7 +4536,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are levelled with train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -4645,7 +4645,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -4759,7 +4759,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -4873,7 +4873,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -4953,7 +4953,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -5023,7 +5023,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -5126,7 +5126,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors in the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -5195,7 +5195,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -5264,7 +5264,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -5334,7 +5334,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -5444,7 +5444,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -5550,7 +5550,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -5687,7 +5687,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle and inbound ends only"
+                "note": "Level with the train doors (middle and ends)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -5802,15 +5802,15 @@
         "sginfor": {
             "1": {
                 "level": "all",
-                "note": "Platforms 1 and 2 are level with the train doors"
+                "note": "Level with the train doors"
             },
             "2": {
                 "level": "all",
-                "note": "Platforms 1 and 2 are level with the train doors"
+                "note": "Level with the train doors"
             },
             "3": {
                 "level": "none",
-                "note": "Platform 3 is lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -5925,7 +5925,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -6038,7 +6038,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -6155,7 +6155,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -6268,7 +6268,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -6387,7 +6387,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -6504,7 +6504,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors in the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -6617,7 +6617,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle and outbound ends only"
+                "note": "Level with the train doors (middle and ends)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -6727,7 +6727,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -6833,7 +6833,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -6947,7 +6947,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -7016,7 +7016,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -7130,7 +7130,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -7247,7 +7247,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -7332,7 +7332,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -7438,7 +7438,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -7542,7 +7542,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -7622,7 +7622,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -7735,7 +7735,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -7848,7 +7848,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -7952,7 +7952,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -8067,7 +8067,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -8177,7 +8177,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -8294,7 +8294,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -8408,7 +8408,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -8515,7 +8515,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -8629,7 +8629,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -8743,7 +8743,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -8847,7 +8847,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -8951,7 +8951,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -9069,19 +9069,19 @@
         "sginfor": {
             "1": {
                 "level": "all",
-                "note": "Platform 1 is level with the train doors"
+                "note": "Level with the train doors"
             },
             "2": {
                 "level": "none",
-                "note": "Platforms 2, 3 and 4 are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "3": {
                 "level": "none",
-                "note": "Platforms 2, 3 and 4 are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "4": {
                 "level": "none",
-                "note": "Platforms 2, 3 and 4 are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -9181,7 +9181,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -9250,7 +9250,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -9364,7 +9364,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -9481,7 +9481,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -9586,7 +9586,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -9700,7 +9700,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -9804,7 +9804,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -9905,7 +9905,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -10023,7 +10023,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -10129,7 +10129,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -10238,7 +10238,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -10357,7 +10357,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -10472,7 +10472,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -10581,7 +10581,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -10695,7 +10695,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -10812,7 +10812,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -10938,7 +10938,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -11051,7 +11051,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -11150,7 +11150,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -11271,7 +11271,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -11383,7 +11383,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -11485,7 +11485,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -11593,23 +11593,23 @@
         "sginfor": {
             "1": {
                 "level": "partial",
-                "note": "Platforms 1, 2 and 3 are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "2": {
                 "level": "partial",
-                "note": "Platforms 1, 2 and 3 are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "3": {
                 "level": "partial",
-                "note": "Platforms 1, 2 and 3 are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "4": {
                 "level": "all",
-                "note": "Platforms 4 and 5 are level with the train doors"
+                "note": "Level with the train doors"
             },
             "5": {
                 "level": "all",
-                "note": "Platforms 4 and 5 are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -11713,7 +11713,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -11782,7 +11782,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -11891,7 +11891,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -12006,7 +12006,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -12120,7 +12120,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -12226,7 +12226,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -12339,7 +12339,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are levelled with train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -12466,43 +12466,43 @@
         "sginfor": {
             "1": {
                 "level": "none",
-                "note": "Platforms 1 and 2 are for bus services"
+                "note": "Bus Services"
             },
             "2": {
                 "level": "none",
-                "note": "Platforms 1 and 2 are for bus services"
+                "note": "Bus Services"
             },
             "3": {
                 "level": "partial",
-                "note": "Platform 3 is level with the train at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "4": {
                 "level": "partial",
-                "note": "Platforms 4, 5, 6, 7, 8 and 9 are level with the train doors at the middle and outbound ends only"
+                "note": "Level with the train doors (middle and ends)"
             },
             "5": {
                 "level": "partial",
-                "note": "Platforms 4, 5, 6, 7, 8 and 9 are level with the train doors at the middle and outbound ends only"
+                "note": "Level with the train doors (middle and ends)"
             },
             "6": {
                 "level": "partial",
-                "note": "Platforms 4, 5, 6, 7, 8 and 9 are level with the train doors at the middle and outbound ends only"
+                "note": "Level with the train doors (middle and ends)"
             },
             "7": {
                 "level": "partial",
-                "note": "Platforms 4, 5, 6, 7, 8 and 9 are level with the train doors at the middle and outbound ends only"
+                "note": "Level with the train doors (middle and ends)"
             },
             "8": {
                 "level": "partial",
-                "note": "Platforms 4, 5, 6, 7, 8 and 9 are level with the train doors at the middle and outbound ends only"
+                "note": "Level with the train doors (middle and ends)"
             },
             "9": {
                 "level": "partial",
-                "note": "Platforms 4, 5, 6, 7, 8 and 9 are level with the train doors at the middle and outbound ends only"
+                "note": "Level with the train doors (middle and ends)"
             },
             "10": {
                 "level": "none",
-                "note": "Platform 10 is lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -12601,7 +12601,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -12705,7 +12705,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -12815,15 +12815,15 @@
         "sginfor": {
             "1": {
                 "level": "all",
-                "note": "Platforms 1 and 2 are level with the train doors"
+                "note": "Level with the train doors"
             },
             "2": {
                 "level": "all",
-                "note": "Platforms 1 and 2 are level with the train doors"
+                "note": "Level with the train doors"
             },
             "3": {
                 "level": "none",
-                "note": "Platform 3 is lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -12902,7 +12902,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -13001,7 +13001,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -13118,7 +13118,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -13196,7 +13196,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -13303,7 +13303,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -13410,7 +13410,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -13525,7 +13525,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -13637,7 +13637,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -13764,7 +13764,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -13874,7 +13874,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -13991,7 +13991,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -14108,7 +14108,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -14174,7 +14174,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -14255,7 +14255,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -14335,7 +14335,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -14449,7 +14449,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -14571,7 +14571,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -14698,7 +14698,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -14767,7 +14767,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -14880,7 +14880,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -14986,7 +14986,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -15103,7 +15103,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -15227,7 +15227,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -15307,7 +15307,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -15421,7 +15421,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -15534,7 +15534,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -15647,7 +15647,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -15747,7 +15747,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -15866,19 +15866,19 @@
         "sginfor": {
             "1": {
                 "level": "partial",
-                "note": "Platforms 1, 2 and 3 are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "2": {
                 "level": "partial",
-                "note": "Platforms 1, 2 and 3 are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "3": {
                 "level": "partial",
-                "note": "Platforms 1, 2 and 3 are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "4": {
                 "level": "none",
-                "note": "Platform 4 is lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -15947,7 +15947,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -16027,7 +16027,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are level with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -16141,7 +16141,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -16255,7 +16255,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -16369,7 +16369,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -16438,7 +16438,7 @@
         "sginfor": {
             "all": {
                 "level": "none",
-                "note": "All platforms are lower than the train doors"
+                "note": "Lower than the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -16537,7 +16537,7 @@
         "sginfor": {
             "all": {
                 "level": "all",
-                "note": "All platforms are levelled with the train doors"
+                "note": "Level with the train doors"
             },
             "_notes": [
                 "A boarding ramp is available"
@@ -16776,7 +16776,7 @@
         "sginfor": {
             "all": {
                 "level": "partial",
-                "note": "All platforms are level with the train doors at the middle only"
+                "note": "Level with the train doors (middle only)"
             },
             "_notes": [
                 "A boarding ramp is available"
