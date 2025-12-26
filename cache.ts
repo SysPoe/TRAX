@@ -254,7 +254,7 @@ export function getStopTimeUpdates(ctx: CacheContext, trip_id: string): Realtime
 
 export function getRawStopTimes(ctx: CacheContext, trip_id: string): StopTime[] {
 	const { gtfs: ctxGtfs } = ctx;
-	return (ctxGtfs ?? getGtfs()).getStopTimesForTrip(trip_id);
+	return (ctxGtfs ?? getGtfs()).getStopTimes({ trip_id });
 }
 
 export function getAugmentedTrips(ctx: CacheContext, trip_id?: string): AugmentedTrip[] {
@@ -360,7 +360,7 @@ export function queryAugmentedStopTimes(ctx: CacheContext, query: qdf.StopTimeQu
 	const { gtfs: ctxGtfs } = context;
 	const results: AugmentedStopTime[] = [];
 	const gtfs = ctxGtfs ?? getGtfs();
-	gtfs.queryStopTimes(query).forEach((st) => {
+	gtfs.getStopTimes(query).forEach((st: qdf.StopTime) => {
 		const augmentedTrip = getAugmentedTrips(context, st.trip_id)[0];
 		if (augmentedTrip) {
 			for (const instance of augmentedTrip.instances) {

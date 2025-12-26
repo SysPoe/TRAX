@@ -21,8 +21,8 @@ export interface PlatformLevelness {
     note: string;
 }
 
-export interface RailwayStationFacilitySginfor {
-    [key: string]: PlatformLevelness | string[] | undefined;
+export interface LevelBoardingInformation {
+    [platform: string]: PlatformLevelness | string[] | undefined;
     _notes?: string[];
 }
 
@@ -31,7 +31,7 @@ export interface RailwayStationFacility {
     ln: string[];
     ohours: RailwayStationFacilityOhours;
     stops: string[];
-    sginfor: RailwayStationFacilitySginfor;
+    sginfor: LevelBoardingInformation;
     facility_accessible_adult_change_facilities: boolean;
     facility_accessible_kiss_n_ride: boolean;
     facility_accessible_parking: boolean;

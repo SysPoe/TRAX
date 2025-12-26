@@ -35,15 +35,15 @@ export function getConsideredStations(ctx: CacheContext): qdf.Stop[] {
 		let seen: { [key: string]: boolean } = {};
 		let startTime = Date.now();
 		gtfs.getTrips().forEach((trip) => {
-			if (gtfs.getRoute(trip.route_id)?.route_type !== 2) return;
+			if (gtfs.getRoutes({ route_id: trip.route_id })[0]?.route_type !== 2) return;
 
-			const stopTimes = gtfs.getStopTimesForTrip(trip.trip_id);
+			const stopTimes = gtfs.getStopTimes({ trip_id: trip.trip_id });
 			const sig = getPatternSignature(stopTimes);
 			if (seen[sig]) return;
 			seen[sig] = true;
 
-			stopTimes.forEach((st) => {
-				const stop = gtfs.getStop(st.stop_id);
+			stopTimes.forEach((st: qdf.StopTime) => {
+				const stop = gtfs.getStops({ stop_id: st.stop_id })[0];
 				if (stop) {
 					const stationId = stop.parent_station ?? stop.stop_id;
 					if (!stations) stations = [];
@@ -60,7 +60,7 @@ export function getConsideredStations(ctx: CacheContext): qdf.Stop[] {
 		logger.debug(`Loaded considered_stations in ${Date.now() - startTime}ms`, { module: "SRT" });
 	}
 
-	const result = stations.map((v) => gtfs.getStop(v)).filter((v) => v) as qdf.Stop[];
+	const result = stations.map((v) => gtfs.getStops({ stop_id: v })[0]).filter((v) => v) as qdf.Stop[];
 
 	if (ctx) {
 		ctx.augmented.railStations = result;

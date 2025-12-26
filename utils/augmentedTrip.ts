@@ -182,7 +182,7 @@ function trackBackwards(instance: AugmentedTripInstance, ctx: cache.CacheContext
 
 		if ((time ?? 0) < RS_TOLERATE_SECS) break;
 
-		let deps_ids = gtfs.queryStopTimes({
+		let deps_ids = gtfs.getStopTimes({
 			stop_id: st.scheduled_stop_id ?? undefined,
 			date: serviceDate.toString(),
 			start_time: (time ?? 0) - RS_TOLERATE_SECS,
@@ -264,7 +264,7 @@ function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx: 
 		const time = st.scheduled_departure_time ?? st.scheduled_arrival_time;
 		if (time === null) break;
 
-		let deps_ids = gtfs.queryStopTimes({
+		let deps_ids = gtfs.getStopTimes({
 			stop_id: st.scheduled_stop_id ?? undefined,
 			date: serviceDate.toString(),
 			start_time: time ?? 0,

@@ -1,5 +1,4 @@
 import * as cache from "./cache.js";
-import * as calendar from "./utils/calendar.js";
 import * as stations from "./utils/stations.js";
 import * as qrTravel from "./region-specific/SEQ/qr-travel/qr-travel-tracker.js";
 import * as timeUtils from "./utils/time.js";
@@ -101,7 +100,7 @@ export class TRAX {
 
 	private async loadStaticInternal() {
 		logger.info("Loading GTFS data...");
-		await this.gtfs.loadFromUrl(this.config.url);
+		await this.gtfs.loadStatic(this.config.urls);
 		logger.info("GTFS data loaded.");
 
 		this.ctx = await cache.refreshStaticCache(this.gtfs, this.config);
@@ -111,12 +110,11 @@ export class TRAX {
 		if (!this.config.realtime) return;
 
 		const rt = this.config.realtime;
-		const getUrl = (v: any) => (typeof v === "string" ? v : v?.url);
 
 		await this.gtfs.updateRealtimeFromUrl(
-			getUrl(rt.realtimeAlerts),
-			getUrl(rt.realtimeTripUpdates),
-			getUrl(rt.realtimeVehiclePositions),
+			rt.realtimeAlerts,
+			rt.realtimeTripUpdates,
+			rt.realtimeVehiclePositions,
 		);
 
 		await cache.refreshRealtimeCache(this.gtfs, this.config, this.ctx);
@@ -229,7 +227,7 @@ export default TRAX;
 
 export { logger };
 
-export { resolveConfig, type TraxConfig, type TraxConfigOptions } from "./config.js";
+export { PRESETS, resolveConfig, type TraxConfig, type TraxConfigOptions } from "./config.js";
 export * as cache from "./cache.js";
 export * as stations from "./utils/stations.js";
 export * as calendar from "./utils/calendar.js";

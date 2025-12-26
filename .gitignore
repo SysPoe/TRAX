@@ -10,3 +10,4 @@ TRAX.log
 dist
 .TRAXCACHE
 pnpm-lock.yaml
+.env

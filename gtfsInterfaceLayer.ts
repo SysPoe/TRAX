@@ -6,7 +6,7 @@ let currentGtfs: GTFS | null = null;
 
 async function loadStatic(gtfs: GTFS, config: TraxConfig) {
 	logger.info("Loading GTFS data...");
-	await gtfs.loadFromUrl(config.url);
+	await gtfs.loadStatic(config.urls);
 	logger.info("GTFS data loaded.");
 }
 
@@ -15,12 +15,10 @@ async function loadRealtime(gtfs: GTFS, config: TraxConfig) {
 	const rt = config.realtime;
 	logger.info("Loading realtime data...");
 
-	const getUrl = (v: any) => (typeof v === "string" ? v : v?.url);
-
 	await gtfs.updateRealtimeFromUrl(
-		getUrl(rt.realtimeAlerts),
-		getUrl(rt.realtimeTripUpdates),
-		getUrl(rt.realtimeVehiclePositions),
+		rt.realtimeAlerts,
+		rt.realtimeTripUpdates,
+		rt.realtimeVehiclePositions,
 	);
 	logger.info("Realtime data loaded.");
 }

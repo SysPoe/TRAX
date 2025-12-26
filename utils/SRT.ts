@@ -61,7 +61,7 @@ function getPatternSignature(stopTimes: any[]): string {
 function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 	const gtfs = ctx.gtfs ?? getGtfs();
 	const trips = gtfs.getTrips();
-	const railTrips = trips.filter((t) => gtfs.getRoute(t.route_id)?.route_type === 2);
+	const railTrips = trips.filter((t) => gtfs.getRoutes({ route_id: t.route_id })[0]?.route_type === 2);
 
 	const uniquePatterns: any[][] = [];
 	const seenSignatures = new Set<string>();
@@ -69,14 +69,14 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 	logger.debug("Topology: Extracting unique stopping patterns...");
 
 	railTrips.forEach((trip) => {
-		const stopTimes = gtfs.getStopTimesForTrip(trip.trip_id);
+		const stopTimes = gtfs.getStopTimes({ trip_id: trip.trip_id });
 		const signature = getPatternSignature(stopTimes);
 
 		if (seenSignatures.has(signature)) return;
 		seenSignatures.add(signature);
 
-		const stops = stopTimes.map((st, i) => {
-			const stop = gtfs.getStop(st.stop_id);
+		const stops = stopTimes.map((st: qdf.StopTime, i: number) => {
+			const stop = gtfs.getStops({ stop_id: st.stop_id })[0];
 			const id = stop ? (stop.parent_station ?? stop.stop_id) : st.stop_id;
 
 			let timeFromPrev = 0;
