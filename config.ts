@@ -25,10 +25,8 @@ export type TraxConfigOptions = Partial<Omit<TraxConfig, "realtime">> & {
 	} | null;
 };
 
-const METROLINX_KEY = process.env.METROLINX_KEY ?? "";
-
-export const PRESETS: Record<"SEQ" | "GTHA", TraxConfigOptions> = {
-	SEQ: {
+export const PRESETS: Record<"SEQ" | "GTHA", ((apiKey: string) => TraxConfigOptions) | (() => TraxConfigOptions)> = {
+	SEQ: () => ({
 		urls: ["https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip"],
 		region: "SEQ",
 		realtime: {
@@ -36,16 +34,16 @@ export const PRESETS: Record<"SEQ" | "GTHA", TraxConfigOptions> = {
 			realtimeTripUpdates: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates"],
 			realtimeVehiclePositions: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions"],
 		},
-	},
-	GTHA: {
+	} as TraxConfigOptions),
+	GTHA: (apiKey) => ({
 		urls: ["https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/GO-GTFS.zip", "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/UP-GTFS.zip"],
 		region: "GTHA",
 		realtime: {
-			realtimeAlerts: ["https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/Alerts?key=" + METROLINX_KEY],
-			realtimeTripUpdates: ["https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/TripUpdates?key=" + METROLINX_KEY],
-			realtimeVehiclePositions: ["https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/VehiclePosition?key=" + METROLINX_KEY],
+			realtimeAlerts: ["https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/Alerts?key=" + apiKey],
+			realtimeTripUpdates: ["https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/TripUpdates?key=" + apiKey],
+			realtimeVehiclePositions: ["https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/VehiclePosition?key=" + apiKey],
 		}
-	},
+	} as TraxConfigOptions),
 };
 
 export function resolveConfig(options: TraxConfigOptions = {}): TraxConfig {
@@ -77,10 +75,10 @@ export function resolveConfig(options: TraxConfigOptions = {}): TraxConfig {
 
 	const resolvedRealtime = options.realtime
 		? {
-				realtimeAlerts: normalizeFeeds(options.realtime.realtimeAlerts),
-				realtimeTripUpdates: normalizeFeeds(options.realtime.realtimeTripUpdates),
-				realtimeVehiclePositions: normalizeFeeds(options.realtime.realtimeVehiclePositions),
-			}
+			realtimeAlerts: normalizeFeeds(options.realtime.realtimeAlerts),
+			realtimeTripUpdates: normalizeFeeds(options.realtime.realtimeTripUpdates),
+			realtimeVehiclePositions: normalizeFeeds(options.realtime.realtimeVehiclePositions),
+		}
 		: options.url || options.urls
 			? null
 			: defaults.realtime;

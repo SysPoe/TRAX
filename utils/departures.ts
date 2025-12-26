@@ -48,7 +48,6 @@ export function getDeparturesForStop(
 	};
 
 	// Query static GTFS for stop times at this station (optimized)
-	// Query static GTFS for stop times at this station (optimized)
 	const rawStopTimes = Array.from(validStops).flatMap((id) => gtfs.getStopTimes({ stop_id: id }));
 	const passingTrips = Array.from(validStops).flatMap((id) => cache.getPassingTrips(ctx, id));
 	const allTripIds = new Set([...rawStopTimes.map((st) => st.trip_id), ...passingTrips]);
