@@ -7,6 +7,8 @@ import { getVehicleInfo as getGTHAVehicleInfo } from "../region-specific/GTHA/ve
 export type VehicleInfo = {
 	vehicle_model: string | null;
 	vehicle_id: string | null;
+	passenger_cars?: number | null;
+	scheduled_passenger_cars?: number | null;
 };
 
 function resolveVehicleInfo(inst: AugmentedTripInstance, ctx: CacheContext, config: TraxConfig): VehicleInfo {
@@ -26,11 +28,18 @@ function mergeVehicleInfo(inst: AugmentedTripInstance, incoming: VehicleInfo): V
 	const prev = previousVehicleInfo[inst.instance_id];
 	const vehicle_id = incoming.vehicle_id ?? prev?.vehicle_id ?? inst.vehicle_id ?? null;
 	const vehicle_model = incoming.vehicle_model ?? prev?.vehicle_model ?? inst.vehicle_model ?? null;
+	const passenger_cars = incoming.passenger_cars ?? prev?.passenger_cars ?? inst.passenger_cars ?? null;
+	const scheduled_passenger_cars =
+		incoming.scheduled_passenger_cars ?? prev?.scheduled_passenger_cars ?? inst.scheduled_passenger_cars ?? null;
 
-	// Persist the best known values so brief realtime gaps do not wipe them.
-	previousVehicleInfo[inst.instance_id] = { vehicle_id, vehicle_model };
+	previousVehicleInfo[inst.instance_id] = {
+		vehicle_id,
+		vehicle_model,
+		passenger_cars,
+		scheduled_passenger_cars,
+	};
 
-	return { vehicle_id, vehicle_model };
+	return { vehicle_id, vehicle_model, passenger_cars, scheduled_passenger_cars };
 }
 
 export function addVehicleModel(
@@ -40,13 +49,20 @@ export function addVehicleModel(
 ): AugmentedTripInstance {
 	const needsModel = inst.vehicle_model == null;
 	const needsId = (inst as any).vehicle_id === undefined || inst.vehicle_id == null;
-	if (needsModel || needsId) {
+	const needsPassengerCars = inst.passenger_cars == null;
+	const needsScheduledPassengerCars = inst.scheduled_passenger_cars == null;
+
+	if (needsModel || needsId || needsPassengerCars || needsScheduledPassengerCars) {
 		const info = mergeVehicleInfo(inst, resolveVehicleInfo(inst, ctx, config));
 		if (needsModel) inst.vehicle_model = info.vehicle_model;
 		if (needsId) inst.vehicle_id = info.vehicle_id;
+		if (needsPassengerCars) inst.passenger_cars = info.passenger_cars ?? null;
+		if (needsScheduledPassengerCars) inst.scheduled_passenger_cars = info.scheduled_passenger_cars ?? null;
 	}
 	if (inst.vehicle_model === undefined) inst.vehicle_model = null;
 	if (inst.vehicle_id === undefined) inst.vehicle_id = null;
+	if (inst.passenger_cars === undefined) inst.passenger_cars = null;
+	if (inst.scheduled_passenger_cars === undefined) inst.scheduled_passenger_cars = null;
 	return inst;
 }
 

@@ -32,7 +32,6 @@ function applyPlatformUpdate(
 	platform: string | null,
 	scheduledPlatform: string | null,
 ) {
-	// If the RT feed sends null, keep previously known values.
 	const newActual = platform ?? stopTime.actual_platform_code ?? null;
 	const newScheduled = scheduledPlatform ?? stopTime.scheduled_platform_code ?? null;
 
@@ -55,108 +54,61 @@ function applyPlatformUpdate(
 	stopTime.rt_platform_code_updated = true;
 }
 
-function toServiceDate(epochMs: number | undefined) {
-	if (epochMs === undefined || Number.isNaN(epochMs)) return undefined;
-	return new Date(epochMs).toISOString().slice(0, 10).replace(/-/g, "");
-}
-
-function parseSerializedDate(serialized: string | undefined) {
-	if (!serialized) return undefined;
-	const match = /\/Date\((?<ms>-?\d+)\)\//.exec(serialized);
-	if (!match?.groups?.ms) return undefined;
-	return Number.parseInt(match.groups.ms, 10);
-}
-
-function parseGoTrackerPayload(raw: string) {
-	const match = raw.match(/<Data>(.*)<\/Data>/s);
-	if (!match?.[1]) return undefined;
-	try {
-		return JSON.parse(match[1]);
-	} catch {
-		return undefined;
-	}
-}
-
-const lines = {
-	DA: ["Lakeshore East", "Stouffville"],
-	SC: ["Lakeshore East", "Stouffville"],
-	KE: ["Stouffville"],
-	AG: ["Stouffville"],
-	MK: ["Stouffville"],
-	UI: ["Stouffville"],
-	CE: ["Stouffville"],
-	MR: ["Stouffville"],
-	MJ: ["Stouffville"],
-	ST: ["Stouffville"],
-	LI: ["Stouffville"],
-	DW: ["Barrie"],
-	RU: ["Barrie"],
-	MP: ["Barrie"],
-	KC: ["Barrie"],
-	AU: ["Barrie"],
-	NE: ["Barrie"],
-	EA: ["Barrie"],
-	BD: ["Barrie"],
-	BA: ["Barrie"],
-	AD: ["Barrie"],
-	BL: ["Kitchener"],
-	MD: ["Kitchener"],
-	WE: ["Kitchener"],
-	ET: ["Kitchener"],
-	MA: ["Kitchener"],
-	BE: ["Kitchener"],
-	BR: ["Kitchener"],
-	MO: ["Kitchener"],
-	GE: ["Kitchener"],
-	AC: ["Kitchener"],
-	GL: ["Kitchener"],
-	KI: ["Kitchener"],
-	EG: ["Lakeshore East"],
-	GU: ["Lakeshore East"],
-	RO: ["Lakeshore East"],
-	PIN: ["Lakeshore East"],
-	AJ: ["Lakeshore East"],
-	WH: ["Lakeshore East"],
-	OS: ["Lakeshore East"],
-	EX: ["Lakeshore West"],
-	MI: ["Lakeshore West"],
-	LO: ["Lakeshore West"],
-	PO: ["Lakeshore West"],
-	CL: ["Lakeshore West"],
-	OA: ["Lakeshore West"],
-	BO: ["Lakeshore West"],
-	AP: ["Lakeshore West"],
-	BU: ["Lakeshore West"],
-	AL: ["Lakeshore West"],
-	HA: ["Lakeshore West"],
-	WR: ["Lakeshore West"],
-	CF: ["Lakeshore West"],
-	SCTH: ["Lakeshore West"],
-	NI: ["Lakeshore West"],
-	KP: ["Milton"],
-	DI: ["Milton"],
-	CO: ["Milton"],
-	ER: ["Milton"],
-	SR: ["Milton"],
-	ME: ["Milton"],
-	LS: ["Milton"],
-	ML: ["Milton"],
-	OR: ["Richmond Hill"],
-	OL: ["Richmond Hill"],
-	LA: ["Richmond Hill"],
-	RI: ["Richmond Hill"],
-	GO: ["Richmond Hill"],
-	BM: ["Richmond Hill"],
-};
-
-const corridors = {
-	Barrie: "65",
-	Kitchener: "31",
-	"Lakeshore East": "09",
-	"Lakeshore West": "01",
-	Milton: "21",
-	"Richmond Hill": "61",
-	Stouffville: "71",
+const gotrackerMobile_stop_conversion: Record<string, string[]> = {
+	UN: ["BR", "GT", "LE", "LW", "ST"],
+	DW: ["BR"],
+	RU: ["BR"],
+	MP: ["BR"],
+	KC: ["BR"],
+	AU: ["BR"],
+	NE: ["BR"],
+	EA: ["BR"],
+	BD: ["BR"],
+	BA: ["BR"],
+	AD: ["BR"],
+	BL: ["GT"],
+	MD: ["GT"],
+	WE: ["GT"],
+	MA: ["GT"],
+	BE: ["GT"],
+	BR: ["GT"],
+	MO: ["GT"],
+	GE: ["GT"],
+	AC: ["GT"],
+	GL: ["GT"],
+	KI: ["GT"],
+	DA: ["LE"],
+	SC: ["LE"],
+	EG: ["LE"],
+	GU: ["LE"],
+	RO: ["LE"],
+	PIN: ["LE"],
+	AJ: ["LE"],
+	WH: ["LE"],
+	OS: ["LE"],
+	EX: ["LW"],
+	MI: ["LW"],
+	LO: ["LW"],
+	PO: ["LW"],
+	CL: ["LW"],
+	OA: ["LW"],
+	BO: ["LW"],
+	AP: ["LW"],
+	BU: ["LW"],
+	AL: ["LW"],
+	WR: ["LW"],
+	CF: ["LW"],
+	SCTH: ["LW"],
+	NI: ["LW"],
+	KE: ["ST"],
+	AG: ["ST"],
+	MK: ["ST"],
+	UI: ["ST"],
+	CE: ["ST"],
+	MR: ["ST"],
+	MJ: ["ST"],
+	ST: ["ST"],
+	LI: ["ST"],
 };
 
 export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
@@ -167,7 +119,6 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 
 	const UP_ids = ["UN", "PA", "BL", "MD", "WE"];
 
-	// Stop times in the next 10 minutes (GO departures)
 	const stopTimes10m = gtfs
 		.getStopTimes({ date: serviceDateStr, start_time: nowSecs, end_time: nowSecs + GO_LOOKAHEAD_SECS })
 		.filter((v) => isConsideredTripId(v.trip_id, gtfs))
@@ -191,7 +142,6 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 	stopTimes10m.forEach((st) => stopTimes10mMap.set(`${st.stop_id}-${st.trip_id}`, st));
 	const uniqueStopTimes10m = Array.from(stopTimes10mMap.values());
 
-	// Stop times in the next 2 hours (UPE)
 	const stopTimes2h = gtfs
 		.getStopTimes({ date: serviceDateStr, start_time: nowSecs, end_time: nowSecs + PLATFORM_LOOKAHEAD_SECS })
 		.filter((v) => isConsideredTripId(v.trip_id, gtfs))
@@ -215,7 +165,6 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 	stopTimes2h.forEach((st) => stopTimes2hMap.set(`${st.stop_id}-${st.trip_id}`, st));
 	const uniqueStopTimes2h = Array.from(stopTimes2hMap.values());
 
-	// Stop times for the entire service day (GoTracker)
 	const stopTimesGoTracker = gtfs
 		.getStopTimes({ date: serviceDateStr, start_time: 0, end_time: 86400 })
 		.filter((v) => isConsideredTripId(v.trip_id, gtfs))
@@ -386,48 +335,57 @@ async function maybeUpdatePlatformsFromGoTracker(
 	if (nowMs - (lastGoTrackerFetchMs[stop_id] ?? 0) < GOTRACKER_THROTTLE_MS) return;
 	lastGoTrackerFetchMs[stop_id] = nowMs;
 
-	const corridor_ids = lines[stop_id as keyof typeof lines]
-		.map((v) => corridors[v as keyof typeof corridors])
-		.filter((v) => v);
+	const corridor_codes = gotrackerMobile_stop_conversion[stop_id] ?? [];
 
-	let TripStatuses: any[] = [];
+	let tripMessages: any[] = [];
 
-	for (const corridor_id of corridor_ids) {
-		const goTrackerUrl = `https://www.gotracker.ca/GoTracker/web/GODataAPIProxy.svc/StationStatusJSON/Service/StationCd/Lang/${corridor_id}/${stop_id}/en-us?_=${nowMs}`;
+	for (const corridor_code of corridor_codes) {
+		const goTrackerUrl = `https://www.gotracker.ca/gotracker/mobile/proxy/web/Messages/Signage/Rail/${corridor_code}/${stop_id}`;
 
-		const response = await fetch(goTrackerUrl, { headers: { Referer: GOTRACKER_REFERRER } });
-		if (!response.ok) return;
+		try {
+			const response = await fetch(goTrackerUrl, { headers: { Referer: GOTRACKER_REFERRER } });
+			if (!response.ok) continue;
 
-		const raw = await response.text();
-		const parsed = parseGoTrackerPayload(raw);
-		if (!parsed?.TripStatus) continue;
-		TripStatuses = TripStatuses.concat(parsed.TripStatus);
+			const data = await response.json();
+			if (!data?.directions) continue;
+			for (const direction of data.directions) {
+				if (direction.tripMessages) {
+					tripMessages = tripMessages.concat(direction.tripMessages);
+				}
+			}
+		} catch (e) {
+			logger.error(`Failed to fetch GoTracker for stop ${stop_id} corridor ${corridor_code}`, {
+				error: e,
+				module: "region-specific/GTHA/realtime",
+				function: "maybeUpdatePlatformsFromGoTracker",
+			});
+		}
 	}
 
-	for (const trip of TripStatuses) {
-		if (!trip?.TripNumber || trip.TripNumber === "NoTrip_") continue;
+	for (const trip of tripMessages) {
+		if (!trip?.tripName) continue;
 
-		const platform = (trip.Track ?? trip.UnionArrivePlatform ?? trip.UnionDepartPlatform)?.toString()?.trim();
+		const platform = trip.track?.toString()?.trim();
 		if (!platform) continue;
 
-		const parsedServiceDate = toServiceDate(
-			parseSerializedDate(trip.EstimatedArrival) ?? parseSerializedDate(trip.Scheduled),
-		);
-		const targetServiceDate = parsedServiceDate ?? serviceDateStr;
+		const targetServiceDate = trip.scheduled?.slice(0, 10).replace(/-/g, "") ?? serviceDateStr;
 
 		for (const st of stopTimes) {
 			if (st.stop_id !== stop_id) continue;
-			if (!st.trip_id.endsWith(trip.TripNumber)) continue;
+			if (!st.trip_id.endsWith(trip.tripName)) continue;
 
-			const augmentedStopTimes = getAugmentedTrips(ctx, st.trip_id)[0]?.instances.find(
+			const instance = getAugmentedTrips(ctx, st.trip_id)[0]?.instances.find(
 				(v) => v.serviceDate === targetServiceDate,
-			)?.stopTimes;
+			);
 
-			if (!augmentedStopTimes) continue;
-			const ast = augmentedStopTimes.find((ast) => ast.actual_stop_id === st.stop_id);
+			if (!instance) continue;
+			const ast = instance.stopTimes.find((ast) => ast.actual_stop_id === st.stop_id);
 			if (!ast) continue;
 
 			applyPlatformUpdate(ast, stop_id, platform, null);
+
+			if (trip.coachCount !== undefined) instance.passenger_cars = trip.coachCount;
+			if (trip.scheduledCoachCount !== undefined) instance.scheduled_passenger_cars = trip.scheduledCoachCount;
 		}
 	}
 }
