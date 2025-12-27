@@ -12,6 +12,6 @@ const RUN_MODEL_MAP: Record<string, string> = {
 
 export function getVehicleInfo(inst: AugmentedTripInstance): VehicleInfo {
 	const prefix = inst.run?.[0]?.toUpperCase();
-	const vehicle_model = prefix ? RUN_MODEL_MAP[prefix] ?? null : null;
+	const vehicle_model = prefix ? (RUN_MODEL_MAP[prefix] ?? null) : null;
 	return { vehicle_model, vehicle_id: null };
 }

@@ -274,7 +274,9 @@ export function getAugmentedTrips(ctx: CacheContext, trip_id?: string): Augmente
 		}
 		return [];
 	}
-	return Array.from(augmented.tripsRec.values()).map((v) => addVehicleModelTrip(addSC(v, ctx, context.config), ctx, context.config));
+	return Array.from(augmented.tripsRec.values()).map((v) =>
+		addVehicleModelTrip(addSC(v, ctx, context.config), ctx, context.config),
+	);
 }
 
 export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string): AugmentedTripInstance | null {
