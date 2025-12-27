@@ -284,8 +284,8 @@ export function augmentStopTimes(
 		let dep = s?.departure_time ?? 0;
 
 		if (!s && r) {
-			if (r.arrival_time) arr = Math.floor(Number(r.arrival_time) - serviceDayStart);
-			if (r.departure_time) dep = Math.floor(Number(r.departure_time) - serviceDayStart);
+			if (r.arrival_time) arr = Math.floor(Number(r.arrival_time) - serviceDayStart + 86400) % 86400;
+			if (r.departure_time) dep = Math.floor(Number(r.departure_time) - serviceDayStart + 86400) % 86400;
 			if (arr === 0 && dep !== 0) arr = dep;
 			if (dep === 0 && arr !== 0) dep = arr;
 		}
@@ -432,7 +432,7 @@ export function augmentStopTimes(
 				lastDelay = delaySecs;
 				rtFlags.dep = true;
 			} else if (rtUpdate.departure_time) {
-				const depAbs = Math.floor(Number(rtUpdate.departure_time) - serviceDayStart);
+				const depAbs = Math.floor((Number(rtUpdate.departure_time) - serviceDayStart + 86400) % 86400);
 				delaySecs = depAbs - (schedDep ?? 0);
 				actDep = depAbs;
 				lastDelay = delaySecs;
@@ -447,7 +447,7 @@ export function augmentStopTimes(
 				delaySecs = rtUpdate.arrival_delay;
 				rtFlags.arr = true;
 			} else if (rtUpdate.arrival_time) {
-				const arrAbs = Math.floor(Number(rtUpdate.arrival_time) - serviceDayStart);
+				const arrAbs = Math.floor(Number(rtUpdate.arrival_time) - serviceDayStart + 86400) % 86400;
 				actArr = arrAbs;
 				rtFlags.arr = true;
 			} else if (lastDelay) {

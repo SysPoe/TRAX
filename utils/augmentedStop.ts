@@ -51,7 +51,9 @@ export function augmentStop(stop: qdf.Stop, ctx: cache.CacheContext): AugmentedS
 		);
 		const facilities = cache.SEQgetRailwayStationFacilities(ctx);
 		const myFacility = facilities.find(
-			(f) => f.stops && (f.stops.includes(stop.stop_id) || (stop.parent_station && f.stops.includes(stop.parent_station))),
+			(f) =>
+				f.stops &&
+				(f.stops.includes(stop.stop_id) || (stop.parent_station && f.stops.includes(stop.parent_station))),
 		);
 
 		augmented.regionSpecific = {

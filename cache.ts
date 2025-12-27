@@ -8,7 +8,7 @@ import type {
 	Stop,
 	StopTime,
 	Trip,
-    GTFS
+	GTFS,
 } from "qdf-gtfs";
 import { isConsideredTrip } from "./utils/considered.js";
 import { AugmentedStop, augmentStop } from "./utils/augmentedStop.js";
@@ -24,6 +24,7 @@ import { QRTPlace, QRTTravelTrip } from "./index.js";
 import { getCurrentQRTravelTrains, getPlaces } from "./region-specific/SEQ/qr-travel/qr-travel-tracker.js";
 import { getRailwayStationFacilities } from "./region-specific/SEQ/facilities.js";
 import { RailwayStationFacility } from "./region-specific/SEQ/facilities-types.js";
+import { updateGTHAPlatforms } from "./region-specific/GTHA/realtime.js";
 import logger from "./utils/logger.js";
 import { getGtfs } from "./gtfsInterfaceLayer.js";
 import * as qdf from "qdf-gtfs";
@@ -287,7 +288,10 @@ export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string)
 	}
 }
 
-export function getVehicleTripInstance(ctx: CacheContext, vehicle: RealtimeVehiclePosition): AugmentedTripInstance | null {
+export function getVehicleTripInstance(
+	ctx: CacheContext,
+	vehicle: RealtimeVehiclePosition,
+): AugmentedTripInstance | null {
 	const tripId = vehicle.trip.trip_id;
 	if (!tripId) return null;
 
@@ -523,10 +527,13 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 			function: "refreshStaticCache",
 		});
 		newRawCache.regionSpecific.SEQ.railwayStationFacilities = await getRailwayStationFacilities(config);
-		logger.debug(`Loaded ${newRawCache.regionSpecific.SEQ.railwayStationFacilities.length} railway station facilities.`, {
-			module: "cache",
-			function: "refreshStaticCache",
-		});
+		logger.debug(
+			`Loaded ${newRawCache.regionSpecific.SEQ.railwayStationFacilities.length} railway station facilities.`,
+			{
+				module: "cache",
+				function: "refreshStaticCache",
+			},
+		);
 	}
 
 	newRawCache.stops = gtfs.getStops();
@@ -700,85 +707,84 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 			module: "cache",
 			function: "refreshRealtimeCache",
 		});
-		logger.info("Realtime GTFS cache refreshed.", {
+	} else {
+		resetRealtimeCacheIncremental(updatedTripIds, ctx);
+
+		logger.debug("Re-augmenting updated trips...", {
 			module: "cache",
 			function: "refreshRealtimeCache",
 		});
-		return;
-	}
 
-	resetRealtimeCacheIncremental(updatedTripIds, ctx);
+		const tripsToUpdate: Trip[] = [];
+		for (const id of updatedTripIds) {
+			const t = rawCache.tripsRec.get(id);
+			if (t) tripsToUpdate.push(t);
+		}
 
-	logger.debug("Re-augmenting updated trips...", {
-		module: "cache",
-		function: "refreshRealtimeCache",
-	});
+		const updatedAugmented = await processWithProgress(tripsToUpdate, "Re-augmenting updated trips", (t) =>
+			augmentTrip(t, ctx),
+		);
 
-	const tripsToUpdate: Trip[] = [];
-	for (const id of updatedTripIds) {
-		const t = rawCache.tripsRec.get(id);
-		if (t) tripsToUpdate.push(t);
-	}
+		for (const at of updatedAugmented) {
+			augmentedCache.tripsRec.set(at.trip_id, at);
+		}
 
-	const updatedAugmented = await processWithProgress(tripsToUpdate, "Re-augmenting updated trips", (t) =>
-		augmentTrip(t, ctx),
-	);
+		augmentedCache.trips = Array.from(augmentedCache.tripsRec.values());
 
-	for (const at of updatedAugmented) {
-		augmentedCache.tripsRec.set(at.trip_id, at);
-	}
+		logger.debug(`Re-augmented ${updatedTripIds.size} trips.`, {
+			module: "cache",
+			function: "refreshRealtimeCache",
+		});
 
-	augmentedCache.trips = Array.from(augmentedCache.tripsRec.values());
+		logger.debug("Building augmented cache records for updated trips...", {
+			module: "cache",
+			function: "refreshRealtimeCache",
+		});
 
-	logger.debug(`Re-augmented ${updatedTripIds.size} trips.`, {
-		module: "cache",
-		function: "refreshRealtimeCache",
-	});
+		for (const tripId of updatedTripIds) {
+			const trip = augmentedCache.tripsRec.get(tripId);
+			if (!trip) continue;
 
-	logger.debug("Building augmented cache records for updated trips...", {
-		module: "cache",
-		function: "refreshRealtimeCache",
-	});
+			const allStopTimes = trip.instances.flatMap((i) => i.stopTimes);
 
-	for (const tripId of updatedTripIds) {
-		const trip = augmentedCache.tripsRec.get(tripId);
-		if (!trip) continue;
+			augmentedCache.stopTimes[trip.trip_id] = allStopTimes;
+			augmentedCache.baseStopTimes[trip.trip_id] = [...allStopTimes];
 
-		const allStopTimes = trip.instances.flatMap((i) => i.stopTimes);
-
-		augmentedCache.stopTimes[trip.trip_id] = allStopTimes;
-		augmentedCache.baseStopTimes[trip.trip_id] = [...allStopTimes];
-
-		for (const instance of trip.instances) {
-			for (const serviceDate of instance.actualTripDates) {
-				let tripIds = augmentedCache.serviceDateTrips.get(serviceDate);
-				if (!tripIds) {
-					tripIds = [];
-					augmentedCache.serviceDateTrips.set(serviceDate, tripIds);
-				}
-				if (!tripIds.includes(trip.trip_id)) tripIds.push(trip.trip_id);
-			}
-
-			for (const st of instance.stopTimes) {
-				if (st.passing && st.actual_stop_id) {
-					const stopId = st.actual_stop_id;
-					let tripIds = augmentedCache.passingTrips.get(stopId);
+			for (const instance of trip.instances) {
+				for (const date of instance.actualTripDates) {
+					let tripIds = augmentedCache.serviceDateTrips.get(date);
 					if (!tripIds) {
 						tripIds = [];
-						augmentedCache.passingTrips.set(stopId, tripIds);
+						augmentedCache.serviceDateTrips.set(date, tripIds);
 					}
 					if (!tripIds.includes(trip.trip_id)) tripIds.push(trip.trip_id);
 				}
+
+				for (const st of instance.stopTimes) {
+					if (st.passing && st.actual_stop_id) {
+						const stopId = st.actual_stop_id;
+						let tripIds = augmentedCache.passingTrips.get(stopId);
+						if (!tripIds) {
+							tripIds = [];
+							augmentedCache.passingTrips.set(stopId, tripIds);
+						}
+						if (!tripIds.includes(trip.trip_id)) tripIds.push(trip.trip_id);
+					}
+				}
 			}
 		}
+		for (const stop of augmentedCache.stops) augmentedCache.stopsRec.set(stop.stop_id, stop);
 	}
 
-	await Promise.all(additionalPromises);
+	if (config.region === "GTHA") {
+		await updateGTHAPlatforms(ctx, gtfs);
+	}
 
-	logger.info("Realtime GTFS cache refreshed incrementally.", {
+	logger.info("Realtime GTFS cache refreshed.", {
 		module: "cache",
 		function: "refreshRealtimeCache",
 	});
+	await Promise.all(additionalPromises);
 }
 
 async function processWithProgress<T, U>(

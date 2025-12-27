@@ -202,8 +202,11 @@ function getTripDirection(inst: AugmentedTripInstance, currentStopSequence: numb
 
 	if (stopTimes.length === 0) return null;
 
-	const cache = (inst as any)._seq_direction_data || (inst as any)._seq_direction_data === null ? (inst as any)._seq_direction_data : null;
-	
+	const cache =
+		(inst as any)._seq_direction_data || (inst as any)._seq_direction_data === null
+			? (inst as any)._seq_direction_data
+			: null;
+
 	let centralIndex = -1;
 	let romaIndex = -1;
 	let firstCityIndex = -1;
@@ -373,11 +376,7 @@ export function getServiceCapacity(
 	return ServiceCapacity.UNKNOWN;
 }
 
-export function addSCI(
-	inst: AugmentedTripInstance,
-	ctx: CacheContext,
-	config: TraxConfig,
-): AugmentedTripInstance {
+export function addSCI(inst: AugmentedTripInstance, ctx: CacheContext, config: TraxConfig): AugmentedTripInstance {
 	let prevSC: ServiceCapacity = ServiceCapacity.UNKNOWN;
 	inst.stopTimes.forEach((st) => {
 		if (st.passing || st.service_capacity !== ServiceCapacity.NOT_CALCULATED) return;

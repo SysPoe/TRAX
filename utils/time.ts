@@ -64,10 +64,12 @@ export function parseTimeWithConfig(dateStr: string, timezone: string): number {
 	const offsetSecs = getTimezoneOffsetSeconds(timezone, new Date(dateStr + "Z"));
 	const offsetHours = Math.floor(Math.abs(offsetSecs) / 3600);
 	const offsetMins = (Math.abs(offsetSecs) % 3600) / 60;
-	const offsetStr = (offsetSecs >= 0 ? "+" : "-") + 
-		offsetHours.toString().padStart(2, "0") + ":" + 
+	const offsetStr =
+		(offsetSecs >= 0 ? "+" : "-") +
+		offsetHours.toString().padStart(2, "0") +
+		":" +
 		offsetMins.toString().padStart(2, "0");
-	
+
 	return new Date(dateStr + offsetStr).getTime();
 }
 
@@ -81,4 +83,11 @@ export function parseBrisbaneTime(dateStr: string, assume: string = "+10:00"): n
 	return new Date(dateStr + assume).getTime();
 }
 
-export default { timeDiff, secTimeDiff, getTimezoneOffsetSeconds, getServiceDayStart, parseTimeWithConfig, parseBrisbaneTime };
+export default {
+	timeDiff,
+	secTimeDiff,
+	getTimezoneOffsetSeconds,
+	getServiceDayStart,
+	parseTimeWithConfig,
+	parseBrisbaneTime,
+};

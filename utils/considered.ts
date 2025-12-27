@@ -27,10 +27,19 @@ export function isConsideredTripId(trip_id: string, gtfs?: qdf.GTFS): boolean {
 export function isConsideredStop(stop: AugmentedStop | qdf.Stop, gtfs?: qdf.GTFS): boolean {
 	if (stopCache.has(stop.stop_id)) return stopCache.get(stop.stop_id)!;
 	if (!gtfs) gtfs = getGtfs();
-	let children = (stop as AugmentedStop).child_stop_ids ?? gtfs.getStops().filter(s => s.parent_station === stop.stop_id).map(s => s.stop_id);
-	const valid = gtfs.getStopTimes({
-		stop_id: stop.stop_id
-	}).some((st: qdf.StopTime) => isConsideredTripId(st.trip_id, gtfs)) || children.some(child => isConsideredStopId(child, gtfs));
+	let children =
+		(stop as AugmentedStop).child_stop_ids ??
+		gtfs
+			.getStops()
+			.filter((s) => s.parent_station === stop.stop_id)
+			.map((s) => s.stop_id);
+	const valid =
+		gtfs
+			.getStopTimes({
+				stop_id: stop.stop_id,
+			})
+			.some((st: qdf.StopTime) => isConsideredTripId(st.trip_id, gtfs)) ||
+		children.some((child) => isConsideredStopId(child, gtfs));
 	stopCache.set(stop.stop_id, valid);
 	return valid;
 }

@@ -28,35 +28,40 @@ export type TraxConfigOptions = Partial<Omit<TraxConfig, "realtime">> & {
 };
 
 export const PRESETS: Record<"SEQ" | "GTHA", (apiKey?: string | undefined) => TraxConfigOptions> = {
-	SEQ: () => ({
-		urls: ["https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip"],
-		region: "SEQ",
-		timezone: "Australia/Brisbane",
-		realtime: {
-			realtimeAlerts: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts"],
-			realtimeTripUpdates: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates"],
-			realtimeVehiclePositions: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions"],
-		},
-	} as TraxConfigOptions),
-	GTHA: (apiKey) => ({
-		urls: ["https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/UP-GTFS.zip", "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/GO-GTFS.zip"],
-		region: "GTHA",
-		timezone: "America/Toronto",
-		realtime: {
-			realtimeAlerts: [
-				"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/Alerts?key=" + apiKey,
-				"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/Alerts?key=" + apiKey
+	SEQ: () =>
+		({
+			urls: ["https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip"],
+			region: "SEQ",
+			timezone: "Australia/Brisbane",
+			realtime: {
+				realtimeAlerts: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts"],
+				realtimeTripUpdates: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates"],
+				realtimeVehiclePositions: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions"],
+			},
+		}) as TraxConfigOptions,
+	GTHA: (apiKey) =>
+		({
+			urls: [
+				"https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/UP-GTFS.zip",
+				"https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/GO-GTFS.zip",
 			],
-			realtimeTripUpdates: [
-				"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/TripUpdates?key=" + apiKey,
-				"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/TripUpdates?key=" + apiKey
-			],
-			realtimeVehiclePositions: [
-				"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/VehiclePosition?key=" + apiKey,
-				"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/VehiclePosition?key=" + apiKey
-			],
-		}
-	} as TraxConfigOptions),
+			region: "GTHA",
+			timezone: "America/Toronto",
+			realtime: {
+				realtimeAlerts: [
+					"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/Alerts?key=" + apiKey,
+					"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/Alerts?key=" + apiKey,
+				],
+				realtimeTripUpdates: [
+					"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/TripUpdates?key=" + apiKey,
+					"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/TripUpdates?key=" + apiKey,
+				],
+				realtimeVehiclePositions: [
+					"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/VehiclePosition?key=" + apiKey,
+					"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/VehiclePosition?key=" + apiKey,
+				],
+			},
+		}) as TraxConfigOptions,
 };
 
 export function resolveConfig(options: TraxConfigOptions = {}): TraxConfig {
@@ -70,7 +75,9 @@ export function resolveConfig(options: TraxConfigOptions = {}): TraxConfig {
 
 	const staticUrls: (string | GTFSFeedConfig)[] =
 		options.urls ??
-		(options.url ? [{ url: options.url, headers: options.headers ?? undefined }] : ["https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip"]);
+		(options.url
+			? [{ url: options.url, headers: options.headers ?? undefined }]
+			: ["https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip"]);
 
 	const defaults: TraxConfig = {
 		urls: ["https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip"],
@@ -89,10 +96,10 @@ export function resolveConfig(options: TraxConfigOptions = {}): TraxConfig {
 
 	const resolvedRealtime = options.realtime
 		? {
-			realtimeAlerts: normalizeFeeds(options.realtime.realtimeAlerts),
-			realtimeTripUpdates: normalizeFeeds(options.realtime.realtimeTripUpdates),
-			realtimeVehiclePositions: normalizeFeeds(options.realtime.realtimeVehiclePositions),
-		}
+				realtimeAlerts: normalizeFeeds(options.realtime.realtimeAlerts),
+				realtimeTripUpdates: normalizeFeeds(options.realtime.realtimeTripUpdates),
+				realtimeVehiclePositions: normalizeFeeds(options.realtime.realtimeVehiclePositions),
+			}
 		: options.url || options.urls
 			? null
 			: defaults.realtime;

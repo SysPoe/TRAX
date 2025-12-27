@@ -440,8 +440,12 @@ export function findPassingStopTimes(
 		const startTime = resultTimes.at(-1);
 		const endTime = idsToTimes[srt.to];
 
-		if (startTime?.departure_time === undefined || startTime?.departure_time === null || 
-			endTime?.arrival_time === undefined || endTime?.arrival_time === null) {
+		if (
+			startTime?.departure_time === undefined ||
+			startTime?.departure_time === null ||
+			endTime?.arrival_time === undefined ||
+			endTime?.arrival_time === null
+		) {
 			if (endTime) resultTimes.push({ ...endTime, _passing: false });
 			currentPassingRun = [];
 			continue;

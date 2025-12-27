@@ -15,11 +15,7 @@ async function loadRealtime(gtfs: GTFS, config: TraxConfig) {
 	const rt = config.realtime;
 	logger.info("Loading realtime data...");
 
-	await gtfs.updateRealtimeFromUrl(
-		rt.realtimeAlerts,
-		rt.realtimeTripUpdates,
-		rt.realtimeVehiclePositions,
-	);
+	await gtfs.updateRealtimeFromUrl(rt.realtimeAlerts, rt.realtimeTripUpdates, rt.realtimeVehiclePositions);
 	logger.info("Realtime data loaded.");
 }
 

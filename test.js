@@ -19,12 +19,7 @@ async function main() {
 	const stop = TRAX.getAugmentedStops("place_censta")[0];
 	console.log("facilities", JSON.stringify(stop.regionSpecific.SEQ.facilities).length);
 	const date = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10).replaceAll("-", "");
-	const deps = TRAX.utils.departures.getDeparturesForStop(
-		stop,
-		date,
-		"08:00:00",
-		"23:59:59",
-	);
+	const deps = TRAX.utils.departures.getDeparturesForStop(stop, date, "08:00:00", "23:59:59");
 
 	console.log(deps.length + " testdeps");
 
@@ -39,10 +34,12 @@ async function main() {
 	}
 
 	// Test getVehicleTripInstance
-	const vps = TRAX.getVehiclePositions().filter(v => v.trip.trip_id?.includes("QR "));
+	const vps = TRAX.getVehiclePositions().filter((v) => v.trip.trip_id?.includes("QR "));
 	if (vps.length > 0) {
 		const inst = TRAX.getVehicleTripInstance(vps[0]);
-		console.log(`Vehicle ${vps[0].vehicle.id} (Trip: ${vps[0].trip.trip_id}) matched trip instance: ${inst?.instance_id}`);
+		console.log(
+			`Vehicle ${vps[0].vehicle.id} (Trip: ${vps[0].trip.trip_id}) matched trip instance: ${inst?.instance_id}`,
+		);
 	} else {
 		console.log('No rail vehicle positions ("QR ") to test getVehicleTripInstance.');
 	}

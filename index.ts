@@ -9,7 +9,13 @@ import { type TraxConfig, type TraxConfigOptions, resolveConfig } from "./config
 import { findExpressString } from "./utils/SRT.js";
 import { getServiceCapacity } from "./utils/serviceCapacity.js";
 import { attachDeparturesHelpers, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
-import { isConsideredRoute, isConsideredStop, isConsideredStopId, isConsideredTrip, isConsideredTripId } from "./utils/considered.js";
+import {
+	isConsideredRoute,
+	isConsideredStop,
+	isConsideredStopId,
+	isConsideredTrip,
+	isConsideredTripId,
+} from "./utils/considered.js";
 import { AugmentedStop } from "./utils/augmentedStop.js";
 
 export interface TRAXEvent {
@@ -111,11 +117,7 @@ export class TRAX {
 
 		const rt = this.config.realtime;
 
-		await this.gtfs.updateRealtimeFromUrl(
-			rt.realtimeAlerts,
-			rt.realtimeTripUpdates,
-			rt.realtimeVehiclePositions,
-		);
+		await this.gtfs.updateRealtimeFromUrl(rt.realtimeAlerts, rt.realtimeTripUpdates, rt.realtimeVehiclePositions);
 
 		await cache.refreshRealtimeCache(this.gtfs, this.config, this.ctx);
 	}
@@ -157,7 +159,8 @@ export class TRAX {
 
 	public getAugmentedTrips = (trip_id?: string) => cache.getAugmentedTrips(this.ctx, trip_id);
 	public getAugmentedTripInstance = (instance_id: string) => cache.getAugmentedTripInstance(this.ctx, instance_id);
-	public getVehicleTripInstance = (vehicle: RealtimeVehiclePosition) => cache.getVehicleTripInstance(this.ctx, vehicle);
+	public getVehicleTripInstance = (vehicle: RealtimeVehiclePosition) =>
+		cache.getVehicleTripInstance(this.ctx, vehicle);
 	public getAugmentedStops = (stop_id?: string) => cache.getAugmentedStops(this.ctx, stop_id);
 	public getAugmentedStopTimes = (trip_id?: string) => cache.getAugmentedStopTimes(this.ctx, trip_id);
 	public getBaseStopTimes = (trip_id: string) => cache.getBaseStopTimes(this.ctx, trip_id);

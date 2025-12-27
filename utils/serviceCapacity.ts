@@ -41,11 +41,7 @@ export async function ensureServiceCapacityData(config: TraxConfig) {
 	}
 }
 
-export function addSCI(
-	inst: AugmentedTripInstance,
-	ctx: CacheContext,
-	config: TraxConfig,
-): AugmentedTripInstance {
+export function addSCI(inst: AugmentedTripInstance, ctx: CacheContext, config: TraxConfig): AugmentedTripInstance {
 	let prevSC: ServiceCapacity = ServiceCapacity.UNKNOWN;
 	inst.stopTimes.forEach((st) => {
 		if (st.passing || st.service_capacity !== ServiceCapacity.NOT_CALCULATED) return;
