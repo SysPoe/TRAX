@@ -19,6 +19,35 @@ let prevs: {
 }[] = [];
 let lastGoTrackerFetchMs: Record<string, number> = {};
 
+function applyPlatformUpdate(
+    stopTime: { instance_id: string; actual_stop_id?: string | null; scheduled_stop_id?: string | null; actual_platform_code?: string | null; scheduled_platform_code?: string | null; rt_platform_code_updated?: boolean },
+    stopId: string,
+    platform: string | null,
+    scheduledPlatform: string | null,
+) {
+    // If the RT feed sends null, keep previously known values.
+    const newActual = platform ?? stopTime.actual_platform_code ?? null;
+    const newScheduled = scheduledPlatform ?? stopTime.scheduled_platform_code ?? null;
+
+    const changed =
+        newActual !== stopTime.actual_platform_code ||
+        newScheduled !== stopTime.scheduled_platform_code ||
+        !stopTime.rt_platform_code_updated;
+    if (!changed) return;
+
+    prevs = prevs.filter((v) => !(v.tripInstanceId === stopTime.instance_id && v.stopId === stopId));
+    prevs.push({
+        tripInstanceId: stopTime.instance_id,
+        stopId,
+        actualPlatform: newActual,
+        scheduledPlatform: newScheduled,
+    });
+
+    stopTime.actual_platform_code = newActual;
+    stopTime.scheduled_platform_code = newScheduled;
+    stopTime.rt_platform_code_updated = true;
+}
+
 function toServiceDate(epochMs: number | undefined) {
     if (epochMs === undefined || Number.isNaN(epochMs)) return undefined;
     return new Date(epochMs).toISOString().slice(0, 10).replace(/-/g, "");
@@ -176,20 +205,9 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
                             const ast = augmentedStopTimes.find((ast) => ast.actual_stop_id === st.stop_id);
 
                             if (ast?.actual_stop_id === stop_id) {
-                                prevs = prevs.filter(
-                                    (v) => !(v.tripInstanceId === ast?.instance_id && v.stopId === ast?.actual_stop_id),
-                                );
-
-                                prevs.push({
-                                    tripInstanceId: ast.instance_id,
-                                    stopId: ast.actual_stop_id,
-                                    actualPlatform: platform,
-                                    scheduledPlatform: scheduledPlatform,
-                                });
-
-                                ast.actual_platform_code = platform;
-                                ast.scheduled_platform_code = scheduledPlatform;
-                                ast.rt_platform_code_updated = true;
+                                if (platform !== null || scheduledPlatform !== null) {
+                                    applyPlatformUpdate(ast, stop_id, platform, scheduledPlatform);
+                                }
                             }
                         }
                     }
@@ -226,23 +244,9 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
                                 const ast = augmentedStopTimes.find((ast) => ast.actual_stop_id === st.stop_id);
 
                                 if (ast?.actual_stop_id === stop_id) {
-                                    prevs = prevs.filter(
-                                        (v) =>
-                                            !(
-                                                v.tripInstanceId === ast?.instance_id &&
-                                                v.stopId === ast?.actual_stop_id
-                                            ),
-                                    );
-
-                                    prevs.push({
-                                        tripInstanceId: ast.instance_id,
-                                        stopId: ast.actual_stop_id,
-                                        actualPlatform: platform,
-                                        scheduledPlatform: null,
-                                    });
-
-                                    ast.actual_platform_code = platform;
-                                    ast.rt_platform_code_updated = true;
+                                    if (platform !== null) {
+                                        applyPlatformUpdate(ast, stop_id, platform, null);
+                                    }
                                 }
                             }
                         }
@@ -320,19 +324,9 @@ async function maybeUpdatePlatformsFromGoTracker(
 
             if (!augmentedStopTimes) continue;
             const ast = augmentedStopTimes.find((ast) => ast.actual_stop_id === st.stop_id);
-            if (!ast || ast.rt_platform_code_updated) continue;
+            if (!ast) continue;
 
-            prevs = prevs.filter((v) => !(v.tripInstanceId === ast.instance_id && v.stopId === ast.actual_stop_id));
-            if (ast.actual_stop_id) prevs.push({
-                tripInstanceId: ast.instance_id,
-                stopId: ast.actual_stop_id,
-                actualPlatform: ast.actual_platform_code ?? null,
-                scheduledPlatform: ast.scheduled_platform_code ?? null,
-            });
-
-            ast.actual_platform_code = platform;
-            if (!ast.scheduled_platform_code) ast.scheduled_platform_code = platform;
-            ast.rt_platform_code_updated = true;
+            applyPlatformUpdate(ast, stop_id, platform, null);
         }
     }
 }
