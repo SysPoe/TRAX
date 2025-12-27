@@ -158,6 +158,9 @@ Represents a transit trip with live status.
     - `actualTripDates`: `string[]` - List of dates (YYYYMMDD) this trip actually runs (accounting for cancellations/additions).
     - `run`: `string` - The 4-character run ID (e.g., "1098").
     - `scheduleRelationship`: Enum (Scheduled, Added, Unsched, Canceled).
+    - `instances`: `AugmentedTripInstance[]` - Instances per service date, each carrying realtime fields such as `vehicle_model` and `vehicle_id`.
+
+Each `AugmentedTripInstance` exposes `vehicle_model: string | null` and `vehicle_id: string | null`, populated via region-specific rules (e.g., SEQ run prefixes, GO Transit vehicle IDs).
 
 ### `AugmentedStopTime`
 

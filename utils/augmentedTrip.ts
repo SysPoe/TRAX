@@ -15,6 +15,8 @@ export type AugmentedTripInstance = qdf.Trip & {
 	realtime_update: qdf.RealtimeTripUpdate | null;
 	expressInfo: ExpressInfo[];
 	run: string;
+	vehicle_model: string | null;
+	vehicle_id: string | null;
 
 	scheduledTripDates: string[];
 	actualTripDates: string[];
@@ -101,6 +103,8 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 			realtime_update: update,
 			expressInfo,
 			run: trip.trip_id.slice(-4),
+			vehicle_model: null,
+			vehicle_id: null,
 			scheduledTripDates,
 			actualTripDates,
 			runSeries: null,

@@ -29,6 +29,7 @@ import logger from "./utils/logger.js";
 import { getGtfs } from "./gtfsInterfaceLayer.js";
 import * as qdf from "qdf-gtfs";
 import { addSC, addSCI, ensureServiceCapacityData } from "./utils/serviceCapacity.js";
+import { addVehicleModel, addVehicleModelTrip } from "./utils/vehicleModel.js";
 import { TraxConfig } from "./config.js";
 import ensureQRTEnabled from "./region-specific/SEQ/qr-travel/enabled.js";
 import { getServiceDayStart } from "./utils/time.js";
@@ -264,16 +265,16 @@ export function getAugmentedTrips(ctx: CacheContext, trip_id?: string): Augmente
 	const { raw, augmented } = context;
 	if (trip_id) {
 		const trip = augmented.tripsRec.get(trip_id);
-		if (trip) return [addSC(trip, ctx, context.config)];
+		if (trip) return [addVehicleModelTrip(addSC(trip, ctx, context.config), ctx, context.config)];
 		const rawTrip = raw.tripsRec.get(trip_id);
 		if (rawTrip) {
 			const augmentedTrip = augmentTrip(rawTrip, context);
 			augmented.tripsRec.set(trip_id, augmentedTrip);
-			return [addSC(augmentedTrip, ctx, context.config)];
+			return [addVehicleModelTrip(addSC(augmentedTrip, ctx, context.config), ctx, context.config)];
 		}
 		return [];
 	}
-	return Array.from(augmented.tripsRec.values()).map((v) => addSC(v, ctx, context.config));
+	return Array.from(augmented.tripsRec.values()).map((v) => addVehicleModelTrip(addSC(v, ctx, context.config), ctx, context.config));
 }
 
 export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string): AugmentedTripInstance | null {
@@ -282,7 +283,7 @@ export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string)
 		let res = getAugmentedTrips(ctx, JSON.parse(atob(instance_id))[0])[0].instances.find(
 			(v) => v.instance_id === instance_id,
 		);
-		return res ? addSCI(res, ctx, context.config) : null;
+		return res ? addVehicleModel(addSCI(res, ctx, context.config), ctx, context.config) : null;
 	} catch {
 		return null;
 	}
