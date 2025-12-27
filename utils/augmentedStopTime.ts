@@ -4,6 +4,7 @@ import * as cache from "../cache.js";
 import { findPassingStopTimes } from "./SRT.js";
 import { getPlatformData as loadPlatformData } from "./platformData.js";
 import { ServiceCapacity } from "./serviceCapacity.js";
+import { getServiceDayStart } from "./time.js";
 
 export type AugmentedStopTime = {
 	_stopTime: qdf.StopTime | null;
@@ -269,10 +270,7 @@ export function augmentStopTimes(
 
 	const mergedList: MergedStop[] = [];
 
-	const y = parseInt(serviceDate.slice(0, 4));
-	const m = parseInt(serviceDate.slice(4, 6)) - 1;
-	const d = parseInt(serviceDate.slice(6, 8));
-	const serviceDayStart = new Date(Date.UTC(y, m, d) - 10 * 3600 * 1000).getTime() / 1000;
+	const serviceDayStart = getServiceDayStart(serviceDate, ctx.config.timezone);
 
 	for (const seq of sortedSequences) {
 		const entry = sequenceMap.get(seq)!;

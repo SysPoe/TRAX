@@ -2,7 +2,8 @@ export type SRTEntry = { from: string; to: string; travelTrain: number };
 
 import type { QRTTrainMovementDTO } from "./types.js";
 import { loadDataFile } from "../../../utils/fs.js";
-import { parseBrisbaneTime } from "../../../utils/time.js";
+import { parseTimeWithConfig } from "../../../utils/time.js";
+import { TraxConfig } from "../../../config.js";
 import { CacheContext } from "../../../cache.js";
 
 export interface QRTSRTStop {
@@ -41,10 +42,10 @@ function getSRTData(ctx: CacheContext): SRTEntry[] {
     return data;
 }
 
-function getDelay(delaySecs: number | null = null, departureTime: string | null) {
+function getDelay(delaySecs: number | null = null, departureTime: string | null, config: TraxConfig) {
 	if (delaySecs === null || departureTime === null) return { delayString: "scheduled", delayClass: "scheduled" };
 
-	let departsInSecs = Math.round(parseBrisbaneTime(departureTime) - Date.now()) / 1000;
+	let departsInSecs = Math.round(parseTimeWithConfig(departureTime, config.timezone) - Date.now()) / 1000;
 	departsInSecs = Math.round(departsInSecs / 60) * 60;
 	const roundedDelay = delaySecs ? Math.round(delaySecs / 60) * 60 : null;
 	const delayString =
@@ -73,9 +74,10 @@ function getDelay(delaySecs: number | null = null, departureTime: string | null)
 function pushSRT(
 	arr: QRTSRTStop[],
 	stop: Exclude<QRTSRTStop, "departureDelayClass" | "departureDelayString" | "arrivalDelayClass" | "arrivalDelayString">,
+	config: TraxConfig
 ) {
-	let arrivalDelayInfo = getDelay(stop.arrivalDelaySeconds ?? null, stop.actualArrival ?? null);
-	let departureDelayInfo = getDelay(stop.departureDelaySeconds ?? null, stop.actualDeparture ?? null);
+	let arrivalDelayInfo = getDelay(stop.arrivalDelaySeconds ?? null, stop.actualArrival ?? null, config);
+	let departureDelayInfo = getDelay(stop.departureDelaySeconds ?? null, stop.actualDeparture ?? null, config);
 	type delayClass = "on-time" | "scheduled" | "late" | "very-late" | "early";
 	arr.push({
 		...stop,
@@ -100,10 +102,11 @@ function pushSRT(
 
 export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO[], ctx: CacheContext): QRTSRTStop[] {
     const srtData = getSRTData(ctx);
+	const config = ctx.config;
 	function calcDelay(actual?: string, planned?: string): number | null {
 		if (!actual || !planned || actual === "0001-01-01T00:00:00" || planned === "0001-01-01T00:00:00") return null;
-		const a = parseBrisbaneTime(actual, "Z");
-		const p = parseBrisbaneTime(planned, "Z");
+		const a = parseTimeWithConfig(actual, config.timezone);
+		const p = parseTimeWithConfig(planned, config.timezone);
 		if (isNaN(a) || isNaN(p)) return null;
 		return Math.round((a - p) / 1000);
 	}
@@ -138,11 +141,11 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 				actualDeparture: from.ActualDeparture,
 				arrivalDelaySeconds: calcDelay(from.ActualArrival, from.PlannedArrival),
 				departureDelaySeconds: calcDelay(from.ActualDeparture, from.PlannedDeparture),
-			});
+			}, config);
 			if (from.ActualDeparture && from.ActualDeparture !== "0001-01-01T00:00:00") {
-				prevTime = parseBrisbaneTime(from.ActualDeparture, "Z");
+				prevTime = parseTimeWithConfig(from.ActualDeparture, config.timezone);
 			} else if (from.PlannedDeparture && from.PlannedDeparture !== "0001-01-01T00:00:00") {
-				prevTime = parseBrisbaneTime(from.PlannedDeparture, "Z");
+				prevTime = parseTimeWithConfig(from.PlannedDeparture, config.timezone);
 			} else {
 				prevTime = null;
 			}
@@ -169,7 +172,7 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 				estimatedPassingTime: estPassDate ? estPassDate.toISOString().slice(0, 19) : undefined,
 				arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
 				departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
-			});
+			}, config);
 			prevTime = estPass ?? null;
 			continue;
 		}
@@ -220,9 +223,9 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 			let fromTime = prevTime;
 			let toTime: number | null = null;
 			if (to.ActualArrival && to.ActualArrival !== "0001-01-01T00:00:00") {
-				toTime = parseBrisbaneTime(to.ActualArrival, "Z");
+				toTime = parseTimeWithConfig(to.ActualArrival, config.timezone);
 			} else if (to.PlannedArrival && to.PlannedArrival !== "0001-01-01T00:00:00") {
-				toTime = parseBrisbaneTime(to.PlannedArrival, "Z");
+				toTime = parseTimeWithConfig(to.PlannedArrival, config.timezone);
 			}
 
 			let scaleFactor = 1.0;
@@ -267,7 +270,7 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 							orig?.ActualDeparture ?? estPassStr,
 							orig?.PlannedDeparture ?? estPassStr,
 						),
-					});
+					}, config);
 					prevTime = estPass ?? null;
 				}
 			}
@@ -283,11 +286,11 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 				srtMinutes: totalSRT,
 				arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
 				departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
-			});
+			}, config);
 			if (to.ActualDeparture && to.ActualDeparture !== "0001-01-01T00:00:00") {
-				prevTime = parseBrisbaneTime(to.ActualDeparture, "Z");
+				prevTime = parseTimeWithConfig(to.ActualDeparture, config.timezone);
 			} else if (to.PlannedDeparture && to.PlannedDeparture !== "0001-01-01T00:00:00") {
-				prevTime = parseBrisbaneTime(to.PlannedDeparture, "Z");
+				prevTime = parseTimeWithConfig(to.PlannedDeparture, config.timezone);
 			} else {
 				prevTime = toTime;
 			}
@@ -304,11 +307,11 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 			actualDeparture: to.ActualDeparture,
 			arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
 			departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
-		});
+		}, config);
 		if (to.ActualDeparture && to.ActualDeparture !== "0001-01-01T00:00:00") {
-			prevTime = parseBrisbaneTime(to.ActualDeparture, "Z");
+			prevTime = parseTimeWithConfig(to.ActualDeparture, config.timezone);
 		} else if (to.PlannedDeparture && to.PlannedDeparture !== "0001-01-01T00:00:00") {
-			prevTime = parseBrisbaneTime(to.PlannedDeparture, "Z");
+			prevTime = parseTimeWithConfig(to.PlannedDeparture, config.timezone);
 		}
 	}
 	return result;

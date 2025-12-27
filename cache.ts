@@ -30,6 +30,7 @@ import * as qdf from "qdf-gtfs";
 import { addSC, addSCI, ensureServiceCapacityData } from "./utils/serviceCapacity.js";
 import { TraxConfig } from "./config.js";
 import ensureQRTEnabled from "./region-specific/SEQ/qr-travel/enabled.js";
+import { getServiceDayStart } from "./utils/time.js";
 
 class LRUCache<K, V> {
 	private cache = new Map<K, V>();
@@ -306,10 +307,7 @@ export function getVehicleTripInstance(ctx: CacheContext, vehicle: RealtimeVehic
 	for (const instance of augmentedTrip.instances) {
 		if (instance.stopTimes.length === 0) continue;
 
-		const y = parseInt(instance.serviceDate.slice(0, 4));
-		const m = parseInt(instance.serviceDate.slice(4, 6)) - 1;
-		const d = parseInt(instance.serviceDate.slice(6, 8));
-		const serviceDayStart = new Date(Date.UTC(y, m, d) - 10 * 3600 * 1000).getTime() / 1000;
+		const serviceDayStart = getServiceDayStart(instance.serviceDate, ctx.config.timezone);
 
 		const startTime =
 			serviceDayStart +

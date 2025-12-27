@@ -1,7 +1,7 @@
 import { expandWithSRTPassingStops } from "./srt.js";
 import logger from "../../../utils/logger.js";
 import { getConsideredStations } from "../../../utils/stations.js";
-import { parseBrisbaneTime } from "../../../utils/time.js";
+import { parseTimeWithConfig, getTimezoneOffsetSeconds } from "../../../utils/time.js";
 import type {
 	QRTGetServiceResponse,
 	QRTPlace,
@@ -99,13 +99,18 @@ export async function getAllServices(config: TraxConfig) {
 
 export async function getServiceUpdates(config: TraxConfig, startDate?: string, endDate?: string): Promise<QRTServiceUpdate[]> {
 	ensureQRTEnabled(config);
-	const now = new Date(Date.now() + 36000000);
+	const offsetMs = getTimezoneOffsetSeconds(config.timezone) * 1000;
+	const now = new Date(Date.now() + offsetMs);
 	const defaultStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 	const defaultEnd = new Date(defaultStart);
 	defaultEnd.setUTCFullYear(defaultEnd.getUTCFullYear() + 1);
 
 	const start = startDate ?? defaultStart.toISOString().slice(0, 10);
 	const end = endDate ?? defaultEnd.toISOString().slice(0, 10);
+
+	const isoOffset = (offsetMs >= 0 ? "+" : "-") + 
+		Math.floor(Math.abs(offsetMs) / 3600000).toString().padStart(2, "0") + ":" + 
+		((Math.abs(offsetMs) % 3600000) / 60000).toString().padStart(2, "0");
 
 	let res = await fetch("https://www.queenslandrailtravel.com.au/SPWebApp/api/ContentQuery/GetItems", {
 		body: JSON.stringify({
@@ -128,7 +133,7 @@ export async function getServiceUpdates(config: TraxConfig, startDate?: string, 
 					Operand: "Geq",
 					FieldType: "DateTime",
 					IncludeTimeValue: false,
-					Values: [start + "T00:00:00+10:00"],
+					Values: [start + "T00:00:00" + isoOffset],
 					NextJoin: "And",
 				},
 				{
@@ -136,7 +141,7 @@ export async function getServiceUpdates(config: TraxConfig, startDate?: string, 
 					Operand: "Leq",
 					FieldType: "DateTime",
 					IncludeTimeValue: false,
-					Values: [end + "T00:00:00+10:00"],
+					Values: [end + "T00:00:00" + isoOffset],
 					NextJoin: "And",
 				},
 			],
@@ -175,8 +180,8 @@ function convertQRTServiceToTravelTrip(
 			movement.PlannedArrival !== "0001-01-01T00:00:00" &&
 			movement.ActualArrival !== "0001-01-01T00:00:00"
 		) {
-			const plannedArr = parseBrisbaneTime(movement.PlannedArrival, "Z");
-			const actualArr = parseBrisbaneTime(movement.ActualArrival, "Z");
+			const plannedArr = parseTimeWithConfig(movement.PlannedArrival, ctx.config.timezone);
+			const actualArr = parseTimeWithConfig(movement.ActualArrival, ctx.config.timezone);
 			arrivalDelaySeconds = Math.round((actualArr - plannedArr) / 1000);
 		}
 		if (
@@ -185,8 +190,8 @@ function convertQRTServiceToTravelTrip(
 			movement.PlannedDeparture !== "0001-01-01T00:00:00" &&
 			movement.ActualDeparture !== "0001-01-01T00:00:00"
 		) {
-			const plannedDep = parseBrisbaneTime(movement.PlannedDeparture, "Z");
-			const actualDep = parseBrisbaneTime(movement.ActualDeparture, "Z");
+			const plannedDep = parseTimeWithConfig(movement.PlannedDeparture, ctx.config.timezone);
+			const actualDep = parseTimeWithConfig(movement.ActualDeparture, ctx.config.timezone);
 			departureDelaySeconds = Math.round((actualDep - plannedDep) / 1000);
 			const delaySecs = departureDelaySeconds;
 			if (delaySecs !== null) {
@@ -214,10 +219,12 @@ function convertQRTServiceToTravelTrip(
 		let arrivalDelayInfo = getDelay(
 			arrivalDelaySeconds,
 			actualArrival === "0001-01-01T00:00:00" ? movement.PlannedArrival : actualArrival,
+			ctx.config
 		);
 		let departureDelayInfo = getDelay(
 			departureDelaySeconds,
 			actualDeparture === "0001-01-01T00:00:00" ? movement.PlannedDeparture : actualDeparture,
+			ctx.config
 		);
 
 		type DelayClass = "on-time" | "scheduled" | "late" | "very-late" | "early";
@@ -277,10 +284,10 @@ function convertQRTServiceToTravelTrip(
 	};
 }
 
-function getDelay(delaySecs: number | null = null, departureTime: string | null) {
+function getDelay(delaySecs: number | null = null, departureTime: string | null, config: TraxConfig) {
 	if (delaySecs === null || departureTime === null) return { delayString: "scheduled", delayClass: "scheduled" };
 
-	let departsInSecs = Math.round(parseBrisbaneTime(departureTime) - Date.now()) / 1000;
+	let departsInSecs = Math.round(parseTimeWithConfig(departureTime, config.timezone) - Date.now()) / 1000;
 	departsInSecs = Math.round(departsInSecs / 60) * 60;
 	const roundedDelay = delaySecs ? Math.round(delaySecs / 60) * 60 : null;
 	const delayString =

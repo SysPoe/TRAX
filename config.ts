@@ -8,6 +8,7 @@ export interface TraxConfig {
 	logFunction: (message: string) => void;
 	progressLog: (info: ProgressInfo) => void;
 	region: "SEQ" | "GTHA" | "none";
+	timezone: string;
 	realtime: {
 		realtimeAlerts: (string | GTFSFeedConfig)[] | null;
 		realtimeTripUpdates: (string | GTFSFeedConfig)[] | null;
@@ -18,6 +19,7 @@ export interface TraxConfig {
 export type TraxConfigOptions = Partial<Omit<TraxConfig, "realtime">> & {
 	url?: string;
 	headers?: { [key: string]: string } | null;
+	timezone?: string;
 	realtime?: {
 		realtimeAlerts?: (string | GTFSFeedConfig)[] | string | GTFSFeedConfig | null;
 		realtimeTripUpdates?: (string | GTFSFeedConfig)[] | string | GTFSFeedConfig | null;
@@ -25,10 +27,11 @@ export type TraxConfigOptions = Partial<Omit<TraxConfig, "realtime">> & {
 	} | null;
 };
 
-export const PRESETS: Record<"SEQ" | "GTHA", ((apiKey: string) => TraxConfigOptions) | (() => TraxConfigOptions)> = {
+export const PRESETS: Record<"SEQ" | "GTHA", (apiKey?: string | undefined) => TraxConfigOptions> = {
 	SEQ: () => ({
 		urls: ["https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip"],
 		region: "SEQ",
+		timezone: "Australia/Brisbane",
 		realtime: {
 			realtimeAlerts: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts"],
 			realtimeTripUpdates: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates"],
@@ -36,12 +39,22 @@ export const PRESETS: Record<"SEQ" | "GTHA", ((apiKey: string) => TraxConfigOpti
 		},
 	} as TraxConfigOptions),
 	GTHA: (apiKey) => ({
-		urls: ["https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/GO-GTFS.zip", "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/UP-GTFS.zip"],
+		urls: ["https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/UP-GTFS.zip", "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/GO-GTFS.zip"],
 		region: "GTHA",
+		timezone: "America/Toronto",
 		realtime: {
-			realtimeAlerts: ["https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/Alerts?key=" + apiKey],
-			realtimeTripUpdates: ["https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/TripUpdates?key=" + apiKey],
-			realtimeVehiclePositions: ["https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/VehiclePosition?key=" + apiKey],
+			realtimeAlerts: [
+				"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/Alerts?key=" + apiKey,
+				"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/Alerts?key=" + apiKey
+			],
+			realtimeTripUpdates: [
+				"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/TripUpdates?key=" + apiKey,
+				"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/TripUpdates?key=" + apiKey
+			],
+			realtimeVehiclePositions: [
+				"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/VehiclePosition?key=" + apiKey,
+				"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/VehiclePosition?key=" + apiKey
+			],
 		}
 	} as TraxConfigOptions),
 };
@@ -66,6 +79,7 @@ export function resolveConfig(options: TraxConfigOptions = {}): TraxConfig {
 		logFunction: (message: string) => logger.debug(message, { module: "gtfs" }),
 		progressLog: (info: ProgressInfo) => logger.progress(info),
 		region: "SEQ",
+		timezone: "Australia/Brisbane",
 		realtime: {
 			realtimeAlerts: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts"],
 			realtimeTripUpdates: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates"],
