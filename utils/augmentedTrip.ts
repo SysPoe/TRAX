@@ -49,7 +49,10 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 
 	const rawStopTimes = cache.getRawStopTimes(ctx, trip.trip_id).sort((a, b) => a.stop_sequence - b.stop_sequence);
 
-	let parentStops = rawStopTimes.map((st) => cache.getRawStops(ctx, st.stop_id)[0]?.parent_station ?? "");
+	let parentStops = rawStopTimes.map((st) => {
+		const s = cache.getRawStops(ctx, st.stop_id)[0];
+		return s ? (s.parent_station ?? s.stop_id) : st.stop_id;
+	});
 	let expressInfo = findExpress(
 		parentStops.filter((id): id is string => !!id),
 		ctx,
