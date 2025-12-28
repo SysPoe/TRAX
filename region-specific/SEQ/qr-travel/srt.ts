@@ -2,7 +2,7 @@ export type SRTEntry = { from: string; to: string; travelTrain: number };
 
 import type { QRTTrainMovementDTO } from "./types.js";
 import { loadDataFile } from "../../../utils/fs.js";
-import { parseTimeWithConfig } from "../../../utils/time.js";
+import { parseTimeWithConfig, getLocalISOString } from "../../../utils/time.js";
 import { TraxConfig } from "../../../config.js";
 import { CacheContext } from "../../../cache.js";
 
@@ -169,7 +169,7 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 				actualArrival: to.ActualArrival,
 				actualDeparture: to.ActualDeparture,
 				srtMinutes: seg.travelTrain,
-				estimatedPassingTime: estPassDate ? estPassDate.toISOString().slice(0, 19) : undefined,
+				estimatedPassingTime: estPassDate ? getLocalISOString(estPassDate, config.timezone) : undefined,
 				arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
 				departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
 			}, config);
@@ -249,7 +249,7 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 					}
 
 					let estPassDate = estPass ? new Date(estPass) : undefined;
-					let estPassStr = estPassDate ? estPassDate.toISOString().slice(0, 19) : undefined;
+					let estPassStr = estPassDate ? getLocalISOString(estPassDate, config.timezone) : undefined;
 
 					pushSRT(result, {
 					placeCode: orig?.PlaceCode ?? "",

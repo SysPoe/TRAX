@@ -23,7 +23,12 @@ async function main() {
 	let end_realtime = Date.now();
 
 	const stop = TRAX.getAugmentedStops("UN")[0];
-	const date = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10).replaceAll("-", "");
+	const tomorrow = new Date();
+	tomorrow.setDate(tomorrow.getDate() + 1);
+	const date =
+		tomorrow.getFullYear().toString() +
+		(tomorrow.getMonth() + 1).toString().padStart(2, "0") +
+		tomorrow.getDate().toString().padStart(2, "0");
 	const deps = TRAX.utils.departures.getDeparturesForStop(stop, date, "08:00:00", "23:59:59");
 
 	console.log(deps.length + " testdeps");

@@ -34,13 +34,13 @@ export function getDeparturesForStop(
 
 	const toDate = (d: string): Date => {
 		const dstr = d.padStart(8, "0");
-		return new Date(dstr.slice(0, 4) + "-" + dstr.slice(4, 6) + "-" + dstr.slice(6, 8));
+		return new Date(Date.UTC(Number(dstr.slice(0, 4)), Number(dstr.slice(4, 6)) - 1, Number(dstr.slice(6, 8))));
 	};
 
 	const getMatchingTripDate = (tripDates: string[]): string | null => {
 		for (let df = daysForwardStart; df <= daysForwardEnd; df++) {
 			const checkDate = toDate(date);
-			checkDate.setDate(checkDate.getDate() + df);
+			checkDate.setUTCDate(checkDate.getUTCDate() + df);
 			const checkDateNum = checkDate.toISOString().slice(0, 10).replace(/-/g, "");
 			if (tripDates.includes(checkDateNum)) return checkDateNum;
 		}

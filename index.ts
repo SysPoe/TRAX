@@ -153,8 +153,7 @@ export class TRAX {
 	}
 
 	public today(): string {
-		const offsetMs = timeUtils.getTimezoneOffsetSeconds(this.config.timezone) * 1000;
-		return new Date(Date.now() + offsetMs).toISOString().slice(0, 10).replace(/-/g, "");
+		return timeUtils.getServiceDate(new Date(), this.config.timezone);
 	}
 
 	public getAugmentedTrips = (trip_id?: string) => cache.getAugmentedTrips(this.ctx, trip_id);

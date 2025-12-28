@@ -20,6 +20,44 @@ export function secTimeDiff(t1: string, t2: string): number {
 	return diff;
 }
 
+export function getServiceDate(date: Date, timezone: string): string {
+	const parts = new Intl.DateTimeFormat("en-CA", {
+		timeZone: timezone,
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+	}).formatToParts(date);
+	const year = parts.find((p) => p.type === "year")!.value;
+	const month = parts.find((p) => p.type === "month")!.value;
+	const day = parts.find((p) => p.type === "day")!.value;
+	return `${year}${month}${day}`;
+}
+
+export function getLocalISOString(date: Date, timezone: string): string {
+	const format = (type: Intl.DateTimeFormatPartTypes, parts: Intl.DateTimeFormatPart[]) =>
+		parts.find((p) => p.type === type)!.value;
+
+	const parts = new Intl.DateTimeFormat("en-CA", {
+		timeZone: timezone,
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+		hourCycle: "h23",
+	}).formatToParts(date);
+
+	const year = format("year", parts);
+	const month = format("month", parts);
+	const day = format("day", parts);
+	const hour = format("hour", parts);
+	const minute = format("minute", parts);
+	const second = format("second", parts);
+
+	return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
+}
+
 export function getTimezoneOffsetSeconds(timezone: string, date: Date = new Date()): number {
 	const parts = new Intl.DateTimeFormat("en-US", {
 		timeZone: timezone,
@@ -59,16 +97,11 @@ export function parseTimeWithConfig(dateStr: string, timezone: string): number {
 		return new Date(dateStr).getTime();
 	}
 	// Add offset from config
-	const offsetSecs = getTimezoneOffsetSeconds(timezone, new Date(dateStr + "Z"));
-	const offsetHours = Math.floor(Math.abs(offsetSecs) / 3600);
-	const offsetMins = (Math.abs(offsetSecs) % 3600) / 60;
-	const offsetStr =
-		(offsetSecs >= 0 ? "+" : "-") +
-		offsetHours.toString().padStart(2, "0") +
-		":" +
-		offsetMins.toString().padStart(2, "0");
-
-	return new Date(dateStr + offsetStr).getTime();
+	const now = new Date();
+	const offsetMs = getTimezoneOffsetSeconds(timezone, now) * 1000;
+	const dummyDate = new Date(dateStr + "Z"); // Treat as UTC first
+	// Shift back by offset to get actual UTC time
+	return dummyDate.getTime() - offsetMs;
 }
 
 export function parseBrisbaneTime(dateStr: string, assume: string = "+10:00"): number {
@@ -85,6 +118,8 @@ export default {
 	secTimeDiff,
 	getTimezoneOffsetSeconds,
 	getServiceDayStart,
+	getServiceDate,
+	getLocalISOString,
 	parseTimeWithConfig,
 	parseBrisbaneTime,
 };

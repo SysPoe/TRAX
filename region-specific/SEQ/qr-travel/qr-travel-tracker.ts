@@ -1,7 +1,7 @@
 import { expandWithSRTPassingStops } from "./srt.js";
 import logger from "../../../utils/logger.js";
 import { getConsideredStations } from "../../../utils/stations.js";
-import { parseTimeWithConfig, getTimezoneOffsetSeconds } from "../../../utils/time.js";
+import { parseTimeWithConfig, getTimezoneOffsetSeconds, getServiceDate, getLocalISOString } from "../../../utils/time.js";
 import type {
 	QRTGetServiceResponse,
 	QRTPlace,
@@ -99,18 +99,25 @@ export async function getAllServices(config: TraxConfig) {
 
 export async function getServiceUpdates(config: TraxConfig, startDate?: string, endDate?: string): Promise<QRTServiceUpdate[]> {
 	ensureQRTEnabled(config);
-	const offsetMs = getTimezoneOffsetSeconds(config.timezone) * 1000;
-	const now = new Date(Date.now() + offsetMs);
-	const defaultStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-	const defaultEnd = new Date(defaultStart);
-	defaultEnd.setUTCFullYear(defaultEnd.getUTCFullYear() + 1);
+	const now = new Date();
 
-	const start = startDate ?? defaultStart.toISOString().slice(0, 10);
-	const end = endDate ?? defaultEnd.toISOString().slice(0, 10);
+	// Get start of current month in target timezone
+	const startOfMonth = new Date(now);
+	startOfMonth.setDate(1);
+	startOfMonth.setHours(0, 0, 0, 0);
 
-	const isoOffset = (offsetMs >= 0 ? "+" : "-") + 
-		Math.floor(Math.abs(offsetMs) / 3600000).toString().padStart(2, "0") + ":" + 
-		((Math.abs(offsetMs) % 3600000) / 60000).toString().padStart(2, "0");
+	const defaultStart = getServiceDate(startOfMonth, config.timezone).slice(0, 8); // This gives YYYYMMDD
+	// But it seems it wants YYYY-MM-DD for start/end variables in this context
+	const start = startDate ?? getLocalISOString(startOfMonth, config.timezone).slice(0, 10);
+
+	const endOfNextYear = new Date(startOfMonth);
+	endOfNextYear.setFullYear(endOfNextYear.getFullYear() + 1);
+	const end = endDate ?? getLocalISOString(endOfNextYear, config.timezone).slice(0, 10);
+
+	const offsetSecs = getTimezoneOffsetSeconds(config.timezone, now);
+	const isoOffset = (offsetSecs >= 0 ? "+" : "-") +
+		Math.floor(Math.abs(offsetSecs) / 3600).toString().padStart(2, "0") + ":" +
+		((Math.abs(offsetSecs) % 3600) / 60).toString().padStart(2, "0");
 
 	let res = await fetch("https://www.queenslandrailtravel.com.au/SPWebApp/api/ContentQuery/GetItems", {
 		body: JSON.stringify({
@@ -164,7 +171,7 @@ function convertQRTServiceToTravelTrip(
 	serviceResponse: QRTGetServiceResponse,
 	direction: string,
 	line: string,
-    ctx: CacheContext
+	ctx: CacheContext
 ): QRTTravelTrip {
 	const serviceMeta = serviceResponse;
 	const gtfsStops = getConsideredStations(ctx);
@@ -318,7 +325,7 @@ async function processService(
 	direction: any,
 	service: any,
 	services: QRTService[],
-    ctx: CacheContext
+	ctx: CacheContext
 ): Promise<QRTTravelTrip | null> {
 	try {
 		const serviceResponse = await trackTrain(service.ServiceId, service.ServiceDate, ctx.config);
@@ -337,7 +344,7 @@ async function processService(
 					serviceResponse,
 					direction.DirectionName,
 					serviceLine.ServiceLineName,
-                    ctx
+					ctx
 				);
 
 				const trainMovements: QRTTrainMovementDTO[] = travelTrip.stops.map((s) => {
@@ -360,8 +367,8 @@ async function processService(
 						PlannedDeparture: s.plannedDeparture,
 						ActualArrival: s.actualArrival,
 						ActualDeparture: s.actualDeparture,
-				ArrivalDelaySeconds: s.arrivalDelaySeconds ?? 0,
-				DepartureDelaySeconds: s.departureDelaySeconds ?? 0,
+						ArrivalDelaySeconds: s.arrivalDelaySeconds ?? 0,
+						DepartureDelaySeconds: s.departureDelaySeconds ?? 0,
 					};
 				});
 				const expanded = expandWithSRTPassingStops(trainMovements, ctx);
