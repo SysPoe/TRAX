@@ -82,9 +82,9 @@ function propagatePlatformToNextTripInBlock(
 	const blockTrips = blockMap
 		? blockMap.get(currentInst.block_id) || []
 		: (ctx.augmented.serviceDateTrips.get(currentInst.serviceDate) ?? [])
-				.map((id) => ctx.augmented.tripsRec.get(id))
-				.filter(Boolean)
-				.flatMap((at) => at!.instances.filter((i) => i.serviceDate === currentInst.serviceDate));
+			.map((id) => ctx.augmented.tripsRec.get(id))
+			.filter(Boolean)
+			.flatMap((at) => at!.instances.filter((i) => i.serviceDate === currentInst.serviceDate));
 
 	for (const inst of blockTrips) {
 		if (inst.block_id !== currentInst.block_id || inst.instance_id === currentInst.instance_id) continue;
@@ -119,9 +119,9 @@ function propagateVehicleInfoToBlock(
 	const blockTrips = blockMap
 		? blockMap.get(blockId) || []
 		: (ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [])
-				.map((id) => ctx.augmented.tripsRec.get(id))
-				.filter(Boolean)
-				.flatMap((at) => at!.instances.filter((i) => i.serviceDate === serviceDateStr));
+			.map((id) => ctx.augmented.tripsRec.get(id))
+			.filter(Boolean)
+			.flatMap((at) => at!.instances.filter((i) => i.serviceDate === serviceDateStr));
 
 	const info = {
 		vehicle_id: vehicleId,
@@ -210,6 +210,8 @@ const gotrackerMobile_stop_conversion: Record<string, string[]> = {
 };
 
 export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
+	const timer = ctx.augmented.timer;
+	timer.start("updateGTHAPlatforms");
 	const now = new Date();
 	const serviceDateStr = getServiceDate(now, ctx.config.timezone);
 	const serviceDayStart = getServiceDayStart(serviceDateStr, ctx.config.timezone);
@@ -445,8 +447,15 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 		blockMap.get(inst.block_id)!.push(inst);
 	}
 
+	timer.start("updateGTHAPlatforms:AVL");
 	await updateGTHAAVL(ctx, tripNumberToIds, serviceDateStr, blockMap);
+	timer.stop("updateGTHAPlatforms:AVL");
+
+	timer.start("updateGTHAPlatforms:Schedule");
 	await updateGTHASchedule(ctx, tripNumberToIds, serviceDateStr, blockMap);
+	timer.stop("updateGTHAPlatforms:Schedule");
+
+	timer.stop("updateGTHAPlatforms");
 }
 
 export async function updateGTHASchedule(
@@ -455,6 +464,8 @@ export async function updateGTHASchedule(
 	serviceDateStr: string,
 	blockMap?: Map<string, any[]>,
 ) {
+	const timer = ctx.augmented.timer;
+	timer.start("updateGTHASchedule");
 	try {
 		const scheduleUrl = "https://www.gotracker.ca/gotracker/mobile/proxy/web/Schedule/Today/All";
 		const response = await fetch(scheduleUrl, { headers: { Referer: GOTRACKER_REFERRER } });
@@ -550,6 +561,7 @@ export async function updateGTHASchedule(
 			function: "updateGTHASchedule",
 		});
 	}
+	timer.stop("updateGTHASchedule");
 }
 
 export async function updateGTHAAVL(
@@ -558,6 +570,8 @@ export async function updateGTHAAVL(
 	serviceDateStr: string,
 	blockMap?: Map<string, any[]>,
 ) {
+	const timer = ctx.augmented.timer;
+	timer.start("updateGTHAAVL");
 	try {
 		const avlUrl = "https://www.gotracker.ca/gotracker/mobile/proxy/web/AVL/InService/Trip2/All";
 		const response = await fetch(avlUrl, { headers: { Referer: GOTRACKER_REFERRER } });
@@ -661,6 +675,7 @@ export async function updateGTHAAVL(
 			function: "updateGTHAAVL",
 		});
 	}
+	timer.stop("updateGTHAAVL");
 }
 
 async function maybeUpdatePlatformsFromGoTracker(

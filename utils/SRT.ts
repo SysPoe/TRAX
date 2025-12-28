@@ -59,6 +59,8 @@ function getPatternSignature(stopTimes: any[]): string {
 }
 
 function generateNetworkData(ctx: cache.CacheContext): NetworkData {
+	const timer = ctx.augmented.timer;
+	timer.start("SRT:generateNetworkData");
 	const gtfs = ctx.gtfs ?? getGtfs();
 	const trips = gtfs.getTrips();
 	const railTrips = trips.filter((t) => gtfs.getRoutes({ route_id: t.route_id })[0]?.route_type === 2);
@@ -178,6 +180,7 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 
 	const result = { matrix, adjacency, lastUpdated: Date.now() };
 	writeCacheFile(CACHE_FILE, JSON.stringify(result), ctx.config.cacheDir);
+	timer.stop("SRT:generateNetworkData");
 	return result;
 }
 
@@ -245,6 +248,8 @@ function findPathBFS(start: string, end: string, ctx: cache.CacheContext): strin
 }
 
 export function findExpress(givenStops: string[], ctx: cache.CacheContext): ExpressInfo[] {
+	const timer = ctx.augmented.timer;
+	timer.start("SRT:findExpress");
 	const result: ExpressInfo[] = [];
 
 	for (let i = 0; i < givenStops.length - 1; i++) {
@@ -278,6 +283,7 @@ export function findExpress(givenStops: string[], ctx: cache.CacheContext): Expr
 			});
 		}
 	}
+	timer.stop("SRT:findExpress");
 	return result;
 }
 

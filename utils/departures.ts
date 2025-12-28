@@ -27,6 +27,9 @@ export function getDeparturesForStop(
 	const parentId = stop.parent_stop_id;
 	const childIds = stop.child_stop_ids;
 	const validStops = new Set<string>([stop.stop_id, parentId, ...(childIds ?? [])].filter(Boolean) as string[]);
+	const timer = ctx.augmented.timer;
+	timer.start("getDeparturesForStop");
+
 	const timingStart = Date.now();
 	const results: { st: AugmentedStopTime; ts: number }[] = [];
 	const seenStopTimes = new Set<AugmentedStopTime>();
@@ -40,6 +43,7 @@ export function getDeparturesForStop(
 	serviceDayStartCache.set(date, baseServiceDayStart);
 
 	let candidateCount = 0;
+	timer.start("getDeparturesForStop:search");
 	for (const stopId of validStops) {
 		const candidates = cache.getStopDeparturesCached(ctx, stopId, date);
 		candidateCount += candidates.length;
@@ -69,14 +73,19 @@ export function getDeparturesForStop(
 			}
 		}
 	}
+	timer.stop("getDeparturesForStop:search");
 
 	// Cache for express strings per trip and stop to avoid redundant findExpressString calls
 	const expressStringCache = new Map<string, string>();
 
-	return results
+	timer.start("getDeparturesForStop:mapping");
+	const finalResults = results
 		.sort((a, b) => a.ts - b.ts)
 		.map(({ st, ts }, index) => {
+			timer.start("getDeparturesForStop:mapping:getInstance");
 			const instance = cache.getAugmentedTripInstance(ctx, st.instance_id);
+			timer.stop("getDeparturesForStop:mapping:getInstance");
+			
 			if (!instance) return null;
 
 			const stopId = st.actual_parent_station_id ?? st.actual_stop_id ?? "";
@@ -85,8 +94,10 @@ export function getDeparturesForStop(
 			
 			let expressString = expressStringCache.get(expressCacheKey);
 			if (expressString === undefined) {
+				timer.start("getDeparturesForStop:mapping:expressString");
 				expressString = findExpressString(instance.expressInfo, ctx, stopId);
 				expressStringCache.set(expressCacheKey, expressString);
+				timer.stop("getDeparturesForStop:mapping:expressString");
 			}
 
 			return {
@@ -99,6 +110,12 @@ export function getDeparturesForStop(
 			};
 		})
 		.filter((v): v is NonNullable<typeof v> => v !== null);
+	timer.stop("getDeparturesForStop:mapping");
+
+	timer.stop("getDeparturesForStop");
+	timer.log("Departure Lookup");
+
+	return finalResults;
 }
 
 export function attachDeparturesHelpers(stop: AugmentedStop, ctx: cache.CacheContext): AugmentedStop {

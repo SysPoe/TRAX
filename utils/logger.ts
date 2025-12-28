@@ -38,6 +38,8 @@ class Logger {
 		this.level = level;
 	}
 
+	getLevel(): LogLevel { return this.level; }
+
 	private writeLog(message: string): void {
 		this.stream.write(message + "\n");
 	}
@@ -193,9 +195,8 @@ class Logger {
 				: `[f:${context.function}]`
 			: "";
 
-		return `${
-			colorize ? chalk.gray(timestamp) : timestamp
-		} ${levelStr} ${prefixStr}${moduleStr}${functionStr} ${contextStr} ${message}`;
+		return `${colorize ? chalk.gray(timestamp) : timestamp
+			} ${levelStr} ${prefixStr}${moduleStr}${functionStr} ${contextStr} ${message}`;
 	}
 }
 
