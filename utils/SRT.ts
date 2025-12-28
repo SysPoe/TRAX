@@ -115,6 +115,11 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		}
 	});
 
+	if (ctx.config.region === "GTHA") {
+		validEdges.delete("UN|KE");
+		validEdges.delete("KE|UN");
+	}
+
 	logger.debug(`Topology: Reduced to ${validEdges.size} physical edges. Building graph and matrix...`);
 
 	const matrix: SRTMatrix = {};
@@ -157,6 +162,18 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 
 		if (!matrix[to]) matrix[to] = {};
 		if (!matrix[to][from]) matrix[to][from] = parseFloat(avg.toFixed(2));
+	}
+
+	if (ctx.config.region === "GTHA") {
+		if (!matrix["KE"]) matrix["KE"] = {};
+		matrix["KE"]["SC"] = 2;
+		if (!matrix["SC"]) matrix["SC"] = {};
+		matrix["SC"]["KE"] = 2;
+
+		if (!adjacency["KE"]) adjacency["KE"] = [];
+		if (!adjacency["KE"].includes("SC")) adjacency["KE"].push("SC");
+		if (!adjacency["SC"]) adjacency["SC"] = [];
+		if (!adjacency["SC"].includes("KE")) adjacency["SC"].push("KE");
 	}
 
 	const result = { matrix, adjacency, lastUpdated: Date.now() };
