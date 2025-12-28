@@ -115,6 +115,8 @@ export class TRAX {
 	private async loadRealtimeInternal() {
 		if (!this.config.realtime) return;
 
+		logger.info("Updating realtime...");
+
 		const rt = this.config.realtime;
 
 		await this.gtfs.updateRealtimeFromUrl(rt.realtimeAlerts, rt.realtimeTripUpdates, rt.realtimeVehiclePositions);
