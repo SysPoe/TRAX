@@ -16,6 +16,18 @@ const GTHA_VEHICLE_RANGES: { start: number; end: number; model: string }[] = [
 	{ start: 3001, end: 3006, model: "Type C DMU" },
 ];
 
+export function getModelFromId(vehicleId: string): string | null {
+	const numericId = Number.parseInt(vehicleId, 10);
+	if (!Number.isNaN(numericId)) {
+		for (const range of GTHA_VEHICLE_RANGES) {
+			if (numericId >= range.start && numericId <= range.end) {
+				return range.model;
+			}
+		}
+	}
+	return null;
+}
+
 function findRelevantVehicle(inst: AugmentedTripInstance, ctx: CacheContext): RealtimeVehiclePosition | null {
 	const vehicles = ctx.raw.vehiclePositions;
 	if (!vehicles || vehicles.length === 0) return null;
@@ -54,18 +66,7 @@ export function getVehicleInfo(inst: AugmentedTripInstance, ctx: CacheContext): 
 	const vehicle = findRelevantVehicle(inst, ctx);
 	const vehicleId = vehicle?.vehicle.id ?? null;
 
-	let vehicle_model: string | null = null;
-	if (vehicleId) {
-		const numericId = Number.parseInt(vehicleId, 10);
-		if (!Number.isNaN(numericId)) {
-			for (const range of GTHA_VEHICLE_RANGES) {
-				if (numericId >= range.start && numericId <= range.end) {
-					vehicle_model = range.model;
-					break;
-				}
-			}
-		}
-	}
+	const vehicle_model = vehicleId ? getModelFromId(vehicleId) : null;
 
 	return { vehicle_model, vehicle_id: vehicleId };
 }

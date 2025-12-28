@@ -2,11 +2,13 @@ import { CacheContext, getAugmentedTripInstance, getAugmentedTrips, getTripUpdat
 import { GTFS, StopTime } from "qdf-gtfs";
 import { GTHADeparturesResponse, UPEDeparturesResponse } from "./types.js";
 import logger from "../../utils/logger.js";
-import { getServiceDayStart } from "../../utils/time.js";
+import { getServiceDayStart, getServiceDate } from "../../utils/time.js";
 import { isConsideredTripId } from "../../utils/considered.js";
+import { getModelFromId } from "./vehicleModel.js";
+import { mergeVehicleInfo } from "../../utils/vehicleModel.js";
 
 const GO_LOOKAHEAD_SECS = 600;
-const PLATFORM_LOOKAHEAD_SECS = 7200;
+const UP_LOOKAHEAD_SECS = 7200;
 const GOTRACKER_REFERRER = "https://www.gotracker.ca/gotracker/web/";
 const GOTRACKER_THROTTLE_MS = 2 * 60 * 1000;
 const GOTRACKER_EXCLUDED_STOPS = new Set(["PA", "UN"]);
@@ -32,8 +34,8 @@ function applyPlatformUpdate(
 	platform: string | null,
 	scheduledPlatform: string | null,
 ) {
-	const newActual = platform ?? stopTime.actual_platform_code ?? null;
-	const newScheduled = scheduledPlatform ?? stopTime.scheduled_platform_code ?? null;
+	const newActual = platform ?? stopTime.actual_platform_code ?? scheduledPlatform ?? null;
+	const newScheduled = scheduledPlatform ?? stopTime.scheduled_platform_code ?? platform ?? null;
 
 	const changed =
 		newActual !== stopTime.actual_platform_code ||
@@ -52,6 +54,18 @@ function applyPlatformUpdate(
 	stopTime.actual_platform_code = newActual;
 	stopTime.scheduled_platform_code = newScheduled;
 	stopTime.rt_platform_code_updated = true;
+}
+
+function formatTrack(track: string | null | undefined): string | null {
+	if (!track) return null;
+	track = track.trim();
+	if (track === "-" || track === "") return null;
+	if (track.length === 4 && /^\d+$/.test(track)) {
+		const p1 = Number.parseInt(track.slice(0, 2), 10);
+		const p2 = Number.parseInt(track.slice(2, 4), 10);
+		return `${p1} & ${p2}`;
+	} else track = track.replace(/^0+/, "");
+	return track;
 }
 
 const gotrackerMobile_stop_conversion: Record<string, string[]> = {
@@ -113,9 +127,9 @@ const gotrackerMobile_stop_conversion: Record<string, string[]> = {
 
 export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 	const now = new Date();
-	const serviceDayStart = getServiceDayStart(now.toISOString().slice(0, 10).replace(/-/g, ""), ctx.config.timezone);
-	const nowSecs = Math.floor(now.getTime() / 1000 - serviceDayStart + 86400) % 86400;
-	const serviceDateStr = new Date(serviceDayStart * 1000).toISOString().slice(0, 10).replace(/-/g, "");
+	const serviceDateStr = getServiceDate(now, ctx.config.timezone);
+	const serviceDayStart = getServiceDayStart(serviceDateStr, ctx.config.timezone);
+	const nowSecs = Math.floor(now.getTime() / 1000 - serviceDayStart);
 
 	const UP_ids = ["UN", "PA", "BL", "MD", "WE"];
 
@@ -142,8 +156,14 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 	stopTimes10m.forEach((st) => stopTimes10mMap.set(`${st.stop_id}-${st.trip_id}`, st));
 	const uniqueStopTimes10m = Array.from(stopTimes10mMap.values());
 
-	const stopTimes2h = gtfs
-		.getStopTimes({ date: serviceDateStr, start_time: nowSecs, end_time: nowSecs + PLATFORM_LOOKAHEAD_SECS })
+	const stopTimes2h = UP_ids.flatMap((stop_id) =>
+		gtfs.getStopTimes({
+			date: serviceDateStr,
+			start_time: nowSecs,
+			end_time: nowSecs + UP_LOOKAHEAD_SECS,
+			stop_id,
+		}),
+	)
 		.filter((v) => isConsideredTripId(v.trip_id, gtfs))
 		.map((v) => ({ stop_id: v.stop_id, trip_id: v.trip_id }))
 		.concat(
@@ -154,7 +174,7 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 							(stu) =>
 								(stu.departure_time ?? stu.arrival_time) &&
 								((stu.departure_time ?? stu.arrival_time ?? 0) - nowSecs + 86400) % 86400 <=
-									PLATFORM_LOOKAHEAD_SECS,
+									UP_LOOKAHEAD_SECS,
 						)
 						.map((stu) => ({ stop_id: stu.stop_id, trip_id: update.trip.trip_id })) ?? [],
 			),
@@ -175,13 +195,23 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 	const uniqueStopTimesGoTracker = Array.from(stopTimesGoTrackerMap.values());
 
 	const goStopIds = new Set(uniqueStopTimes10m.map((v) => v.stop_id));
-	const upStopIds = new Set(uniqueStopTimes2h.filter((v) => UP_ids.includes(v.stop_id)).map((v) => v.stop_id));
 	const goTrackerStopIds = new Set(
 		uniqueStopTimesGoTracker.filter((v) => !GOTRACKER_EXCLUDED_STOPS.has(v.stop_id)).map((v) => v.stop_id),
 	);
 
+	const tripNumberToIds = new Map<string, string[]>();
+	for (const tid of uniqueStopTimesGoTracker.map((v) => v.trip_id)) {
+		const match = tid.match(/\d+$/);
+		if (match) {
+			const num = match[0];
+			if (!tripNumberToIds.has(num)) tripNumberToIds.set(num, []);
+			const list = tripNumberToIds.get(num)!;
+			if (!list.includes(tid)) list.push(tid);
+		}
+	}
+
 	logger.debug(
-		`Updating GTHA platforms (GO ${goStopIds.size} | UPE ${upStopIds.size} | GoTracker ${goTrackerStopIds.size})`,
+		`Updating GTHA platforms (GO ${goStopIds.size} | UPE ${UP_ids.length} | GoTracker ${goTrackerStopIds.size})`,
 		{
 			module: "region-specific/GTHA/realtime",
 			function: "updateGTHAPlatforms",
@@ -196,6 +226,7 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 
 		st.actual_platform_code = v.actualPlatform;
 		st.scheduled_platform_code = v.scheduledPlatform;
+		st.rt_platform_code_updated = true;
 	});
 
 	await Promise.all([
@@ -263,7 +294,7 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 				console.error(e);
 			}
 		}),
-		...Array.from(upStopIds).map(async (stop_id) => {
+		...UP_ids.map(async (stop_id) => {
 			try {
 				const upeUrl = `https://api.metrolinx.com/external/upe/tdp/up/departures/${stop_id}`;
 				const upeResponse = await fetch(upeUrl);
@@ -277,18 +308,15 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 
 						for (const st of uniqueStopTimes2h) {
 							if (!st.trip_id.endsWith(tripNumber)) continue;
-							const augmentedStopTimes = getAugmentedTrips(ctx, st.trip_id)[0]?.instances.find(
-								(v) => v.serviceDate === dateStr,
-							)?.stopTimes;
+							const augmentedStopTimes =
+								getAugmentedTrips(ctx, st.trip_id)[0]?.instances.find((v) => v.serviceDate === dateStr)
+									?.stopTimes ?? getAugmentedTrips(ctx, st.trip_id)[0]?.instances[0]?.stopTimes;
 
 							if (augmentedStopTimes) {
 								const ast = augmentedStopTimes.find((ast) => ast.actual_stop_id === st.stop_id);
 
-								if (ast?.actual_stop_id === stop_id) {
-									if (platform !== null) {
-										applyPlatformUpdate(ast, stop_id, platform, null);
-									}
-								}
+								if (ast?.actual_stop_id === stop_id && platform !== null)
+									applyPlatformUpdate(ast, stop_id, platform, null);
 							}
 						}
 					}
@@ -321,6 +349,162 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 		module: "region-specific/GTHA/realtime",
 		function: "updateGTHAPlatforms",
 	});
+
+	await updateGTHAAVL(ctx, tripNumberToIds, serviceDateStr);
+	await updateGTHASchedule(ctx, tripNumberToIds, serviceDateStr);
+}
+
+export async function updateGTHASchedule(
+	ctx: CacheContext,
+	tripNumberToIds: Map<string, string[]>,
+	serviceDateStr: string,
+) {
+	try {
+		const scheduleUrl = "https://www.gotracker.ca/gotracker/mobile/proxy/web/Schedule/Today/All";
+		const response = await fetch(scheduleUrl, { headers: { Referer: GOTRACKER_REFERRER } });
+		if (!response.ok) return;
+
+		const data = await response.json();
+		const commitmentTrips = data.commitmentTrip as any[];
+
+		logger.debug(`GTHA Schedule: Processing ${commitmentTrips.length} commitment trips`, {
+			module: "region-specific/GTHA/realtime",
+			function: "updateGTHASchedule",
+		});
+
+		let updateCount = 0;
+		for (const trip of commitmentTrips) {
+			const tripNumber = trip.tripNumber;
+			const tripIds = tripNumberToIds.get(tripNumber) || [];
+
+			if (tripIds.length === 0) continue;
+
+			for (const tripId of tripIds) {
+				const augmentedTrip = getAugmentedTrips(ctx, tripId)[0];
+				if (!augmentedTrip) continue;
+
+				const instance = augmentedTrip.instances.find((v: any) => v.serviceDate === serviceDateStr);
+				if (!instance) continue;
+
+				for (const gtStop of trip.stop) {
+					const schTime = gtStop.schDeparture || gtStop.schArrival;
+					if (!schTime) continue;
+
+					const targetStopTime = instance.stopTimes.find((st: any) => {
+						const gtfsTimeSecs = st.scheduled_departure_time ?? st.scheduled_arrival_time;
+						if (gtfsTimeSecs === null) return false;
+						const h = Math.floor((gtfsTimeSecs / 3600) % 24);
+						const m = Math.floor((gtfsTimeSecs % 3600) / 60);
+						const hhmm = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+						return hhmm === schTime;
+					});
+
+					if (targetStopTime) {
+						const schTrack = formatTrack(gtStop.schTrack);
+						const actTrack = formatTrack(gtStop.completeInfo?.actTrack);
+
+						if (schTrack || actTrack) {
+							applyPlatformUpdate(
+								targetStopTime,
+								targetStopTime.actual_stop_id ?? targetStopTime.scheduled_stop_id ?? "",
+								actTrack ?? schTrack,
+								schTrack,
+							);
+							updateCount++;
+						}
+
+						if (gtStop.engineId && gtStop.engineId !== "-" && gtStop.engineId !== "") {
+							const vehicleInfo = mergeVehicleInfo(instance, {
+								vehicle_id: gtStop.engineId,
+								vehicle_model: getModelFromId(gtStop.engineId),
+							});
+							instance.vehicle_id = vehicleInfo.vehicle_id;
+							instance.vehicle_model = vehicleInfo.vehicle_model;
+						}
+					}
+				}
+			}
+		}
+
+		logger.debug(`GTHA Schedule: Completed with ${updateCount} platform updates`, {
+			module: "region-specific/GTHA/realtime",
+			function: "updateGTHASchedule",
+		});
+	} catch (e) {
+		logger.error("Failed to update GTHA Schedule", {
+			error: e,
+			module: "region-specific/GTHA/realtime",
+			function: "updateGTHASchedule",
+		});
+	}
+}
+
+export async function updateGTHAAVL(ctx: CacheContext, tripNumberToIds: Map<string, string[]>, serviceDateStr: string) {
+	try {
+		const avlUrl = "https://www.gotracker.ca/gotracker/mobile/proxy/web/AVL/InService/Trip2/All";
+		const response = await fetch(avlUrl, { headers: { Referer: GOTRACKER_REFERRER } });
+		if (!response.ok) return;
+
+		const data = await response.json();
+		const trips = (data.trip as any[]).filter((v) => v.source !== "B");
+
+		logger.debug(`GTHA AVL: Processing ${trips.length} active trips`, {
+			module: "region-specific/GTHA/realtime",
+			function: "updateGTHAAVL",
+		});
+
+		let updateCount = 0;
+		for (const trip of trips) {
+			const tripNumber = trip.tripNumber;
+			const vehicleId = trip.vehicleNumber;
+			const vehicleType = trip.vehicleType ?? "";
+
+			let passengerCars: number | null = null;
+			if (vehicleType.startsWith("L")) {
+				const num = Number.parseInt(vehicleType.slice(1), 10);
+				if (!Number.isNaN(num)) passengerCars = num;
+			}
+
+			const tripIds = tripNumberToIds.get(tripNumber) || [];
+			for (const tripId of tripIds) {
+				const augmentedTrip = getAugmentedTrips(ctx, tripId)[0];
+				if (!augmentedTrip) continue;
+
+				const instance = augmentedTrip.instances.find((v) => v.serviceDate === serviceDateStr);
+				if (!instance) continue;
+
+				if (vehicleId && vehicleId !== "-") {
+					const vehicleInfo = mergeVehicleInfo(instance, {
+						vehicle_id: vehicleId,
+						vehicle_model: getModelFromId(vehicleId),
+						passenger_cars: passengerCars,
+					});
+					instance.vehicle_id = vehicleInfo.vehicle_id;
+					instance.vehicle_model = vehicleInfo.vehicle_model;
+					instance.passenger_cars = vehicleInfo.passenger_cars ?? null;
+				} else if (passengerCars !== null) {
+					const vehicleInfo = mergeVehicleInfo(instance, {
+						vehicle_id: null,
+						vehicle_model: null,
+						passenger_cars: passengerCars,
+					});
+					instance.passenger_cars = vehicleInfo.passenger_cars ?? null;
+				}
+				updateCount++;
+			}
+		}
+
+		logger.debug(`GTHA AVL: Completed vehicle updates for ${updateCount} trip instances`, {
+			module: "region-specific/GTHA/realtime",
+			function: "updateGTHAAVL",
+		});
+	} catch (e) {
+		logger.error("Failed to update GTHA AVL", {
+			error: e,
+			module: "region-specific/GTHA/realtime",
+			function: "updateGTHAAVL",
+		});
+	}
 }
 
 async function maybeUpdatePlatformsFromGoTracker(

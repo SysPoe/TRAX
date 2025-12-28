@@ -24,7 +24,7 @@ function resolveVehicleInfo(inst: AugmentedTripInstance, ctx: CacheContext, conf
 
 const previousVehicleInfo: Record<string, VehicleInfo> = {};
 
-function mergeVehicleInfo(inst: AugmentedTripInstance, incoming: VehicleInfo): VehicleInfo {
+export function mergeVehicleInfo(inst: AugmentedTripInstance, incoming: VehicleInfo): VehicleInfo {
 	const prev = previousVehicleInfo[inst.instance_id];
 	const vehicle_id = incoming.vehicle_id ?? prev?.vehicle_id ?? inst.vehicle_id ?? null;
 	const vehicle_model = incoming.vehicle_model ?? prev?.vehicle_model ?? inst.vehicle_model ?? null;
@@ -48,7 +48,7 @@ export function addVehicleModel(
 	config: TraxConfig,
 ): AugmentedTripInstance {
 	const needsModel = inst.vehicle_model == null;
-	const needsId = (inst as any).vehicle_id === undefined || inst.vehicle_id == null;
+	const needsId = inst.vehicle_id === undefined || inst.vehicle_id == null;
 	const needsPassengerCars = inst.passenger_cars == null;
 	const needsScheduledPassengerCars = inst.scheduled_passenger_cars == null;
 
