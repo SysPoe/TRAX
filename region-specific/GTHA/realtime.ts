@@ -20,8 +20,10 @@ let prevs: {
 	scheduledPlatform: string | null;
 }[] = [];
 let lastGoTrackerFetchMs: Record<string, number> = {};
+let vehiclePassengerCars: Record<string, number> = {};
 
 function applyPlatformUpdate(
+	ctx: CacheContext,
 	stopTime: {
 		instance_id: string;
 		actual_stop_id?: string | null;
@@ -54,6 +56,79 @@ function applyPlatformUpdate(
 	stopTime.actual_platform_code = newActual;
 	stopTime.scheduled_platform_code = newScheduled;
 	stopTime.rt_platform_code_updated = true;
+
+	// If this is the terminating stop, propagate platform to next trip in block if it starts here
+	const ti = getAugmentedTripInstance(ctx, stopTime.instance_id);
+	if (ti && ti.stopTimes.at(-1) === (stopTime as any)) {
+		propagatePlatformToNextTripInBlock(ctx, ti, stopId, newActual, newScheduled);
+	}
+}
+
+function propagatePlatformToNextTripInBlock(
+	ctx: CacheContext,
+	currentInst: any,
+	stopId: string,
+	actualPlatform: string | null,
+	scheduledPlatform: string | null,
+) {
+	if (!currentInst.block_id) return;
+
+	const tripsForDate = ctx.augmented.serviceDateTrips.get(currentInst.serviceDate) ?? [];
+	let nextTrip: any = null;
+	const currentEndTime =
+		currentInst.stopTimes.at(-1)?.actual_arrival_time ?? currentInst.stopTimes.at(-1)?.scheduled_arrival_time;
+
+	for (const tripId of tripsForDate) {
+		const at = getAugmentedTrips(ctx, tripId)[0];
+		if (!at) continue;
+		const inst = at.instances.find((i) => i.serviceDate === currentInst.serviceDate);
+		if (!inst || inst.block_id !== currentInst.block_id || inst.instance_id === currentInst.instance_id) continue;
+
+		const firstSt = inst.stopTimes[0];
+		const startTime = (firstSt?.actual_departure_time ?? firstSt?.scheduled_departure_time) as number | null;
+		if (startTime !== null && currentEndTime !== null && startTime >= (currentEndTime as number)) {
+			const nextTripStartTime = (nextTrip?.stopTimes[0]?.actual_departure_time ??
+				nextTrip?.stopTimes[0]?.scheduled_departure_time) as number | null;
+			if (!nextTrip || startTime < (nextTripStartTime ?? Infinity)) {
+				nextTrip = inst;
+			}
+		}
+	}
+
+	if (nextTrip && (nextTrip.stopTimes[0]?.actual_stop_id ?? nextTrip.stopTimes[0]?.scheduled_stop_id) === stopId) {
+		const firstStopTime = nextTrip.stopTimes[0];
+		applyPlatformUpdate(ctx, firstStopTime, stopId, actualPlatform, scheduledPlatform);
+	}
+}
+
+function propagateVehicleInfoToBlock(
+	ctx: CacheContext,
+	serviceDateStr: string,
+	blockId: string | undefined | null,
+	vehicleId: string | null,
+	passengerCars: number | null,
+) {
+	if (!blockId) return;
+	const tripsForDate = ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [];
+	const info = {
+		vehicle_id: vehicleId,
+		vehicle_model: vehicleId ? getModelFromId(vehicleId) : null,
+		passenger_cars: passengerCars,
+	};
+
+	for (const tripId of tripsForDate) {
+		const at = getAugmentedTrips(ctx, tripId)[0];
+		if (!at) continue;
+		const inst = at.instances.find((i) => i.serviceDate === serviceDateStr);
+		if (!inst || inst.block_id !== blockId) continue;
+
+		if (inst.vehicle_id === vehicleId && inst.passenger_cars === (passengerCars ?? null)) continue;
+
+		const merged = mergeVehicleInfo(inst, info);
+		inst.vehicle_id = merged.vehicle_id;
+		inst.vehicle_model = merged.vehicle_model;
+		inst.passenger_cars = merged.passenger_cars ?? null;
+	}
 }
 
 function formatTrack(track: string | null | undefined): string | null {
@@ -145,7 +220,7 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 							(stu) =>
 								(stu.departure_time ?? stu.arrival_time) &&
 								((stu.departure_time ?? stu.arrival_time ?? 0) - nowSecs + 86400) % 86400 <=
-									GO_LOOKAHEAD_SECS,
+								GO_LOOKAHEAD_SECS,
 						)
 						.map((stu) => ({ stop_id: stu.stop_id, trip_id: update.trip.trip_id })) ?? [],
 			),
@@ -174,7 +249,7 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 							(stu) =>
 								(stu.departure_time ?? stu.arrival_time) &&
 								((stu.departure_time ?? stu.arrival_time ?? 0) - nowSecs + 86400) % 86400 <=
-									UP_LOOKAHEAD_SECS,
+								UP_LOOKAHEAD_SECS,
 						)
 						.map((stu) => ({ stop_id: stu.stop_id, trip_id: update.trip.trip_id })) ?? [],
 			),
@@ -278,7 +353,7 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 
 							if (ast?.actual_stop_id === stop_id) {
 								if (platform !== null || scheduledPlatform !== null) {
-									applyPlatformUpdate(ast, stop_id, platform, scheduledPlatform);
+									applyPlatformUpdate(ctx, ast, stop_id, platform, scheduledPlatform);
 								}
 							}
 						}
@@ -316,7 +391,7 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 								const ast = augmentedStopTimes.find((ast) => ast.actual_stop_id === st.stop_id);
 
 								if (ast?.actual_stop_id === stop_id && platform !== null)
-									applyPlatformUpdate(ast, stop_id, platform, null);
+									applyPlatformUpdate(ctx, ast, stop_id, platform, null);
 							}
 						}
 					}
@@ -405,6 +480,7 @@ export async function updateGTHASchedule(
 
 						if (schTrack || actTrack) {
 							applyPlatformUpdate(
+								ctx,
 								targetStopTime,
 								targetStopTime.actual_stop_id ?? targetStopTime.scheduled_stop_id ?? "",
 								actTrack ?? schTrack,
@@ -417,9 +493,19 @@ export async function updateGTHASchedule(
 							const vehicleInfo = mergeVehicleInfo(instance, {
 								vehicle_id: gtStop.engineId,
 								vehicle_model: getModelFromId(gtStop.engineId),
+								passenger_cars: vehiclePassengerCars[gtStop.engineId] ?? null,
 							});
 							instance.vehicle_id = vehicleInfo.vehicle_id;
 							instance.vehicle_model = vehicleInfo.vehicle_model;
+							instance.passenger_cars = vehicleInfo.passenger_cars ?? null;
+
+							propagateVehicleInfoToBlock(
+								ctx,
+								serviceDateStr,
+								instance.block_id,
+								instance.vehicle_id,
+								instance.passenger_cars,
+							);
 						}
 					}
 				}
@@ -453,16 +539,36 @@ export async function updateGTHAAVL(ctx: CacheContext, tripNumberToIds: Map<stri
 			function: "updateGTHAAVL",
 		});
 
+		// Pass 1: Update persistent cache from current AVL data
+		for (const trip of trips) {
+			const vehicleId = trip.vehicleNumber;
+			if (!vehicleId || vehicleId === "-") continue;
+
+			const vehicleType = trip.vehicleType ?? "";
+			if (vehicleType.startsWith("L")) {
+				const num = Number.parseInt(vehicleType.slice(1), 10);
+				if (!Number.isNaN(num)) {
+					vehiclePassengerCars[vehicleId] = num;
+				}
+			}
+		}
+
 		let updateCount = 0;
+		// Pass 2: Apply to instances, using cache for missing car counts
 		for (const trip of trips) {
 			const tripNumber = trip.tripNumber;
-			const vehicleId = trip.vehicleNumber;
+			const vehicleId = trip.vehicleNumber && trip.vehicleNumber !== "-" ? trip.vehicleNumber : null;
 			const vehicleType = trip.vehicleType ?? "";
 
 			let passengerCars: number | null = null;
 			if (vehicleType.startsWith("L")) {
 				const num = Number.parseInt(vehicleType.slice(1), 10);
 				if (!Number.isNaN(num)) passengerCars = num;
+			}
+
+			// If missing car count but we have a vehicle ID, try the cache
+			if (passengerCars === null && vehicleId && vehiclePassengerCars[vehicleId]) {
+				passengerCars = vehiclePassengerCars[vehicleId];
 			}
 
 			const tripIds = tripNumberToIds.get(tripNumber) || [];
@@ -473,7 +579,7 @@ export async function updateGTHAAVL(ctx: CacheContext, tripNumberToIds: Map<stri
 				const instance = augmentedTrip.instances.find((v) => v.serviceDate === serviceDateStr);
 				if (!instance) continue;
 
-				if (vehicleId && vehicleId !== "-") {
+				if (vehicleId) {
 					const vehicleInfo = mergeVehicleInfo(instance, {
 						vehicle_id: vehicleId,
 						vehicle_model: getModelFromId(vehicleId),
@@ -482,6 +588,14 @@ export async function updateGTHAAVL(ctx: CacheContext, tripNumberToIds: Map<stri
 					instance.vehicle_id = vehicleInfo.vehicle_id;
 					instance.vehicle_model = vehicleInfo.vehicle_model;
 					instance.passenger_cars = vehicleInfo.passenger_cars ?? null;
+
+					propagateVehicleInfoToBlock(
+						ctx,
+						serviceDateStr,
+						instance.block_id,
+						instance.vehicle_id,
+						instance.passenger_cars,
+					);
 				} else if (passengerCars !== null) {
 					const vehicleInfo = mergeVehicleInfo(instance, {
 						vehicle_id: null,
@@ -489,6 +603,14 @@ export async function updateGTHAAVL(ctx: CacheContext, tripNumberToIds: Map<stri
 						passenger_cars: passengerCars,
 					});
 					instance.passenger_cars = vehicleInfo.passenger_cars ?? null;
+
+					propagateVehicleInfoToBlock(
+						ctx,
+						serviceDateStr,
+						instance.block_id,
+						instance.vehicle_id,
+						instance.passenger_cars,
+					);
 				}
 				updateCount++;
 			}
@@ -565,10 +687,23 @@ async function maybeUpdatePlatformsFromGoTracker(
 			if (!instance) continue;
 			const ast = instance.stopTimes.find((ast) => ast.actual_stop_id === st.stop_id);
 			if (!ast) continue;
+			applyPlatformUpdate(ctx, ast, stop_id, platform, null);
 
-			applyPlatformUpdate(ast, stop_id, platform, null);
+			if (trip.coachCount !== undefined) {
+				instance.passenger_cars = trip.coachCount;
+				if (instance.vehicle_id) vehiclePassengerCars[instance.vehicle_id] = trip.coachCount;
+			} else if (instance.vehicle_id && vehiclePassengerCars[instance.vehicle_id]) {
+				instance.passenger_cars = vehiclePassengerCars[instance.vehicle_id];
+			}
 
-			if (trip.coachCount !== undefined) instance.passenger_cars = trip.coachCount;
+			propagateVehicleInfoToBlock(
+				ctx,
+				targetServiceDate,
+				instance.block_id,
+				instance.vehicle_id,
+				instance.passenger_cars,
+			);
+
 			if (trip.scheduledCoachCount !== undefined) instance.scheduled_passenger_cars = trip.scheduledCoachCount;
 		}
 	}
