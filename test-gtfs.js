@@ -16,27 +16,35 @@ async function main() {
 	await TRAX.loadGTFS(false);
 	let end_static = Date.now();
 
-	console.log("GTFS data loaded successfully.\n");
-
-	let start_realtime = Date.now();
-	await TRAX.updateRealtime();
-	let end_realtime = Date.now();
+	console.log(`\nGTFS data loaded successfully in ${(end_static - start_static) / 1000}s.\n`);
 
 	const stop = TRAX.getAugmentedStops("UN")[0];
+	if (!stop) {
+		console.error("Could not find stop UN");
+		process.exit(1);
+	}
+
 	const tomorrow = new Date();
 	tomorrow.setDate(tomorrow.getDate() + 1);
 	const date =
 		tomorrow.getFullYear().toString() +
 		(tomorrow.getMonth() + 1).toString().padStart(2, "0") +
 		tomorrow.getDate().toString().padStart(2, "0");
+
+	console.log(`Getting departures for ${stop.stop_name} on ${date}...`);
+	let depstart = Date.now();
+
 	const deps = TRAX.utils.departures.getDeparturesForStop(stop, date, "08:00:00", "23:59:59");
+	let depend = Date.now();
 
-	console.log(deps.length + " testdeps");
+	console.log(`\nFound ${deps.length} departures.`);
+	console.log(`Departure lookup took ${depend - depstart}ms.`);
 
-	console.log(`GTFS loading took ${(end_static - start_static) / 1000} seconds.`);
-	console.log(`Realtime updates took ${(end_realtime - start_realtime) / 1000} seconds.`);
-	console.log("Done!");
+	console.log("\nDone!");
 	process.exit(0);
 }
 
-main();
+main().catch(err => {
+	console.error(err);
+	process.exit(1);
+});

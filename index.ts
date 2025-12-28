@@ -8,7 +8,7 @@ import logger from "./utils/logger.js";
 import { type TraxConfig, type TraxConfigOptions, resolveConfig } from "./config.js";
 import { findExpressString } from "./utils/SRT.js";
 import { getServiceCapacity } from "./utils/serviceCapacity.js";
-import { attachDeparturesHelpers, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
+import { attachDeparturesHelpers, getDeparturesForStop } from "./utils/departures.js";
 import {
 	isConsideredRoute,
 	isConsideredStop,
@@ -202,10 +202,10 @@ export class TRAX {
 			isConsideredStopId: (stop_id: string) => isConsideredStopId(stop_id, this.gtfs),
 			departures: {
 				attachDeparturesHelpers: (stop: any) => attachDeparturesHelpers(stop, this.ctx),
-				getDeparturesForStop: (stop: any, date: string, st: string, et: string) =>
+				getDeparturesForStop: (stop: any, date: string, st: string | number, et: string | number) =>
 					getDeparturesForStop(stop, date, st, et, this.ctx),
 				getServiceDateDeparturesForStop: (stop: any, date: string, st: number, et: number) =>
-					getServiceDateDeparturesForStop(stop, date, st, et, this.ctx),
+					getDeparturesForStop(stop, date, st, et, this.ctx),
 			},
 		};
 	}
@@ -241,7 +241,7 @@ export * as qrTravel from "./region-specific/SEQ/qr-travel/qr-travel-tracker.js"
 export type { AugmentedTrip, AugmentedTripInstance, RunSeries } from "./utils/augmentedTrip.js";
 export type { AugmentedStopTime } from "./utils/augmentedStopTime.js";
 export type { AugmentedStop } from "./utils/augmentedStop.js";
-export { attachDeparturesHelpers, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
+export { attachDeparturesHelpers, getDeparturesForStop } from "./utils/departures.js";
 
 export type {
 	QRTTrainMovementDTO,

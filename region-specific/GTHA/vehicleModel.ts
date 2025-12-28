@@ -1,5 +1,5 @@
 import { RealtimeVehiclePosition } from "qdf-gtfs";
-import { CacheContext } from "../../cache.js";
+import { CacheContext, getVehiclePositions, getTrips } from "../../cache.js";
 import { AugmentedTripInstance } from "../../utils/augmentedTrip.js";
 import type { VehicleInfo } from "../../utils/vehicleModel.js";
 
@@ -29,7 +29,7 @@ export function getModelFromId(vehicleId: string): string | null {
 }
 
 function findRelevantVehicle(inst: AugmentedTripInstance, ctx: CacheContext): RealtimeVehiclePosition | null {
-	const vehicles = ctx.raw.vehiclePositions;
+	const vehicles = getVehiclePositions(ctx);
 	if (!vehicles || vehicles.length === 0) return null;
 
 	const startDate = inst.rt_start_date ?? inst.serviceDate;
@@ -39,7 +39,7 @@ function findRelevantVehicle(inst: AugmentedTripInstance, ctx: CacheContext): Re
 		const serviceDateTrips = ctx.augmented.serviceDateTrips.get(startDate) ?? [];
 		for (const tripId of serviceDateTrips) {
 			if (candidateTripIds.has(tripId)) continue;
-			const rawTrip = ctx.raw.tripsRec.get(tripId);
+			const rawTrip = getTrips(ctx, tripId)[0];
 			if (rawTrip?.block_id && rawTrip.block_id === inst.block_id) {
 				candidateTripIds.add(tripId);
 			}

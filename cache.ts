@@ -75,20 +75,6 @@ class LRUCache<K, V> {
 }
 
 export type RawCache = {
-	tripUpdates: RealtimeTripUpdate[];
-	vehiclePositions: RealtimeVehiclePosition[];
-
-	calendars: Calendar[];
-	calendarDates: CalendarDate[];
-
-	trips: Trip[];
-	stops: Stop[];
-	routes: Route[];
-
-	tripsRec: Map<string, Trip>;
-	stopsRec: Map<string, Stop>;
-	routesRec: Map<string, Route>;
-
 	regionSpecific: {
 		SEQ: {
 			qrtPlaces: QRTPlace[];
@@ -117,6 +103,10 @@ export type AugmentedCache = {
 	expressInfoCache: LRUCache<string, any[]>;
 	passingStopsCache: LRUCache<string, any[]>;
 	runSeriesCache: Map<string, Map<string, RunSeries>>;
+
+	tripsStoppingAt: Map<string, Set<string>>;
+	stopDeparturesCached: Map<string, AugmentedStopTime[]>;
+	instancesRec: Map<string, AugmentedTripInstance>;
 };
 
 export type CacheContext = {
@@ -128,16 +118,6 @@ export type CacheContext = {
 
 export function createEmptyRawCache(): RawCache {
 	return {
-		tripUpdates: [],
-		vehiclePositions: [],
-		calendars: [],
-		calendarDates: [],
-		trips: [],
-		stops: [],
-		routes: [],
-		tripsRec: new Map(),
-		stopsRec: new Map(),
-		routesRec: new Map(),
 		regionSpecific: {
 			SEQ: {
 				qrtPlaces: [],
@@ -164,6 +144,9 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 		expressInfoCache: new LRUCache<string, any[]>(1000),
 		passingStopsCache: new LRUCache<string, any[]>(5000),
 		runSeriesCache: new Map(),
+		tripsStoppingAt: new Map(),
+		stopDeparturesCached: new Map(),
+		instancesRec: new Map(),
 	};
 }
 
@@ -171,93 +154,168 @@ let rawCache: RawCache = createEmptyRawCache();
 let augmentedCache: AugmentedCache = createEmptyAugmentedCache();
 
 export function getCalendars(ctx: CacheContext, filter?: Partial<Calendar>): Calendar[] {
-	const { raw, gtfs: ctxGtfs } = ctx;
-	const gtfs = ctxGtfs ?? getGtfs();
-	if (!raw.calendars || raw.calendars.length === 0) raw.calendars = gtfs.getCalendars();
-	if (!filter) return raw.calendars;
-	return raw.calendars.filter((c) => {
-		for (const key of Object.keys(filter)) {
-			const k = key as keyof typeof c;
-			if (c[k] !== filter[k]) return false;
-		}
-		return true;
-	});
+	return (ctx.gtfs ?? getGtfs()).getCalendars(filter);
 }
 
 export function getCalendarDates(ctx: CacheContext, filter?: Partial<CalendarDate>): CalendarDate[] {
-	const { raw, gtfs: ctxGtfs } = ctx;
-	const gtfs = ctxGtfs ?? getGtfs();
-	if (!raw.calendarDates || raw.calendarDates.length === 0) raw.calendarDates = gtfs.getCalendarDates();
-	if (!filter) return raw.calendarDates;
-	return raw.calendarDates.filter((c) => {
-		for (const key of Object.keys(filter)) {
-			const k = key as keyof typeof c;
-			if (c[k] !== filter[k]) return false;
-		}
-		return true;
-	});
+	return (ctx.gtfs ?? getGtfs()).getCalendarDates(filter);
 }
 
-export function getRawTrips(ctx: CacheContext, trip_id?: string): Trip[] {
-	const { raw } = ctx;
-	if (trip_id) {
-		const trip = raw.tripsRec.get(trip_id);
-		return trip ? [trip] : [];
-	}
-	return raw.trips;
+export function getTrips(ctx: CacheContext, filter?: Partial<Trip> | string): Trip[] {
+	const gtfs = ctx.gtfs ?? getGtfs();
+	const query = typeof filter === "string" ? { trip_id: filter } : filter;
+	return gtfs.getTrips(query).filter((v) => isConsideredTrip(v, gtfs));
 }
 
-export function getRawStops(ctx: CacheContext, stop_id?: string): Stop[] {
-	const { raw } = ctx;
-	if (stop_id) {
-		const stop = raw.stopsRec.get(stop_id);
-		return stop ? [stop] : [];
-	}
-	return raw.stops;
+export function getStops(ctx: CacheContext, filter?: Partial<Stop> | string): Stop[] {
+	const query = typeof filter === "string" ? { stop_id: filter } : filter;
+	return (ctx.gtfs ?? getGtfs()).getStops(query);
 }
 
-export function getRawRoutes(ctx: CacheContext, route_id?: string): Route[] {
-	const { raw } = ctx;
-	if (route_id) {
-		const route = raw.routesRec.get(route_id);
-		return route ? [route] : [];
-	}
-	return raw.routes;
-}
-
-export function getRawCalendars(ctx: CacheContext): Calendar[] {
-	const { raw } = ctx;
-	return raw.calendars;
-}
-
-export function getRawCalendarDates(ctx: CacheContext): CalendarDate[] {
-	const { raw } = ctx;
-	return raw.calendarDates;
+export function getRoutes(ctx: CacheContext, filter?: Partial<Route> | string): Route[] {
+	const query = typeof filter === "string" ? { route_id: filter } : filter;
+	return (ctx.gtfs ?? getGtfs()).getRoutes(query);
 }
 
 export function getTripUpdates(ctx: CacheContext, trip_id?: string): RealtimeTripUpdate[] {
-	const { raw, gtfs: ctxGtfs } = ctx;
-	const gtfs = ctxGtfs ?? getGtfs();
-	if (raw.tripUpdates.length === 0) raw.tripUpdates = gtfs.getRealtimeTripUpdates();
-	if (trip_id) return raw.tripUpdates.filter((v) => v.trip.trip_id == trip_id);
-	return raw.tripUpdates;
+	const gtfs = ctx.gtfs ?? getGtfs();
+	const updates = gtfs.getRealtimeTripUpdates();
+	if (trip_id) return updates.filter((v) => v.trip.trip_id == trip_id);
+	return updates;
 }
 
 export function getVehiclePositions(ctx: CacheContext, trip_id?: string): RealtimeVehiclePosition[] {
-	const { raw, gtfs: ctxGtfs } = ctx;
-	const gtfs = ctxGtfs ?? getGtfs();
-	if (raw.vehiclePositions.length === 0) raw.vehiclePositions = gtfs.getRealtimeVehiclePositions();
-	if (trip_id) return raw.vehiclePositions.filter((v) => v.trip.trip_id == trip_id);
-	return raw.vehiclePositions;
+	const gtfs = ctx.gtfs ?? getGtfs();
+	const positions = gtfs.getRealtimeVehiclePositions();
+	if (trip_id) return positions.filter((v) => v.trip.trip_id == trip_id);
+	return positions;
 }
 
 export function getStopTimeUpdates(ctx: CacheContext, trip_id: string): RealtimeStopTimeUpdate[] {
 	return getTripUpdates(ctx, trip_id)[0]?.stop_time_updates ?? [];
 }
 
-export function getRawStopTimes(ctx: CacheContext, trip_id: string): StopTime[] {
-	const { gtfs: ctxGtfs } = ctx;
-	return (ctxGtfs ?? getGtfs()).getStopTimes({ trip_id });
+export function getStopTimes(ctx: CacheContext, query: qdf.StopTimeQuery): StopTime[] {
+	return (ctx.gtfs ?? getGtfs()).getStopTimes(query);
+}
+
+// Aliases for backward compatibility
+export const getRawTrips = getTrips;
+export const getRawStops = getStops;
+export const getRawRoutes = getRoutes;
+export const getRawCalendars = getCalendars;
+export const getRawCalendarDates = getCalendarDates;
+export const getRawStopTimes = (ctx: CacheContext, trip_id: string) => getStopTimes(ctx, { trip_id });
+
+export function unregisterAugmentedTrip(ctx: CacheContext, tripId: string): void {
+	const { augmented } = ctx;
+	const trip = augmented.tripsRec.get(tripId);
+	if (!trip) return;
+
+	for (const instance of trip.instances) {
+		for (const st of instance.stopTimes) {
+			const stopsToCleanup = new Set<string>();
+			if (st.actual_stop_id) stopsToCleanup.add(st.actual_stop_id);
+			if (st.actual_parent_station_id) stopsToCleanup.add(st.actual_parent_station_id);
+			if (st.scheduled_stop_id) stopsToCleanup.add(st.scheduled_stop_id);
+			if (st.scheduled_parent_station_id) stopsToCleanup.add(st.scheduled_parent_station_id);
+
+			for (const stopId of stopsToCleanup) {
+				const tripSet = augmented.tripsStoppingAt.get(stopId);
+				if (tripSet) {
+					tripSet.delete(tripId);
+					// Clear all date-based caches for this stop
+					for (const key of augmented.stopDeparturesCached.keys()) {
+						if (key.startsWith(`${stopId}|`)) augmented.stopDeparturesCached.delete(key);
+					}
+				}
+			}
+		}
+		augmented.instancesRec.delete(instance.instance_id);
+	}
+}
+
+export function registerAugmentedTrip(ctx: CacheContext, trip: AugmentedTrip): void {
+	const { augmented } = ctx;
+	const tripId = trip.trip_id;
+
+	// Populate tripsStoppingAt once per trip (from the first instance's stop times)
+	// This identifies which stops this trip potentially visits.
+	const firstInstance = trip.instances[0];
+	if (firstInstance) {
+		for (const st of firstInstance.stopTimes) {
+			const stopsToIndex = new Set<string>();
+			if (st.actual_stop_id) stopsToIndex.add(st.actual_stop_id);
+			if (st.actual_parent_station_id) stopsToIndex.add(st.actual_parent_station_id);
+			if (st.scheduled_stop_id) stopsToIndex.add(st.scheduled_stop_id);
+			if (st.scheduled_parent_station_id) stopsToIndex.add(st.scheduled_parent_station_id);
+
+			for (const stopId of stopsToIndex) {
+				let tripSet = augmented.tripsStoppingAt.get(stopId);
+				if (!tripSet) {
+					tripSet = new Set();
+					augmented.tripsStoppingAt.set(stopId, tripSet);
+				}
+				tripSet.add(tripId);
+				// Invalidate cache for this stop across all dates (since a trip changed)
+				for (const key of augmented.stopDeparturesCached.keys()) {
+					if (key.startsWith(`${stopId}|`)) augmented.stopDeparturesCached.delete(key);
+				}
+			}
+		}
+	}
+
+	for (const instance of trip.instances) {
+		augmented.instancesRec.set(instance.instance_id, instance);
+	}
+}
+
+export function getStopDeparturesCached(ctx: CacheContext, stopId: string, serviceDate: string): AugmentedStopTime[] {
+	const { augmented } = ctx;
+	const cacheKey = `${stopId}|${serviceDate}`;
+	let cached = augmented.stopDeparturesCached.get(cacheKey);
+	if (cached) return cached;
+
+	const tripIdsForStop = augmented.tripsStoppingAt.get(stopId);
+	const tripIdsForDate = augmented.serviceDateTrips.get(serviceDate);
+
+	if (!tripIdsForStop || !tripIdsForDate) return [];
+
+	// Intersect trips for stop and trips for date
+	const relevantTripIds = (tripIdsForStop.size < tripIdsForDate.length)
+		? Array.from(tripIdsForStop).filter(id => tripIdsForDate.includes(id))
+		: tripIdsForDate.filter(id => tripIdsForStop.has(id));
+
+	const results: AugmentedStopTime[] = [];
+	for (const tripId of relevantTripIds) {
+		const trip = augmented.tripsRec.get(tripId);
+		if (!trip) continue;
+		const instance = trip.instances.find(i => i.serviceDate === serviceDate);
+		if (!instance) continue;
+
+		for (const st of instance.stopTimes) {
+			if ((st.actual_stop_id === stopId || st.actual_parent_station_id === stopId ||
+				 st.scheduled_stop_id === stopId || st.scheduled_parent_station_id === stopId)) {
+				results.push(st);
+			}
+		}
+	}
+
+	// Sort by absolute time for fast window queries
+	const serviceDayStartCache = new Map<string, number>();
+	const getAbsTime = (st: AugmentedStopTime) => {
+		let dayStart = serviceDayStartCache.get(st.service_date);
+		if (dayStart === undefined) {
+			dayStart = getServiceDayStart(st.service_date, ctx.config.timezone);
+			serviceDayStartCache.set(st.service_date, dayStart);
+		}
+		return (st.actual_departure_time ?? st.scheduled_departure_time ?? st.actual_arrival_time ?? 0) + dayStart;
+	};
+
+	results.sort((a, b) => getAbsTime(a) - getAbsTime(b));
+
+	augmented.stopDeparturesCached.set(cacheKey, results);
+	return results;
 }
 
 export function getAugmentedTrips(ctx: CacheContext, trip_id?: string): AugmentedTrip[] {
@@ -266,9 +324,10 @@ export function getAugmentedTrips(ctx: CacheContext, trip_id?: string): Augmente
 	if (trip_id) {
 		const trip = augmented.tripsRec.get(trip_id);
 		if (trip) return [addVehicleModelTrip(addSC(trip, ctx, context.config), ctx, context.config)];
-		const rawTrip = raw.tripsRec.get(trip_id);
+		const rawTrip = getTrips(ctx, trip_id)[0];
 		if (rawTrip) {
 			const augmentedTrip = augmentTrip(rawTrip, context);
+			registerAugmentedTrip(ctx, augmentedTrip);
 			augmented.tripsRec.set(trip_id, augmentedTrip);
 			return [addVehicleModelTrip(addSC(augmentedTrip, ctx, context.config), ctx, context.config)];
 		}
@@ -281,8 +340,22 @@ export function getAugmentedTrips(ctx: CacheContext, trip_id?: string): Augmente
 
 export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string): AugmentedTripInstance | null {
 	const context = ctx;
+	const cached = ctx.augmented.instancesRec.get(instance_id);
+	if (cached) return cached;
+
 	try {
-		let res = getAugmentedTrips(ctx, JSON.parse(atob(instance_id))[0])[0].instances.find(
+		const tripId = JSON.parse(atob(instance_id))[0];
+		const trip = ctx.augmented.tripsRec.get(tripId);
+		if (trip) {
+			const inst = trip.instances.find((v) => v.instance_id === instance_id);
+			if (inst) {
+				ctx.augmented.instancesRec.set(instance_id, inst);
+				return inst;
+			}
+		}
+
+		// Fallback to slow way if not in record
+		let res = getAugmentedTrips(ctx, tripId)[0]?.instances.find(
 			(v) => v.instance_id === instance_id,
 		);
 		return res ? addVehicleModel(addSCI(res, ctx, context.config), ctx, context.config) : null;
@@ -343,7 +416,7 @@ export function getAugmentedStops(ctx: CacheContext, stop_id?: string): Augmente
 	if (stop_id) {
 		const stop = augmented.stopsRec.get(stop_id);
 		if (stop) return [stop];
-		const rawStop = raw.stopsRec.get(stop_id);
+		const rawStop = getStops(ctx, stop_id)[0];
 		if (rawStop) {
 			const augmentedStop = augmentStop(rawStop, context);
 			augmented.stopsRec.set(stop_id, augmentedStop);
@@ -480,15 +553,10 @@ export function SEQgetRailwayStationFacilities(ctx: CacheContext): RailwayStatio
 }
 
 function resetRealtimeCacheIncremental(updatedTripIds: Set<string>, ctx: CacheContext): void {
-	const { raw: rawCache, augmented: augmentedCache, config } = ctx;
-	rawCache.tripUpdates = [];
-	rawCache.vehiclePositions = [];
-
-	if (config.region === "SEQ") {
-		rawCache.regionSpecific.SEQ.qrtTrains = [];
-	}
+	const { augmented: augmentedCache } = ctx;
 
 	for (const tripId of updatedTripIds) {
+		unregisterAugmentedTrip(ctx, tripId);
 		augmentedCache.tripsRec.delete(tripId);
 		delete augmentedCache.stopTimes[tripId];
 		delete augmentedCache.baseStopTimes[tripId];
@@ -539,38 +607,38 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 		);
 	}
 
-	newRawCache.stops = gtfs.getStops();
-	logger.debug(`Loaded ${newRawCache.stops.length} stops.`, {
+	const stops = gtfs.getStops();
+	logger.debug(`Loaded ${stops.length} stops.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
-	newRawCache.calendars = gtfs.getCalendars();
-	logger.debug(`Loaded ${newRawCache.calendars.length} calendars.`, {
+	const calendars = gtfs.getCalendars();
+	logger.debug(`Loaded ${calendars.length} calendars.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
-	newRawCache.calendarDates = gtfs.getCalendarDates();
-	logger.debug(`Loaded ${newRawCache.calendarDates.length} calendar dates.`, {
+	const calendarDates = gtfs.getCalendarDates();
+	logger.debug(`Loaded ${calendarDates.length} calendar dates.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
-	newRawCache.routes = gtfs.getRoutes();
-	logger.debug(`Loaded ${newRawCache.routes.length} routes.`, {
+	const routes = gtfs.getRoutes();
+	logger.debug(`Loaded ${routes.length} routes.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
-	newRawCache.trips = gtfs.getTrips().filter((v) => isConsideredTrip(v, gtfs));
-	logger.debug(`Loaded ${newRawCache.trips.length} trips.`, {
+	const trips = gtfs.getTrips().filter((v) => isConsideredTrip(v, gtfs));
+	logger.debug(`Loaded ${trips.length} trips.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
 	const shapeSet = new Set<string>();
-	for (const trip of newRawCache.trips) {
+	for (const trip of trips) {
 		if (trip.shape_id && !shapeSet.has(trip.shape_id)) {
 			shapeSet.add(trip.shape_id);
 			newAugmentedCache.shapes.push({ shape_id: trip.shape_id, route_id: trip.route_id });
@@ -579,11 +647,7 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 
 	await ensureServiceCapacityData(config);
 
-	for (const trip of newRawCache.trips) newRawCache.tripsRec.set(trip.trip_id, trip);
-	for (const stop of newRawCache.stops) newRawCache.stopsRec.set(stop.stop_id, stop);
-	for (const route of newRawCache.routes) newRawCache.routesRec.set(route.route_id, route);
-
-	newAugmentedCache.stops = await processWithProgress(newRawCache.stops, "Augmenting stops", (s) =>
+	newAugmentedCache.stops = await processWithProgress(stops, "Augmenting stops", (s) =>
 		augmentStop(s, ctx),
 	);
 	logger.debug(`Augmented ${newAugmentedCache.stops.length} stops.`, {
@@ -591,7 +655,7 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 		function: "refreshStaticCache",
 	});
 
-	newAugmentedCache.trips = await processWithProgress(newRawCache.trips, "Augmenting trips", (trip) =>
+	newAugmentedCache.trips = await processWithProgress(trips, "Augmenting trips", (trip) =>
 		augmentTrip(trip, ctx),
 	);
 	for (const trip of newAugmentedCache.trips) {
@@ -605,6 +669,7 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 
 	for (const trip of newAugmentedCache.trips) {
 		newAugmentedCache.tripsRec.set(trip.trip_id, trip);
+		registerAugmentedTrip(ctx, trip);
 
 		const allStopTimes = trip.instances.flatMap((i) => i.stopTimes);
 
@@ -681,23 +746,23 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		function: "refreshRealtimeCache",
 	});
 
-	rawCache.tripUpdates = gtfs.getRealtimeTripUpdates();
-	rawCache.vehiclePositions = gtfs.getRealtimeVehiclePositions();
+	const tripUpdates = gtfs.getRealtimeTripUpdates();
+	const vehiclePositions = gtfs.getRealtimeVehiclePositions();
 
 	logger.debug(
-		`Loaded ${rawCache.tripUpdates.length} trip updates with ${rawCache.tripUpdates.flatMap((v) => v.stop_time_updates).length} stop time updates.`,
+		`Loaded ${tripUpdates.length} trip updates with ${tripUpdates.flatMap((v) => v.stop_time_updates).length} stop time updates.`,
 		{
 			module: "cache",
 			function: "refreshRealtimeCache",
 		},
 	);
-	logger.debug(`Loaded ${rawCache.vehiclePositions.length} vehicle positions.`, {
+	logger.debug(`Loaded ${vehiclePositions.length} vehicle positions.`, {
 		module: "cache",
 		function: "refreshRealtimeCache",
 	});
 
 	const updatedTripIds = new Set([
-		...rawCache.tripUpdates.map((u) => u.trip.trip_id).filter((id) => id !== undefined),
+		...tripUpdates.map((u) => u.trip.trip_id).filter((id) => id !== undefined),
 	]);
 
 	logger.debug(`Found ${updatedTripIds.size} trips with realtime updates.`, {
@@ -718,11 +783,7 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 			function: "refreshRealtimeCache",
 		});
 
-		const tripsToUpdate: Trip[] = [];
-		for (const id of updatedTripIds) {
-			const t = rawCache.tripsRec.get(id);
-			if (t) tripsToUpdate.push(t);
-		}
+		const tripsToUpdate = getTrips(ctx).filter(t => updatedTripIds.has(t.trip_id));
 
 		const updatedAugmented = await processWithProgress(tripsToUpdate, "Re-augmenting updated trips", (t) =>
 			augmentTrip(t, ctx),
@@ -730,6 +791,7 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 
 		for (const at of updatedAugmented) {
 			augmentedCache.tripsRec.set(at.trip_id, at);
+			registerAugmentedTrip(ctx, at);
 		}
 
 		augmentedCache.trips = Array.from(augmentedCache.tripsRec.values());

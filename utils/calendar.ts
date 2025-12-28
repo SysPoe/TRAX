@@ -56,12 +56,12 @@ export function getServiceDates(
 		const { service_id, date, exception_type } = calendarDate;
 		serviceDates[service_id] = serviceDates[service_id] ?? [];
 
-		if (exception_type === 1) {
+		if (date && exception_type === 1) {
 			// Service added
 			if (!serviceDates[service_id].includes(date)) {
 				serviceDates[service_id].push(date);
 			}
-		} else if (exception_type === 2) {
+		} else if (date && exception_type === 2) {
 			// Service removed
 			const index = serviceDates[service_id].indexOf(date);
 			if (index > -1) {
