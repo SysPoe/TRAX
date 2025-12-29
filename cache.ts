@@ -613,6 +613,9 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	ctx.augmented.timer.clear();
 	ctx.augmented.timer.start("refreshStaticCache");
 
+	const serviceDateTripsMap = new Map<string, Set<string>>();
+	const passingTripsMap = new Map<string, Set<string>>();
+
 	if (config.region === "SEQ") {
 		newRawCache.regionSpecific.SEQ.qrtPlaces = await getPlaces(config);
 		logger.debug(`Loaded ${newRawCache.regionSpecific.SEQ.qrtPlaces.length} QRT places.`, {
@@ -677,51 +680,51 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 		function: "refreshStaticCache",
 	});
 
-	newAugmentedCache.trips = await processWithProgress(trips, "Augmenting trips", (trip) =>
-		augmentTrip(trip, ctx),
-	);
-	for (const trip of newAugmentedCache.trips) {
-		newAugmentedCache.tripsRec.set(trip.trip_id, trip);
-	}
+	// Prime stop lookup map before trip augmentation to avoid repeated per-stop augmentation work
+	for (const stop of newAugmentedCache.stops) newAugmentedCache.stopsRec.set(stop.stop_id, stop);
 
-	logger.debug(`Augmented ${newAugmentedCache.tripsRec.size} trips.`, {
-		module: "cache",
-		function: "refreshStaticCache",
-	});
+	newAugmentedCache.trips = await processWithProgress(trips, "Augmenting trips", (trip) => {
+		const augmentedTrip = augmentTrip(trip, ctx);
+		
+		newAugmentedCache.tripsRec.set(augmentedTrip.trip_id, augmentedTrip);
+		registerAugmentedTrip(ctx, augmentedTrip);
 
-	for (const trip of newAugmentedCache.trips) {
-		newAugmentedCache.tripsRec.set(trip.trip_id, trip);
-		registerAugmentedTrip(ctx, trip);
+		const allStopTimes = augmentedTrip.instances.flatMap((i) => i.stopTimes);
+		newAugmentedCache.stopTimes[augmentedTrip.trip_id] = allStopTimes;
+		newAugmentedCache.baseStopTimes[augmentedTrip.trip_id] = [...allStopTimes];
 
-		const allStopTimes = trip.instances.flatMap((i) => i.stopTimes);
-
-		newAugmentedCache.stopTimes[trip.trip_id] = allStopTimes;
-		newAugmentedCache.baseStopTimes[trip.trip_id] = [...allStopTimes];
-
-		for (const instance of trip.instances) {
+		for (const instance of augmentedTrip.instances) {
 			for (const date of instance.actualTripDates) {
-				let tripIds = newAugmentedCache.serviceDateTrips.get(date);
-				if (!tripIds) {
-					tripIds = [];
-					newAugmentedCache.serviceDateTrips.set(date, tripIds);
+				let tripIdSet = serviceDateTripsMap.get(date);
+				if (!tripIdSet) {
+					tripIdSet = new Set();
+					serviceDateTripsMap.set(date, tripIdSet);
 				}
-				if (!tripIds.includes(trip.trip_id)) tripIds.push(trip.trip_id);
+				tripIdSet.add(augmentedTrip.trip_id);
 			}
 
 			for (const st of instance.stopTimes) {
 				if (st.passing && st.actual_stop_id) {
 					const stopId = st.actual_stop_id;
-					let tripIds = newAugmentedCache.passingTrips.get(stopId);
-					if (!tripIds) {
-						tripIds = [];
-						newAugmentedCache.passingTrips.set(stopId, tripIds);
+					let tripIdSet = passingTripsMap.get(stopId);
+					if (!tripIdSet) {
+						tripIdSet = new Set();
+						passingTripsMap.set(stopId, tripIdSet);
 					}
-					if (!tripIds.includes(trip.trip_id)) tripIds.push(trip.trip_id);
+					tripIdSet.add(augmentedTrip.trip_id);
 				}
 			}
 		}
+
+		return augmentedTrip;
+	});
+
+	for (const [date, set] of serviceDateTripsMap) {
+		newAugmentedCache.serviceDateTrips.set(date, Array.from(set));
 	}
-	for (const stop of newAugmentedCache.stops) newAugmentedCache.stopsRec.set(stop.stop_id, stop);
+	for (const [stopId, set] of passingTripsMap) {
+		newAugmentedCache.passingTrips.set(stopId, Array.from(set));
+	}
 
 	rawCache = newRawCache;
 	augmentedCache = newAugmentedCache;

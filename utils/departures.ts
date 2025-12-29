@@ -7,10 +7,9 @@ import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { AugmentedTripInstance } from "./augmentedTrip.js";
 import { getServiceDayStart } from "./time.js";
 
-function timeSeconds(time: string | number): number {
-	if (typeof time === "number") return time;
+function timeSeconds(time: string): number {
 	const [hours, minutes, seconds] = time.split(":").map(Number);
-	return hours * 3600 + (minutes ?? 0) * 60 + (seconds ?? 0);
+	return hours * 3600 + minutes * 60 + seconds;
 }
 
 type DepartureResult = AugmentedStopTime & { express_string: string; instance_id: string };
@@ -18,113 +17,150 @@ type DepartureResult = AugmentedStopTime & { express_string: string; instance_id
 export function getDeparturesForStop(
 	stop: AugmentedStop,
 	date: string,
-	start_time: string | number,
-	end_time: string | number,
+	start_time: string,
+	end_time: string,
 	ctx: cache.CacheContext,
 ): DepartureResult[] {
 	const startSec = timeSeconds(start_time);
 	const endSec = timeSeconds(end_time);
 	const parentId = stop.parent_stop_id;
 	const childIds = stop.child_stop_ids;
-	const validStops = new Set<string>([stop.stop_id, parentId, ...(childIds ?? [])].filter(Boolean) as string[]);
-	const timer = ctx.augmented.timer;
-	timer.start("getDeparturesForStop");
+	const validStops = new Set<string>([stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]);
+	const instanceCache = new Map<string, AugmentedTripInstance>();
+	const results: { st: AugmentedStopTime; inst: AugmentedTripInstance }[] = [];
 
-	const timingStart = Date.now();
-	const results: { st: AugmentedStopTime; ts: number }[] = [];
-	const seenStopTimes = new Set<AugmentedStopTime>();
+	const toDate = (d: string): Date => {
+		const dstr = d.padStart(8, "0");
+		return new Date(dstr.slice(0, 4) + "-" + dstr.slice(4, 6) + "-" + dstr.slice(6, 8));
+	};
 
-	const baseServiceDayStart = getServiceDayStart(date, ctx.config.timezone);
-	const absStart = baseServiceDayStart + startSec;
-	const absEnd = baseServiceDayStart + endSec;
+	const baseDate = toDate(date);
+	const baseDayStart = getServiceDayStart(date, ctx.config.timezone);
+	const windowStartAbs = baseDayStart + startSec;
+	const windowEndAbs = baseDayStart + endSec;
 
-	// Local cache for service day starts to avoid expensive Intl.DateTimeFormat calls
-	const serviceDayStartCache = new Map<string, number>();
-	serviceDayStartCache.set(date, baseServiceDayStart);
+	const daysForwardStart = Math.floor(startSec / 86400);
+	const daysForwardEnd = Math.floor(endSec / 86400);
 
-	let candidateCount = 0;
-	timer.start("getDeparturesForStop:search");
-	for (const stopId of validStops) {
-		const candidates = cache.getStopDeparturesCached(ctx, stopId, date);
-		candidateCount += candidates.length;
+	const getInstance = (instanceId: string): AugmentedTripInstance | null => {
+		if (instanceCache.has(instanceId)) return instanceCache.get(instanceId) ?? null;
+		const cached = ctx.augmented.instancesRec.get(instanceId) ?? cache.getAugmentedTripInstance(ctx, instanceId);
+		if (cached) instanceCache.set(instanceId, cached);
+		return cached ?? null;
+	};
 
-		for (const st of candidates) {
-			const time =
-				st.actual_departure_time ??
-				st.actual_arrival_time ??
-				st.scheduled_departure_time ??
-				st.scheduled_arrival_time;
-			if (time === null) continue;
+	const collectForServiceDate = (serviceDate: string, offsetDays: number) => {
+		const dayStart = getServiceDayStart(serviceDate, ctx.config.timezone);
+		const windowStart = windowStartAbs - offsetDays * 86400;
+		const windowEnd = windowEndAbs - offsetDays * 86400;
 
-			let dayStart = serviceDayStartCache.get(st.service_date);
-			if (dayStart === undefined) {
-				dayStart = getServiceDayStart(st.service_date, ctx.config.timezone);
-				serviceDayStartCache.set(st.service_date, dayStart);
-			}
-
-			const ts = time + dayStart;
-
-			if (ts < absStart || ts > absEnd) continue;
-
-			// Deduplicate if the same AugmentedStopTime is indexed under multiple stop IDs (e.g. parent and child)
-			if (!seenStopTimes.has(st)) {
-				results.push({ st, ts });
-				seenStopTimes.add(st);
+		for (const stopId of validStops) {
+			const stopDepartures = cache.getStopDeparturesCached(ctx, stopId, serviceDate);
+			for (const st of stopDepartures) {
+				const timeSecs = st.actual_departure_time ?? st.actual_arrival_time ?? st.scheduled_departure_time ?? 0;
+				const absTs = dayStart + timeSecs;
+				if (absTs < windowStart || absTs > windowEnd) continue;
+				const inst = getInstance(st.instance_id);
+				if (!inst) continue;
+				results.push({ st, inst });
 			}
 		}
+	};
+
+	for (let df = daysForwardStart; df <= daysForwardEnd; df++) {
+		const checkDate = new Date(baseDate);
+		checkDate.setDate(checkDate.getDate() + df);
+		const serviceDateStr = checkDate.toISOString().slice(0, 10).replace(/-/g, "");
+		collectForServiceDate(serviceDateStr, df);
 	}
-	timer.stop("getDeparturesForStop:search");
 
-	// Cache for express strings per trip and stop to avoid redundant findExpressString calls
-	const expressStringCache = new Map<string, string>();
-
-	timer.start("getDeparturesForStop:mapping");
-	const finalResults = results
-		.sort((a, b) => a.ts - b.ts)
-		.map(({ st, ts }, index) => {
-			timer.start("getDeparturesForStop:mapping:getInstance");
-			const instance = cache.getAugmentedTripInstance(ctx, st.instance_id);
-			timer.stop("getDeparturesForStop:mapping:getInstance");
-			
-			if (!instance) return null;
-
-			const stopId = st.actual_parent_station_id ?? st.actual_stop_id ?? "";
-			// Cache key includes trip ID and the stop it's departing from
-			const expressCacheKey = `${instance.trip_id}-${stopId}`;
-			
-			let expressString = expressStringCache.get(expressCacheKey);
-			if (expressString === undefined) {
-				timer.start("getDeparturesForStop:mapping:expressString");
-				expressString = findExpressString(instance.expressInfo, ctx, stopId);
-				expressStringCache.set(expressCacheKey, expressString);
-				timer.stop("getDeparturesForStop:mapping:expressString");
-			}
-
+	return results
+		.sort((a, b) => (a.st.actual_departure_time ?? 0) - (b.st.actual_departure_time ?? 0))
+		.map(({ st, inst }) => {
+			const expressString = findExpressString(
+				inst.expressInfo,
+				ctx,
+				st.actual_parent_station_id ?? st.actual_stop_id ?? "",
+			);
 			return {
 				...st,
 				express_string: expressString,
+				instance_id: inst.instance_id,
 				service_capacity:
 					st.service_capacity === ServiceCapacity.NOT_CALCULATED
-						? getServiceCapacity(instance, st, instance.serviceDate, undefined, ctx, ctx.config)
+						? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx, ctx.config)
 						: st.service_capacity,
 			};
-		})
-		.filter((v): v is NonNullable<typeof v> => v !== null);
-	timer.stop("getDeparturesForStop:mapping");
+		});
+}
 
-	timer.stop("getDeparturesForStop");
-	timer.log("Departure Lookup");
+export function getServiceDateDeparturesForStop(
+	stop: AugmentedStop,
+	serviceDate: string,
+	start_time_secs: number,
+	end_time_secs: number,
+	ctx: cache.CacheContext,
+): DepartureResult[] {
+	const parentId = stop.parent_stop_id;
+	const childIds = stop.child_stop_ids;
+	const validStops = new Set<string>([stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]);
+	const instanceCache = new Map<string, AugmentedTripInstance>();
+	const dayStart = getServiceDayStart(serviceDate, ctx.config.timezone);
+	const windowStartAbs = dayStart + start_time_secs;
+	const windowEndAbs = dayStart + end_time_secs;
+	const results: { st: AugmentedStopTime; inst: AugmentedTripInstance }[] = [];
 
-	return finalResults;
+	const getInstance = (instanceId: string): AugmentedTripInstance | null => {
+		if (instanceCache.has(instanceId)) return instanceCache.get(instanceId) ?? null;
+		const cached = ctx.augmented.instancesRec.get(instanceId) ?? cache.getAugmentedTripInstance(ctx, instanceId);
+		if (cached) instanceCache.set(instanceId, cached);
+		return cached ?? null;
+	};
+
+	for (const stopId of validStops) {
+		const stopDepartures = cache.getStopDeparturesCached(ctx, stopId, serviceDate);
+		for (const st of stopDepartures) {
+			const timeSecs = st.actual_departure_time ?? st.actual_arrival_time ?? st.scheduled_departure_time ?? 0;
+			const absTs = dayStart + timeSecs;
+			if (absTs < windowStartAbs || absTs > windowEndAbs) continue;
+			const inst = getInstance(st.instance_id);
+			if (!inst) continue;
+			results.push({ st, inst });
+		}
+	}
+
+	return results
+		.sort((a, b) => (a.st.actual_departure_time ?? 0) - (b.st.actual_departure_time ?? 0))
+		.map(({ st, inst }) => {
+			const expressString = findExpressString(
+				inst.expressInfo,
+				ctx,
+				st.actual_parent_station_id ?? st.actual_stop_id ?? "",
+			);
+			return {
+				...st,
+				express_string: expressString,
+				instance_id: inst.instance_id,
+				service_capacity:
+					st.service_capacity === ServiceCapacity.NOT_CALCULATED
+						? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx, ctx.config)
+						: st.service_capacity,
+			};
+		});
 }
 
 export function attachDeparturesHelpers(stop: AugmentedStop, ctx: cache.CacheContext): AugmentedStop {
 	Object.defineProperties(stop, {
 		getDepartures: {
-			value: (date: string, start_time: string | number, end_time: string | number) =>
+			value: (date: string, start_time: string, end_time: string) =>
 				getDeparturesForStop(stop, date, start_time, end_time, ctx),
 			enumerable: false,
-		}
+		},
+		_getSDDepartures: {
+			value: (serviceDate: string, start_time_secs: number, end_time_secs: number) =>
+				getServiceDateDeparturesForStop(stop, serviceDate, start_time_secs, end_time_secs, ctx),
+			enumerable: false,
+		},
 	});
 	return stop;
 }

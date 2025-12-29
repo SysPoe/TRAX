@@ -135,9 +135,6 @@ function resolveExitSide(
 }
 
 function assignPlatformSides(st: IntermediateAST[], platformDataMap: any): AugmentedStopTime[] {
-	const timer = (st[0] as any)?.timer; // Best effort to get timer from ctx reference if it was passed through
-	// Actually, we'll just use the category in augmentStopTimes.
-	// But let's add a specific sub-timer anyway if we can find it.
 	const getPlatformData = (stopId: string | null | undefined) => {
 		if (!stopId) return null;
 		return platformDataMap[stopId];
@@ -242,8 +239,6 @@ export function augmentStopTimes(
 	},
 	ctx: cache.CacheContext,
 ): AugmentedStopTime[] {
-	const timer = ctx.augmented.timer;
-	timer.start("augmentStopTimes");
 	const { serviceDate, tripUpdate, scheduleRelationship } = instanceContext;
 	const tripId = tripUpdate?.trip.trip_id ?? staticStopTimes?.[0]?.trip_id ?? "";
 
@@ -601,9 +596,5 @@ export function augmentStopTimes(
 	}
 	platformData = ctx.raw.regionSpecific.SEQ.platformData;
 
-	timer.start("augmentStopTimes:platforms");
-	const res = assignPlatformSides(finalStops, platformData);
-	timer.stop("augmentStopTimes:platforms");
-	timer.stop("augmentStopTimes");
-	return res;
+	return assignPlatformSides(finalStops, platformData);
 }
