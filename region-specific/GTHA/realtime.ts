@@ -82,9 +82,9 @@ function propagatePlatformToNextTripInBlock(
 	const blockTrips = blockMap
 		? blockMap.get(currentInst.block_id) || []
 		: (ctx.augmented.serviceDateTrips.get(currentInst.serviceDate) ?? [])
-			.map((id) => ctx.augmented.tripsRec.get(id))
-			.filter(Boolean)
-			.flatMap((at) => at!.instances.filter((i) => i.serviceDate === currentInst.serviceDate));
+				.map((id) => ctx.augmented.tripsRec.get(id))
+				.filter(Boolean)
+				.flatMap((at) => at!.instances.filter((i) => i.serviceDate === currentInst.serviceDate));
 
 	for (const inst of blockTrips) {
 		if (inst.block_id !== currentInst.block_id || inst.instance_id === currentInst.instance_id) continue;
@@ -119,9 +119,9 @@ function propagateVehicleInfoToBlock(
 	const blockTrips = blockMap
 		? blockMap.get(blockId) || []
 		: (ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [])
-			.map((id) => ctx.augmented.tripsRec.get(id))
-			.filter(Boolean)
-			.flatMap((at) => at!.instances.filter((i) => i.serviceDate === serviceDateStr));
+				.map((id) => ctx.augmented.tripsRec.get(id))
+				.filter(Boolean)
+				.flatMap((at) => at!.instances.filter((i) => i.serviceDate === serviceDateStr));
 
 	const info = {
 		vehicle_id: vehicleId,
@@ -231,7 +231,7 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 							(stu) =>
 								(stu.departure_time ?? stu.arrival_time) &&
 								((stu.departure_time ?? stu.arrival_time ?? 0) - nowSecs + 86400) % 86400 <=
-								GO_LOOKAHEAD_SECS,
+									GO_LOOKAHEAD_SECS,
 						)
 						.map((stu) => ({ stop_id: stu.stop_id, trip_id: update.trip.trip_id })) ?? [],
 			),
@@ -260,7 +260,7 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 							(stu) =>
 								(stu.departure_time ?? stu.arrival_time) &&
 								((stu.departure_time ?? stu.arrival_time ?? 0) - nowSecs + 86400) % 86400 <=
-								UP_LOOKAHEAD_SECS,
+									UP_LOOKAHEAD_SECS,
 						)
 						.map((stu) => ({ stop_id: stu.stop_id, trip_id: update.trip.trip_id })) ?? [],
 			),

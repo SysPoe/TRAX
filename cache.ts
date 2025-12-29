@@ -295,9 +295,10 @@ export function getStopDeparturesCached(ctx: CacheContext, stopId: string, servi
 	}
 
 	// Intersect trips for stop and trips for date
-	const relevantTripIds = (tripIdsForStop.size < tripIdsForDate.length)
-		? Array.from(tripIdsForStop).filter(id => tripIdsForDate.includes(id))
-		: tripIdsForDate.filter(id => tripIdsForStop.has(id));
+	const relevantTripIds =
+		tripIdsForStop.size < tripIdsForDate.length
+			? Array.from(tripIdsForStop).filter((id) => tripIdsForDate.includes(id))
+			: tripIdsForDate.filter((id) => tripIdsForStop.has(id));
 	timer.stop("getStopDeparturesCached:idIntersection");
 
 	timer.start("getStopDeparturesCached:processInstances");
@@ -305,12 +306,16 @@ export function getStopDeparturesCached(ctx: CacheContext, stopId: string, servi
 	for (const tripId of relevantTripIds) {
 		const trip = augmented.tripsRec.get(tripId);
 		if (!trip) continue;
-		const instance = trip.instances.find(i => i.serviceDate === serviceDate);
+		const instance = trip.instances.find((i) => i.serviceDate === serviceDate);
 		if (!instance) continue;
 
 		for (const st of instance.stopTimes) {
-			if ((st.actual_stop_id === stopId || st.actual_parent_station_id === stopId ||
-				 st.scheduled_stop_id === stopId || st.scheduled_parent_station_id === stopId)) {
+			if (
+				st.actual_stop_id === stopId ||
+				st.actual_parent_station_id === stopId ||
+				st.scheduled_stop_id === stopId ||
+				st.scheduled_parent_station_id === stopId
+			) {
 				results.push(st);
 			}
 		}
@@ -374,9 +379,7 @@ export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string)
 		}
 
 		// Fallback to slow way if not in record
-		let res = getAugmentedTrips(ctx, tripId)[0]?.instances.find(
-			(v) => v.instance_id === instance_id,
-		);
+		let res = getAugmentedTrips(ctx, tripId)[0]?.instances.find((v) => v.instance_id === instance_id);
 		return res ? addVehicleModel(addSCI(res, ctx, context.config), ctx, context.config) : null;
 	} catch {
 		return null;
@@ -672,9 +675,7 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 
 	await ensureServiceCapacityData(config);
 
-	newAugmentedCache.stops = await processWithProgress(stops, "Augmenting stops", (s) =>
-		augmentStop(s, ctx),
-	);
+	newAugmentedCache.stops = await processWithProgress(stops, "Augmenting stops", (s) => augmentStop(s, ctx));
 	logger.debug(`Augmented ${newAugmentedCache.stops.length} stops.`, {
 		module: "cache",
 		function: "refreshStaticCache",
@@ -685,7 +686,7 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 
 	newAugmentedCache.trips = await processWithProgress(trips, "Augmenting trips", (trip) => {
 		const augmentedTrip = augmentTrip(trip, ctx);
-		
+
 		newAugmentedCache.tripsRec.set(augmentedTrip.trip_id, augmentedTrip);
 		registerAugmentedTrip(ctx, augmentedTrip);
 
@@ -791,9 +792,7 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		function: "refreshRealtimeCache",
 	});
 
-	const updatedTripIds = new Set([
-		...tripUpdates.map((u) => u.trip.trip_id).filter((id) => id !== undefined),
-	]);
+	const updatedTripIds = new Set([...tripUpdates.map((u) => u.trip.trip_id).filter((id) => id !== undefined)]);
 
 	logger.debug(`Found ${updatedTripIds.size} trips with realtime updates.`, {
 		module: "cache",
@@ -813,7 +812,7 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 			function: "refreshRealtimeCache",
 		});
 
-		const tripsToUpdate = getTrips(ctx).filter(t => updatedTripIds.has(t.trip_id));
+		const tripsToUpdate = getTrips(ctx).filter((t) => updatedTripIds.has(t.trip_id));
 
 		const updatedAugmented = await processWithProgress(tripsToUpdate, "Re-augmenting updated trips", (t) =>
 			augmentTrip(t, ctx),

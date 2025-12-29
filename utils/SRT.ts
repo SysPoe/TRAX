@@ -322,10 +322,16 @@ export function findExpressString(
 		"Running express " +
 		segments
 			.map((run) => {
-				const startName = (ctx.augmented.stopsRec.get(run.from)?.stop_name ?? cache.getRawStops(ctx, run.from)[0]?.stop_name)?.replace(" station", "");
-				const endName = (ctx.augmented.stopsRec.get(run.to)?.stop_name ?? cache.getRawStops(ctx, run.to)[0]?.stop_name)?.replace(" station", "");
+				const startName = (
+					ctx.augmented.stopsRec.get(run.from)?.stop_name ?? cache.getRawStops(ctx, run.from)[0]?.stop_name
+				)?.replace(" station", "");
+				const endName = (
+					ctx.augmented.stopsRec.get(run.to)?.stop_name ?? cache.getRawStops(ctx, run.to)[0]?.stop_name
+				)?.replace(" station", "");
 				const stoppingAtNames = run.stoppingAt.map((stopId) =>
-					(ctx.augmented.stopsRec.get(stopId)?.stop_name ?? cache.getRawStops(ctx, stopId)[0]?.stop_name)?.replace(" station", ""),
+					(
+						ctx.augmented.stopsRec.get(stopId)?.stop_name ?? cache.getRawStops(ctx, stopId)[0]?.stop_name
+					)?.replace(" station", ""),
 				);
 				const formattedStoppingAtNames =
 					stoppingAtNames.length <= 1

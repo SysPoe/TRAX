@@ -17,33 +17,35 @@ export class Timer {
 		if (start !== undefined) {
 			const elapsed = performance.now() - start;
 			this.times.set(category, (this.times.get(category) ?? 0) + elapsed);
-			
+
 			const currentMin = this.minTimes.get(category) ?? Infinity;
 			if (elapsed < currentMin) this.minTimes.set(category, elapsed);
-			
+
 			const currentMax = this.maxTimes.get(category) ?? 0;
 			if (elapsed > currentMax) this.maxTimes.set(category, elapsed);
-			
+
 			this.activeTimers.delete(category);
 		}
 	}
 
 	public log(label: string) {
-        if(logger.getLevel() < LogLevel.DEBUG) return;
+		if (logger.getLevel() < LogLevel.DEBUG) return;
 		console.log(`\n--- Detailed Timing Report: ${label} ---`);
-		
+
 		const sorted = Array.from(this.times.entries()).sort((a, b) => b[1] - a[1]);
 		for (const [category, total] of sorted) {
 			const count = this.counts.get(category) ?? 0;
 			const avg = total / count;
 			const min = this.minTimes.get(category) ?? 0;
 			const max = this.maxTimes.get(category) ?? 0;
-			
+
 			const depth = category.split(":").length - 1;
 			const indent = "  ".repeat(depth);
 			const displayName = indent + (depth > 0 ? "└ " : "") + category.split(":").pop();
 
-			console.log(`${displayName.padEnd(45)} | ${total.toFixed(2).padStart(10)}ms | x${count.toString().padEnd(6)} | avg: ${avg.toFixed(3).padStart(8)}ms | [${min.toFixed(2)}, ${max.toFixed(2)}]`);
+			console.log(
+				`${displayName.padEnd(45)} | ${total.toFixed(2).padStart(10)}ms | x${count.toString().padEnd(6)} | avg: ${avg.toFixed(3).padStart(8)}ms | [${min.toFixed(2)}, ${max.toFixed(2)}]`,
+			);
 		}
 		console.log("-".repeat(110) + "\n");
 	}
