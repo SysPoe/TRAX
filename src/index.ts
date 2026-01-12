@@ -193,7 +193,8 @@ export class TRAX {
 	public getVehiclePositions = (trip_id?: string) => cache.getVehiclePositions(this.ctx, trip_id);
 	public getShapes = () => cache.getShapes(this.ctx);
 
-	public logTimings = (label: string = "TRAX Operation", clear: boolean = true) => this.ctx.augmented.timer.log(label, clear);
+	public logTimings = (label: string = "TRAX Operation", clear: boolean = true) =>
+		this.ctx.augmented.timer.log(label, clear);
 
 	public on(event: keyof TRAXEvent | string | symbol, listener: (...args: any[]) => void): this {
 		this.events.on(event, listener);

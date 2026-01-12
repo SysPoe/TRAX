@@ -712,13 +712,13 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	}
 	const qrtPlacesByName = new Map<string, any>();
 	if (config.region === "SEQ") {
-		for (const p of (newRawCache.regionSpecific.SEQ.qrtPlaces ?? [])) {
+		for (const p of newRawCache.regionSpecific.SEQ.qrtPlaces ?? []) {
 			if (p.Title) qrtPlacesByName.set(p.Title.toLowerCase().trim().replace("station", "").trim(), p);
 		}
 	}
 	const facilitiesByStopId = new Map<string, RailwayStationFacility>();
 	if (config.region === "SEQ") {
-		for (const f of (newRawCache.regionSpecific.SEQ.railwayStationFacilities ?? [])) {
+		for (const f of newRawCache.regionSpecific.SEQ.railwayStationFacilities ?? []) {
 			if (f.stops) {
 				for (const sId of f.stops) facilitiesByStopId.set(sId, f);
 			}
@@ -738,14 +738,16 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	// Prime stop lookup map
 	ctx.augmented.timer.start("refreshStaticCache:primeStopMap");
 	for (const stop of newAugmentedCache.stops) newAugmentedCache.stopsRec.set(stop.stop_id, stop);
-	
+
 	// Link parents and children
 	for (const stop of newAugmentedCache.stops) {
 		if (stop.parent_stop_id) {
 			stop.parent = newAugmentedCache.stopsRec.get(stop.parent_stop_id) ?? null;
 		}
 		if (stop.child_stop_ids) {
-			stop.children = stop.child_stop_ids.map(id => newAugmentedCache.stopsRec.get(id)).filter((s): s is AugmentedStop => !!s);
+			stop.children = stop.child_stop_ids
+				.map((id) => newAugmentedCache.stopsRec.get(id))
+				.filter((s): s is AugmentedStop => !!s);
 		}
 	}
 	ctx.augmented.timer.stop("refreshStaticCache:primeStopMap");

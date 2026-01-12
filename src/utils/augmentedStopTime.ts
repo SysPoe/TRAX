@@ -7,12 +7,6 @@ import { ServiceCapacity } from "./serviceCapacity.js";
 import { getServiceDayStart } from "./time.js";
 import { Timer } from "./timer.js";
 import {
-	findPath as wasmFindPath,
-	resetGraph,
-	addAdjacency,
-	addSRT,
-	getSRT as getWasmSRT,
-	interpolateTimes as wasmInterpolateTimes,
 	addDaysToDateString as wasmAddDaysToDateString,
 	calculateDelayClassWasm,
 } from "../../build/release.js";

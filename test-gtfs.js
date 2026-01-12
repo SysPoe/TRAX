@@ -32,7 +32,7 @@ async function main() {
 		tomorrow.getDate().toString().padStart(2, "0");
 
 	console.log(`Getting departures for ${stop.stop_name} on ${date}...`);
-	
+
 	let depstart = Date.now();
 	const deps = TRAX.utils.departures.getDeparturesForStop(stop, date, "08:00:00", "23:59:59");
 	let depend = Date.now();
