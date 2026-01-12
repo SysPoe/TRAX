@@ -125,3 +125,67 @@ export function interpolateTimes(
 
     return result;
 }
+
+/**
+ * Filter and sort departure indices based on timestamps.
+ * Returns an array of original indices.
+ */
+export function filterAndSortDepartures(
+  timestamps: f64[],
+  originalIndices: i32[],
+  windowStart: f64,
+  windowEnd: f64
+): i32[] {
+  let filteredIndices = new Array<i32>();
+  let filteredTimestamps = new Array<f64>();
+
+  for (let i = 0, len = timestamps.length; i < len; i++) {
+    let ts = timestamps[i];
+    if (ts >= windowStart && ts <= windowEnd) {
+      filteredIndices.push(originalIndices[i]);
+      filteredTimestamps.push(ts);
+    }
+  }
+
+  // Sort the filtered results based on timestamps
+  if (filteredIndices.length > 1) {
+    quickSort(filteredIndices, filteredTimestamps, 0, filteredIndices.length - 1);
+  }
+
+  return filteredIndices;
+}
+
+function quickSort(indices: i32[], timestamps: f64[], left: i32, right: i32): void {
+  if (left < right) {
+    let pivotIndex = partition(indices, timestamps, left, right);
+    quickSort(indices, timestamps, left, pivotIndex - 1);
+    quickSort(indices, timestamps, pivotIndex + 1, right);
+  }
+}
+
+function partition(indices: i32[], timestamps: f64[], left: i32, right: i32): i32 {
+  let pivot = timestamps[right];
+  let i = left - 1;
+  for (let j = left; j < right; j++) {
+    if (timestamps[j] < pivot) {
+      i++;
+      swap(indices, i, j);
+      swapF64(timestamps, i, j);
+    }
+  }
+  swap(indices, i + 1, right);
+  swapF64(timestamps, i + 1, right);
+  return i + 1;
+}
+
+function swap(arr: i32[], i: i32, j: i32): void {
+  let temp = arr[i];
+  arr[i] = arr[j];
+  arr[j] = temp;
+}
+
+function swapF64(arr: f64[], i: i32, j: i32): void {
+  let temp = arr[i];
+  arr[i] = arr[j];
+  arr[j] = temp;
+}

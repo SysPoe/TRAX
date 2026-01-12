@@ -3,6 +3,14 @@ import { getGtfs } from "../gtfsInterfaceLayer.js";
 import { cacheFileExists, loadCacheFile, writeCacheFile } from "./fs.js";
 import * as cache from "../cache.js";
 import * as qdf from "qdf-gtfs";
+import {
+	findPath as wasmFindPath,
+	resetGraph,
+	addAdjacency,
+	addSRT,
+	getSRT as getWasmSRT,
+	interpolateTimes as wasmInterpolateTimes,
+} from "../../build/release.js";
 
 export type SRTMatrix = {
 	[from: string]: {
@@ -190,6 +198,23 @@ function ensureDataLoaded(ctx: cache.CacheContext) {
 		if (!_networkData) {
 			_networkData = generateNetworkData(ctx);
 		}
+		syncToWasm(_networkData);
+	}
+}
+
+function syncToWasm(data: NetworkData) {
+	resetGraph();
+	const adjacency = data.adjacency;
+	for (const from in adjacency) {
+		for (const to of adjacency[from]) {
+			addAdjacency(from, to);
+		}
+	}
+	const matrix = data.matrix;
+	for (const from in matrix) {
+		for (const to in matrix[from]) {
+			addSRT(from, to, matrix[from][to]);
+		}
 	}
 }
 
@@ -211,40 +236,10 @@ function findPathBFS(start: string, end: string, ctx: cache.CacheContext): strin
 		return bfsCache.get(cacheKey)!;
 	}
 
-	const graph = getGraph(ctx);
-	if (!graph[start] || !graph[end]) {
-		bfsCache.set(cacheKey, null);
-		return null;
-	}
-	if (start === end) {
-		const res = [start];
-		bfsCache.set(cacheKey, res);
-		return res;
-	}
-
-	const queue: { stop: string; path: string[] }[] = [{ stop: start, path: [start] }];
-	const visited = new Set<string>([start]);
-
-	while (queue.length > 0) {
-		const { stop: currentStop, path: currentPath } = queue.shift()!;
-		const neighbors = graph[currentStop];
-
-		if (neighbors) {
-			for (const neighbor of neighbors) {
-				if (!visited.has(neighbor)) {
-					visited.add(neighbor);
-					const newPath = [...currentPath, neighbor];
-					if (neighbor === end) {
-						bfsCache.set(cacheKey, newPath);
-						return newPath;
-					}
-					queue.push({ stop: neighbor, path: newPath });
-				}
-			}
-		}
-	}
-	bfsCache.set(cacheKey, null);
-	return null;
+	ensureDataLoaded(ctx);
+	const path = wasmFindPath(start, end);
+	bfsCache.set(cacheKey, path);
+	return path;
 }
 
 export function findExpress(givenStops: string[], ctx: cache.CacheContext): ExpressInfo[] {
@@ -480,16 +475,13 @@ export function findPassingStopTimes(
 			continue;
 		}
 
-		const totalTimeDiff = Math.floor((endTime.arrival_time - startTime.departure_time) / 60);
-		const totalEmu = currentPassingRun.reduce((acc, curr) => acc + curr.emu, 0) + srt.emu;
+		const totalTimeDiff = endTime.arrival_time - startTime.departure_time;
+		const segmentEmus = [...currentPassingRun.map((r) => r.emu), srt.emu];
+		const interpolatedTimes = wasmInterpolateTimes(startTime.departure_time, endTime.arrival_time, segmentEmus);
 
-		let accumulatedEmu = 0;
 		for (let i = 0; i < currentPassingRun.length; i++) {
 			const run = currentPassingRun[i];
-			accumulatedEmu += run.emu;
-			const scaledTimeOffset = totalEmu > 0 ? (accumulatedEmu / totalEmu) * totalTimeDiff : 0;
-
-			const interpolatedTime = startTime.departure_time + Math.floor(scaledTimeOffset * 60);
+			const interpolatedTime = interpolatedTimes[i];
 
 			resultTimes.push({
 				_passing: true,

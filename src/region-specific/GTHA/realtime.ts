@@ -244,6 +244,7 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 					module: "GTHA",
 					function: "updateGTHAPlatforms",
 				});
+				console.error(e);
 				return null;
 			}),
 	}));
@@ -287,11 +288,11 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 		)
 			.then(async (r) => (r.ok ? ((await r.json()) as GTHADeparturesResponse) : null))
 			.catch((e) => {
-				logger.error(`Failed to update GO platforms for stop ${stop_id}`, {
-					error: e,
+				logger.error(`Failed to update GO platforms for stop ${stop_id}: ${e.message ?? e}`, {
 					module: "GTHA",
 					function: "updateGTHAPlatforms",
 				});
+				console.error(e);
 				return null;
 			}),
 	}));
@@ -365,11 +366,11 @@ export async function updateGTHAPlatforms(ctx: CacheContext, gtfs: GTFS) {
 					)
 						.then((r) => (r.ok ? r.json() : null))
 						.catch((e) => {
-							logger.error(`Failed to fetch GoTracker for stop ${stop_id} corridor ${code}`, {
-								error: e,
+							logger.error(`Failed to fetch GoTracker for stop ${stop_id} corridor ${code}: ${e.message ?? e}`, {
 								module: "GTHA",
 								function: "updateGTHAPlatforms",
 							});
+							console.error(e);
 							return null;
 						}),
 				})),
@@ -632,6 +633,7 @@ export async function updateGTHASchedule(
 			module: "GTHA",
 			function: "updateGTHASchedule",
 		});
+		console.error(e);
 	}
 	timer.stop("updateGTHASchedule");
 }
@@ -751,6 +753,7 @@ export async function updateGTHAAVL(
 			module: "GTHA",
 			function: "updateGTHAAVL",
 		});
+		console.error(e);
 	}
 	timer.stop("updateGTHAAVL");
 }

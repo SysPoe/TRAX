@@ -6,6 +6,7 @@ import { AugmentedStop } from "./augmentedStop.js";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { AugmentedTripInstance } from "./augmentedTrip.js";
 import { getServiceDayStart } from "./time.js";
+import { filterAndSortDepartures } from "../../build/release.js";
 
 function timeSeconds(time: string): number {
 	const [hours, minutes, seconds] = time.split(":").map(Number);
@@ -51,48 +52,69 @@ export function getDeparturesForStop(
 	};
 
 	ctx.augmented.timer.start("getDeparturesForStop:collect");
+	const allTimestamps: number[] = [];
+	const allStopsAndInsts: { st: AugmentedStopTime; inst: AugmentedTripInstance }[] = [];
+
 	for (let df = daysForwardStart; df <= daysForwardEnd; df++) {
 		const checkDate = new Date(baseDate);
 		checkDate.setDate(checkDate.getDate() + df);
 		const serviceDateStr = checkDate.toISOString().slice(0, 10).replace(/-/g, "");
 		const dayStart = getServiceDayStart(serviceDateStr, ctx.config.timezone);
-		const windowStart = windowStartAbs - df * 86400;
-		const windowEnd = windowEndAbs - df * 86400;
 
 		for (const stopId of validStops) {
 			const stopDepartures = cache.getStopDeparturesCached(ctx, stopId, serviceDateStr);
 			for (const st of stopDepartures) {
 				const timeSecs = st.actual_departure_time ?? st.actual_arrival_time ?? st.scheduled_departure_time ?? 0;
 				const absTs = dayStart + timeSecs;
-				if (absTs < windowStart || absTs > windowEnd) continue;
-				const inst = getInstance(st.instance_id);
-				if (!inst) continue;
-				results.push({ st, inst });
+				
+				allTimestamps.push(absTs);
+				allStopsAndInsts.push({ st, inst: null as any }); // inst will be fetched later for filtered results
 			}
 		}
 	}
 	ctx.augmented.timer.stop("getDeparturesForStop:collect");
 
-	ctx.augmented.timer.start("getDeparturesForStop:sortAndMap");
-	const sortedResults = results
-		.sort((a, b) => (a.st.actual_departure_time ?? 0) - (b.st.actual_departure_time ?? 0))
-		.map(({ st, inst }) => {
-			const expressString = findExpressString(
-				inst.expressInfo,
-				ctx,
-				st.actual_parent_station_id ?? st.actual_stop_id ?? "",
-			);
-			return {
-				...st,
-				express_string: expressString,
-				instance_id: inst.instance_id,
-				service_capacity:
-					st.service_capacity === ServiceCapacity.NOT_CALCULATED
-						? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx, ctx.config)
-						: st.service_capacity,
-			};
-		});
-	ctx.augmented.timer.stop("getDeparturesForStop:sortAndMap");
+	ctx.augmented.timer.start("getDeparturesForStop:wasm");
+	const originalIndices = new Int32Array(allTimestamps.length);
+	for (let i = 0; i < allTimestamps.length; i++) originalIndices[i] = i;
+
+	const filteredIndices = filterAndSortDepartures(
+		allTimestamps,
+		Array.from(originalIndices),
+		windowStartAbs,
+		windowEndAbs,
+	) as number[];
+	ctx.augmented.timer.stop("getDeparturesForStop:wasm");
+
+	ctx.augmented.timer.start("getDeparturesForStop:instantiate");
+	const finalResults: { st: AugmentedStopTime; inst: AugmentedTripInstance }[] = [];
+	for (const idx of filteredIndices) {
+		const entry = allStopsAndInsts[idx];
+		const inst = getInstance(entry.st.instance_id);
+		if (inst) {
+			finalResults.push({ st: entry.st, inst });
+		}
+	}
+	ctx.augmented.timer.stop("getDeparturesForStop:instantiate");
+
+	ctx.augmented.timer.start("getDeparturesForStop:map");
+	const sortedResults = finalResults.map(({ st, inst }) => {
+		const expressString = findExpressString(
+			inst.expressInfo,
+			ctx,
+			st.actual_parent_station_id ?? st.actual_stop_id ?? "",
+		);
+		return {
+			...st,
+			express_string: expressString,
+			instance_id: inst.instance_id,
+			service_capacity:
+				st.service_capacity === ServiceCapacity.NOT_CALCULATED
+					? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx, ctx.config)
+					: st.service_capacity,
+		};
+	});
+	ctx.augmented.timer.stop("getDeparturesForStop:map");
 
 	ctx.augmented.timer.stop("getDeparturesForStop");
 	return sortedResults;
@@ -123,39 +145,62 @@ export function getServiceDateDeparturesForStop(
 	};
 
 	ctx.augmented.timer.start("getServiceDateDeparturesForStop:collect");
+	const allTimestamps: number[] = [];
+	const allStopsAndInsts: { st: AugmentedStopTime; inst: AugmentedTripInstance }[] = [];
+
 	for (const stopId of validStops) {
 		const stopDepartures = cache.getStopDeparturesCached(ctx, stopId, serviceDate);
 		for (const st of stopDepartures) {
 			const timeSecs = st.actual_departure_time ?? st.actual_arrival_time ?? st.scheduled_departure_time ?? 0;
 			const absTs = dayStart + timeSecs;
-			if (absTs < windowStartAbs || absTs > windowEndAbs) continue;
-			const inst = getInstance(st.instance_id);
-			if (!inst) continue;
-			results.push({ st, inst });
+			
+			allTimestamps.push(absTs);
+			allStopsAndInsts.push({ st, inst: null as any });
 		}
 	}
 	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:collect");
 
-	ctx.augmented.timer.start("getServiceDateDeparturesForStop:sortAndMap");
-	const sortedResults = results
-		.sort((a, b) => (a.st.actual_departure_time ?? 0) - (b.st.actual_departure_time ?? 0))
-		.map(({ st, inst }) => {
-			const expressString = findExpressString(
-				inst.expressInfo,
-				ctx,
-				st.actual_parent_station_id ?? st.actual_stop_id ?? "",
-			);
-			return {
-				...st,
-				express_string: expressString,
-				instance_id: inst.instance_id,
-				service_capacity:
-					st.service_capacity === ServiceCapacity.NOT_CALCULATED
-						? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx, ctx.config)
-						: st.service_capacity,
-			};
-		});
-	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:sortAndMap");
+	ctx.augmented.timer.start("getServiceDateDeparturesForStop:wasm");
+	const originalIndices = new Int32Array(allTimestamps.length);
+	for (let i = 0; i < allTimestamps.length; i++) originalIndices[i] = i;
+
+	const filteredIndices = filterAndSortDepartures(
+		allTimestamps,
+		Array.from(originalIndices),
+		windowStartAbs,
+		windowEndAbs,
+	) as number[];
+	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:wasm");
+
+	ctx.augmented.timer.start("getServiceDateDeparturesForStop:instantiate");
+	const finalResults: { st: AugmentedStopTime; inst: AugmentedTripInstance }[] = [];
+	for (const idx of filteredIndices) {
+		const entry = allStopsAndInsts[idx];
+		const inst = getInstance(entry.st.instance_id);
+		if (inst) {
+			finalResults.push({ st: entry.st, inst });
+		}
+	}
+	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:instantiate");
+
+	ctx.augmented.timer.start("getServiceDateDeparturesForStop:map");
+	const sortedResults = finalResults.map(({ st, inst }) => {
+		const expressString = findExpressString(
+			inst.expressInfo,
+			ctx,
+			st.actual_parent_station_id ?? st.actual_stop_id ?? "",
+		);
+		return {
+			...st,
+			express_string: expressString,
+			instance_id: inst.instance_id,
+			service_capacity:
+				st.service_capacity === ServiceCapacity.NOT_CALCULATED
+					? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx, ctx.config)
+					: st.service_capacity,
+		};
+	});
+	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:map");
 
 	ctx.augmented.timer.stop("getServiceDateDeparturesForStop");
 	return sortedResults;
