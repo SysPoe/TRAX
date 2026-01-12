@@ -1,13 +1,13 @@
 **/node_modules
 **/.TRAXCACHE.sqlite
 **/.TRAXCACHE.sqlite-journal
-**/package-lock.json
 **/.cache
 **/.git
 .idea
 profiler
 TRAX.log
 dist
+build
 .TRAXCACHE
 pnpm-lock.yaml
 .env

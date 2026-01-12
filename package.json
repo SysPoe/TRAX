@@ -1,37 +1,43 @@
 {
-    "type": "module",
-    "name": "translink-rail-api",
-    "version": "0.1.11",
-    "description": "High-level API for TransLink Rail services",
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
-    "devDependencies": {
-        "@types/node": "^24.0.14",
-        "assemblyscript": "^0.28.9",
-        "prettier": "^3.6.2",
-        "tsx": "^3.12.7",
-        "typescript": "^5.9.3"
-    },
-    "dependencies": {
-        "@types/cli-progress": "^3.11.6",
-        "chalk": "^5.4.1",
-        "cli-progress": "^3.12.0",
-        "qdf-gtfs": "github:SysPoe/QDF-GTFS",
-        "dotenv": "^17.2.3",
-        "strip-ansi": "^7.1.2"
-    },
-    "scripts": {
-        "build": "tsc",
-        "prepare": "npm run build",
-        "format": "prettier . --write --config .prettierrc"
-    },
-    "files": [
-        "dist"
-    ],
-    "exports": {
-        ".": {
-            "import": "./dist/index.js",
-            "types": "./dist/index.d.ts"
-        }
+  "type": "module",
+  "name": "translink-rail-api",
+  "version": "0.1.11",
+  "description": "High-level API for TransLink Rail services",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "devDependencies": {
+    "@types/node": "^24.0.14",
+    "assemblyscript": "^0.28.9",
+    "prettier": "^3.6.2",
+    "tsx": "^3.12.7",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@types/cli-progress": "^3.11.6",
+    "chalk": "^5.4.1",
+    "cli-progress": "^3.12.0",
+    "dotenv": "^17.2.3",
+    "qdf-gtfs": "github:SysPoe/QDF-GTFS",
+    "strip-ansi": "^7.1.2"
+  },
+  "scripts": {
+    "build": "npm run asbuild && tsc",
+    "prepare": "npm run build",
+    "format": "prettier . --write --config .prettierrc",
+    "asbuild:debug": "asc assembly/index.ts --target debug",
+    "asbuild:release": "asc assembly/index.ts --target release",
+    "asbuild": "npm run asbuild:debug && npm run asbuild:release",
+    "test": "node tests",
+    "start": "npx serve ."
+  },
+  "files": [
+    "dist",
+    "build"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     }
+  }
 }
