@@ -189,3 +189,176 @@ function swapF64(arr: f64[], i: i32, j: i32): void {
   arr[i] = arr[j];
   arr[j] = temp;
 }
+
+// --- Delay Logic ---
+
+class DelayInfo {
+    str: string = "";
+    cls: string = "";
+}
+
+export function calculateDelayClassWasm(delaySecs: i32): DelayInfo {
+    if (Math.abs(delaySecs as f64) <= 60) return { str: "on time", cls: "on-time" };
+    if (delaySecs > 0 && delaySecs <= 300) return { str: (Math.round(delaySecs as f64 / 60)).toString() + "m late", cls: "late" };
+    if (delaySecs > 300) return { str: (Math.round(delaySecs as f64 / 60)).toString() + "m late", cls: "very-late" };
+    return { str: (Math.round(Math.abs(delaySecs as f64) / 60)).toString() + "m early", cls: "early" };
+}
+
+// --- Static Data Store for Augmentation ---
+
+class WasmStop {
+    id: string = "";
+    parentId: string = "";
+    platformCode: string = "";
+}
+
+class WasmCalendar {
+    monday: bool = false;
+    tuesday: bool = false;
+    wednesday: bool = false;
+    thursday: bool = false;
+    friday: bool = false;
+    saturday: bool = false;
+    sunday: bool = false;
+    startDate: string = "";
+    endDate: string = "";
+}
+
+class WasmCalendarDate {
+    serviceId: string = "";
+    date: string = "";
+    exceptionType: i32 = 0;
+}
+
+const stops = new Map<string, WasmStop>();
+const calendars = new Map<string, WasmCalendar>();
+const calendarDates = new Array<WasmCalendarDate>();
+const tripServiceIds = new Map<string, string>();
+
+export function clearStaticData(): void {
+    stops.clear();
+    calendars.clear();
+    calendarDates.length = 0;
+    tripServiceIds.clear();
+}
+
+export function addWasmStop(id: string, parentId: string, platformCode: string): void {
+    stops.set(id, { id, parentId, platformCode });
+}
+
+export function addWasmCalendar(serviceId: string, m: bool, t: bool, w: bool, th: bool, f: bool, s: bool, su: bool, start: string, end: string): void {
+    calendars.set(serviceId, { monday: m, tuesday: t, wednesday: w, thursday: th, friday: f, saturday: s, sunday: su, startDate: start, endDate: end });
+}
+
+export function addWasmCalendarDate(serviceId: string, date: string, type: i32): void {
+    calendarDates.push({ serviceId, date, exceptionType: type });
+}
+
+export function addWasmTripRecord(tripId: string, serviceId: string): void {
+    tripServiceIds.set(tripId, serviceId);
+}
+
+// --- Date Utilities ---
+
+function dateToEpochDays(y: i32, m: i32, d: i32): i32 {
+    m = (m + 9) % 12;
+    y = y - m / 10;
+    return 365 * y + y / 4 - y / 100 + y / 400 + (m * 306 + 5) / 10 + (d - 1);
+}
+
+function epochDaysToDateString(g: i32): string {
+    let y = (10000 * g + 1478010) / 3652425;
+    let ddt = g - (365 * y + y / 4 - y / 100 + y / 400);
+    if (ddt < 0) {
+        y = y - 1;
+        ddt = g - (365 * y + y / 4 - y / 100 + y / 400);
+    }
+    let mi = (100 * ddt + 52) / 3060;
+    let mm = (mi + 2) % 12 + 1;
+    y = y + (mi + 2) / 12;
+    let dd = ddt - (mi * 306 + 5) / 10 + 1;
+
+    let yearStr = y.toString();
+    let monthStr = mm.toString();
+    if (monthStr.length < 2) monthStr = "0" + monthStr;
+    let dayStr = dd.toString();
+    if (dayStr.length < 2) dayStr = "0" + dayStr;
+
+    return yearStr + monthStr + dayStr;
+}
+
+function getDayOfWeek(epochDays: i32): i32 {
+    // 1970-01-01 was a Thursday (index 4)
+    // EPOCH_ADJUSTMENT is for 0001-01-01 which was a Monday (index 1)
+    return (epochDays + 1) % 7;
+}
+
+export function addDaysToDateString(dateStr: string, daysToAdd: i32): string {
+    if (daysToAdd == 0) return dateStr;
+    let y = I32.parseInt(dateStr.slice(0, 4));
+    let m = I32.parseInt(dateStr.slice(4, 6));
+    let d = I32.parseInt(dateStr.slice(6, 8));
+
+    let epochDays = dateToEpochDays(y, m, d) + daysToAdd;
+    return epochDaysToDateString(epochDays);
+}
+
+export function getServiceDatesWasm(serviceId: string): string[] {
+    let dates = new Array<string>();
+    if (!calendars.has(serviceId)) {
+        // Only exceptions?
+    } else {
+        let cal = calendars.get(serviceId);
+        let startY = I32.parseInt(cal.startDate.slice(0, 4));
+        let startM = I32.parseInt(cal.startDate.slice(4, 6));
+        let startD = I32.parseInt(cal.startDate.slice(6, 8));
+        
+        let endY = I32.parseInt(cal.endDate.slice(0, 4));
+        let endM = I32.parseInt(cal.endDate.slice(4, 6));
+        let endD = I32.parseInt(cal.endDate.slice(6, 8));
+
+        let currentEpoch = dateToEpochDays(startY, startM, startD);
+        let endEpoch = dateToEpochDays(endY, endM, endD);
+
+        while (currentEpoch <= endEpoch) {
+            let dow = getDayOfWeek(currentEpoch); // 0=Sun, 1=Mon, ..., 6=Sat
+            let runs = false;
+            if (dow == 0 && cal.sunday) runs = true;
+            else if (dow == 1 && cal.monday) runs = true;
+            else if (dow == 2 && cal.tuesday) runs = true;
+            else if (dow == 3 && cal.wednesday) runs = true;
+            else if (dow == 4 && cal.thursday) runs = true;
+            else if (dow == 5 && cal.friday) runs = true;
+            else if (dow == 6 && cal.saturday) runs = true;
+
+            if (runs) {
+                dates.push(epochDaysToDateString(currentEpoch));
+            }
+            currentEpoch++;
+        }
+    }
+
+    // Apply exceptions
+    for (let i = 0; i < calendarDates.length; i++) {
+        let cd = calendarDates[i];
+        if (cd.serviceId != serviceId) continue;
+
+        if (cd.exceptionType == 1) {
+            if (dates.indexOf(cd.date) == -1) {
+                dates.push(cd.date);
+            }
+        } else if (cd.exceptionType == 2) {
+            let idx = dates.indexOf(cd.date);
+            if (idx > -1) {
+                dates.splice(idx, 1);
+            }
+        }
+    }
+
+    return dates.sort();
+}
+
+export function getServiceDatesByTripWasm(tripId: string): string[] {
+    if (!tripServiceIds.has(tripId)) return [];
+    return getServiceDatesWasm(tripServiceIds.get(tripId));
+}

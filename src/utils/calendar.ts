@@ -1,5 +1,14 @@
 import type * as qdf from "qdf-gtfs";
 import { getRawTrips, getCalendars, getCalendarDates, CacheContext } from "../cache.js";
+import { getGtfs } from "../gtfsInterfaceLayer.js";
+import {
+	getServiceDatesWasm,
+	clearStaticData,
+	addWasmCalendar,
+	addWasmCalendarDate,
+	getServiceDatesByTripWasm,
+	addWasmTripRecord,
+} from "../../build/release.js";
 
 export function getServiceDates(
 	calendars: qdf.Calendar[],
@@ -78,6 +87,10 @@ export function getServiceDates(
 }
 
 export function getServiceDatesByTrip(trip_id: string, ctx: CacheContext): string[] {
+	// Use Wasm for faster trip-to-service mapping and date calculation
+	const wasmDates = getServiceDatesByTripWasm(trip_id);
+	if (wasmDates && wasmDates.length > 0) return wasmDates;
+
 	const trips = getRawTrips(ctx, trip_id);
 	const trip = trips && trips.length > 0 ? trips[0] : undefined;
 	if (!trip) return [];
@@ -85,4 +98,31 @@ export function getServiceDatesByTrip(trip_id: string, ctx: CacheContext): strin
 	const calendarDates = getCalendarDates(ctx, { service_id: trip.service_id });
 	const serviceDatesMap = getServiceDates(calendars, calendarDates);
 	return serviceDatesMap[trip.service_id] ?? [];
+}
+
+export function syncCalendarsToWasm(ctx: CacheContext) {
+	clearStaticData(); // Or just calendars? Let's use a more specific one if needed
+	const calendars = getCalendars(ctx);
+	for (const c of calendars) {
+		addWasmCalendar(
+			c.service_id,
+			!!c.monday,
+			!!c.tuesday,
+			!!c.wednesday,
+			!!c.thursday,
+			!!c.friday,
+			!!c.saturday,
+			!!c.sunday,
+			String(c.start_date),
+			String(c.end_date)
+		);
+	}
+	const calendarDates = getCalendarDates(ctx);
+	for (const cd of calendarDates) {
+		addWasmCalendarDate(cd.service_id, String(cd.date), cd.exception_type);
+	}
+	const trips = getRawTrips(ctx);
+	for (const t of trips) {
+		addWasmTripRecord(t.trip_id, t.service_id);
+	}
 }

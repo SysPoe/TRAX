@@ -16,65 +16,72 @@ export type AugmentedStop = qdf.Stop & {
 	children?: AugmentedStop[];
 };
 
-export function augmentStop(stop: qdf.Stop, ctx: cache.CacheContext): AugmentedStop {
+export interface AugmentationContext {
+	childrenByParent?: Map<string, qdf.Stop[]>;
+	qrtPlacesByName?: Map<string, any>;
+	facilitiesByStopId?: Map<string, RailwayStationFacility>;
+}
+
+export function augmentStop(
+	stop: qdf.Stop,
+	ctx: cache.CacheContext,
+	augCtx?: AugmentationContext,
+): AugmentedStop {
 	const parentId = stop.parent_station ?? null;
-	const childStops = cache.getRawStops(ctx).filter((s) => s.parent_station === stop.stop_id);
-	const childIds = childStops.map((s) => s.stop_id);
-
-	let cachedChildren: AugmentedStop[] | null = null;
-	const resolveChildren = (): AugmentedStop[] => {
-		if (cachedChildren) return cachedChildren;
-		cachedChildren = childIds
-			.map((id) => cache.getAugmentedStops(ctx, id)[0] ?? augmentStop(cache.getRawStops(ctx, id)[0], ctx))
-			.filter((s): s is AugmentedStop => !!s);
-		return cachedChildren;
-	};
-
-	const resolveParent = (): AugmentedStop | null => {
-		if (!parentId) return null;
-		return cache.getAugmentedStops(ctx, parentId)[0] ?? null;
-	};
+	
+	let childIds: string[] = [];
+	if (augCtx?.childrenByParent) {
+		childIds = augCtx.childrenByParent.get(stop.stop_id)?.map(s => s.stop_id) ?? [];
+	} else {
+		const childStops = cache.getRawStops(ctx).filter((s) => s.parent_station === stop.stop_id);
+		childIds = childStops.map((s) => s.stop_id);
+	}
 
 	const augmented: AugmentedStop = {
 		...stop,
 		parent_stop_id: parentId === "" ? null : parentId,
 		child_stop_ids: childIds,
+		parent: null,
+		children: [],
 	};
 
 	if (ctx.config.region === "SEQ") {
-		const qrt_Places = cache.SEQgetQRTPlaces(ctx);
+		let myPlace = null;
 		const trimmedStopName = stop.stop_name?.toLowerCase().replace("station", "").trim();
-		const myPlace = qrt_Places.find(
-			(v) =>
-				v.Title?.toLowerCase().trim() === trimmedStopName ||
-				(trimmedStopName === "roma street" && v.Title?.toLowerCase().trim().includes("roma street")),
-		);
-		const facilities = cache.SEQgetRailwayStationFacilities(ctx);
-		const myFacility = facilities.find(
-			(f) =>
-				f.stops &&
-				(f.stops.includes(stop.stop_id) || (stop.parent_station && f.stops.includes(stop.parent_station))),
-		);
+		if (augCtx?.qrtPlacesByName) {
+			myPlace = augCtx.qrtPlacesByName.get(trimmedStopName!) || 
+					  (trimmedStopName === "roma street" ? augCtx.qrtPlacesByName.get("roma street") : null);
+		} else {
+			const qrt_Places = cache.SEQgetQRTPlaces(ctx);
+			myPlace = qrt_Places.find(
+				(v) =>
+					v.Title?.toLowerCase().trim() === trimmedStopName ||
+					(trimmedStopName === "roma street" && v.Title?.toLowerCase().trim().includes("roma street")),
+			);
+		}
+
+		let myFacility = null;
+		if (augCtx?.facilitiesByStopId) {
+			myFacility = augCtx.facilitiesByStopId.get(stop.stop_id) || 
+						 (stop.parent_station ? augCtx.facilitiesByStopId.get(stop.parent_station) : null);
+		} else {
+			const facilities = cache.SEQgetRailwayStationFacilities(ctx);
+			myFacility = facilities.find(
+				(f) =>
+					f.stops &&
+					(f.stops.includes(stop.stop_id) || (stop.parent_station && f.stops.includes(stop.parent_station))),
+			);
+		}
 
 		augmented.regionSpecific = {
 			SEQ: {
 				qrt_Place: !!myPlace,
 				qrt_PlaceCode: myPlace?.qrt_PlaceCode,
-				facilities: myFacility,
+				facilities: myFacility as RailwayStationFacility,
 			},
 		};
 	}
 
-	Object.defineProperties(augmented, {
-		parent: {
-			get: () => resolveParent(),
-			enumerable: false,
-		},
-		children: {
-			get: () => resolveChildren(),
-			enumerable: false,
-		},
-	});
-
+	// We'll populate parent/children later in cache.ts to avoid recursion and getters
 	return augmented;
 }

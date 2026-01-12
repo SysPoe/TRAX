@@ -101,21 +101,29 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 		ctx.augmented.timer.stop("createInstance:augmentStopTimes");
 
 		ctx.augmented.timer.start("createInstance:calculateTripDates");
-		const scheduledTripDates = [
-			...new Set(
-				stopTimes
-					.map((st) => [...(st.scheduled_arrival_dates ?? []), ...(st.scheduled_departure_dates ?? [])])
-					.flat(),
-			),
-		].sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
+		const getUniqueDates = (times: AugmentedStopTime[], type: "scheduled" | "actual") => {
+			const dates = new Set<string>();
+			for (let i = 0; i < times.length; i++) {
+				const st = times[i];
+				const arr = type === "scheduled" ? st.scheduled_arrival_dates : st.actual_arrival_dates;
+				const dep = type === "scheduled" ? st.scheduled_departure_dates : st.actual_departure_dates;
+				if (arr) for (let j = 0; j < arr.length; j++) dates.add(arr[j]);
+				if (dep) for (let j = 0; j < dep.length; j++) dates.add(dep[j]);
+			}
+			if (dates.size === 1) {
+				const singleDate = dates.values().next().value as string;
+				if (singleDate === serviceDate) return (type === "scheduled" ? scheduled_dates : actual_dates) ?? [singleDate];
+				return [singleDate];
+			}
+			return Array.from(dates).sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
+		};
 
-		const actualTripDates = [
-			...new Set(
-				stopTimes
-					.map((st) => [...(st.actual_arrival_dates ?? []), ...(st.actual_departure_dates ?? [])])
-					.flat(),
-			),
-		].sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
+		// Common case pre-check to avoid Set creation
+		let scheduled_dates: string[] | null = null;
+		let actual_dates: string[] | null = null;
+
+		const scheduledTripDates = getUniqueDates(stopTimes, "scheduled");
+		const actualTripDates = getUniqueDates(stopTimes, "actual");
 		ctx.augmented.timer.stop("createInstance:calculateTripDates");
 
 		const instance: AugmentedTripInstance = {

@@ -6,6 +6,16 @@ import { getPlatformData as loadPlatformData } from "./platformData.js";
 import { ServiceCapacity } from "./serviceCapacity.js";
 import { getServiceDayStart } from "./time.js";
 import { Timer } from "./timer.js";
+import {
+	findPath as wasmFindPath,
+	resetGraph,
+	addAdjacency,
+	addSRT,
+	getSRT as getWasmSRT,
+	interpolateTimes as wasmInterpolateTimes,
+	addDaysToDateString as wasmAddDaysToDateString,
+	calculateDelayClassWasm,
+} from "../../build/release.js";
 
 export type AugmentedStopTime = {
 	_stopTime: qdf.StopTime | null;
@@ -81,34 +91,36 @@ function attachStopReferences(
 		scheduledParent?: AugmentedStop | null;
 	},
 ): void {
-	Object.defineProperties(ast, {
-		actual_stop: { value: refs.actualStop ?? null, enumerable: false, writable: true },
-		actual_parent_station: { value: refs.actualParent ?? null, enumerable: false, writable: true },
-		scheduled_stop: { value: refs.scheduledStop ?? null, enumerable: false, writable: true },
-		scheduled_parent_station: { value: refs.scheduledParent ?? null, enumerable: false, writable: true },
-	});
+	ast.actual_stop = refs.actualStop ?? null;
+	ast.actual_parent_station = refs.actualParent ?? null;
+	ast.scheduled_stop = refs.scheduledStop ?? null;
+	ast.scheduled_parent_station = refs.scheduledParent ?? null;
 }
 
 function calculateDelayClass(delaySecs: number) {
-	if (Math.abs(delaySecs) <= 60) return { str: "on time", cls: "on-time" as const };
-	if (delaySecs > 0 && delaySecs <= 300) return { str: `${Math.round(delaySecs / 60)}m late`, cls: "late" as const };
-	if (delaySecs > 300) return { str: `${Math.round(delaySecs / 60)}m late`, cls: "very-late" as const };
-	return { str: `${Math.round(Math.abs(delaySecs) / 60)}m early`, cls: "early" as const };
+	const info = calculateDelayClassWasm(delaySecs);
+	return { str: info.str, cls: info.cls as "on-time" | "late" | "very-late" | "early" };
 }
 
+const dateOffsetCache = new Map<string, string>();
 function addDaysToDateString(dateStr: string, daysToAdd: number): string {
 	if (daysToAdd === 0) return dateStr;
-	const y = parseInt(dateStr.slice(0, 4), 10);
-	const m = parseInt(dateStr.slice(4, 6), 10) - 1;
-	const d = parseInt(dateStr.slice(6, 8), 10);
+	const key = `${dateStr}|${daysToAdd}`;
+	let cached = dateOffsetCache.get(key);
+	if (cached !== undefined) return cached;
+	const result = wasmAddDaysToDateString(dateStr, daysToAdd);
+	dateOffsetCache.set(key, result);
+	return result;
+}
 
-	const date = new Date(Date.UTC(y, m, d));
-	date.setUTCDate(date.getUTCDate() + daysToAdd);
-
-	const ny = date.getUTCFullYear();
-	const nm = (date.getUTCMonth() + 1).toString().padStart(2, "0");
-	const nd = date.getUTCDate().toString().padStart(2, "0");
-	return `${ny}${nm}${nd}`;
+export const serviceDateArrayCache = new Map<string, string[]>();
+export function getServiceDateArray(date: string): string[] {
+	let cached = serviceDateArrayCache.get(date);
+	if (!cached) {
+		cached = [date];
+		serviceDateArrayCache.set(date, cached);
+	}
+	return cached;
 }
 
 function resolveExitSide(
@@ -553,34 +565,34 @@ export function augmentStopTimes(
 
 			...realtimeDetails,
 
-			scheduled_arrival_dates: [
+			scheduled_arrival_dates: getServiceDateArray(
 				addDaysToDateString(
 					datesServiceDate,
 					(currentOffsets.schedArr ?? currentOffsets.schedDep ?? dateOffsets.schedArr) - dateOffsets.schedArr,
 				),
-			],
-			actual_arrival_dates: [
+			),
+			actual_arrival_dates: getServiceDateArray(
 				addDaysToDateString(
 					datesServiceDate,
 					(currentOffsets.actArr ?? currentOffsets.actDep ?? dateOffsets.actArr) - dateOffsets.actArr,
 				),
-			],
+			),
 			scheduled_arrival_date_offset:
 				(currentOffsets.schedArr ?? currentOffsets.schedDep ?? dateOffsets.schedArr) - dateOffsets.schedArr,
 			actual_arrival_date_offset:
 				(currentOffsets.actArr ?? currentOffsets.actDep ?? dateOffsets.actArr) - dateOffsets.actArr,
-			scheduled_departure_dates: [
+			scheduled_departure_dates: getServiceDateArray(
 				addDaysToDateString(
 					datesServiceDate,
 					(currentOffsets.schedDep ?? currentOffsets.schedArr ?? dateOffsets.schedDep) - dateOffsets.schedDep,
 				),
-			],
-			actual_departure_dates: [
+			),
+			actual_departure_dates: getServiceDateArray(
 				addDaysToDateString(
 					datesServiceDate,
 					(currentOffsets.actDep ?? currentOffsets.actArr ?? dateOffsets.actDep) - dateOffsets.actDep,
 				),
-			],
+			),
 			scheduled_departure_date_offset:
 				(currentOffsets.schedDep ?? currentOffsets.schedArr ?? dateOffsets.schedDep) - dateOffsets.schedDep,
 			actual_departure_date_offset:
