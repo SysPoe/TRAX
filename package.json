@@ -16,6 +16,7 @@
         "chalk": "^5.4.1",
         "cli-progress": "^3.12.0",
         "qdf-gtfs": "github:SysPoe/QDF-GTFS",
+        "dotenv": "^17.2.3",
         "strip-ansi": "^7.1.2"
     },
     "scripts": {
