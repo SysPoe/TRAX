@@ -11,6 +11,7 @@ export enum LogLevel {
 	WARN = 2,
 	INFO = 3,
 	DEBUG = 4,
+	TIMING = 5,
 }
 
 export type LogContext = {

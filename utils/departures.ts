@@ -21,6 +21,7 @@ export function getDeparturesForStop(
 	end_time: string,
 	ctx: cache.CacheContext,
 ): DepartureResult[] {
+	ctx.augmented.timer.start("getDeparturesForStop");
 	const startSec = timeSeconds(start_time);
 	const endSec = timeSeconds(end_time);
 	const parentId = stop.parent_stop_id;
@@ -49,13 +50,17 @@ export function getDeparturesForStop(
 		return cached ?? null;
 	};
 
-	const collectForServiceDate = (serviceDate: string, offsetDays: number) => {
-		const dayStart = getServiceDayStart(serviceDate, ctx.config.timezone);
-		const windowStart = windowStartAbs - offsetDays * 86400;
-		const windowEnd = windowEndAbs - offsetDays * 86400;
+	ctx.augmented.timer.start("getDeparturesForStop:collect");
+	for (let df = daysForwardStart; df <= daysForwardEnd; df++) {
+		const checkDate = new Date(baseDate);
+		checkDate.setDate(checkDate.getDate() + df);
+		const serviceDateStr = checkDate.toISOString().slice(0, 10).replace(/-/g, "");
+		const dayStart = getServiceDayStart(serviceDateStr, ctx.config.timezone);
+		const windowStart = windowStartAbs - df * 86400;
+		const windowEnd = windowEndAbs - df * 86400;
 
 		for (const stopId of validStops) {
-			const stopDepartures = cache.getStopDeparturesCached(ctx, stopId, serviceDate);
+			const stopDepartures = cache.getStopDeparturesCached(ctx, stopId, serviceDateStr);
 			for (const st of stopDepartures) {
 				const timeSecs = st.actual_departure_time ?? st.actual_arrival_time ?? st.scheduled_departure_time ?? 0;
 				const absTs = dayStart + timeSecs;
@@ -65,16 +70,11 @@ export function getDeparturesForStop(
 				results.push({ st, inst });
 			}
 		}
-	};
-
-	for (let df = daysForwardStart; df <= daysForwardEnd; df++) {
-		const checkDate = new Date(baseDate);
-		checkDate.setDate(checkDate.getDate() + df);
-		const serviceDateStr = checkDate.toISOString().slice(0, 10).replace(/-/g, "");
-		collectForServiceDate(serviceDateStr, df);
 	}
+	ctx.augmented.timer.stop("getDeparturesForStop:collect");
 
-	return results
+	ctx.augmented.timer.start("getDeparturesForStop:sortAndMap");
+	const sortedResults = results
 		.sort((a, b) => (a.st.actual_departure_time ?? 0) - (b.st.actual_departure_time ?? 0))
 		.map(({ st, inst }) => {
 			const expressString = findExpressString(
@@ -92,6 +92,10 @@ export function getDeparturesForStop(
 						: st.service_capacity,
 			};
 		});
+	ctx.augmented.timer.stop("getDeparturesForStop:sortAndMap");
+
+	ctx.augmented.timer.stop("getDeparturesForStop");
+	return sortedResults;
 }
 
 export function getServiceDateDeparturesForStop(
@@ -101,6 +105,7 @@ export function getServiceDateDeparturesForStop(
 	end_time_secs: number,
 	ctx: cache.CacheContext,
 ): DepartureResult[] {
+	ctx.augmented.timer.start("getServiceDateDeparturesForStop");
 	const parentId = stop.parent_stop_id;
 	const childIds = stop.child_stop_ids;
 	const validStops = new Set<string>([stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]);
@@ -117,6 +122,7 @@ export function getServiceDateDeparturesForStop(
 		return cached ?? null;
 	};
 
+	ctx.augmented.timer.start("getServiceDateDeparturesForStop:collect");
 	for (const stopId of validStops) {
 		const stopDepartures = cache.getStopDeparturesCached(ctx, stopId, serviceDate);
 		for (const st of stopDepartures) {
@@ -128,8 +134,10 @@ export function getServiceDateDeparturesForStop(
 			results.push({ st, inst });
 		}
 	}
+	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:collect");
 
-	return results
+	ctx.augmented.timer.start("getServiceDateDeparturesForStop:sortAndMap");
+	const sortedResults = results
 		.sort((a, b) => (a.st.actual_departure_time ?? 0) - (b.st.actual_departure_time ?? 0))
 		.map(({ st, inst }) => {
 			const expressString = findExpressString(
@@ -147,6 +155,10 @@ export function getServiceDateDeparturesForStop(
 						: st.service_capacity,
 			};
 		});
+	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:sortAndMap");
+
+	ctx.augmented.timer.stop("getServiceDateDeparturesForStop");
+	return sortedResults;
 }
 
 export function attachDeparturesHelpers(stop: AugmentedStop, ctx: cache.CacheContext): AugmentedStop {

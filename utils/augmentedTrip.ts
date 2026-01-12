@@ -45,10 +45,14 @@ export type RunSeries = {
 };
 
 export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedTrip {
+	ctx.augmented.timer.start("augmentTrip");
 	const serviceDates = getServiceDatesByTrip(trip.trip_id, ctx);
 
+	ctx.augmented.timer.start("augmentTrip:getRawStopTimes");
 	const rawStopTimes = cache.getRawStopTimes(ctx, trip.trip_id).sort((a, b) => a.stop_sequence - b.stop_sequence);
+	ctx.augmented.timer.stop("augmentTrip:getRawStopTimes");
 
+	ctx.augmented.timer.start("augmentTrip:getParentStops");
 	const getParentStationId = (stopId: string): string => {
 		const cached = ctx.augmented.stopsRec.get(stopId);
 		if (cached) return cached.parent_stop_id ?? "";
@@ -57,23 +61,31 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 	};
 
 	let parentStops = rawStopTimes.map((st) => getParentStationId(st.stop_id));
+	ctx.augmented.timer.stop("augmentTrip:getParentStops");
+
+	ctx.augmented.timer.start("augmentTrip:findExpress");
 	let expressInfo = findExpress(
 		parentStops.filter((id): id is string => !!id),
 		ctx,
 	);
+	ctx.augmented.timer.stop("augmentTrip:findExpress");
 
+	ctx.augmented.timer.start("augmentTrip:getTripUpdates");
 	const updates = cache.getTripUpdates(ctx, trip.trip_id);
+	ctx.augmented.timer.stop("augmentTrip:getTripUpdates");
 
 	const createInstance = (
 		serviceDate: string,
 		update: qdf.RealtimeTripUpdate | null,
 		scheduleRelationship: qdf.TripScheduleRelationship,
 	): AugmentedTripInstance => {
+		ctx.augmented.timer.start("createInstance");
 		const startDate = update?.trip.start_date ?? serviceDate;
 		const startTime = update?.trip.start_time ?? "";
 
 		const instance_id = btoa(JSON.stringify([trip.trip_id, startDate, startTime, scheduleRelationship]));
 
+		ctx.augmented.timer.start("createInstance:augmentStopTimes");
 		const stopTimes = augmentStopTimes(
 			scheduleRelationship === qdf.TripScheduleRelationship.ADDED ||
 				scheduleRelationship === qdf.TripScheduleRelationship.UNSCHEDULED
@@ -86,7 +98,9 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 			},
 			ctx,
 		);
+		ctx.augmented.timer.stop("createInstance:augmentStopTimes");
 
+		ctx.augmented.timer.start("createInstance:calculateTripDates");
 		const scheduledTripDates = [
 			...new Set(
 				stopTimes
@@ -102,6 +116,7 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 					.flat(),
 			),
 		].sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
+		ctx.augmented.timer.stop("createInstance:calculateTripDates");
 
 		const instance: AugmentedTripInstance = {
 			...trip,
@@ -122,6 +137,7 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 			rt_start_date: update?.trip.start_date ?? null,
 		};
 
+		ctx.augmented.timer.start("createInstance:serviceCapacity");
 		let prev_cap: ServiceCapacity = ServiceCapacity.UNKNOWN;
 
 		for (let i = 0; i < instance.stopTimes.length; i++) {
@@ -136,10 +152,13 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 			st.service_date = instance.serviceDate;
 			st.schedule_relationship = instance.schedule_relationship;
 		}
+		ctx.augmented.timer.stop("createInstance:serviceCapacity");
 
+		ctx.augmented.timer.stop("createInstance");
 		return instance;
 	};
 
+	ctx.augmented.timer.start("augmentTrip:createInstances");
 	const instances: AugmentedTripInstance[] = [];
 	const coveredServiceDates = new Set<string>();
 
@@ -168,6 +187,7 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 			instances.push(createInstance(sDate, null, qdf.TripScheduleRelationship.SCHEDULED));
 		}
 	}
+	ctx.augmented.timer.stop("augmentTrip:createInstances");
 
 	const augmentedTrip: AugmentedTrip = {
 		...trip,
@@ -175,6 +195,7 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 		instances,
 	};
 
+	ctx.augmented.timer.stop("augmentTrip");
 	return augmentedTrip;
 }
 

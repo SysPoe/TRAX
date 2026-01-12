@@ -10,7 +10,7 @@ async function main() {
 	console.log("Loading gtfs data...");
 
 	const TRAX = new TRAXClass(PRESETS.GTHA(process.env.METROLINX_KEY));
-	logger.setLevel(LogLevel.DEBUG);
+	logger.setLevel(LogLevel.TIMING);
 
 	let start_static = Date.now();
 	await TRAX.loadGTFS(false);
@@ -32,13 +32,25 @@ async function main() {
 		tomorrow.getDate().toString().padStart(2, "0");
 
 	console.log(`Getting departures for ${stop.stop_name} on ${date}...`);
+	
 	let depstart = Date.now();
-
 	const deps = TRAX.utils.departures.getDeparturesForStop(stop, date, "08:00:00", "23:59:59");
 	let depend = Date.now();
 
 	console.log(`\nFound ${deps.length} departures.`);
 	console.log(`Departure lookup took ${depend - depstart}ms.`);
+
+	TRAX.logTimings("Departure lookup");
+
+	console.log("Fetching considered stations...");
+	let considerstart = Date.now();
+	const considered = TRAX.getStations();
+	let considerend = Date.now();
+
+	console.log(`\nFound ${considered.length} considered stations.`);
+	console.log(`Considered stations lookup took ${considerend - considerstart}ms.`);
+
+	TRAX.logTimings("Get considered stations");
 
 	console.log("\nDone!");
 	process.exit(0);

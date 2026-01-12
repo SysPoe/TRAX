@@ -620,12 +620,16 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	const passingTripsMap = new Map<string, Set<string>>();
 
 	if (config.region === "SEQ") {
+		ctx.augmented.timer.start("refreshStaticCache:loadQRTPlaces");
 		newRawCache.regionSpecific.SEQ.qrtPlaces = await getPlaces(config);
+		ctx.augmented.timer.stop("refreshStaticCache:loadQRTPlaces");
 		logger.debug(`Loaded ${newRawCache.regionSpecific.SEQ.qrtPlaces.length} QRT places.`, {
 			module: "cache",
 			function: "refreshStaticCache",
 		});
+		ctx.augmented.timer.start("refreshStaticCache:loadRailwayFacilities");
 		newRawCache.regionSpecific.SEQ.railwayStationFacilities = await getRailwayStationFacilities(config);
+		ctx.augmented.timer.stop("refreshStaticCache:loadRailwayFacilities");
 		logger.debug(
 			`Loaded ${newRawCache.regionSpecific.SEQ.railwayStationFacilities.length} railway station facilities.`,
 			{
@@ -635,36 +639,47 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 		);
 	}
 
+	ctx.augmented.timer.start("refreshStaticCache:loadStops");
 	const stops = gtfs.getStops();
+	ctx.augmented.timer.stop("refreshStaticCache:loadStops");
 	logger.debug(`Loaded ${stops.length} stops.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
+	ctx.augmented.timer.start("refreshStaticCache:loadCalendars");
 	const calendars = gtfs.getCalendars();
+	ctx.augmented.timer.stop("refreshStaticCache:loadCalendars");
 	logger.debug(`Loaded ${calendars.length} calendars.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
+	ctx.augmented.timer.start("refreshStaticCache:loadCalendarDates");
 	const calendarDates = gtfs.getCalendarDates();
+	ctx.augmented.timer.stop("refreshStaticCache:loadCalendarDates");
 	logger.debug(`Loaded ${calendarDates.length} calendar dates.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
+	ctx.augmented.timer.start("refreshStaticCache:loadRoutes");
 	const routes = gtfs.getRoutes();
+	ctx.augmented.timer.stop("refreshStaticCache:loadRoutes");
 	logger.debug(`Loaded ${routes.length} routes.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
+	ctx.augmented.timer.start("refreshStaticCache:loadTrips");
 	const trips = gtfs.getTrips().filter((v) => isConsideredTrip(v, gtfs));
+	ctx.augmented.timer.stop("refreshStaticCache:loadTrips");
 	logger.debug(`Loaded ${trips.length} trips.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
+	ctx.augmented.timer.start("refreshStaticCache:processShapes");
 	const shapeSet = new Set<string>();
 	for (const trip of trips) {
 		if (trip.shape_id && !shapeSet.has(trip.shape_id)) {
@@ -672,18 +687,26 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 			newAugmentedCache.shapes.push({ shape_id: trip.shape_id, route_id: trip.route_id });
 		}
 	}
+	ctx.augmented.timer.stop("refreshStaticCache:processShapes");
 
+	ctx.augmented.timer.start("refreshStaticCache:ensureServiceCapacity");
 	await ensureServiceCapacityData(config);
+	ctx.augmented.timer.stop("refreshStaticCache:ensureServiceCapacity");
 
+	ctx.augmented.timer.start("refreshStaticCache:augmentStops");
 	newAugmentedCache.stops = await processWithProgress(stops, "Augmenting stops", (s) => augmentStop(s, ctx));
+	ctx.augmented.timer.stop("refreshStaticCache:augmentStops");
 	logger.debug(`Augmented ${newAugmentedCache.stops.length} stops.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
 	// Prime stop lookup map before trip augmentation to avoid repeated per-stop augmentation work
+	ctx.augmented.timer.start("refreshStaticCache:primeStopMap");
 	for (const stop of newAugmentedCache.stops) newAugmentedCache.stopsRec.set(stop.stop_id, stop);
+	ctx.augmented.timer.stop("refreshStaticCache:primeStopMap");
 
+	ctx.augmented.timer.start("refreshStaticCache:augmentTrips");
 	newAugmentedCache.trips = await processWithProgress(trips, "Augmenting trips", (trip) => {
 		const augmentedTrip = augmentTrip(trip, ctx);
 
@@ -719,19 +742,25 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 
 		return augmentedTrip;
 	});
+	ctx.augmented.timer.stop("refreshStaticCache:augmentTrips");
 
+	ctx.augmented.timer.start("refreshStaticCache:buildServiceDateTrips");
 	for (const [date, set] of serviceDateTripsMap) {
 		newAugmentedCache.serviceDateTrips.set(date, Array.from(set));
 	}
+	ctx.augmented.timer.stop("refreshStaticCache:buildServiceDateTrips");
+
+	ctx.augmented.timer.start("refreshStaticCache:buildPassingTrips");
 	for (const [stopId, set] of passingTripsMap) {
 		newAugmentedCache.passingTrips.set(stopId, Array.from(set));
 	}
+	ctx.augmented.timer.stop("refreshStaticCache:buildPassingTrips");
 
 	rawCache = newRawCache;
 	augmentedCache = newAugmentedCache;
 
 	ctx.augmented.timer.stop("refreshStaticCache");
-	ctx.augmented.timer.log("Static Cache Refresh");
+	ctx.augmented.timer.log("Static Cache Refresh", true);
 
 	logger.info(`Static GTFS cache refreshed in ${((Date.now() - (startTotal as number)) / 1000).toFixed(2)}s.`, {
 		module: "cache",
@@ -873,7 +902,7 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 	await updateGTHAPlatforms(ctx, gtfs);
 
 	ctx.augmented.timer.stop("refreshRealtimeCache");
-	ctx.augmented.timer.log("Realtime Cache Refresh");
+	ctx.augmented.timer.log("Realtime Cache Refresh", true);
 
 	logger.info(`Realtime GTFS cache refreshed in ${((Date.now() - startTotal) / 1000).toFixed(2)}s.`, {
 		module: "cache",

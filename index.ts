@@ -5,7 +5,7 @@ import * as timeUtils from "./utils/time.js";
 import { EventEmitter } from "events";
 import { GTFS, RealtimeVehiclePosition, Route, Stop, Trip } from "qdf-gtfs";
 import logger from "./utils/logger.js";
-import { type TraxConfig, type TraxConfigOptions, resolveConfig } from "./config.js";
+import { globalTimer } from "./utils/timer.js";
 import { findExpressString } from "./utils/SRT.js";
 import { getServiceCapacity } from "./utils/serviceCapacity.js";
 import { attachDeparturesHelpers, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
@@ -17,6 +17,7 @@ import {
 	isConsideredTripId,
 } from "./utils/considered.js";
 import { AugmentedStop } from "./utils/augmentedStop.js";
+import { type TraxConfig, type TraxConfigOptions, resolveConfig } from "./config.js";
 
 export interface TRAXEvent {
 	"realtime-update-start": [];
@@ -105,11 +106,17 @@ export class TRAX {
 	}
 
 	private async loadStaticInternal() {
+		globalTimer.start("loadStaticInternal");
 		logger.info("Loading GTFS data...");
+		globalTimer.start("loadStaticInternal:loadStatic");
 		await this.gtfs.loadStatic(this.config.urls);
+		globalTimer.stop("loadStaticInternal:loadStatic");
 		logger.info("GTFS data loaded.");
 
+		globalTimer.start("loadStaticInternal:refreshStaticCache");
 		this.ctx = await cache.refreshStaticCache(this.gtfs, this.config);
+		globalTimer.stop("loadStaticInternal:refreshStaticCache");
+		globalTimer.stop("loadStaticInternal");
 	}
 
 	private async loadRealtimeInternal() {
@@ -117,13 +124,20 @@ export class TRAX {
 
 		const rt = this.config.realtime;
 
+		globalTimer.start("loadRealtimeInternal");
+		globalTimer.start("loadRealtimeInternal:updateRealtimeFromUrl");
 		await this.gtfs.updateRealtimeFromUrl(rt.realtimeAlerts, rt.realtimeTripUpdates, rt.realtimeVehiclePositions);
+		globalTimer.stop("loadRealtimeInternal:updateRealtimeFromUrl");
 
+		globalTimer.start("loadRealtimeInternal:refreshRealtimeCache");
 		await cache.refreshRealtimeCache(this.gtfs, this.config, this.ctx);
+		globalTimer.stop("loadRealtimeInternal:refreshRealtimeCache");
+		globalTimer.stop("loadRealtimeInternal");
 	}
 
 	public async updateRealtime(): Promise<void> {
 		if (this.config.realtime == null) return;
+		globalTimer.start("updateRealtime");
 		try {
 			await this.loadRealtimeInternal();
 		} catch (error: any) {
@@ -131,6 +145,8 @@ export class TRAX {
 				module: "index",
 				function: "updateRealtime",
 			});
+		} finally {
+			globalTimer.stop("updateRealtime");
 		}
 	}
 
@@ -176,6 +192,8 @@ export class TRAX {
 	public getTripUpdates = (trip_id?: string) => cache.getTripUpdates(this.ctx, trip_id);
 	public getVehiclePositions = (trip_id?: string) => cache.getVehiclePositions(this.ctx, trip_id);
 	public getShapes = () => cache.getShapes(this.ctx);
+
+	public logTimings = (label: string = "TRAX Operation", clear: boolean = true) => this.ctx.augmented.timer.log(label, clear);
 
 	public on(event: keyof TRAXEvent | string | symbol, listener: (...args: any[]) => void): this {
 		this.events.on(event, listener);

@@ -5,6 +5,7 @@ import { findPassingStopTimes } from "./SRT.js";
 import { getPlatformData as loadPlatformData } from "./platformData.js";
 import { ServiceCapacity } from "./serviceCapacity.js";
 import { getServiceDayStart } from "./time.js";
+import { Timer } from "./timer.js";
 
 export type AugmentedStopTime = {
 	_stopTime: qdf.StopTime | null;
@@ -239,12 +240,14 @@ export function augmentStopTimes(
 	},
 	ctx: cache.CacheContext,
 ): AugmentedStopTime[] {
+	ctx.augmented.timer.start("augmentStopTimes");
 	const { serviceDate, tripUpdate, scheduleRelationship } = instanceContext;
 	const tripId = tripUpdate?.trip.trip_id ?? staticStopTimes?.[0]?.trip_id ?? "";
 
 	const stopTimeUpdates = tripUpdate?.stop_time_updates ?? [];
 	const sequenceMap = new Map<number, { static?: qdf.StopTime; rt?: qdf.RealtimeStopTimeUpdate }>();
 
+	ctx.augmented.timer.start("augmentStopTimes:mergeStaticAndRealtime");
 	if (staticStopTimes) {
 		for (const st of staticStopTimes) {
 			const seq = st.stop_sequence;
@@ -260,6 +263,7 @@ export function augmentStopTimes(
 			sequenceMap.get(seq)!.rt = rt;
 		}
 	}
+	ctx.augmented.timer.stop("augmentStopTimes:mergeStaticAndRealtime");
 
 	const sortedSequences = Array.from(sequenceMap.keys()).sort((a, b) => a - b);
 
@@ -272,6 +276,7 @@ export function augmentStopTimes(
 
 	const serviceDayStart = getServiceDayStart(serviceDate, ctx.config.timezone);
 
+	ctx.augmented.timer.start("augmentStopTimes:buildMergedList");
 	for (const seq of sortedSequences) {
 		const entry = sequenceMap.get(seq)!;
 		const s = entry.static;
@@ -307,6 +312,7 @@ export function augmentStopTimes(
 			_isSkipped: isSkipped,
 		});
 	}
+	ctx.augmented.timer.stop("augmentStopTimes:buildMergedList");
 
 	const activeStops = mergedList.filter((s) => !s._isSkipped);
 	const interpolatedActiveStops = findPassingStopTimes(activeStops, ctx);
@@ -330,6 +336,7 @@ export function augmentStopTimes(
 
 	let currentSequence = -1;
 
+	ctx.augmented.timer.start("augmentStopTimes:processStops");
 	for (const stopTime of interpolatedActiveStops) {
 		const seq = stopTime.stop_sequence;
 		const isPassing = (stopTime as any)._passing;
@@ -589,6 +596,7 @@ export function augmentStopTimes(
 
 		finalStops.push(augmented);
 	}
+	ctx.augmented.timer.stop("augmentStopTimes:processStops");
 
 	let platformData = {};
 	if (ctx.raw.regionSpecific.SEQ.platformData === undefined) {
@@ -596,5 +604,10 @@ export function augmentStopTimes(
 	}
 	platformData = ctx.raw.regionSpecific.SEQ.platformData;
 
-	return assignPlatformSides(finalStops, platformData);
+	ctx.augmented.timer.start("augmentStopTimes:assignPlatformSides");
+	const result = assignPlatformSides(finalStops, platformData);
+	ctx.augmented.timer.stop("augmentStopTimes:assignPlatformSides");
+
+	ctx.augmented.timer.stop("augmentStopTimes");
+	return result;
 }
