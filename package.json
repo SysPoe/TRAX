@@ -24,8 +24,8 @@
     "build": "npm run asbuild && tsc",
     "prepare": "npm run build",
     "format": "prettier . --write --config .prettierrc",
-    "asbuild:debug": "asc assembly/index.ts --target debug",
-    "asbuild:release": "asc assembly/index.ts --target release",
+    "asbuild:debug": "asc assembly/index.ts --target debug --enable threads --initialMemory 100 --maximumMemory 1000 --sharedMemory",
+    "asbuild:release": "asc assembly/index.ts --target release --enable threads --initialMemory 100 --maximumMemory 1000 --sharedMemory",
     "asbuild": "npm run asbuild:debug && npm run asbuild:release",
     "test": "node tests",
     "start": "npx serve ."
