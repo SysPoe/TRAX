@@ -18,6 +18,7 @@ import {
 } from "./utils/considered.js";
 import { AugmentedStop } from "./utils/augmentedStop.js";
 import { type TraxConfig, type TraxConfigOptions, resolveConfig } from "./config.js";
+import * as GTHA from "./region-specific/GTHA/realtime.js";
 
 export interface TRAXEvent {
 	"realtime-update-start": [];
@@ -241,6 +242,11 @@ export class TRAX {
 				getQRTPlaces: () => cache.SEQgetQRTPlaces(this.ctx),
 				getQRTTrains: () => cache.SEQgetQRTTrains(this.ctx),
 				qrTravel,
+			},
+			GTHA: {
+				getActiveVehicleModels: () => GTHA.getActiveVehicleModels(),
+				getActiveVehicleIds: () => GTHA.getActiveVehicleIds(),
+				getActivePassengerCars: () => GTHA.getActivePassengerCars(),
 			},
 		};
 	}

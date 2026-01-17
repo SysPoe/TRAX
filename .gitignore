@@ -11,3 +11,4 @@ build
 .TRAXCACHE
 pnpm-lock.yaml
 .env
+*-ignore.*
