@@ -1114,63 +1114,90 @@ export const BILEVEL_REGISTRY: Record<
 	"2000": {
 		serial_number: "77-85-0911",
 		delivery_date: "1976-01-01",
-		notes: ["Retired", "Sold to", "TRE", "in 1997", "First unit built."],
+		notes: [
+			"Retired",
+			"Sold to TRE in 1997",
+			"First unit built."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2001": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Retired", "Sold to", "TRE", "in 1997"],
+		notes: [
+			"Retired",
+			"Sold to TRE in 1997"
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2002": {
 		serial_number: "77-85-0913",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in October 2016."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in October 2016."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2003": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in April 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in April 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2004": {
 		serial_number: "77-85-0915",
 		delivery_date: "1976-01-01",
-		notes: ["Active"],
+		notes: [
+			"Active"
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2005": {
 		serial_number: "77-85-0916",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in March 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in March 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2006": {
 		serial_number: "77-85-0917",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in February 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in February 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2007": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in November 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in November 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2008": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in January 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in January 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
@@ -1181,7 +1208,7 @@ export const BILEVEL_REGISTRY: Record<
 			"Active",
 			"Rebuilt by CAD-Lachine.",
 			"Equipped with electrical outlets.",
-			"Repainted in the two-tone Metrolinx livery in February 2017.",
+			"Repainted in the two-tone Metrolinx livery in February 2017."
 		],
 		series: "I",
 		is_accessible: false,
@@ -1191,9 +1218,9 @@ export const BILEVEL_REGISTRY: Record<
 		delivery_date: "1976-01-01",
 		notes: [
 			"Active",
-			"Sold toTREin 1998.",
+			"Sold to TRE in 1998.",
 			"Re-purchased by GO in 1999.",
-			"Repainted in the two-tone Metrolinx livery in December 2018.",
+			"Repainted in the two-tone Metrolinx livery in December 2018."
 		],
 		series: "I",
 		is_accessible: false,
@@ -1203,9 +1230,9 @@ export const BILEVEL_REGISTRY: Record<
 		delivery_date: "1976-01-01",
 		notes: [
 			"Active",
-			"Sold toTREin 1998.",
-			"Traded back for223and224in 1999.",
-			"Repainted in the two-tone Metrolinx livery in April 2018.",
+			"Sold to TRE in 1998.",
+			"Traded back for 223 and 224 in 1999.",
+			"Repainted in the two-tone Metrolinx livery in April 2018."
 		],
 		series: "I",
 		is_accessible: false,
@@ -1215,9 +1242,9 @@ export const BILEVEL_REGISTRY: Record<
 		delivery_date: "1976-01-01",
 		notes: [
 			"Active",
-			"Sold toTREin 1998.",
-			"Traded back for223and224in 1999.",
-			"Repainted in the two-tone Metrolinx livery in January 2018.",
+			"Sold to TRE in 1998.",
+			"Traded back for 223 and 224 in 1999.",
+			"Repainted in the two-tone Metrolinx livery in January 2018."
 		],
 		series: "I",
 		is_accessible: false,
@@ -1225,14 +1252,20 @@ export const BILEVEL_REGISTRY: Record<
 	"2013": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Retired", "Sold to", "TRE", "in 1998"],
+		notes: [
+			"Retired",
+			"Sold to TRE in 1998"
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2014": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Retired", "Sold to", "TRE", "in 1998"],
+		notes: [
+			"Retired",
+			"Sold to TRE in 1998"
+		],
 		series: "I",
 		is_accessible: false,
 	},
@@ -1241,9 +1274,9 @@ export const BILEVEL_REGISTRY: Record<
 		delivery_date: "1976-01-01",
 		notes: [
 			"Active",
-			"Sold toTREin 1998.",
-			"Traded back for223and224in 1999.",
-			"Repainted in the two-tone Metrolinx livery in February 2018.",
+			"Sold to TRE in 1998.",
+			"Traded back for 223 and 224 in 1999.",
+			"Repainted in the two-tone Metrolinx livery in February 2018."
 		],
 		series: "I",
 		is_accessible: false,
@@ -1251,21 +1284,30 @@ export const BILEVEL_REGISTRY: Record<
 	"2016": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Retired", "Sold to", "TRE", "in 1998"],
+		notes: [
+			"Retired",
+			"Sold to TRE in 1998"
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2017": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Retired", "Sold to", "TRE", "in 1998"],
+		notes: [
+			"Retired",
+			"Sold to TRE in 1998"
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2018": {
 		serial_number: "77-85-0929",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in January 2017."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in January 2017."
+		],
 		series: "I",
 		is_accessible: false,
 	},
@@ -1274,9 +1316,9 @@ export const BILEVEL_REGISTRY: Record<
 		delivery_date: "1976-01-01",
 		notes: [
 			"Active",
-			"Sold toTREin 1998.",
-			"Traded back for223and224in 1999.",
-			"Repainted in the two-tone Metrolinx livery in May 2017.",
+			"Sold to TRE in 1998.",
+			"Traded back for 223 and 224 in 1999.",
+			"Repainted in the two-tone Metrolinx livery in May 2017."
 		],
 		series: "I",
 		is_accessible: false,
@@ -1284,7 +1326,10 @@ export const BILEVEL_REGISTRY: Record<
 	"2020": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Retired", "Sold to", "TRE", "in 1998"],
+		notes: [
+			"Retired",
+			"Sold to TRE in 1998"
+		],
 		series: "I",
 		is_accessible: false,
 	},
@@ -1293,9 +1338,9 @@ export const BILEVEL_REGISTRY: Record<
 		delivery_date: "1976-01-01",
 		notes: [
 			"Active",
-			"Sold toTREin 1998.",
-			"Traded back for223and224in 1999.",
-			"Repainted in the two-tone Metrolinx livery in November 2017.",
+			"Sold to TRE in 1998.",
+			"Traded back for 223 and 224 in 1999.",
+			"Repainted in the two-tone Metrolinx livery in November 2017."
 		],
 		series: "I",
 		is_accessible: false,
@@ -1303,56 +1348,80 @@ export const BILEVEL_REGISTRY: Record<
 	"2022": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Retired", "Sold to", "TRE", "in 1998"],
+		notes: [
+			"Retired",
+			"Sold to TRE in 1998"
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2023": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Retired", "Sold to", "TRE", "in 1998"],
+		notes: [
+			"Retired",
+			"Sold to TRE in 1998"
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2024": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Retired", "Sold to", "TRE", "in 1998"],
+		notes: [
+			"Retired",
+			"Sold to TRE in 1998"
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2025": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in December 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in December 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2026": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in June 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in June 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2027": {
 		serial_number: "77-85-0938",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in May 2019."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in May 2019."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2028": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in April 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in April 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2029": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in November 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in November 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
@@ -1362,7 +1431,7 @@ export const BILEVEL_REGISTRY: Record<
 		notes: [
 			"Active",
 			"Wrapped for Ontario Science Centre.",
-			"Repainted in the two-tone Metrolinx livery in May 2019.",
+			"Repainted in the two-tone Metrolinx livery in May 2019."
 		],
 		series: "I",
 		is_accessible: false,
@@ -1370,14 +1439,20 @@ export const BILEVEL_REGISTRY: Record<
 	"2031": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in December 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in December 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2032": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in September 2017."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in September 2017."
+		],
 		series: "I",
 		is_accessible: false,
 	},
@@ -1387,7 +1462,7 @@ export const BILEVEL_REGISTRY: Record<
 		notes: [
 			"Active",
 			"Wrapped for Pan Am Games 2015 (Ontario Yours to Discover)",
-			"Repainted in the two-tone Metrolinx livery in January 2017.",
+			"Repainted in the two-tone Metrolinx livery in January 2017."
 		],
 		series: "I",
 		is_accessible: false,
@@ -1395,322 +1470,459 @@ export const BILEVEL_REGISTRY: Record<
 	"2034": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in December 2017."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in December 2017."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2035": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in October 2019."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in October 2019."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2036": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in September 2016."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in September 2016."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2037": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in June 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in June 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2038": {
 		serial_number: "77-85-0949",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in March 2019."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in March 2019."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2039": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active"],
+		notes: [
+			"Active"
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2040": {
 		serial_number: "77-85-0951",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in April 2017."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in April 2017."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2041": {
 		serial_number: "77-85-0952",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in November 2017."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in November 2017."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2042": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in June 2017."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in June 2017."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2043": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in February/March 2019."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in February/March 2019."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2044": {
 		serial_number: "77-85-0955",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in February/March 2019."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in February/March 2019."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2045": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in December 2017."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in December 2017."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2046": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in August 2019."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in August 2019."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2047": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in February 2017."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in February 2017."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2048": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in September 2016."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in September 2016."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2049": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in April 2017."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in April 2017."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2050": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in June 2017."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in June 2017."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2051": {
 		serial_number: "77-85-0962",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in October 2016."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in October 2016."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2052": {
 		serial_number: "77-85-0963",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in November 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in November 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2053": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in May 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in May 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2054": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in June 2019."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in June 2019."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2055": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in June 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in June 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2056": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in November 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in November 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2057": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in July 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in July 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2058": {
 		serial_number: "77-85-0969",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in April 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in April 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2059": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in March 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in March 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2060": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in August 2019."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in August 2019."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2061": {
 		serial_number: "77-85-0972",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in September 2016."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in September 2016."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2062": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in July 2019."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in July 2019."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2063": {
 		serial_number: "77-85-0974",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in December 2017."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in December 2017."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2064": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in August 2017."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in August 2017."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2065": {
 		serial_number: "77-85-0976",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in February 2019."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in February 2019."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2066": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in June 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in June 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2067": {
 		serial_number: "77-85-0978",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in September 2019."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in September 2019."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2068": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in January 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in January 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2069": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in April 2017."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in April 2017."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2070": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery by 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery by 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2071": {
 		serial_number: "77-85-0982",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in February 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in February 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2072": {
 		serial_number: "77-85-0983",
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in July 2019."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in July 2019."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2073": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in May 2017."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in May 2017."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2074": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in September 2019."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in September 2019."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2075": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in July 2019."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in July 2019."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2076": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in April 2018."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in April 2018."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2077": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in February 2019."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in February 2019."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2078": {
 		serial_number: null,
 		delivery_date: "1976-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in November 2016."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in November 2016."
+		],
 		series: "I",
 		is_accessible: false,
 	},
 	"2079": {
 		serial_number: null,
 		delivery_date: "1978-01-01",
-		notes: ["Active", "Repainted in the two-tone Metrolinx livery in July 2017."],
+		notes: [
+			"Active",
+			"Repainted in the two-tone Metrolinx livery in July 2017."
+		],
 		series: "I",
 		is_accessible: false,
 	},
