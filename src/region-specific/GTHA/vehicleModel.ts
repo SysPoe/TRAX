@@ -3,15 +3,12 @@ import { CacheContext, getVehiclePositions, getTrips } from "../../cache.js";
 import { AugmentedTripInstance } from "../../utils/augmentedTrip.js";
 import type { VehicleInfo } from "../../utils/vehicleModel.js";
 
+import { getGTHAVehicleDetails } from "./vehicleDetails.js";
+
 const GTHA_VEHICLE_RANGES: { start: number; end: number; model: string }[] = [
-	{ start: 500, end: 507, model: "GMD GP40TC" },
-	{ start: 510, end: 515, model: "GMD F40PH" },
-	{ start: 520, end: 531, model: "GMD FP7" },
-	{ start: 557, end: 568, model: "GMD F59PH" },
+	{ start: 520, end: 568, model: "GMD F59PH" },
 	{ start: 600, end: 666, model: "MPI MP40PH-3C" },
 	{ start: 667, end: 682, model: "MPI MP54AC" },
-	{ start: 700, end: 710, model: "GMD GP40-2W" },
-	{ start: 720, end: 726, model: "GMD GP40-2W" },
 	{ start: 1001, end: 1014, model: "Type A DMU" },
 	{ start: 3001, end: 3006, model: "Type C DMU" },
 ];
@@ -66,7 +63,8 @@ export function getVehicleInfo(inst: AugmentedTripInstance, ctx: CacheContext): 
 	const vehicle = findRelevantVehicle(inst, ctx);
 	const vehicleId = vehicle?.vehicle.id ?? null;
 
-	const vehicle_model = vehicleId ? getModelFromId(vehicleId) : null;
+	const vehicleDetails = vehicleId ? getGTHAVehicleDetails(vehicleId) : null;
+	const vehicle_model = vehicleDetails?.description.model ?? (vehicleId ? getModelFromId(vehicleId) : null);
 
-	return { vehicle_model, vehicle_id: vehicleId };
+	return { vehicle_model, vehicle_id: vehicleId, details: vehicleDetails };
 }
