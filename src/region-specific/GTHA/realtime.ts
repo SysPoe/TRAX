@@ -77,7 +77,8 @@ const SOURCE_E_STOP_CONVERSION: Record<string, string[]> = {
 // --- URLs ---
 const SOURCE_A_URL = "https://www.gotracker.ca/gotracker/mobile/proxy/web/AVL/InService/Trip2/All";
 const SOURCE_B_URL = "https://www.gotracker.ca/gotracker/mobile/proxy/web/Schedule/Today/All";
-const SOURCE_C_URL_TEMPLATE = (stop_id: string) => `https://api.metrolinx.com/external/upe/tdp/up/departures/${stop_id}`;
+const SOURCE_C_URL_TEMPLATE = (stop_id: string) =>
+	`https://api.metrolinx.com/external/upe/tdp/up/departures/${stop_id}`;
 const SOURCE_D_URL_TEMPLATE = (stop_id: string) =>
 	`https://api.metrolinx.com/external/go/departures/stops/${stop_id}/departures?page=1&pageLimit=10`;
 const SOURCE_E_URL_TEMPLATE = (code: string, stop_id: string) =>
@@ -291,7 +292,6 @@ function getUniqueStopTimesForRange(
 	return Array.from(map.values());
 }
 
-
 export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	const timer = ctx.augmented.timer;
 	timer.start("updateAllSources");
@@ -361,7 +361,13 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 
 	// Source D (requires identifying active stops first)
 	timer.start("updateAllSources:getStopTimesSourceD");
-	const uniqueStopTimesSourceD = getUniqueStopTimesForRange(ctx, gtfs, serviceDateStr, nowSecs, SOURCE_D_LOOKAHEAD_SECS);
+	const uniqueStopTimesSourceD = getUniqueStopTimesForRange(
+		ctx,
+		gtfs,
+		serviceDateStr,
+		nowSecs,
+		SOURCE_D_LOOKAHEAD_SECS,
+	);
 	timer.stop("updateAllSources:getStopTimesSourceD");
 
 	const sourceDStopIds = Array.from(new Set(uniqueStopTimesSourceD.map((v) => v.stop_id)));
@@ -406,9 +412,12 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 					promise: fetch(SOURCE_E_URL_TEMPLATE(code, stop_id), { headers: { Referer: SOURCE_E_REFERRER } })
 						.then((r) => (r.ok ? r.json() : null))
 						.catch((e) => {
-							logger.error(`Failed to fetch Source E for stop ${stop_id} corridor ${code}: ${e.message}`, {
-								module: "GTHA",
-							});
+							logger.error(
+								`Failed to fetch Source E for stop ${stop_id} corridor ${code}: ${e.message}`,
+								{
+									module: "GTHA",
+								},
+							);
 							return null;
 						}),
 				})),
@@ -448,8 +457,9 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 				if (!st.trip_id.endsWith(tripNumber)) continue;
 				const instance = getAugmentedTrips(ctx, st.trip_id)[0]?.instances.find((v) => {
 					if (v.serviceDate === departure.scheduledDateTime.slice(0, 10).replace(/-/g, "")) return true;
-					const offset = v.stopTimes.find((st) => st.actual_stop_id === item.stop_id)
-						?.scheduled_departure_date_offset;
+					const offset = v.stopTimes.find(
+						(st) => st.actual_stop_id === item.stop_id,
+					)?.scheduled_departure_date_offset;
 					if (!offset) return false;
 
 					const prevDate = new Date(departure.scheduledDateTime.slice(0, 10));
@@ -465,7 +475,13 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 
 	// Process Source C Departures
 	timer.start("updateAllSources:getStopTimesSourceC");
-	const uniqueStopTimesSourceC = getUniqueStopTimesForRange(ctx, gtfs, serviceDateStr, nowSecs, SOURCE_C_LOOKAHEAD_SECS);
+	const uniqueStopTimesSourceC = getUniqueStopTimesForRange(
+		ctx,
+		gtfs,
+		serviceDateStr,
+		nowSecs,
+		SOURCE_C_LOOKAHEAD_SECS,
+	);
 	timer.stop("updateAllSources:getStopTimesSourceC");
 
 	for (const item of sourceCFetches) {

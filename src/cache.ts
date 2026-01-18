@@ -26,7 +26,7 @@ import { getPlaces, getCurrentQRTravelTrains } from "./region-specific/SEQ/qr-tr
 import { Timer, globalTimer } from "./utils/timer.js";
 import { getRailwayStationFacilities } from "./region-specific/SEQ/facilities.js";
 import { RailwayStationFacility } from "./region-specific/SEQ/facilities-types.js";
-import { updateGTHAAltSources } from "./region-specific/GTHA/realtime.js";
+import { updateAllSources } from "./region-specific/GTHA/realtime.js";
 import logger from "./utils/logger.js";
 import { getGtfs } from "./gtfsInterfaceLayer.js";
 import * as qdf from "qdf-gtfs";
@@ -1018,7 +1018,7 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		}
 	}
 
-	await updateGTHAAltSources(ctx, gtfs);
+	await updateAllSources(ctx, gtfs);
 
 	ctx.augmented.timer.stop("refreshRealtimeCache");
 	ctx.augmented.timer.log("Realtime Cache Refresh", true);
