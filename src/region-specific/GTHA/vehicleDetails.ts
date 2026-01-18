@@ -64,6 +64,10 @@ export interface GOTransitVehicle {
 			visual_next_stop_display: boolean;
 		};
 	};
+
+	/** Optional historical or descriptive notes for the series */
+	series_notes?: string[];
+
 	/** Optional data for specific individual cars extracted from registries */
 	individual_car_data?: {
 		serial_number: string | null;
@@ -231,6 +235,59 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 	},
 
 	// --- BiLevel Railcars ---
+	{
+		type: "Coach",
+		series_ranges: [{ from: 2000, to: 2079 }],
+		description: {
+			model_year: 1976,
+			model_year_end: 1978,
+			manufacturer: "Hawker Siddeley Canada",
+			model: "BiLevel Series I Coach",
+			fuel_type: "Unpowered Railcar",
+		},
+		dimensions: {
+			length_meters: 25.9,
+			articulated_sections: 1,
+			levels: 3,
+			doors: 2,
+		},
+		livery: {
+			style: "Bilevel",
+			hex_color: "#008341",
+		},
+		capacity: {
+			seating: 162,
+			bicycles: 2,
+			wheelchair_bays: 0,
+			restrictions: [],
+		},
+		amenities: {
+			restrooms: { total: 1, is_accessible: false },
+			climate_control: { has_ac: true },
+			connectivity: {
+				has_wifi: true,
+				wifi_notes: "GO Wi-Fi Plus",
+				has_power_outlets: true,
+				has_usb_ports: false,
+			},
+		},
+		accessibility: {
+			is_fully_accessible: false,
+			boarding_steps: 2,
+			ramp: { is_available: false },
+			passenger_info: {
+				audio_announcements: true,
+				visual_next_stop_display: true,
+			},
+		},
+		series_notes: [
+			"GO Transit 2000-2079 are Hawker Siddeley Canada Bilevel coaches built between 1976 and 1978 at a cost of $35 million ($437,500 a piece) (1976 $CDN). The 80 cars of this order was at the time GO's largest single order of equipment. When delivered, starting in March 1977, they were used predominantly on the Lakeshore Corridor but soon made it to other lines as services were added and ridership increased.",
+			'The BiLevel design (as it is now known) was arrived at expressly at GO Transit\'s behest. In the early 1970s, GO quickly found out that the single-level cars then being used were simply not able to provide the capacity required within the track time that they were been allotted by CN. After tests with leased "Gallery-style" equipment from C&NW and later CPR, it was decided that an entirely new car design would be the best way to attack the problem.',
+			"In the late-1990s, in the midst of a funding cutback and ridership slump, GO would sell 16 coaches to TRE, along with F59 locomotives 565-568. A year later, GO exchanged 5 of the coaches for two cab cars, 223 and 224. One other car, 2010, would be bought outright by GO.",
+			"Refurbishment (1998): These cars underwent their first refurbishment starting in 1998, giving them more modern features and interior. A portion were refurbished by CAD Railway Services and the remaining portion were done by GEC Alsthom. Features included updated seats with improved ergonomics, taller headrests, and new flooring.",
+			"Second Refurbishment (2015-2019): Series I Bilevels underwent a second refurbishment by CAD Railway Services. Changes include pale green fabric seat cushions, taller warm grey vinyl headrests, new grey ceilings and side walls, and LED exterior step lights.",
+		],
+	},
 	{
 		type: "Coach",
 		series_ranges: [{ from: 2100, to: 2155 }],
