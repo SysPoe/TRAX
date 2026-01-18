@@ -246,7 +246,16 @@ function propagateVehicleInfoToBlock(
 
 	for (const inst of blockTrips) {
 		if (inst.block_id !== blockId) continue;
-		if (inst.vehicle_id === vehicleId && inst.passenger_cars === (passengerCars ?? null)) continue;
+
+		if (inst.vehicle_id === vehicleId && inst.passenger_cars === (passengerCars ?? null)) {
+			if (inst.vehicle_id) registerCarTrips(ctx, inst.trip_id, inst.vehicle_id);
+			if (inst.consist) {
+				for (const carId of inst.consist) {
+					registerCarTrips(ctx, inst.trip_id, carId);
+				}
+			}
+			continue;
+		}
 
 		const merged = mergeVehicleInfo(inst, info);
 		inst.vehicle_id = merged.vehicle_id;
@@ -323,6 +332,20 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 
 	const now = new Date();
 	const serviceDateStr = getServiceDate(now, ctx.config.timezone);
+
+	// Re-bootstrap carTrips from existing augmented data
+	const existingTripsForDate = ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [];
+	for (const tripId of existingTripsForDate) {
+		const at = ctx.augmented.tripsRec.get(tripId);
+		if (!at) continue;
+		const inst = at.instances.find((i) => i.serviceDate === serviceDateStr);
+		if (inst) {
+			if (inst.vehicle_id) registerCarTrips(ctx, inst.trip_id, inst.vehicle_id);
+			if (inst.consist) {
+				for (const carId of inst.consist) registerCarTrips(ctx, inst.trip_id, carId);
+			}
+		}
+	}
 	const serviceDayStart = getServiceDayStart(serviceDateStr, ctx.config.timezone);
 	const nowSecs = Math.floor(now.getTime() / 1000 - serviceDayStart);
 	const nowMs = Date.now();
@@ -805,6 +828,7 @@ export async function updateSourceA(
 						instance.vehicle_id,
 						instance.passenger_cars,
 						blockMap,
+						instance.consist,
 					);
 				}
 				updateCount++;
@@ -878,6 +902,8 @@ function processSourceEUpdates(
 				instance.block_id,
 				instance.vehicle_id,
 				instance.passenger_cars,
+				undefined,
+				instance.consist,
 			);
 
 			if (trip.scheduledCoachCount !== undefined) instance.scheduled_passenger_cars = trip.scheduledCoachCount;
