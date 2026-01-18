@@ -86,11 +86,12 @@ const SOURCE_E_URL_TEMPLATE = (code: string, stop_id: string) =>
 const SOURCE_F_URL = "https://www.transsee.ca/fleetfind?a=gotrain";
 
 // --- Throttles ---
-const SOURCE_A_THROTTLE_MS = 60 * 1000;
-const SOURCE_B_THROTTLE_MS = 15 * 60 * 1000;
-const SOURCE_CD_THROTTLE_MS = 60 * 1000;
-const SOURCE_E_THROTTLE_MS = 2 * 60 * 1000;
-const SOURCE_F_THROTTLE_MS = 5 * 60 * 1000;
+const MINUTES = 60 * 1000;
+const SOURCE_A_THROTTLE_MS = 1 * MINUTES;
+const SOURCE_B_THROTTLE_MS = 15 * MINUTES;
+const SOURCE_CD_THROTTLE_MS = 1 * MINUTES;
+const SOURCE_E_THROTTLE_MS = 2 * MINUTES;
+const SOURCE_F_THROTTLE_MS = 5 * MINUTES;
 
 // --- Module State ---
 let activeModels: Set<string> = new Set();
@@ -98,11 +99,22 @@ let activeIds: Set<string> = new Set();
 let activeCars: Set<string> = new Set();
 let activePassengerCars: Set<number> = new Set();
 
+const SOURCE_PRIORITIES: Record<string, number> = {
+	"Source D": 4,
+	"Source E": 3,
+	"Source C": 2,
+	"Source A": 1,
+	"Source B": 0,
+	Propagation: 0,
+	prevs: 0,
+};
+
 let prevs: {
 	tripInstanceId: string;
 	stopId: string;
 	actualPlatform: string | null;
 	scheduledPlatform: string | null;
+	priority: number;
 }[] = [];
 let lastSourceEFetchMs: Record<string, number> = {};
 let lastSourceBFetchMs = 0;
@@ -139,15 +151,21 @@ function applyPlatformUpdate(
 	stopId: string,
 	platform: string | null,
 	scheduledPlatform: string | null,
+	source: string,
 	blockMap?: Map<string, any[]>,
 ) {
+	const priority = SOURCE_PRIORITIES[source] ?? -1;
+	const currentPriority = (stopTime as any).platformPriority ?? -1;
+
 	const newActual = platform ?? stopTime.actual_platform_code ?? scheduledPlatform ?? null;
 	const newScheduled = scheduledPlatform ?? stopTime.scheduled_platform_code ?? platform ?? null;
 
 	const changed =
-		newActual !== stopTime.actual_platform_code ||
-		newScheduled !== stopTime.scheduled_platform_code ||
-		!stopTime.rt_platform_code_updated;
+		(newActual !== stopTime.actual_platform_code ||
+			newScheduled !== stopTime.scheduled_platform_code ||
+			!stopTime.rt_platform_code_updated) &&
+		(stopTime.actual_platform_code === null || currentPriority <= priority);
+
 	if (!changed) return;
 
 	prevs = prevs.filter((v) => !(v.tripInstanceId === stopTime.instance_id && v.stopId === stopId));
@@ -156,11 +174,14 @@ function applyPlatformUpdate(
 		stopId,
 		actualPlatform: newActual,
 		scheduledPlatform: newScheduled,
+		priority: priority,
 	});
 
 	stopTime.actual_platform_code = newActual;
 	stopTime.scheduled_platform_code = newScheduled;
 	stopTime.rt_platform_code_updated = true;
+	(stopTime as any).platformSource = source;
+	(stopTime as any).platformPriority = priority;
 
 	// If this is the terminating stop, propagate platform to next trip in block if it starts here
 	const ti = getAugmentedTripInstance(ctx, stopTime.instance_id);
@@ -206,7 +227,7 @@ function propagatePlatformToNextTripInBlock(
 
 	if (nextTrip && (nextTrip.stopTimes[0]?.actual_stop_id ?? nextTrip.stopTimes[0]?.scheduled_stop_id) === stopId) {
 		const firstStopTime = nextTrip.stopTimes[0];
-		applyPlatformUpdate(ctx, firstStopTime, stopId, actualPlatform, scheduledPlatform, blockMap);
+		applyPlatformUpdate(ctx, firstStopTime, stopId, actualPlatform, scheduledPlatform, "Propagation", blockMap);
 	}
 }
 
@@ -219,6 +240,21 @@ function registerCarTrips(ctx: CacheContext, tripId: string, carId: string) {
 	set.add(tripId);
 }
 
+const ROUTE_GROUP_EAST = ["ST", "RH", "LE"];
+const ROUTE_GROUP_WEST = ["MI", "LW", "KI", "BR"];
+
+function getTripRouteGroup(ctx: CacheContext, tripId: string): string | null {
+	const augmentedTrip = ctx.augmented.tripsRec.get(tripId);
+	if (!augmentedTrip || !ctx.gtfs) return null;
+	const routeId = augmentedTrip.route_id;
+	const route = ctx.gtfs.getRoutes({ route_id: routeId })[0];
+	if (!route) return null;
+	const rsn = route.route_short_name;
+	if (rsn && ROUTE_GROUP_EAST.includes(rsn)) return "EAST";
+	if (rsn && ROUTE_GROUP_WEST.includes(rsn)) return "WEST";
+	return null;
+}
+
 function propagateVehicleInfoToBlock(
 	ctx: CacheContext,
 	serviceDateStr: string,
@@ -227,48 +263,94 @@ function propagateVehicleInfoToBlock(
 	passengerCars: number | null,
 	blockMap?: Map<string, any[]>,
 	consist: string[] | null = null,
+	sourceTripId?: string,
 ) {
 	if (!blockId) return;
 
-	const blockTrips = blockMap
+	let blockTrips = blockMap
 		? blockMap.get(blockId) || []
 		: (ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [])
 				.map((id) => ctx.augmented.tripsRec.get(id))
 				.filter(Boolean)
 				.flatMap((at) => at!.instances.filter((i) => i.serviceDate === serviceDateStr));
 
-	const info = {
-		vehicle_id: vehicleId,
-		vehicle_model: vehicleId ? getModelFromId(vehicleId) : null,
-		passenger_cars: passengerCars,
-		consist: consist,
-	};
+	if (blockTrips.length === 0) return;
 
-	for (const inst of blockTrips) {
-		if (inst.block_id !== blockId) continue;
+	// Sort trips by time
+	blockTrips = [...blockTrips].sort((a, b) => {
+		const aTime = a.stopTimes[0]?.scheduled_departure_time ?? 0;
+		const bTime = b.stopTimes[0]?.scheduled_departure_time ?? 0;
+		return aTime - bTime;
+	});
 
-		if (inst.vehicle_id === vehicleId && inst.passenger_cars === (passengerCars ?? null)) {
+	const sourceIndex = sourceTripId ? blockTrips.findIndex((inst) => inst.trip_id === sourceTripId) : -1;
+
+	const updateInst = (inst: any, currentConsist: string[] | null) => {
+		const info = {
+			vehicle_id: vehicleId,
+			vehicle_model: vehicleId ? getModelFromId(vehicleId) : null,
+			passenger_cars: passengerCars,
+			consist: currentConsist,
+		};
+
+		if (
+			inst.vehicle_id === vehicleId &&
+			inst.passenger_cars === (passengerCars ?? null) &&
+			JSON.stringify(inst.consist) === JSON.stringify(currentConsist)
+		) {
 			if (inst.vehicle_id) registerCarTrips(ctx, inst.trip_id, inst.vehicle_id);
 			if (inst.consist) {
-				for (const carId of inst.consist) {
-					registerCarTrips(ctx, inst.trip_id, carId);
-				}
+				for (const carId of inst.consist) registerCarTrips(ctx, inst.trip_id, carId);
 			}
-			continue;
+			return;
 		}
 
 		const merged = mergeVehicleInfo(inst, info);
 		inst.vehicle_id = merged.vehicle_id;
 		inst.vehicle_model = merged.vehicle_model;
 		inst.passenger_cars = merged.passenger_cars ?? null;
-		if (consist) inst.consist = consist;
+		if (currentConsist) inst.consist = currentConsist;
 
 		if (inst.vehicle_id) registerCarTrips(ctx, inst.trip_id, inst.vehicle_id);
 		if (inst.consist) {
-			for (const carId of inst.consist) {
-				registerCarTrips(ctx, inst.trip_id, carId);
-			}
+			for (const carId of inst.consist) registerCarTrips(ctx, inst.trip_id, carId);
 		}
+	};
+
+	if (sourceIndex === -1) {
+		for (const inst of blockTrips) {
+			updateInst(inst, consist);
+		}
+		return;
+	}
+
+	// Apply to source trip (redundant but safe)
+	updateInst(blockTrips[sourceIndex], consist);
+
+	// Propagate forwards
+	let forwardConsist = consist;
+	for (let i = sourceIndex + 1; i < blockTrips.length; i++) {
+		const prev = blockTrips[i - 1];
+		const curr = blockTrips[i];
+		const groupPrev = getTripRouteGroup(ctx, prev.trip_id);
+		const groupCurr = getTripRouteGroup(ctx, curr.trip_id);
+		if (groupPrev && groupCurr && groupPrev === groupCurr && forwardConsist) {
+			forwardConsist = [...forwardConsist].reverse();
+		}
+		updateInst(curr, forwardConsist);
+	}
+
+	// Propagate backwards
+	let backwardConsist = consist;
+	for (let i = sourceIndex - 1; i >= 0; i--) {
+		const next = blockTrips[i + 1];
+		const curr = blockTrips[i];
+		const groupNext = getTripRouteGroup(ctx, next.trip_id);
+		const groupCurr = getTripRouteGroup(ctx, curr.trip_id);
+		if (groupNext && groupCurr && groupNext === groupCurr && backwardConsist) {
+			backwardConsist = [...backwardConsist].reverse();
+		}
+		updateInst(curr, backwardConsist);
 	}
 }
 
@@ -332,6 +414,19 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 
 	const now = new Date();
 	const serviceDateStr = getServiceDate(now, ctx.config.timezone);
+
+	// Re-apply previous state (prevents UI flicker if context was reset but module state remains)
+	prevs.forEach((v) => {
+		const ti = getAugmentedTripInstance(ctx, v.tripInstanceId);
+		const st = ti?.stopTimes.find((st) => (st.actual_stop_id ?? st.scheduled_stop_id) === v.stopId);
+		if (st) {
+			st.actual_platform_code = v.actualPlatform;
+			st.scheduled_platform_code = v.scheduledPlatform;
+			st.rt_platform_code_updated = true;
+			(st as any).platformSource = "prevs";
+			(st as any).platformPriority = v.priority ?? SOURCE_PRIORITIES.prevs;
+		}
+	});
 
 	// Re-bootstrap carTrips from existing augmented data
 	const existingTripsForDate = ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [];
@@ -477,17 +572,6 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 
 	// --- 2. Process State & Wait for Departures ---
 
-	// Re-apply previous state (prevents UI flicker if context was reset but module state remains)
-	prevs.forEach((v) => {
-		const ti = getAugmentedTripInstance(ctx, v.tripInstanceId);
-		const st = ti?.stopTimes.find((st) => (st.actual_stop_id ?? st.scheduled_stop_id) === v.stopId);
-		if (st) {
-			st.actual_platform_code = v.actualPlatform;
-			st.scheduled_platform_code = v.scheduledPlatform;
-			st.rt_platform_code_updated = true;
-		}
-	});
-
 	timer.start("updateAllSources:processAPIs");
 
 	// Process Source D Departures
@@ -519,7 +603,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 				});
 
 				const ast = instance?.stopTimes.find((ast) => ast.actual_stop_id === st.stop_id);
-				if (ast) applyPlatformUpdate(ctx, ast, item.stop_id, platform, scheduledPlatform, blockMap);
+				if (ast) applyPlatformUpdate(ctx, ast, item.stop_id, platform, scheduledPlatform, "Source D", blockMap);
 			}
 		}
 	}
@@ -551,7 +635,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 					getAugmentedTrips(ctx, st.trip_id)[0]?.instances[0];
 
 				const ast = instance?.stopTimes.find((ast) => ast.actual_stop_id === st.stop_id);
-				if (ast) applyPlatformUpdate(ctx, ast, item.stop_id, platform, null, blockMap);
+				if (ast) applyPlatformUpdate(ctx, ast, item.stop_id, platform, null, "Source C", blockMap);
 			}
 		}
 	}
@@ -572,7 +656,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	}
 	timer.stop("updateAllSources:processAPIs");
 
-	// --- 3. Process AVL & Schedule ---
+	// --- 3. Process Source A & Source B ---
 
 	const tripNumberToIds = new Map<string, string[]>();
 	for (const tid of uniqueStopTimesSourceE.map((v) => v.trip_id)) {
@@ -667,6 +751,7 @@ export async function updateSourceB(
 								targetStopTime.actual_stop_id ?? targetStopTime.scheduled_stop_id ?? "",
 								actTrack ?? schTrack,
 								schTrack,
+								"Source B",
 								blockMap,
 							);
 							updateCount++;
@@ -697,6 +782,7 @@ export async function updateSourceB(
 								instance.passenger_cars,
 								blockMap,
 								instance.consist,
+								instance.trip_id,
 							);
 						}
 					}
@@ -812,6 +898,7 @@ export async function updateSourceA(
 						instance.passenger_cars,
 						blockMap,
 						instance.consist,
+						instance.trip_id,
 					);
 				} else if (passengerCars !== null) {
 					const vehicleInfo = mergeVehicleInfo(instance, {
@@ -829,6 +916,7 @@ export async function updateSourceA(
 						instance.passenger_cars,
 						blockMap,
 						instance.consist,
+						instance.trip_id,
 					);
 				}
 				updateCount++;
@@ -887,7 +975,7 @@ function processSourceEUpdates(
 			if (!instance) continue;
 			const ast = instance.stopTimes.find((f_ast) => f_ast.actual_stop_id === st.stop_id);
 			if (!ast) continue;
-			applyPlatformUpdate(ctx, ast, stop_id, platform, null);
+			applyPlatformUpdate(ctx, ast, stop_id, platform, null, "Source E");
 
 			if (trip.coachCount !== undefined) {
 				instance.passenger_cars = trip.coachCount;
