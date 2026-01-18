@@ -6,16 +6,19 @@ import { getServiceDayStart, getServiceDate } from "../../utils/time.js";
 import { isConsideredTripId } from "../../utils/considered.js";
 import { getModelFromId } from "./vehicleModel.js";
 import { mergeVehicleInfo } from "../../utils/vehicleModel.js";
+import { parse } from "node-html-parser";
 
 const GO_LOOKAHEAD_SECS = 600;
 const UP_LOOKAHEAD_SECS = 7200;
 const GOTRACKER_REFERRER = "https://www.gotracker.ca/gotracker/web/";
 const GOTRACKER_THROTTLE_MS = 2 * 60 * 1000;
 const GO_SCHEDULE_THROTTLE_MS = 15 * 60 * 1000;
+const TRANSSEE_THROTTLE_MS = 5 * 60 * 1000;
 const GOTRACKER_EXCLUDED_STOPS = new Set(["PA", "UN"]);
 
 let activeModels: Set<string> = new Set();
 let activeIds: Set<string> = new Set();
+let activeCars: Set<string> = new Set();
 let activePassengerCars: Set<number> = new Set();
 
 let prevs: {
@@ -26,11 +29,22 @@ let prevs: {
 }[] = [];
 let lastGoTrackerFetchMs: Record<string, number> = {};
 let lastGoScheduleFetchMs = 0;
+let lastTransSeeFetchMs = 0;
 let vehiclePassengerCars: Record<string, number> = {};
+let vehicleConsists: Record<string, string[]> = {};
 
-export function getActiveVehicleModels(): Set<string> { return activeModels }
-export function getActiveVehicleIds(): Set<string> { return activeIds }
-export function getActivePassengerCars(): Set<number> { return activePassengerCars }
+export function getActiveVehicleModels(): Set<string> {
+	return activeModels;
+}
+export function getActiveVehicleIds(): Set<string> {
+	return activeIds;
+}
+export function getActiveCars(): Set<string> {
+	return activeCars;
+}
+export function getActivePassengerCars(): Set<number> {
+	return activePassengerCars;
+}
 
 function applyPlatformUpdate(
 	ctx: CacheContext,
@@ -92,9 +106,9 @@ function propagatePlatformToNextTripInBlock(
 	const blockTrips = blockMap
 		? blockMap.get(currentInst.block_id) || []
 		: (ctx.augmented.serviceDateTrips.get(currentInst.serviceDate) ?? [])
-			.map((id) => ctx.augmented.tripsRec.get(id))
-			.filter(Boolean)
-			.flatMap((at) => at!.instances.filter((i) => i.serviceDate === currentInst.serviceDate));
+				.map((id) => ctx.augmented.tripsRec.get(id))
+				.filter(Boolean)
+				.flatMap((at) => at!.instances.filter((i) => i.serviceDate === currentInst.serviceDate));
 
 	for (const inst of blockTrips) {
 		if (inst.block_id !== currentInst.block_id || inst.instance_id === currentInst.instance_id) continue;
@@ -123,20 +137,22 @@ function propagateVehicleInfoToBlock(
 	vehicleId: string | null,
 	passengerCars: number | null,
 	blockMap?: Map<string, any[]>,
+	consist: string[] | null = null,
 ) {
 	if (!blockId) return;
 
 	const blockTrips = blockMap
 		? blockMap.get(blockId) || []
 		: (ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [])
-			.map((id) => ctx.augmented.tripsRec.get(id))
-			.filter(Boolean)
-			.flatMap((at) => at!.instances.filter((i) => i.serviceDate === serviceDateStr));
+				.map((id) => ctx.augmented.tripsRec.get(id))
+				.filter(Boolean)
+				.flatMap((at) => at!.instances.filter((i) => i.serviceDate === serviceDateStr));
 
 	const info = {
 		vehicle_id: vehicleId,
 		vehicle_model: vehicleId ? getModelFromId(vehicleId) : null,
 		passenger_cars: passengerCars,
+		consist: consist,
 	};
 
 	for (const inst of blockTrips) {
@@ -147,6 +163,7 @@ function propagateVehicleInfoToBlock(
 		inst.vehicle_id = merged.vehicle_id;
 		inst.vehicle_model = merged.vehicle_model;
 		inst.passenger_cars = merged.passenger_cars ?? null;
+		if (consist) inst.consist = consist;
 	}
 }
 
@@ -223,9 +240,37 @@ export async function updateGTHAAltSources(ctx: CacheContext, gtfs: GTFS) {
 	const timer = ctx.augmented.timer;
 	timer.start("updateGTHAAltSources");
 
+	logger.debug("Updating alt sources...", {
+		function: "updateGTHAAltSources",
+		module: "GTHA",
+	});
+
 	activeIds.clear();
 	activeModels.clear();
+	activeCars.clear();
 	activePassengerCars.clear();
+
+	const now = new Date();
+	const serviceDateStr = getServiceDate(now, ctx.config.timezone);
+	const serviceDayStart = getServiceDayStart(serviceDateStr, ctx.config.timezone);
+	const nowSecs = Math.floor(now.getTime() / 1000 - serviceDayStart);
+
+	timer.start("updateGTHAAltSources:buildBlockMap");
+	const blockMap = new Map<string, any[]>();
+	const tripsForDate = ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [];
+	for (const tripId of tripsForDate) {
+		const at = ctx.augmented.tripsRec.get(tripId);
+		if (!at) continue;
+		const inst = at.instances.find((i) => i.serviceDate === serviceDateStr);
+		if (!inst || !inst.block_id) continue;
+		if (!blockMap.has(inst.block_id)) blockMap.set(inst.block_id, []);
+		blockMap.get(inst.block_id)!.push(inst);
+	}
+	timer.stop("updateGTHAAltSources:buildBlockMap");
+
+	timer.start("updateGTHAConsists");
+	await updateGTHAConsists(ctx, serviceDateStr, blockMap);
+	timer.stop("updateGTHAConsists");
 
 	// Start static/early fetches
 	const avlPromise = fetch("https://www.gotracker.ca/gotracker/mobile/proxy/web/AVL/InService/Trip2/All", {
@@ -261,11 +306,6 @@ export async function updateGTHAAltSources(ctx: CacheContext, gtfs: GTFS) {
 			}),
 	}));
 
-	const now = new Date();
-	const serviceDateStr = getServiceDate(now, ctx.config.timezone);
-	const serviceDayStart = getServiceDayStart(serviceDateStr, ctx.config.timezone);
-	const nowSecs = Math.floor(now.getTime() / 1000 - serviceDayStart);
-
 	timer.start("updateGTHAAltSources:getStopTimes10m");
 	const stopTimes10m = gtfs
 		.getStopTimes({ date: serviceDateStr, start_time: nowSecs, end_time: nowSecs + GO_LOOKAHEAD_SECS })
@@ -279,7 +319,7 @@ export async function updateGTHAAltSources(ctx: CacheContext, gtfs: GTFS) {
 							(stu) =>
 								(stu.departure_time ?? stu.arrival_time) &&
 								((stu.departure_time ?? stu.arrival_time ?? 0) - nowSecs + 86400) % 86400 <=
-								GO_LOOKAHEAD_SECS,
+									GO_LOOKAHEAD_SECS,
 						)
 						.map((stu) => ({ stop_id: stu.stop_id, trip_id: update.trip.trip_id })) ?? [],
 			),
@@ -328,7 +368,7 @@ export async function updateGTHAAltSources(ctx: CacheContext, gtfs: GTFS) {
 							(stu) =>
 								(stu.departure_time ?? stu.arrival_time) &&
 								((stu.departure_time ?? stu.arrival_time ?? 0) - nowSecs + 86400) % 86400 <=
-								UP_LOOKAHEAD_SECS,
+									UP_LOOKAHEAD_SECS,
 						)
 						.map((stu) => ({ stop_id: stu.stop_id, trip_id: update.trip.trip_id })) ?? [],
 			),
@@ -511,19 +551,6 @@ export async function updateGTHAAltSources(ctx: CacheContext, gtfs: GTFS) {
 		function: "updateGTHAAltSources",
 	});
 
-	timer.start("updateGTHAAltSources:buildBlockMap");
-	const blockMap = new Map<string, any[]>();
-	const tripsForDate = ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [];
-	for (const tripId of tripsForDate) {
-		const at = ctx.augmented.tripsRec.get(tripId);
-		if (!at) continue;
-		const inst = at.instances.find((i) => i.serviceDate === serviceDateStr);
-		if (!inst || !inst.block_id) continue;
-		if (!blockMap.has(inst.block_id)) blockMap.set(inst.block_id, []);
-		blockMap.get(inst.block_id)!.push(inst);
-	}
-	timer.stop("updateGTHAAltSources:buildBlockMap");
-
 	timer.start("updateGTHAAltSources:AVL");
 	await updateGTHAAVL(ctx, tripNumberToIds, serviceDateStr, blockMap, await avlPromise);
 	timer.stop("updateGTHAAltSources:AVL");
@@ -531,7 +558,7 @@ export async function updateGTHAAltSources(ctx: CacheContext, gtfs: GTFS) {
 	if (schedulePromise) {
 		timer.start("updateGTHAAltSources:Schedule");
 		await updateGTHASchedule(ctx, tripNumberToIds, serviceDateStr, blockMap, await schedulePromise);
-		timer.stop("updateGTHAAltSources:Schedule");
+		timer.stop("updateGTHASchedule");
 	}
 
 	timer.stop("updateGTHAAltSources");
@@ -613,6 +640,7 @@ export async function updateGTHASchedule(
 
 						if (gtStop.engineId && gtStop.engineId !== "-" && gtStop.engineId.trim() !== "") {
 							activeIds.add(gtStop.engineId);
+							activeCars.add(gtStop.engineId);
 							const vehicle_model = getModelFromId(gtStop.engineId);
 							if (vehicle_model) activeModels.add(vehicle_model);
 
@@ -620,10 +648,12 @@ export async function updateGTHASchedule(
 								vehicle_id: gtStop.engineId,
 								vehicle_model,
 								passenger_cars: vehiclePassengerCars[gtStop.engineId] ?? null,
+								consist: vehicleConsists[gtStop.engineId] ?? null,
 							});
 							instance.vehicle_id = vehicleInfo.vehicle_id;
 							instance.vehicle_model = vehicleInfo.vehicle_model;
 							instance.passenger_cars = vehicleInfo.passenger_cars ?? null;
+							instance.consist = vehicleInfo.consist ?? null;
 
 							propagateVehicleInfoToBlock(
 								ctx,
@@ -632,6 +662,7 @@ export async function updateGTHASchedule(
 								instance.vehicle_id,
 								instance.passenger_cars,
 								blockMap,
+								instance.consist,
 							);
 						}
 					}
@@ -715,6 +746,7 @@ export async function updateGTHAAVL(
 
 			if (vehicleId) {
 				activeIds.add(vehicleId);
+				activeCars.add(vehicleId);
 				const vehicle_model = getModelFromId(vehicleId);
 				if (vehicle_model) activeModels.add(vehicle_model);
 			}
@@ -732,10 +764,12 @@ export async function updateGTHAAVL(
 						vehicle_id: vehicleId,
 						vehicle_model: getModelFromId(vehicleId),
 						passenger_cars: passengerCars,
+						consist: vehicleConsists[vehicleId] ?? null,
 					});
 					instance.vehicle_id = vehicleInfo.vehicle_id;
 					instance.vehicle_model = vehicleInfo.vehicle_model;
 					instance.passenger_cars = vehicleInfo.passenger_cars ?? null;
+					instance.consist = vehicleInfo.consist ?? null;
 
 					propagateVehicleInfoToBlock(
 						ctx,
@@ -744,6 +778,7 @@ export async function updateGTHAAVL(
 						instance.vehicle_id,
 						instance.passenger_cars,
 						blockMap,
+						instance.consist,
 					);
 				} else if (passengerCars !== null) {
 					const vehicleInfo = mergeVehicleInfo(instance, {
@@ -837,5 +872,107 @@ function processGoTrackerUpdates(
 
 			if (trip.scheduledCoachCount !== undefined) instance.scheduled_passenger_cars = trip.scheduledCoachCount;
 		}
+	}
+}
+
+export async function updateGTHAConsists(ctx: CacheContext, serviceDateStr: string, blockMap?: Map<string, any[]>) {
+	const now = Date.now();
+	if (now - lastTransSeeFetchMs < TRANSSEE_THROTTLE_MS) return;
+	lastTransSeeFetchMs = now;
+
+	try {
+		const response = await fetch("https://www.transsee.ca/fleetfind?a=gotrain");
+		if (!response.ok) return;
+		const html = await response.text();
+
+		const root = parse(html);
+		const trainParagraphs = root.querySelectorAll("p[id]");
+
+		let matchCount = 0;
+		let tripUpdatedCount = 0;
+
+		for (const p of trainParagraphs) {
+			const vehicleNumber = Number.parseInt(p.getAttribute("id") ?? "");
+			if (Number.isNaN(vehicleNumber)) continue;
+
+			// Extract destination from paragraph text
+			const pInnerHTML = p.innerHTML;
+			const destination =
+				pInnerHTML
+					.split("</span>")
+					.pop()
+					?.split("<br>")[0]
+					?.replace(/<[^>]+>/g, "")
+					.replace(/^to\s+/, "")
+					.trim() || "";
+
+			const table = p.nextElementSibling;
+			if (!table || table.tagName !== "TABLE") continue;
+
+			const rows = table.querySelectorAll("tr");
+			if (rows.length < 2) continue;
+
+			matchCount++;
+
+			const fleetRow = rows[0]
+				.querySelectorAll("td")
+				.slice(1)
+				.map((td) => td.text.trim());
+			const infoRow = rows[1]
+				.querySelectorAll("td")
+				.slice(1)
+				.map((td) => td.text.trim());
+
+			let locoIdx = infoRow.findIndex((s) => s.toLowerCase().includes("locomotive"));
+			let cabIdx = infoRow.findIndex((s) => s.toLowerCase().includes("cab"));
+
+			const isToUnion = destination.includes("Union Station");
+
+			let consist = [...fleetRow];
+			const cabIsLead = isToUnion;
+
+			if (cabIdx !== -1 && locoIdx !== -1) {
+				const cabAtStart = cabIdx < locoIdx;
+				if (cabIsLead !== cabAtStart) {
+					consist.reverse();
+				}
+			}
+
+			vehicleConsists[vehicleNumber] = consist;
+			consist.forEach((car) => activeCars.add(car));
+
+			const tripsForDate = ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [];
+			for (const tripId of tripsForDate) {
+				const augmentedTrip = ctx.augmented.tripsRec.get(tripId);
+				if (!augmentedTrip) continue;
+				const instance = augmentedTrip.instances.find((v) => v.serviceDate === serviceDateStr);
+				if (!instance) continue;
+
+				if (instance.vehicle_id === vehicleNumber.toString()) {
+					instance.consist = consist;
+					tripUpdatedCount++;
+					propagateVehicleInfoToBlock(
+						ctx,
+						serviceDateStr,
+						instance.block_id,
+						instance.vehicle_id,
+						instance.passenger_cars,
+						blockMap,
+						consist,
+					);
+				}
+			}
+		}
+
+		logger.debug(`Updated consists w/ ${matchCount} matches and ${tripUpdatedCount} trips`, {
+			module: "GTHA",
+			function: "updateGTHAConsists",
+		});
+	} catch (e) {
+		logger.error("Failed to fetch consists", {
+			error: e,
+			module: "GTHA",
+			function: "updateGTHAConsists",
+		});
 	}
 }

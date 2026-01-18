@@ -9,6 +9,8 @@ export type VehicleInfo = {
 	vehicle_id: string | null;
 	passenger_cars?: number | null;
 	scheduled_passenger_cars?: number | null;
+	consist?: string[] | null;
+	details?: any | null;
 };
 
 function resolveVehicleInfo(inst: AugmentedTripInstance, ctx: CacheContext, config: TraxConfig): VehicleInfo {
@@ -31,15 +33,19 @@ export function mergeVehicleInfo(inst: AugmentedTripInstance, incoming: VehicleI
 	const passenger_cars = incoming.passenger_cars ?? prev?.passenger_cars ?? inst.passenger_cars ?? null;
 	const scheduled_passenger_cars =
 		incoming.scheduled_passenger_cars ?? prev?.scheduled_passenger_cars ?? inst.scheduled_passenger_cars ?? null;
+	const consist = incoming.consist ?? prev?.consist ?? inst.consist ?? null;
+	const details = incoming.details ?? prev?.details ?? inst.vehicle_details ?? null;
 
 	previousVehicleInfo[inst.instance_id] = {
 		vehicle_id,
 		vehicle_model,
 		passenger_cars,
 		scheduled_passenger_cars,
+		consist,
+		details,
 	};
 
-	return { vehicle_id, vehicle_model, passenger_cars, scheduled_passenger_cars };
+	return { vehicle_id, vehicle_model, passenger_cars, scheduled_passenger_cars, consist, details };
 }
 
 export function addVehicleModel(
@@ -51,18 +57,22 @@ export function addVehicleModel(
 	const needsId = inst.vehicle_id === undefined || inst.vehicle_id == null;
 	const needsPassengerCars = inst.passenger_cars == null;
 	const needsScheduledPassengerCars = inst.scheduled_passenger_cars == null;
+	const needsConsist = inst.consist == null;
 
-	if (needsModel || needsId || needsPassengerCars || needsScheduledPassengerCars) {
+	if (needsModel || needsId || needsPassengerCars || needsScheduledPassengerCars || needsConsist) {
 		const info = mergeVehicleInfo(inst, resolveVehicleInfo(inst, ctx, config));
 		if (needsModel) inst.vehicle_model = info.vehicle_model;
 		if (needsId) inst.vehicle_id = info.vehicle_id;
 		if (needsPassengerCars) inst.passenger_cars = info.passenger_cars ?? null;
 		if (needsScheduledPassengerCars) inst.scheduled_passenger_cars = info.scheduled_passenger_cars ?? null;
+		if (needsConsist) inst.consist = info.consist ?? null;
+		inst.vehicle_details = info.details ?? null;
 	}
 	if (inst.vehicle_model === undefined) inst.vehicle_model = null;
 	if (inst.vehicle_id === undefined) inst.vehicle_id = null;
 	if (inst.passenger_cars === undefined) inst.passenger_cars = null;
 	if (inst.scheduled_passenger_cars === undefined) inst.scheduled_passenger_cars = null;
+	if (inst.consist === undefined) inst.consist = null;
 	return inst;
 }
 

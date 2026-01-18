@@ -17,8 +17,10 @@ export type AugmentedTripInstance = qdf.Trip & {
 	run: string;
 	vehicle_model: string | null;
 	vehicle_id: string | null;
+	vehicle_details?: any | null;
 	passenger_cars: number | null;
 	scheduled_passenger_cars: number | null;
+	consist: string[] | null;
 
 	scheduledTripDates: string[];
 	actualTripDates: string[];
@@ -139,6 +141,7 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 			vehicle_id: null,
 			passenger_cars: null,
 			scheduled_passenger_cars: null,
+			consist: null,
 			scheduledTripDates,
 			actualTripDates,
 			runSeries: null,
