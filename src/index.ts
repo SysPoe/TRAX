@@ -19,6 +19,7 @@ import {
 import { AugmentedStop } from "./utils/augmentedStop.js";
 import { type TraxConfig, type TraxConfigOptions, resolveConfig } from "./config.js";
 import * as GTHA from "./region-specific/GTHA/realtime.js";
+import { getGTHAVehicleDetails, type GOTransitVehicle } from "./region-specific/GTHA/vehicleDetails.js";
 
 export interface TRAXEvent {
 	"realtime-update-start": [];
@@ -247,6 +248,8 @@ export class TRAX {
 				getActiveVehicleModels: () => GTHA.getActiveVehicleModels(),
 				getActiveVehicleIds: () => GTHA.getActiveVehicleIds(),
 				getActivePassengerCars: () => GTHA.getActivePassengerCars(),
+				getActiveCars: () => GTHA.getActiveCars(),
+				getGTHAVehicleDetails: (vehicleId: string) => getGTHAVehicleDetails(vehicleId),
 			},
 		};
 	}
@@ -280,6 +283,8 @@ export type {
 	QRTTravelStopTime,
 	QRTTravelTrip,
 } from "./region-specific/SEQ/qr-travel/types.js";
+
+export type GTHAActiveVehicle = GOTransitVehicle;
 
 export type { QRTSRTStop } from "./region-specific/SEQ/qr-travel/srt.js";
 export { Logger as TraxLogger, LogLevel } from "./utils/logger.js";
