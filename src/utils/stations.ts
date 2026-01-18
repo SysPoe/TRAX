@@ -34,7 +34,8 @@ export function getConsideredStations(ctx: CacheContext): qdf.Stop[] {
 		let included: { [key: string]: boolean } = {};
 		let seen: { [key: string]: boolean } = {};
 		let startTime = Date.now();
-		gtfs.getTrips().forEach((trip) => {
+
+		const processTrip = (trip: qdf.Trip) => {
 			if (gtfs.getRoutes({ route_id: trip.route_id })[0]?.route_type !== 2) return;
 
 			const stopTimes = gtfs.getStopTimes({ trip_id: trip.trip_id });
@@ -46,14 +47,19 @@ export function getConsideredStations(ctx: CacheContext): qdf.Stop[] {
 				const stop = gtfs.getStops({ stop_id: st.stop_id })[0];
 				if (stop) {
 					const stationId = stop.parent_station ?? stop.stop_id;
-					if (!stations) stations = [];
 					if (!included[stationId]) {
 						included[stationId] = true;
-						stations.push(stationId);
+						stations!.push(stationId);
 					}
 				}
 			});
-		});
+		};
+
+		if (ctx.augmented.trips.length > 0) {
+			ctx.augmented.trips.forEach((at) => processTrip(at));
+		} else {
+			gtfs.getTrips().forEach(processTrip);
+		}
 
 		writeCacheFile("considered_stations.json", JSON.stringify(stations), cacheDir);
 

@@ -4,6 +4,7 @@ import { AugmentedStop } from "./augmentedStop.js";
 
 let routeCache: Map<string, boolean> = new Map();
 let stopCache: Map<string, boolean> = new Map();
+let tripIdCache: Map<string, boolean> = new Map();
 
 export function isConsideredRoute(route: qdf.Route): boolean {
 	if (routeCache.has(route.route_id)) return routeCache.get(route.route_id)!;
@@ -18,10 +19,20 @@ export function isConsideredTrip(trip: qdf.Trip, gtfs?: qdf.GTFS): boolean {
 }
 
 export function isConsideredTripId(trip_id: string, gtfs?: qdf.GTFS): boolean {
+	if (tripIdCache.has(trip_id)) return tripIdCache.get(trip_id)!;
 	const route_id = (gtfs ?? getGtfs()).getTrips({ trip_id })[0]?.route_id;
-	if (!route_id) return false;
-	if (routeCache.has(route_id)) return routeCache.get(route_id)!;
-	return isConsideredRoute((gtfs ?? getGtfs()).getRoutes({ route_id })[0]!);
+	if (!route_id) {
+		tripIdCache.set(trip_id, false);
+		return false;
+	}
+	if (routeCache.has(route_id)) {
+		const valid = routeCache.get(route_id)!;
+		tripIdCache.set(trip_id, valid);
+		return valid;
+	}
+	const valid = isConsideredRoute((gtfs ?? getGtfs()).getRoutes({ route_id })[0]!);
+	tripIdCache.set(trip_id, valid);
+	return valid;
 }
 
 export function isConsideredStop(stop: AugmentedStop | qdf.Stop, gtfs?: qdf.GTFS): boolean {

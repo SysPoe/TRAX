@@ -109,6 +109,7 @@ export type AugmentedCache = {
 	tripsStoppingAt: Map<string, Set<string>>;
 	stopDeparturesCached: Map<string, AugmentedStopTime[]>;
 	instancesRec: Map<string, AugmentedTripInstance>;
+	carTrips: Map<string, Set<string>>;
 	timer: Timer;
 };
 
@@ -150,6 +151,7 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 		tripsStoppingAt: new Map(),
 		stopDeparturesCached: new Map(),
 		instancesRec: new Map(),
+		carTrips: new Map(),
 		timer: globalTimer,
 	};
 }

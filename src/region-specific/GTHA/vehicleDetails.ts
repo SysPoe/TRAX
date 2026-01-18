@@ -252,8 +252,8 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			doors: 2,
 		},
 		livery: {
-			style: "Bilevel",
-			hex_color: "#008341",
+			style: "Two-tone",
+			hex_color: "#29621A",
 		},
 		capacity: {
 			seating: 162,
@@ -267,17 +267,17 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			connectivity: {
 				has_wifi: true,
 				wifi_notes: "GO Wi-Fi Plus",
-				has_power_outlets: true,
+				has_power_outlets: false,
 				has_usb_ports: false,
 			},
 		},
 		accessibility: {
 			is_fully_accessible: false,
-			boarding_steps: 2,
+			boarding_steps: 1,
 			ramp: { is_available: false },
 			passenger_info: {
 				audio_announcements: true,
-				visual_next_stop_display: true,
+				visual_next_stop_display: false,
 			},
 		},
 		series_notes: [
@@ -320,17 +320,17 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			connectivity: {
 				has_wifi: true,
 				wifi_notes: "GO Wi-Fi Plus",
-				has_power_outlets: true,
+				has_power_outlets: false,
 				has_usb_ports: false,
 			},
 		},
 		accessibility: {
 			is_fully_accessible: false,
-			boarding_steps: 2,
+			boarding_steps: 1,
 			ramp: { is_available: false },
 			passenger_info: {
 				audio_announcements: true,
-				visual_next_stop_display: true,
+				visual_next_stop_display: false,
 			},
 		},
 	},
@@ -351,32 +351,32 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			doors: 2,
 		},
 		livery: {
-			style: "Bilevel",
-			hex_color: "#008341",
+			style: "Two-tone",
+			hex_color: "#29621A",
 		},
 		capacity: {
 			seating: 161,
-			bicycles: 0,
+			bicycles: 2,
 			wheelchair_bays: 0,
 			restrictions: [],
 		},
 		amenities: {
-			restrooms: { total: 1, is_accessible: false },
+			restrooms: { total: 0, is_accessible: false },
 			climate_control: { has_ac: true },
 			connectivity: {
 				has_wifi: true,
 				wifi_notes: "GO Wi-Fi Plus",
-				has_power_outlets: true,
+				has_power_outlets: false,
 				has_usb_ports: false,
 			},
 		},
 		accessibility: {
 			is_fully_accessible: false,
-			boarding_steps: 2,
+			boarding_steps: 1,
 			ramp: { is_available: false },
 			passenger_info: {
 				audio_announcements: true,
-				visual_next_stop_display: true,
+				visual_next_stop_display: false,
 			},
 		},
 	},
@@ -418,11 +418,11 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 		},
 		accessibility: {
 			is_fully_accessible: false,
-			boarding_steps: 2,
+			boarding_steps: 1,
 			ramp: { is_available: false },
 			passenger_info: {
 				audio_announcements: true,
-				visual_next_stop_display: true,
+				visual_next_stop_display: false,
 			},
 		},
 	},
@@ -448,12 +448,12 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 		},
 		capacity: {
 			seating: 160,
-			bicycles: 0,
+			bicycles: 2,
 			wheelchair_bays: 0,
 			restrictions: [],
 		},
 		amenities: {
-			restrooms: { total: 1, is_accessible: false },
+			restrooms: { total: 0, is_accessible: false },
 			climate_control: { has_ac: true },
 			connectivity: {
 				has_wifi: true,
@@ -464,11 +464,11 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 		},
 		accessibility: {
 			is_fully_accessible: false,
-			boarding_steps: 2,
+			boarding_steps: 1,
 			ramp: { is_available: false },
 			passenger_info: {
 				audio_announcements: true,
-				visual_next_stop_display: true,
+				visual_next_stop_display: false,
 			},
 		},
 	},
@@ -493,13 +493,13 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			hex_color: "#008341",
 		},
 		capacity: {
-			seating: 156,
+			seating: 162,
 			bicycles: 2,
-			wheelchair_bays: 2,
+			wheelchair_bays: 0,
 			restrictions: [],
 		},
 		amenities: {
-			restrooms: { total: 1, is_accessible: true },
+			restrooms: { total: 1, is_accessible: false },
 			climate_control: { has_ac: true },
 			connectivity: {
 				has_wifi: true,
@@ -509,15 +509,14 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			},
 		},
 		accessibility: {
-			is_fully_accessible: true,
-			boarding_steps: 0,
+			is_fully_accessible: false,
+			boarding_steps: 1,
 			ramp: {
-				is_available: true,
-				deployment_notes: "Manual ramp deployed by crew at accessible platform",
+				is_available: false,
 			},
 			passenger_info: {
 				audio_announcements: true,
-				visual_next_stop_display: true,
+				visual_next_stop_display: false,
 			},
 		},
 	},
@@ -542,13 +541,13 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			hex_color: "#008341",
 		},
 		capacity: {
-			seating: 154,
-			bicycles: 0,
+			seating: 160,
+			bicycles: 2,
 			wheelchair_bays: 0,
 			restrictions: [],
 		},
 		amenities: {
-			restrooms: { total: 1, is_accessible: true },
+			restrooms: { total: 0, is_accessible: false },
 			climate_control: { has_ac: true },
 			connectivity: {
 				has_wifi: true,
@@ -559,23 +558,20 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 		},
 		accessibility: {
 			is_fully_accessible: false,
-			boarding_steps: 2,
+			boarding_steps: 1,
 			ramp: { is_available: false },
 			passenger_info: {
 				audio_announcements: true,
-				visual_next_stop_display: true,
+				visual_next_stop_display: false,
 			},
 		},
 	},
 	{
 		type: "Coach",
-		series_ranges: [
-			{ from: 2400, to: 2455 },
-			{ from: 2499, to: 2499 }, // Prototype
-		],
+		series_ranges: [{ from: 2400, to: 2455 }],
 		description: {
-			model_year: 2002,
-			manufacturer: "Bombardier Transportation",
+			model_year: 1990,
+			manufacturer: "Can-Car Rail / UTDC",
 			model: "BiLevel Series V Coach",
 			fuel_type: "Unpowered Railcar",
 		},
@@ -586,8 +582,8 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			doors: 2,
 		},
 		livery: {
-			style: "Bilevel",
-			hex_color: "#008341",
+			style: "Two-tone",
+			hex_color: "#29621A",
 		},
 		capacity: {
 			seating: 162,
@@ -601,17 +597,62 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			connectivity: {
 				has_wifi: true,
 				wifi_notes: "GO Wi-Fi Plus",
-				has_power_outlets: true,
+				has_power_outlets: false,
 				has_usb_ports: false,
 			},
 		},
 		accessibility: {
 			is_fully_accessible: false,
-			boarding_steps: 2,
+			boarding_steps: 1,
 			ramp: { is_available: false },
 			passenger_info: {
 				audio_announcements: true,
-				visual_next_stop_display: true,
+				visual_next_stop_display: false,
+			},
+		},
+	},
+	{
+		type: "Coach",
+		series_ranges: [{ from: 2499, to: 2499 }],
+		description: {
+			model_year: 1990,
+			manufacturer: "Can-Car Rail / UTDC",
+			model: "BiLevel Series V Prototype Coach",
+			fuel_type: "Unpowered Railcar",
+		},
+		dimensions: {
+			length_meters: 25.9,
+			articulated_sections: 1,
+			levels: 3,
+			doors: 2,
+		},
+		livery: {
+			style: "Two-tone",
+			hex_color: "#29621A",
+		},
+		capacity: {
+			seating: 147,
+			bicycles: 2,
+			wheelchair_bays: 0,
+			restrictions: [],
+		},
+		amenities: {
+			restrooms: { total: 2, is_accessible: true },
+			climate_control: { has_ac: true },
+			connectivity: {
+				has_wifi: true,
+				wifi_notes: "GO Wi-Fi Plus",
+				has_power_outlets: false,
+				has_usb_ports: false,
+			},
+		},
+		accessibility: {
+			is_fully_accessible: false,
+			boarding_steps: 1,
+			ramp: { is_available: false },
+			passenger_info: {
+				audio_announcements: true,
+				visual_next_stop_display: false,
 			},
 		},
 	},
@@ -635,9 +676,9 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			hex_color: "#008341",
 		},
 		capacity: {
-			seating: 136,
-			bicycles: 0,
-			wheelchair_bays: 4,
+			seating: 133,
+			bicycles: 2,
+			wheelchair_bays: 8,
 			restrictions: ["Designated accessible coach"],
 		},
 		amenities: {
@@ -652,14 +693,15 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 		},
 		accessibility: {
 			is_fully_accessible: true,
-			boarding_steps: 0,
+			boarding_steps: 1,
 			ramp: {
 				is_available: true,
-				deployment_notes: "Manual ramp deployed by crew",
+				deployment_notes:
+					"Ramp put out by Customer Service Ambassador from a door in the accessability coach at all stops. Board from the ramped mini-platform on the train platform.",
 			},
 			passenger_info: {
 				audio_announcements: true,
-				visual_next_stop_display: true,
+				visual_next_stop_display: false,
 			},
 		},
 	},
@@ -684,7 +726,7 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			hex_color: "#008341",
 		},
 		capacity: {
-			seating: 150,
+			seating: 151,
 			bicycles: 2,
 			wheelchair_bays: 0,
 			restrictions: [],
@@ -695,17 +737,17 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			connectivity: {
 				has_wifi: true,
 				wifi_notes: "GO Wi-Fi Plus",
-				has_power_outlets: true,
-				has_usb_ports: true,
+				has_power_outlets: false,
+				has_usb_ports: false,
 			},
 		},
 		accessibility: {
 			is_fully_accessible: false,
-			boarding_steps: 2,
+			boarding_steps: 1,
 			ramp: { is_available: false },
 			passenger_info: {
 				audio_announcements: true,
-				visual_next_stop_display: true,
+				visual_next_stop_display: false,
 			},
 		},
 	},
@@ -730,9 +772,9 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			hex_color: "#008341",
 		},
 		capacity: {
-			seating: 136,
+			seating: 133,
 			bicycles: 2,
-			wheelchair_bays: 4,
+			wheelchair_bays: 8,
 			restrictions: [],
 		},
 		amenities: {
@@ -741,17 +783,21 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			connectivity: {
 				has_wifi: true,
 				wifi_notes: "GO Wi-Fi Plus",
-				has_power_outlets: true,
-				has_usb_ports: true,
+				has_power_outlets: false,
+				has_usb_ports: false,
 			},
 		},
 		accessibility: {
 			is_fully_accessible: true,
-			boarding_steps: 0,
-			ramp: { is_available: true },
+			boarding_steps: 1,
+			ramp: {
+				is_available: true,
+				deployment_notes:
+					"Ramp put out by Customer Service Ambassador from a door in the accessability coach at all stops. Board from the ramped mini-platform on the train platform.",
+			},
 			passenger_info: {
 				audio_announcements: true,
-				visual_next_stop_display: true,
+				visual_next_stop_display: false,
 			},
 		},
 	},
@@ -776,8 +822,8 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			hex_color: "#008341",
 		},
 		capacity: {
-			seating: 148,
-			bicycles: 0,
+			seating: 147,
+			bicycles: 2,
 			wheelchair_bays: 0,
 			restrictions: ["Full-width cab"],
 		},
@@ -787,23 +833,26 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			connectivity: {
 				has_wifi: true,
 				wifi_notes: "GO Wi-Fi Plus",
-				has_power_outlets: true,
-				has_usb_ports: true,
+				has_power_outlets: false,
+				has_usb_ports: false,
 			},
 		},
 		accessibility: {
 			is_fully_accessible: false,
-			boarding_steps: 2,
+			boarding_steps: 1,
 			ramp: { is_available: false },
 			passenger_info: {
 				audio_announcements: true,
-				visual_next_stop_display: true,
+				visual_next_stop_display: false,
 			},
 		},
 	},
 	{
 		type: "Coach",
-		series_ranges: [{ from: 2700, to: 2857 }],
+		series_ranges: [
+			{ from: 2700, to: 2742 },
+			{ from: 2747, to: 2857 },
+		],
 		description: {
 			model_year: 2008,
 			model_year_end: 2015,
@@ -818,11 +867,11 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			doors: 2,
 		},
 		livery: {
-			style: "Two-tone",
-			hex_color: "#29621A",
+			style: "Bilevel",
+			hex_color: "#008341",
 		},
 		capacity: {
-			seating: 150,
+			seating: 151,
 			bicycles: 2,
 			wheelchair_bays: 0,
 			restrictions: [],
@@ -833,17 +882,62 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			connectivity: {
 				has_wifi: true,
 				wifi_notes: "GO Wi-Fi Plus",
-				has_power_outlets: true,
-				has_usb_ports: true,
+				has_power_outlets: false,
+				has_usb_ports: false,
 			},
 		},
 		accessibility: {
 			is_fully_accessible: false,
-			boarding_steps: 2,
+			boarding_steps: 1,
 			ramp: { is_available: false },
 			passenger_info: {
 				audio_announcements: true,
-				visual_next_stop_display: true,
+				visual_next_stop_display: false,
+			},
+		},
+	},
+	{
+		type: "Coach",
+		series_ranges: [{ from: 2743, to: 2746 }],
+		description: {
+			model_year: 2010,
+			manufacturer: "Bombardier Transportation",
+			model: "BiLevel Series VIII Bicycle Coach",
+			fuel_type: "Unpowered Railcar",
+		},
+		dimensions: {
+			length_meters: 25.9,
+			articulated_sections: 1,
+			levels: 3,
+			doors: 2,
+		},
+		livery: {
+			style: "Bilevel",
+			hex_color: "#008341",
+		},
+		capacity: {
+			seating: 100,
+			bicycles: 18,
+			wheelchair_bays: 0,
+			restrictions: ["Bicycle coach"],
+		},
+		amenities: {
+			restrooms: { total: 1, is_accessible: false },
+			climate_control: { has_ac: true },
+			connectivity: {
+				has_wifi: true,
+				wifi_notes: "GO Wi-Fi Plus",
+				has_power_outlets: false,
+				has_usb_ports: false,
+			},
+		},
+		accessibility: {
+			is_fully_accessible: false,
+			boarding_steps: 1,
+			ramp: { is_available: false },
+			passenger_info: {
+				audio_announcements: true,
+				visual_next_stop_display: false,
 			},
 		},
 	},
@@ -864,13 +958,13 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			doors: 2,
 		},
 		livery: {
-			style: "Two-tone",
-			hex_color: "#29621A",
+			style: "Bilevel",
+			hex_color: "#008341",
 		},
 		capacity: {
-			seating: 136,
+			seating: 133,
 			bicycles: 2,
-			wheelchair_bays: 4,
+			wheelchair_bays: 8,
 			restrictions: [],
 		},
 		amenities: {
@@ -879,17 +973,21 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			connectivity: {
 				has_wifi: true,
 				wifi_notes: "GO Wi-Fi Plus",
-				has_power_outlets: true,
-				has_usb_ports: true,
+				has_power_outlets: false,
+				has_usb_ports: false,
 			},
 		},
 		accessibility: {
 			is_fully_accessible: true,
-			boarding_steps: 0,
-			ramp: { is_available: true },
+			boarding_steps: 1,
+			ramp: {
+				is_available: true,
+				deployment_notes:
+					"Ramp put out by Customer Service Ambassador from a door in the accessability coach at all stops. Board from the ramped mini-platform on the train platform.",
+			},
 			passenger_info: {
 				audio_announcements: true,
-				visual_next_stop_display: true,
+				visual_next_stop_display: false,
 			},
 		},
 	},
@@ -910,12 +1008,12 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			doors: 2,
 		},
 		livery: {
-			style: "Two-tone",
-			hex_color: "#29621A",
+			style: "Bilevel",
+			hex_color: "#008341",
 		},
 		capacity: {
-			seating: 148,
-			bicycles: 0,
+			seating: 147,
+			bicycles: 2,
 			wheelchair_bays: 0,
 			restrictions: [],
 		},
@@ -925,17 +1023,17 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			connectivity: {
 				has_wifi: true,
 				wifi_notes: "GO Wi-Fi Plus",
-				has_power_outlets: true,
-				has_usb_ports: true,
+				has_power_outlets: false,
+				has_usb_ports: false,
 			},
 		},
 		accessibility: {
 			is_fully_accessible: false,
-			boarding_steps: 2,
+			boarding_steps: 1,
 			ramp: { is_available: false },
 			passenger_info: {
 				audio_announcements: true,
-				visual_next_stop_display: true,
+				visual_next_stop_display: false,
 			},
 		},
 	},
@@ -943,8 +1041,7 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 		type: "Coach",
 		series_ranges: [{ from: 4000, to: 4245 }],
 		description: {
-			model_year: 2015,
-			model_year_end: 2020,
+			model_year: 2016,
 			manufacturer: "Bombardier Transportation",
 			model: "BiLevel Series 10 (CEM) Coach",
 			fuel_type: "Unpowered Railcar",
@@ -960,7 +1057,7 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			hex_color: "#29621A",
 		},
 		capacity: {
-			seating: 150,
+			seating: 151,
 			bicycles: 2,
 			wheelchair_bays: 0,
 			restrictions: ["Crash Energy Management features"],
@@ -977,11 +1074,11 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 		},
 		accessibility: {
 			is_fully_accessible: false,
-			boarding_steps: 2,
+			boarding_steps: 1,
 			ramp: { is_available: false },
 			passenger_info: {
 				audio_announcements: true,
-				visual_next_stop_display: true,
+				visual_next_stop_display: false,
 			},
 		},
 	},
@@ -989,8 +1086,7 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 		type: "Accessible Coach",
 		series_ranges: [{ from: 4500, to: 4534 }],
 		description: {
-			model_year: 2015,
-			model_year_end: 2020,
+			model_year: 2017,
 			manufacturer: "Bombardier Transportation",
 			model: "BiLevel Series 10 (CEM) Accessible Coach",
 			fuel_type: "Unpowered Railcar",
@@ -1006,9 +1102,9 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			hex_color: "#29621A",
 		},
 		capacity: {
-			seating: 136,
+			seating: 133,
 			bicycles: 2,
-			wheelchair_bays: 4,
+			wheelchair_bays: 8,
 			restrictions: ["Crash Energy Management features"],
 		},
 		amenities: {
@@ -1023,8 +1119,12 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 		},
 		accessibility: {
 			is_fully_accessible: true,
-			boarding_steps: 0,
-			ramp: { is_available: true },
+			boarding_steps: 1,
+			ramp: {
+				is_available: true,
+				deployment_notes:
+					"Ramp put out by Customer Service Ambassador from a door in the accessability coach at all stops. Board from the ramped mini-platform on the train platform.",
+			},
 			passenger_info: {
 				audio_announcements: true,
 				visual_next_stop_display: true,
@@ -1052,8 +1152,8 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			hex_color: "#29621A",
 		},
 		capacity: {
-			seating: 130, // CEM cab is much larger
-			bicycles: 0,
+			seating: 147,
+			bicycles: 2,
 			wheelchair_bays: 0,
 			restrictions: ["Crash Energy Management features", "Raised operator cab"],
 		},
@@ -1063,17 +1163,17 @@ export const GTHAVehicleDetails: GOTransitVehicle[] = [
 			connectivity: {
 				has_wifi: true,
 				wifi_notes: "GO Wi-Fi Plus",
-				has_power_outlets: true,
-				has_usb_ports: true,
+				has_power_outlets: false,
+				has_usb_ports: false,
 			},
 		},
 		accessibility: {
 			is_fully_accessible: false,
-			boarding_steps: 2,
+			boarding_steps: 1,
 			ramp: { is_available: false },
 			passenger_info: {
 				audio_announcements: true,
-				visual_next_stop_display: true,
+				visual_next_stop_display: false,
 			},
 		},
 	},

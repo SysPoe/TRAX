@@ -210,6 +210,15 @@ function propagatePlatformToNextTripInBlock(
 	}
 }
 
+function registerCarTrips(ctx: CacheContext, tripId: string, carId: string) {
+	let set = ctx.augmented.carTrips.get(carId);
+	if (!set) {
+		set = new Set();
+		ctx.augmented.carTrips.set(carId, set);
+	}
+	set.add(tripId);
+}
+
 function propagateVehicleInfoToBlock(
 	ctx: CacheContext,
 	serviceDateStr: string,
@@ -244,6 +253,13 @@ function propagateVehicleInfoToBlock(
 		inst.vehicle_model = merged.vehicle_model;
 		inst.passenger_cars = merged.passenger_cars ?? null;
 		if (consist) inst.consist = consist;
+
+		if (inst.vehicle_id) registerCarTrips(ctx, inst.trip_id, inst.vehicle_id);
+		if (inst.consist) {
+			for (const carId of inst.consist) {
+				registerCarTrips(ctx, inst.trip_id, carId);
+			}
+		}
 	}
 }
 
@@ -288,7 +304,10 @@ function getUniqueStopTimesForRange(
 		.filter((v) => v);
 
 	const map = new Map<string, { stop_id: string; trip_id: string }>();
-	stopTimes.forEach((st) => map.set(`${st.stop_id}-${st.trip_id}`, st));
+	stopTimes.forEach((st) => {
+		const key = `${st.stop_id}-${st.trip_id}`;
+		if (!map.has(key)) map.set(key, st);
+	});
 	return Array.from(map.values());
 }
 
@@ -300,6 +319,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	activeModels.clear();
 	activeCars.clear();
 	activePassengerCars.clear();
+	ctx.augmented.carTrips.clear();
 
 	const now = new Date();
 	const serviceDateStr = getServiceDate(now, ctx.config.timezone);
@@ -391,8 +411,16 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 
 	// Source E
 	timer.start("updateAllSources:getStopTimesSourceE");
+	// Fetch all stop times for the current service day (24h)
 	const uniqueStopTimesSourceE = getUniqueStopTimesForRange(ctx, gtfs, serviceDateStr, 0, 86400);
 	timer.stop("updateAllSources:getStopTimesSourceE");
+
+	// Group stop times by stop_id for O(1) lookup during Source E processing
+	const stopTimesByStopE = new Map<string, typeof uniqueStopTimesSourceE>();
+	for (const st of uniqueStopTimesSourceE) {
+		if (!stopTimesByStopE.has(st.stop_id)) stopTimesByStopE.set(st.stop_id, []);
+		stopTimesByStopE.get(st.stop_id)!.push(st);
+	}
 
 	const sourceEStopIds = Array.from(
 		new Set(uniqueStopTimesSourceE.filter((v) => !SOURCE_E_EXCLUDED_STOPS.has(v.stop_id)).map((v) => v.stop_id)),
@@ -458,7 +486,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 				const instance = getAugmentedTrips(ctx, st.trip_id)[0]?.instances.find((v) => {
 					if (v.serviceDate === departure.scheduledDateTime.slice(0, 10).replace(/-/g, "")) return true;
 					const offset = v.stopTimes.find(
-						(st) => st.actual_stop_id === item.stop_id,
+						(fst) => fst.actual_stop_id === item.stop_id,
 					)?.scheduled_departure_date_offset;
 					if (!offset) return false;
 
@@ -510,7 +538,13 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 		const results = await Promise.all(item.corridors.map((c) => c.promise));
 		const validResults = results.filter(Boolean);
 		if (validResults.length > 0) {
-			processSourceEUpdates(item.stop_id, validResults, uniqueStopTimesSourceE, ctx, serviceDateStr);
+			processSourceEUpdates(
+				item.stop_id,
+				validResults,
+				stopTimesByStopE.get(item.stop_id) ?? [],
+				ctx,
+				serviceDateStr,
+			);
 		}
 	}
 	timer.stop("updateAllSources:processAPIs");
@@ -818,16 +852,16 @@ function processSourceEUpdates(
 
 		const targetServiceDate = trip.scheduled?.slice(0, 10).replace(/-/g, "") ?? serviceDateStr;
 
-		for (const st of stopTimes) {
-			if (st.stop_id !== stop_id) continue;
-			if (!st.trip_id.endsWith(trip.tripName)) continue;
+		// Optimization: build a map of st to trip_id for the current trip name to avoid inner loop overhead
+		const relevantSts = stopTimes.filter((st) => st.trip_id.endsWith(trip.tripName));
 
+		for (const st of relevantSts) {
 			const instance = getAugmentedTrips(ctx, st.trip_id)[0]?.instances.find(
 				(v) => v.serviceDate === targetServiceDate,
 			);
 
 			if (!instance) continue;
-			const ast = instance.stopTimes.find((ast) => ast.actual_stop_id === st.stop_id);
+			const ast = instance.stopTimes.find((f_ast) => f_ast.actual_stop_id === st.stop_id);
 			if (!ast) continue;
 			applyPlatformUpdate(ctx, ast, stop_id, platform, null);
 

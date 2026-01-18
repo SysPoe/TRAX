@@ -19,7 +19,11 @@ import {
 import { AugmentedStop } from "./utils/augmentedStop.js";
 import { type TraxConfig, type TraxConfigOptions, resolveConfig } from "./config.js";
 import * as GTHA from "./region-specific/GTHA/realtime.js";
-import { getGTHAVehicleDetails, type GOTransitVehicle } from "./region-specific/GTHA/vehicleDetails.js";
+import {
+	GTHAVehicleDetails,
+	getGTHAVehicleDetails,
+	type GOTransitVehicle,
+} from "./region-specific/GTHA/vehicleDetails.js";
 
 export interface TRAXEvent {
 	"realtime-update-start": [];
@@ -194,6 +198,10 @@ export class TRAX {
 	public getTripUpdates = (trip_id?: string) => cache.getTripUpdates(this.ctx, trip_id);
 	public getVehiclePositions = (trip_id?: string) => cache.getVehiclePositions(this.ctx, trip_id);
 	public getShapes = () => cache.getShapes(this.ctx);
+	public getTripIdsByServiceDate = (date: string) => this.ctx.augmented.serviceDateTrips.get(date) ?? [];
+	public getTripIdsByStop = (stop_id: string) => this.ctx.augmented.tripsStoppingAt.get(stop_id) ?? new Set<string>();
+	public getTripIdsByCar = (car_id: string) => this.ctx.augmented.carTrips.get(car_id) ?? new Set<string>();
+	public getAvailableServiceDates = () => Array.from(this.ctx.augmented.serviceDateTrips.keys());
 
 	public logTimings = (label: string = "TRAX Operation", clear: boolean = true) =>
 		this.ctx.augmented.timer.log(label, clear);
@@ -250,6 +258,7 @@ export class TRAX {
 				getActivePassengerCars: () => GTHA.getActivePassengerCars(),
 				getActiveCars: () => GTHA.getActiveCars(),
 				getGTHAVehicleDetails: (vehicleId: string) => getGTHAVehicleDetails(vehicleId),
+				getGTHAVehicleDetailsRegistry: () => GTHAVehicleDetails,
 			},
 		};
 	}
