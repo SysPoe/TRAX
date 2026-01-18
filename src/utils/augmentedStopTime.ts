@@ -243,11 +243,12 @@ export function augmentStopTimes(
 		serviceDate: string;
 		tripUpdate: qdf.RealtimeTripUpdate | null;
 		scheduleRelationship: qdf.TripScheduleRelationship;
+		initialDelay?: number;
 	},
 	ctx: cache.CacheContext,
 ): AugmentedStopTime[] {
 	ctx.augmented.timer.start("augmentStopTimes");
-	const { serviceDate, tripUpdate, scheduleRelationship } = instanceContext;
+	const { serviceDate, tripUpdate, scheduleRelationship, initialDelay } = instanceContext;
 	const tripId = tripUpdate?.trip.trip_id ?? staticStopTimes?.[0]?.trip_id ?? "";
 
 	const stopTimeUpdates = tripUpdate?.stop_time_updates ?? [];
@@ -337,7 +338,7 @@ export function augmentStopTimes(
 		actDep: Math.floor(initialActualDep / 86400),
 	};
 
-	let lastDelay = 0;
+	let lastDelay = initialDelay ?? 0;
 	const propagateOnTime = scheduleRelationship === qdf.TripScheduleRelationship.SCHEDULED && !!tripUpdate;
 
 	let currentSequence = -1;

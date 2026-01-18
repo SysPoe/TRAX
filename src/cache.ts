@@ -20,7 +20,7 @@ import {
 	calculateRunSeries,
 	RunSeries,
 } from "./utils/augmentedTrip.js";
-import { AugmentedStopTime } from "./utils/augmentedStopTime.js";
+import { AugmentedStopTime, augmentStopTimes } from "./utils/augmentedStopTime.js";
 import { QRTPlace, QRTTravelTrip } from "./index.js";
 import { getPlaces, getCurrentQRTravelTrains } from "./region-specific/SEQ/qr-travel/qr-travel-tracker.js";
 import { Timer, globalTimer } from "./utils/timer.js";
@@ -604,6 +604,64 @@ function resetRealtimeCacheIncremental(updatedTripIds: Set<string>, ctx: CacheCo
 	}
 }
 
+function propagateBlockDelays(ctx: CacheContext, serviceDate: string): void {
+	const { augmented } = ctx;
+	const tripIds = augmented.serviceDateTrips.get(serviceDate) ?? [];
+	const blockMap = new Map<string, AugmentedTripInstance[]>();
+
+	for (const tripId of tripIds) {
+		const trip = augmented.tripsRec.get(tripId);
+		if (!trip) continue;
+		const instance = trip.instances.find((i) => i.serviceDate === serviceDate);
+		if (!instance || !instance.block_id) continue;
+		if (!blockMap.has(instance.block_id)) blockMap.set(instance.block_id, []);
+		blockMap.get(instance.block_id)!.push(instance);
+	}
+
+	for (const [blockId, instances] of blockMap) {
+		// Sort by scheduled departure time of first stop
+		instances.sort((a, b) => {
+			const aTime = a.stopTimes[0]?.scheduled_departure_time ?? 0;
+			const bTime = b.stopTimes[0]?.scheduled_departure_time ?? 0;
+			return aTime - bTime;
+		});
+
+		for (let i = 0; i < instances.length - 1; i++) {
+			const current = instances[i];
+			const next = instances[i + 1];
+
+			if (current.stopTimes.length === 0 || next.stopTimes.length === 0) continue;
+
+			const lastSt = current.stopTimes[current.stopTimes.length - 1];
+			const arrivalTimeSecs = lastSt.actual_arrival_time ?? lastSt.scheduled_arrival_time;
+			if (arrivalTimeSecs === null) continue;
+
+			const nextFirstSt = next.stopTimes[0];
+			const nextDepartureTimeSecs = nextFirstSt.actual_departure_time ?? nextFirstSt.scheduled_departure_time;
+			if (nextDepartureTimeSecs === null) continue;
+
+			if (arrivalTimeSecs > nextDepartureTimeSecs) {
+				const minDelay = arrivalTimeSecs - (nextFirstSt.scheduled_departure_time ?? 0);
+
+				// Re-augment next trip with the propagated delay
+				const rawStopTimes = getRawStopTimes(ctx, next.trip_id).sort(
+					(a, b) => a.stop_sequence - b.stop_sequence,
+				);
+				next.stopTimes = augmentStopTimes(
+					rawStopTimes,
+					{
+						serviceDate: next.serviceDate,
+						tripUpdate: next.realtime_update,
+						scheduleRelationship: next.schedule_relationship,
+						initialDelay: minDelay,
+					},
+					ctx,
+				);
+			}
+		}
+	}
+}
+
 export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promise<CacheContext> {
 	logger.debug("Refreshing static GTFS cache...", {
 		module: "cache",
@@ -943,6 +1001,15 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 			}
 		}
 		for (const stop of augmentedCache.stops) augmentedCache.stopsRec.set(stop.stop_id, stop);
+
+		logger.debug("Propagating delays across blocks...", {
+			module: "cache",
+			function: "refreshRealtimeCache",
+		});
+		const allServiceDates = Array.from(augmentedCache.serviceDateTrips.keys());
+		for (const date of allServiceDates) {
+			propagateBlockDelays(ctx, date);
+		}
 	}
 
 	await updateGTHAAltSources(ctx, gtfs);

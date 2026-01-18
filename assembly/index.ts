@@ -197,7 +197,8 @@ export function calculateDelayClassWasm(delaySecs: i32): DelayInfo {
 	if (Math.abs(delaySecs as f64) <= 60) return { str: "on time", cls: "on-time" };
 	if (delaySecs > 0 && delaySecs <= 300)
 		return { str: (Math.round((delaySecs as f64) / 60) as i64).toString() + "m late", cls: "late" };
-	if (delaySecs > 300) return { str: (Math.round((delaySecs as f64) / 60) as i64).toString() + "m late", cls: "very-late" };
+	if (delaySecs > 300)
+		return { str: (Math.round((delaySecs as f64) / 60) as i64).toString() + "m late", cls: "very-late" };
 	return { str: (Math.round(Math.abs(delaySecs as f64) / 60) as i64).toString() + "m early", cls: "early" };
 }
 
