@@ -59,6 +59,7 @@ export function getLocalISOString(date: Date, timezone: string): string {
 }
 
 export function getTimezoneOffsetSeconds(timezone: string, date: Date = new Date()): number {
+	if (Number.isNaN(date.getTime())) return 0;
 	const parts = new Intl.DateTimeFormat("en-US", {
 		timeZone: timezone,
 		timeZoneName: "shortOffset",
@@ -74,10 +75,14 @@ export function getTimezoneOffsetSeconds(timezone: string, date: Date = new Date
 }
 
 export function getServiceDayStart(serviceDate: string, timezone: string): number {
+	if (!serviceDate || serviceDate.length < 8) return 0;
 	const y = parseInt(serviceDate.slice(0, 4), 10);
 	const m = parseInt(serviceDate.slice(4, 6), 10) - 1;
 	const d = parseInt(serviceDate.slice(6, 8), 10);
+	if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) return 0;
+
 	const utcMidnight = Date.UTC(y, m, d);
+	if (Number.isNaN(utcMidnight)) return 0;
 
 	const offsetAtUtcMidnight = getTimezoneOffsetSeconds(timezone, new Date(utcMidnight));
 	const result = (utcMidnight - offsetAtUtcMidnight * 1000) / 1000;

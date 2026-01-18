@@ -657,6 +657,12 @@ function propagateBlockDelays(ctx: CacheContext, serviceDate: string): void {
 					},
 					ctx,
 				);
+
+				for (const st of next.stopTimes) {
+					st.instance_id = next.instance_id;
+					st.service_date = next.serviceDate;
+					st.schedule_relationship = next.schedule_relationship;
+				}
 			}
 		}
 	}
