@@ -24,14 +24,9 @@ export async function trackTrain(serviceID: string, serviceDate: string, config:
 	const response = await fetch(url);
 	if (!response.ok) {
 		const errorText = await response.text();
-		logger.error(`Failed to fetch service data: ${response.status} ${response.statusText}`, {
+		logger.error(`Failed to fetch service data for ${serviceID} @ "${url}": ${response.status} ${response.statusText} ${errorText}`, {
 			module: "qr-travel-tracker",
 			function: "trackTrain",
-			serviceID,
-			url,
-			status: response.status,
-			statusText: response.statusText,
-			errorText,
 		});
 		throw new Error(`Failed to fetch: ${response.status} ${response.statusText} ${url}. ${errorText}`);
 	}
@@ -65,8 +60,6 @@ export async function getServiceLines(config: TraxConfig) {
 		logger.error(`Failed to fetch service lines: ${res.status} ${res.statusText}`, {
 			module: "qr-travel-tracker",
 			function: "getServiceLines",
-			status: res.status,
-			statusText: res.statusText,
 		});
 		throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
 	}
@@ -92,7 +85,6 @@ export async function getAllServices(config: TraxConfig) {
 	logger.debug(`Successfully fetched ${json.length} services`, {
 		module: "qr-travel-tracker",
 		function: "getAllServices",
-		count: json.length,
 	});
 	return json as QRTService[];
 }
@@ -161,7 +153,6 @@ export async function getServiceUpdates(config: TraxConfig, startDate?: string, 
 	logger.debug(`Successfully fetched ${json.length} service updates`, {
 		module: "qr-travel-tracker",
 		function: "getServiceUpdates",
-		count: json.length,
 	});
 	return json as QRTServiceUpdate[];
 }
@@ -424,7 +415,6 @@ export async function getCurrentQRTravelTrains(ctx: CacheContext, retries = 5): 
 			{
 				module: "qr-travel-tracker",
 				function: "getCurrentQRTravelTrains",
-				error: error.message ?? error,
 			},
 		);
 		retries--;

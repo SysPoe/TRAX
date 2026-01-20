@@ -17,7 +17,6 @@ export enum LogLevel {
 export type LogContext = {
 	module?: string;
 	function?: string;
-	[key: string]: any;
 };
 
 class Logger {
@@ -174,13 +173,6 @@ class Logger {
 		if (context) {
 			const contextParts: string[] = [];
 
-			// Add any additional context properties
-			Object.keys(context).forEach((key) => {
-				if (key !== "module" && key !== "function") {
-					contextParts.push(`${key}:${context[key]}`);
-				}
-			});
-
 			if (contextParts.length > 0) {
 				contextStr = ` [${contextParts.join(", ")}]`;
 			}
@@ -198,9 +190,8 @@ class Logger {
 				: `[f:${context.function}]`
 			: "";
 
-		return `${
-			colorize ? chalk.gray(timestamp) : timestamp
-		} ${levelStr} ${prefixStr}${moduleStr}${functionStr} ${contextStr} ${message}`;
+		return `${colorize ? chalk.gray(timestamp) : timestamp
+			} ${levelStr} ${prefixStr}${moduleStr}${functionStr} ${contextStr} ${message}`;
 	}
 }
 

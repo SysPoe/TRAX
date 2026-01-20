@@ -95,10 +95,9 @@ export class TRAX {
 					await this.loadStaticInternal();
 					await this.updateRealtime();
 				} catch (error: any) {
-					logger.error("Error refreshing static GTFS data", {
+					logger.error("Error refreshing static GTFS data: " + (error.message ?? error), {
 						module: "index",
 						function: "loadGTFS - scheduleNextStatic",
-						error: error.message ?? error,
 					});
 				} finally {
 					this.events.emit("static-update-end");

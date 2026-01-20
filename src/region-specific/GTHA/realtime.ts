@@ -488,8 +488,10 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 		promise: fetch(SOURCE_C_URL_TEMPLATE(stop_id))
 			.then(async (r) => (r.ok ? ((await r.json()) as UPEDeparturesResponse) : null))
 			.catch((e) => {
-				logger.error(`Failed to update Source C platforms for stop ${stop_id}`, { module: "GTHA" });
-				return null;
+				logger.error(`Failed to update Source C platforms for stop ${stop_id}: ${e.message ?? e}`, {
+					module: "GTHA",
+				});
+				console.error(e);
 			}),
 	}));
 
@@ -794,8 +796,7 @@ export async function updateSourceB(
 			function: "updateGTHASchedule",
 		});
 	} catch (e) {
-		logger.error("Failed to update Source B", {
-			error: e,
+		logger.error(`Failed to update Source B: ${(e as any).message ?? e}`, {
 			module: "GTHA",
 			function: "updateSourceB",
 		});
@@ -927,8 +928,7 @@ export async function updateSourceA(
 			function: "updateGTHAAVL",
 		});
 	} catch (e) {
-		logger.error("Failed to update Source A", {
-			error: e,
+		logger.error(`Failed to update Source A: ${(e as any).message ?? e}`, {
 			module: "GTHA",
 			function: "updateSourceA",
 		});
@@ -1092,10 +1092,10 @@ export async function updateSourceF(ctx: CacheContext, serviceDateStr: string, b
 			function: "updateSourceF",
 		});
 	} catch (e) {
-		logger.error("Failed to fetch Source F", {
-			error: e,
+		logger.error(`Failed to fetch Source F: ${(e as any).message ?? e}`, {
 			module: "GTHA",
 			function: "updateSourceF",
 		});
+		console.error(e);
 	}
 }
