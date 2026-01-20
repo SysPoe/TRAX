@@ -7,7 +7,7 @@ export interface TraxConfig {
 	cacheDir: string;
 	logFunction: (message: string) => void;
 	progressLog: (info: ProgressInfo) => void;
-	region: "SEQ" | "GTHA" | "none";
+	region: "AU/SEQ" | "CA/GTHA" | "none";
 	timezone: string;
 	realtime: {
 		realtimeAlerts: (string | GTFSFeedConfig)[] | null;
@@ -27,11 +27,11 @@ export type TraxConfigOptions = Partial<Omit<TraxConfig, "realtime">> & {
 	} | null;
 };
 
-export const PRESETS: Record<"SEQ" | "GTHA", (apiKey?: string | undefined) => TraxConfigOptions> = {
-	SEQ: () =>
+export const PRESETS: Record<"AU/SEQ" | "CA/GTHA", (apiKey?: string | undefined) => TraxConfigOptions> = {
+	"AU/SEQ": () =>
 		({
 			urls: ["https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip"],
-			region: "SEQ",
+			region: "AU/SEQ",
 			timezone: "Australia/Brisbane",
 			realtime: {
 				realtimeAlerts: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts"],
@@ -39,13 +39,13 @@ export const PRESETS: Record<"SEQ" | "GTHA", (apiKey?: string | undefined) => Tr
 				realtimeVehiclePositions: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions"],
 			},
 		}) as TraxConfigOptions,
-	GTHA: (apiKey) =>
+	"CA/GTHA": (apiKey) =>
 		({
 			urls: [
 				"https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/UP-GTFS.zip",
 				"https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/GO-GTFS.zip",
 			],
-			region: "GTHA",
+			region: "CA/GTHA",
 			timezone: "America/Toronto",
 			realtime: {
 				realtimeAlerts: [
@@ -85,7 +85,7 @@ export function resolveConfig(options: TraxConfigOptions = {}): TraxConfig {
 		cacheDir: ".TRAXCACHE",
 		logFunction: (message: string) => logger.debug(message, { module: "gtfs" }),
 		progressLog: (info: ProgressInfo) => logger.progress(info),
-		region: "SEQ",
+		region: "AU/SEQ",
 		timezone: "Australia/Brisbane",
 		realtime: {
 			realtimeAlerts: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts"],

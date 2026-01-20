@@ -1,6 +1,6 @@
 import type * as qdf from "qdf-gtfs";
 import * as cache from "../cache.js";
-import { RailwayStationFacility } from "../region-specific/SEQ/facilities-types.js";
+import { RailwayStationFacility } from "../region-specific/AU/SEQ/facilities-types.js";
 
 export type AugmentedStop = qdf.Stop & {
 	regionSpecific?: {
@@ -28,7 +28,7 @@ export function augmentStop(
 	augCtx?: AugmentationContext,
 ): AugmentedStop {
 	const parentId = stop.parent_station ?? null;
-	
+
 	let childIds: string[] = [];
 	if (augCtx?.childrenByParent) {
 		childIds = augCtx.childrenByParent.get(stop.stop_id)?.map(s => s.stop_id) ?? [];
@@ -45,12 +45,12 @@ export function augmentStop(
 		children: [],
 	};
 
-	if (ctx.config.region === "SEQ") {
+	if (ctx.config.region === "AU/SEQ") {
 		let myPlace = null;
 		const trimmedStopName = stop.stop_name?.toLowerCase().replace("station", "").trim();
 		if (augCtx?.qrtPlacesByName) {
-			myPlace = augCtx.qrtPlacesByName.get(trimmedStopName!) || 
-					  (trimmedStopName === "roma street" ? augCtx.qrtPlacesByName.get("roma street") : null);
+			myPlace = augCtx.qrtPlacesByName.get(trimmedStopName!) ||
+				(trimmedStopName === "roma street" ? augCtx.qrtPlacesByName.get("roma street") : null);
 		} else {
 			const qrt_Places = cache.SEQgetQRTPlaces(ctx);
 			myPlace = qrt_Places.find(
@@ -62,8 +62,8 @@ export function augmentStop(
 
 		let myFacility = null;
 		if (augCtx?.facilitiesByStopId) {
-			myFacility = augCtx.facilitiesByStopId.get(stop.stop_id) || 
-						 (stop.parent_station ? augCtx.facilitiesByStopId.get(stop.parent_station) : null);
+			myFacility = augCtx.facilitiesByStopId.get(stop.stop_id) ||
+				(stop.parent_station ? augCtx.facilitiesByStopId.get(stop.parent_station) : null);
 		} else {
 			const facilities = cache.SEQgetRailwayStationFacilities(ctx);
 			myFacility = facilities.find(

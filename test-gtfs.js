@@ -9,7 +9,7 @@ if (existsSync(".env")) {
 async function main() {
 	console.log("Loading gtfs data...");
 
-	const TRAX = new TRAXClass(PRESETS.GTHA(process.env.METROLINX_KEY));
+	const TRAX = new TRAXClass(PRESETS["CA/GTHA"](process.env.METROLINX_KEY));
 	logger.setLevel(LogLevel.TIMING);
 
 	let start_static = Date.now();

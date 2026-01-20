@@ -125,7 +125,7 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		}
 	});
 
-	if (ctx.config.region === "GTHA") {
+	if (ctx.config.region === "CA/GTHA") {
 		validEdges.delete("UN|KE");
 		validEdges.delete("KE|UN");
 	}
@@ -174,7 +174,7 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		if (!matrix[to][from]) matrix[to][from] = parseFloat(avg.toFixed(2));
 	}
 
-	if (ctx.config.region === "GTHA") {
+	if (ctx.config.region === "CA/GTHA") {
 		if (!matrix["KE"]) matrix["KE"] = {};
 		matrix["KE"]["SC"] = 2;
 		if (!matrix["SC"]) matrix["SC"] = {};
@@ -490,7 +490,7 @@ export function findPassingStopTimes(
 				stop_sequence:
 					(startTime.stop_sequence ?? 0) +
 					((i + 1) * ((endTime.stop_sequence ?? 0) - (startTime.stop_sequence ?? 0))) /
-						(currentPassingRun.length + 1),
+					(currentPassingRun.length + 1),
 				departure_time: interpolatedTime,
 				arrival_time: interpolatedTime,
 				drop_off_type: 1,

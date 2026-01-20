@@ -1,5 +1,5 @@
-import { AugmentedTripInstance } from "../../utils/augmentedTrip.js";
-import type { VehicleInfo } from "../../utils/vehicleModel.js";
+import { AugmentedTripInstance } from "../../../utils/augmentedTrip.js";
+import type { VehicleInfo } from "../../../utils/vehicleModel.js";
 
 const RUN_MODEL_MAP: Record<string, string> = {
 	"1": "6 car Suburban Multiple Unit",

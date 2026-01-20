@@ -1,8 +1,8 @@
 import { TraxConfig } from "../config.js";
 import { CacheContext } from "../cache.js";
 import { AugmentedTrip, AugmentedTripInstance } from "./augmentedTrip.js";
-import { getVehicleInfo as getSEQVehicleInfo } from "../region-specific/SEQ/vehicleModel.js";
-import { getVehicleInfo as getGTHAVehicleInfo } from "../region-specific/GTHA/vehicleModel.js";
+import { getVehicleInfo as getSEQVehicleInfo } from "../region-specific/AU/SEQ/vehicleModel.js";
+import { getVehicleInfo as getGTHAVehicleInfo } from "../region-specific/CA/GTHA/vehicleModel.js";
 
 export type VehicleInfo = {
 	vehicle_model: string | null;
@@ -15,9 +15,9 @@ export type VehicleInfo = {
 
 function resolveVehicleInfo(inst: AugmentedTripInstance, ctx: CacheContext, config: TraxConfig): VehicleInfo {
 	switch (config.region) {
-		case "SEQ":
+		case "AU/SEQ":
 			return getSEQVehicleInfo(inst);
-		case "GTHA":
+		case "CA/GTHA":
 			return getGTHAVehicleInfo(inst, ctx);
 		default:
 			return { vehicle_model: null, vehicle_id: null };

@@ -1,6 +1,6 @@
 import * as cache from "./cache.js";
 import * as stations from "./utils/stations.js";
-import * as qrTravel from "./region-specific/SEQ/qr-travel/qr-travel-tracker.js";
+import * as qrTravel from "./region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
 import * as timeUtils from "./utils/time.js";
 import { EventEmitter } from "events";
 import { GTFS, RealtimeVehiclePosition, Route, Stop, Trip } from "qdf-gtfs";
@@ -18,12 +18,12 @@ import {
 } from "./utils/considered.js";
 import { AugmentedStop } from "./utils/augmentedStop.js";
 import { type TraxConfig, type TraxConfigOptions, resolveConfig } from "./config.js";
-import * as GTHA from "./region-specific/GTHA/realtime.js";
+import * as GTHA from "./region-specific/CA/GTHA/realtime.js";
 import {
 	GTHAVehicleDetails,
 	getGTHAVehicleDetails,
 	type GOTransitVehicle,
-} from "./region-specific/GTHA/vehicleDetails.js";
+} from "./region-specific/CA/GTHA/vehicleDetails.js";
 
 export interface TRAXEvent {
 	"realtime-update-start": [];
@@ -271,7 +271,7 @@ export { PRESETS, resolveConfig, type TraxConfig, type TraxConfigOptions } from 
 export * as cache from "./cache.js";
 export * as stations from "./utils/stations.js";
 export * as calendar from "./utils/calendar.js";
-export * as qrTravel from "./region-specific/SEQ/qr-travel/qr-travel-tracker.js";
+export * as qrTravel from "./region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
 
 export type { AugmentedTrip, AugmentedTripInstance, RunSeries } from "./utils/augmentedTrip.js";
 export type { AugmentedStopTime } from "./utils/augmentedStopTime.js";
@@ -290,9 +290,9 @@ export type {
 	QRTServiceUpdate,
 	QRTTravelStopTime,
 	QRTTravelTrip,
-} from "./region-specific/SEQ/qr-travel/types.js";
+} from "./region-specific/AU/SEQ/qr-travel/types.js";
 
 export type GTHAActiveVehicle = GOTransitVehicle;
 
-export type { QRTSRTStop } from "./region-specific/SEQ/qr-travel/srt.js";
+export type { QRTSRTStop } from "./region-specific/AU/SEQ/qr-travel/srt.js";
 export { Logger as TraxLogger, LogLevel } from "./utils/logger.js";

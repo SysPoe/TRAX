@@ -4,7 +4,7 @@ import { AugmentedTrip, AugmentedTripInstance } from "./augmentedTrip.js";
 import {
 	getServiceCapacity as SEQServCap,
 	ensureServiceCapacityData as SEQEnsCapData,
-} from "../region-specific/SEQ/serviceCapacity.js";
+} from "../region-specific/AU/SEQ/serviceCapacity.js";
 import { CacheContext } from "../cache.js";
 
 export enum ServiceCapacity {
@@ -26,7 +26,7 @@ export function getServiceCapacity(
 	config: TraxConfig,
 ): ServiceCapacity {
 	switch (config.region) {
-		case "SEQ":
+		case "AU/SEQ":
 			return SEQServCap(inst, stopTime, dateStr, _dirOverride, ctx);
 		case "none":
 		default:
@@ -36,7 +36,7 @@ export function getServiceCapacity(
 
 export async function ensureServiceCapacityData(config: TraxConfig) {
 	switch (config.region) {
-		case "SEQ":
+		case "AU/SEQ":
 			return SEQEnsCapData(config);
 	}
 }

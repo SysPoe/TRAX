@@ -22,18 +22,18 @@ import {
 } from "./utils/augmentedTrip.js";
 import { AugmentedStopTime, augmentStopTimes } from "./utils/augmentedStopTime.js";
 import { QRTPlace, QRTTravelTrip } from "./index.js";
-import { getPlaces, getCurrentQRTravelTrains } from "./region-specific/SEQ/qr-travel/qr-travel-tracker.js";
+import { getPlaces, getCurrentQRTravelTrains } from "./region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
 import { Timer, globalTimer } from "./utils/timer.js";
-import { getRailwayStationFacilities } from "./region-specific/SEQ/facilities.js";
-import { RailwayStationFacility } from "./region-specific/SEQ/facilities-types.js";
-import { updateAllSources } from "./region-specific/GTHA/realtime.js";
+import { getRailwayStationFacilities } from "./region-specific/AU/SEQ/facilities.js";
+import { RailwayStationFacility } from "./region-specific/AU/SEQ/facilities-types.js";
+import { updateAllSources } from "./region-specific/CA/GTHA/realtime.js";
 import logger from "./utils/logger.js";
 import { getGtfs } from "./gtfsInterfaceLayer.js";
 import * as qdf from "qdf-gtfs";
 import { addSC, addSCI, ensureServiceCapacityData } from "./utils/serviceCapacity.js";
 import { addVehicleModel, addVehicleModelTrip } from "./utils/vehicleModel.js";
 import { TraxConfig } from "./config.js";
-import ensureQRTEnabled from "./region-specific/SEQ/qr-travel/enabled.js";
+import ensureQRTEnabled from "./region-specific/AU/SEQ/qr-travel/enabled.js";
 import { getServiceDayStart } from "./utils/time.js";
 
 class LRUCache<K, V> {
@@ -686,7 +686,7 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	const serviceDateTripsMap = new Map<string, Set<string>>();
 	const passingTripsMap = new Map<string, Set<string>>();
 
-	if (config.region === "SEQ") {
+	if (config.region === "AU/SEQ") {
 		ctx.augmented.timer.start("refreshStaticCache:loadQRTPlaces");
 		newRawCache.regionSpecific.SEQ.qrtPlaces = await getPlaces(config);
 		ctx.augmented.timer.stop("refreshStaticCache:loadQRTPlaces");
@@ -777,13 +777,13 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 		}
 	}
 	const qrtPlacesByName = new Map<string, any>();
-	if (config.region === "SEQ") {
+	if (config.region === "AU/SEQ") {
 		for (const p of newRawCache.regionSpecific.SEQ.qrtPlaces ?? []) {
 			if (p.Title) qrtPlacesByName.set(p.Title.toLowerCase().trim().replace("station", "").trim(), p);
 		}
 	}
 	const facilitiesByStopId = new Map<string, RailwayStationFacility>();
-	if (config.region === "SEQ") {
+	if (config.region === "AU/SEQ") {
 		for (const f of newRawCache.regionSpecific.SEQ.railwayStationFacilities ?? []) {
 			if (f.stops) {
 				for (const sId of f.stops) facilitiesByStopId.set(sId, f);
@@ -894,7 +894,7 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 
 	let additionalPromises: Promise<any>[] = [];
 
-	if (config.region === "SEQ") {
+	if (config.region === "AU/SEQ") {
 		logger.debug("Refreshing qrtTrains cache...", {
 			module: "cache",
 			function: "refreshRealtimeCache",

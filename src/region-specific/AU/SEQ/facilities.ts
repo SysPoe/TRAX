@@ -1,7 +1,7 @@
-import { TraxConfig } from "../../config.js";
-import logger from "../../utils/logger.js";
+import { TraxConfig } from "../../../config.js";
+import logger from "../../../utils/logger.js";
 import { RailwayStationFacility } from "./facilities-types.js";
-import { loadDataFile, hasDataFile } from "../../utils/fs.js";
+import { loadDataFile, hasDataFile } from "../../../utils/fs.js";
 
 export async function getRailwayStationFacilities(config: TraxConfig): Promise<RailwayStationFacility[]> {
 	const relativePath = "region-specific/seq/railway-station-facilities.json";

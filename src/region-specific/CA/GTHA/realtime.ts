@@ -1,11 +1,11 @@
-import { CacheContext, getAugmentedTripInstance, getAugmentedTrips, getTripUpdates } from "../../cache.js";
+import { CacheContext, getAugmentedTripInstance, getAugmentedTrips, getTripUpdates } from "../../../cache.js";
 import { GTFS } from "qdf-gtfs";
 import { GTHADeparturesResponse, UPEDeparturesResponse } from "./types.js";
-import logger from "../../utils/logger.js";
-import { getServiceDayStart, getServiceDate } from "../../utils/time.js";
-import { isConsideredTripId } from "../../utils/considered.js";
+import logger from "../../../utils/logger.js";
+import { getServiceDayStart, getServiceDate } from "../../../utils/time.js";
+import { isConsideredTripId } from "../../../utils/considered.js";
 import { getModelFromId } from "./vehicleModel.js";
-import { mergeVehicleInfo } from "../../utils/vehicleModel.js";
+import { mergeVehicleInfo } from "../../../utils/vehicleModel.js";
 import { parse } from "node-html-parser";
 
 // --- Config & Settings ---
@@ -356,7 +356,7 @@ function formatTrack(track: string | null | undefined): string | null {
 	let s = track.split(/[^\d]/g).filter((v) => v.length > 0);
 	if (s.length === 2) return `${s[0]} & ${s[1]}`;
 	logger.error("Failed to parse track: " + track + " " + s + "!", {
-		module: "GTHA",
+		module: "CA/GTHA",
 		function: "formatTrack",
 	});
 	return null;
@@ -489,7 +489,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 			.then(async (r) => (r.ok ? ((await r.json()) as UPEDeparturesResponse) : null))
 			.catch((e) => {
 				logger.error(`Failed to update Source C platforms for stop ${stop_id}: ${e.message ?? e}`, {
-					module: "GTHA",
+					module: "CA/GTHA",
 				});
 				console.error(e);
 			}),
@@ -519,7 +519,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 				.then(async (r) => (r.ok ? ((await r.json()) as GTHADeparturesResponse) : null))
 				.catch((e) => {
 					logger.error(`Failed to update Source D platforms for stop ${stop_id}: ${e.message ?? e}`, {
-						module: "GTHA",
+						module: "CA/GTHA",
 					});
 					console.error(e);
 					return null;
@@ -560,7 +560,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 							logger.error(
 								`Failed to fetch Source E for stop ${stop_id} corridor ${code}: ${e.message}`,
 								{
-									module: "GTHA",
+									module: "CA/GTHA",
 								},
 							);
 							console.error(e);
@@ -706,7 +706,7 @@ export async function updateSourceB(
 		const commitmentTrips = data.commitmentTrip as any[];
 
 		logger.debug(`GTHA Schedule: Processing ${commitmentTrips.length} commitment trips`, {
-			module: "GTHA",
+			module: "CA/GTHA",
 			function: "updateGTHASchedule",
 		});
 
@@ -792,12 +792,12 @@ export async function updateSourceB(
 		}
 
 		logger.debug(`GTHA Schedule: Completed with ${updateCount} platform updates`, {
-			module: "GTHA",
+			module: "CA/GTHA",
 			function: "updateGTHASchedule",
 		});
 	} catch (e) {
 		logger.error(`Failed to update Source B: ${(e as any).message ?? e}`, {
-			module: "GTHA",
+			module: "CA/GTHA",
 			function: "updateSourceB",
 		});
 		console.error(e);
@@ -826,7 +826,7 @@ export async function updateSourceA(
 		const trips = (data.trip as any[]).filter((v) => v.source !== "B");
 
 		logger.debug(`Source A: Processing ${trips.length} active trips`, {
-			module: "GTHA",
+			module: "CA/GTHA",
 			function: "updateSourceA",
 		});
 
@@ -924,12 +924,12 @@ export async function updateSourceA(
 		}
 
 		logger.debug(`GTHA AVL: Completed vehicle updates for ${updateCount} trip instances`, {
-			module: "GTHA",
+			module: "CA/GTHA",
 			function: "updateGTHAAVL",
 		});
 	} catch (e) {
 		logger.error(`Failed to update Source A: ${(e as any).message ?? e}`, {
-			module: "GTHA",
+			module: "CA/GTHA",
 			function: "updateSourceA",
 		});
 		console.error(e);
@@ -1088,12 +1088,12 @@ export async function updateSourceF(ctx: CacheContext, serviceDateStr: string, b
 		}
 
 		logger.debug(`Updated Source F w/ ${matchCount} matches and ${tripUpdatedCount} trips`, {
-			module: "GTHA",
+			module: "CA/GTHA",
 			function: "updateSourceF",
 		});
 	} catch (e) {
 		logger.error(`Failed to fetch Source F: ${(e as any).message ?? e}`, {
-			module: "GTHA",
+			module: "CA/GTHA",
 			function: "updateSourceF",
 		});
 		console.error(e);
