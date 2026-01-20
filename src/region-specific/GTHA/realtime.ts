@@ -160,13 +160,7 @@ function applyPlatformUpdate(
 	const newActual = platform ?? stopTime.actual_platform_code ?? scheduledPlatform ?? null;
 	const newScheduled = scheduledPlatform ?? stopTime.scheduled_platform_code ?? platform ?? null;
 
-	const changed =
-		(newActual !== stopTime.actual_platform_code ||
-			newScheduled !== stopTime.scheduled_platform_code ||
-			!stopTime.rt_platform_code_updated) &&
-		(stopTime.actual_platform_code === null || currentPriority <= priority);
-
-	if (!changed) return;
+	if (currentPriority > priority) return;
 
 	prevs = prevs.filter((v) => !(v.tripInstanceId === stopTime.instance_id && v.stopId === stopId));
 	prevs.push({
@@ -358,12 +352,14 @@ function formatTrack(track: string | null | undefined): string | null {
 	if (!track) return null;
 	track = track.trim();
 	if (track === "-" || track === "") return null;
-	if (track.length === 4 && /^\d+$/.test(track)) {
-		const p1 = Number.parseInt(track.slice(0, 2), 10);
-		const p2 = Number.parseInt(track.slice(2, 4), 10);
-		return `${p1} & ${p2}`;
-	} else track = track.replace(/^0+/, "");
-	return track;
+	if (/^\d+$/.test(track)) return track.replace(/^0+/, "");
+	let s = track.split(/[^\d]/g).filter((v) => v.length > 0);
+	if (s.length === 2) return `${s[0]} & ${s[1]}`;
+	logger.error("Failed to parse track: " + track + " " + s + "!", {
+		module: "GTHA",
+		function: "formatTrack",
+	});
+	return null;
 }
 
 function getUniqueStopTimesForRange(
@@ -492,7 +488,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 		promise: fetch(SOURCE_C_URL_TEMPLATE(stop_id))
 			.then(async (r) => (r.ok ? ((await r.json()) as UPEDeparturesResponse) : null))
 			.catch((e) => {
-				logger.error(`Failed to update Source C platforms for stop ${stop_id}`, { error: e, module: "GTHA" });
+				logger.error(`Failed to update Source C platforms for stop ${stop_id}`, { module: "GTHA" });
 				return null;
 			}),
 	}));
@@ -523,6 +519,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 					logger.error(`Failed to update Source D platforms for stop ${stop_id}: ${e.message ?? e}`, {
 						module: "GTHA",
 					});
+					console.error(e);
 					return null;
 				}),
 		}));
@@ -564,6 +561,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 									module: "GTHA",
 								},
 							);
+							console.error(e);
 							return null;
 						}),
 				})),
@@ -584,8 +582,8 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 			let platform = formatTrack(departure.platform);
 			let scheduledPlatform = formatTrack(departure.scheduledPlatform);
 
-			if (!platform && scheduledPlatform) platform = scheduledPlatform;
-			if (!scheduledPlatform && platform) scheduledPlatform = platform;
+			platform = platform ?? scheduledPlatform;
+
 			if (platform === null && scheduledPlatform === null) continue;
 
 			for (const st of uniqueStopTimesSourceD) {
@@ -603,7 +601,16 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 				});
 
 				const ast = instance?.stopTimes.find((ast) => ast.actual_stop_id === st.stop_id);
-				if (ast) applyPlatformUpdate(ctx, ast, item.stop_id, platform, scheduledPlatform, "Source D", blockMap);
+				if (ast && ast.actual_stop_id)
+					applyPlatformUpdate(
+						ctx,
+						ast,
+						ast.actual_stop_id,
+						platform,
+						scheduledPlatform,
+						"Source D",
+						blockMap,
+					);
 			}
 		}
 	}
@@ -634,7 +641,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 					getAugmentedTrips(ctx, st.trip_id)[0]?.instances.find((v) => v.serviceDate === dateStr) ??
 					getAugmentedTrips(ctx, st.trip_id)[0]?.instances[0];
 
-				const ast = instance?.stopTimes.find((ast) => ast.actual_stop_id === st.stop_id);
+				const ast = instance?.stopTimes.find((ast) => ast.actual_stop_id === item.stop_id);
 				if (ast) applyPlatformUpdate(ctx, ast, item.stop_id, platform, null, "Source C", blockMap);
 			}
 		}
