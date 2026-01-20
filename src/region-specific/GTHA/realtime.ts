@@ -600,17 +600,9 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 					return prevDate.toISOString().slice(0, 10).replace(/-/g, "") === v.serviceDate;
 				});
 
-				const ast = instance?.stopTimes.find((ast) => ast.actual_stop_id === st.stop_id);
+				const ast = instance?.stopTimes.find((ast) => ast.actual_stop_id === item.stop_id);
 				if (ast && ast.actual_stop_id)
-					applyPlatformUpdate(
-						ctx,
-						ast,
-						ast.actual_stop_id,
-						platform,
-						scheduledPlatform,
-						"Source D",
-						blockMap,
-					);
+					applyPlatformUpdate(ctx, ast, item.stop_id, platform, scheduledPlatform, "Source D", blockMap);
 			}
 		}
 	}
