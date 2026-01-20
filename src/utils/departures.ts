@@ -1,5 +1,4 @@
 import * as cache from "../cache.js";
-import { getGtfs } from "../gtfsInterfaceLayer.js";
 import { findExpressString } from "./SRT.js";
 import { getServiceCapacity, ServiceCapacity } from "./serviceCapacity.js";
 import { AugmentedStop } from "./augmentedStop.js";
@@ -66,7 +65,7 @@ export function getDeparturesForStop(
 			for (const st of stopDepartures) {
 				const timeSecs = st.actual_departure_time ?? st.actual_arrival_time ?? st.scheduled_departure_time ?? 0;
 				const absTs = dayStart + timeSecs;
-				
+
 				allTimestamps.push(absTs);
 				allStopsAndInsts.push({ st, inst: null as any }); // inst will be fetched later for filtered results
 			}
@@ -153,7 +152,7 @@ export function getServiceDateDeparturesForStop(
 		for (const st of stopDepartures) {
 			const timeSecs = st.actual_departure_time ?? st.actual_arrival_time ?? st.scheduled_departure_time ?? 0;
 			const absTs = dayStart + timeSecs;
-			
+
 			allTimestamps.push(absTs);
 			allStopsAndInsts.push({ st, inst: null as any });
 		}

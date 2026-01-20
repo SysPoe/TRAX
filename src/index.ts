@@ -24,6 +24,7 @@ import {
 	getGTHAVehicleDetails,
 	type GOTransitVehicle,
 } from "./region-specific/CA/GTHA/vehicleDetails.js";
+import { createGtfs, loadRealtime, loadStatic } from "./gtfsInterfaceLayer.js";
 
 export interface TRAXEvent {
 	"realtime-update-start": [];
@@ -34,7 +35,7 @@ export interface TRAXEvent {
 
 export class TRAX {
 	public config: TraxConfig;
-	public gtfs: GTFS;
+	private gtfs?: GTFS;
 	public events: EventEmitter;
 
 	private ctx: cache.CacheContext;
@@ -45,19 +46,10 @@ export class TRAX {
 		this.config = resolveConfig(options);
 		this.events = new EventEmitter();
 
-		this.gtfs = new GTFS({
-			ansi: false,
-			logger: this.config.logFunction,
-			progress: this.config.progressLog,
-			cache: true,
-			cacheDir: this.config.cacheDir,
-		});
-
 		this.ctx = {
 			raw: cache.createEmptyRawCache(),
 			augmented: cache.createEmptyAugmentedCache(),
 			config: this.config,
-			gtfs: this.gtfs,
 		};
 	}
 
@@ -111,10 +103,15 @@ export class TRAX {
 	}
 
 	private async loadStaticInternal() {
+		if (!this.gtfs) {
+			this.gtfs = await createGtfs(this.config);
+			this.ctx.gtfs = this.gtfs;
+		}
+
 		globalTimer.start("loadStaticInternal");
 		logger.info("Loading GTFS data...");
 		globalTimer.start("loadStaticInternal:loadStatic");
-		await this.gtfs.loadStatic(this.config.urls);
+		await loadStatic(this.gtfs, this.config);
 		globalTimer.stop("loadStaticInternal:loadStatic");
 		logger.info("GTFS data loaded.");
 
@@ -125,13 +122,15 @@ export class TRAX {
 	}
 
 	private async loadRealtimeInternal() {
+		if (!this.gtfs) {
+			this.gtfs = await createGtfs(this.config);
+			this.ctx.gtfs = this.gtfs;
+		}
 		if (!this.config.realtime) return;
-
-		const rt = this.config.realtime;
 
 		globalTimer.start("loadRealtimeInternal");
 		globalTimer.start("loadRealtimeInternal:updateRealtimeFromUrl");
-		await this.gtfs.updateRealtimeFromUrl(rt.realtimeAlerts, rt.realtimeTripUpdates, rt.realtimeVehiclePositions);
+		await loadRealtime(this.gtfs, this.config);
 		globalTimer.stop("loadRealtimeInternal:updateRealtimeFromUrl");
 
 		globalTimer.start("loadRealtimeInternal:refreshRealtimeCache");
@@ -220,13 +219,16 @@ export class TRAX {
 			time: timeUtils,
 			formatTimestamp: this.formatTimestamp,
 			hasGtfs: () => true,
-			getGtfs: () => this.gtfs,
+			getGtfs: () => {
+				if (!this.gtfs) throw new Error("Tried to access GTFS object before initialization!");
+				return this.gtfs;
+			},
 			getShapes: () => cache.getShapes(this.ctx),
-			isConsideredTrip: (trip: Trip) => isConsideredTrip(trip, this.gtfs),
+			isConsideredTrip: (trip: Trip) => isConsideredTrip(trip, this.utils.getGtfs()),
 			isConsideredRoute: (route: Route) => isConsideredRoute(route),
-			isConsideredTripId: (trip_id: string) => isConsideredTripId(trip_id, this.gtfs),
-			isConsideredStop: (stop: AugmentedStop | Stop) => isConsideredStop(stop, this.gtfs),
-			isConsideredStopId: (stop_id: string) => isConsideredStopId(stop_id, this.gtfs),
+			isConsideredTripId: (trip_id: string) => isConsideredTripId(trip_id, this.utils.getGtfs()),
+			isConsideredStop: (stop: AugmentedStop | Stop) => isConsideredStop(stop, this.utils.getGtfs()),
+			isConsideredStopId: (stop_id: string) => isConsideredStopId(stop_id, this.utils.getGtfs()),
 			departures: {
 				attachDeparturesHelpers: (stop: any) => attachDeparturesHelpers(stop, this.ctx),
 				getDeparturesForStop: (stop: any, date: string, st: string, et: string) =>

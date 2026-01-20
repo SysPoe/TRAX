@@ -28,7 +28,6 @@ import { getRailwayStationFacilities } from "./region-specific/AU/SEQ/facilities
 import { RailwayStationFacility } from "./region-specific/AU/SEQ/facilities-types.js";
 import { updateAllSources } from "./region-specific/CA/GTHA/realtime.js";
 import logger from "./utils/logger.js";
-import { getGtfs } from "./gtfsInterfaceLayer.js";
 import * as qdf from "qdf-gtfs";
 import { addSC, addSCI, ensureServiceCapacityData } from "./utils/serviceCapacity.js";
 import { addVehicleModel, addVehicleModelTrip } from "./utils/vehicleModel.js";
@@ -160,39 +159,43 @@ let rawCache: RawCache = createEmptyRawCache();
 let augmentedCache: AugmentedCache = createEmptyAugmentedCache();
 
 export function getCalendars(ctx: CacheContext, filter?: Partial<Calendar>): Calendar[] {
-	return (ctx.gtfs ?? getGtfs()).getCalendars(filter);
+	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
+	return ctx.gtfs.getCalendars(filter);
 }
 
 export function getCalendarDates(ctx: CacheContext, filter?: Partial<CalendarDate>): CalendarDate[] {
-	return (ctx.gtfs ?? getGtfs()).getCalendarDates(filter);
+	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
+	return ctx.gtfs.getCalendarDates(filter);
 }
 
 export function getTrips(ctx: CacheContext, filter?: Partial<Trip> | string): Trip[] {
-	const gtfs = ctx.gtfs ?? getGtfs();
+	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
 	const query = typeof filter === "string" ? { trip_id: filter } : filter;
-	return gtfs.getTrips(query).filter((v) => isConsideredTrip(v, gtfs));
+	return ctx.gtfs.getTrips(query).filter((v) => isConsideredTrip(v, ctx.gtfs as qdf.GTFS));
 }
 
 export function getStops(ctx: CacheContext, filter?: Partial<Stop> | string): Stop[] {
+	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
 	const query = typeof filter === "string" ? { stop_id: filter } : filter;
-	return (ctx.gtfs ?? getGtfs()).getStops(query);
+	return ctx.gtfs.getStops(query);
 }
 
 export function getRoutes(ctx: CacheContext, filter?: Partial<Route> | string): Route[] {
+	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
 	const query = typeof filter === "string" ? { route_id: filter } : filter;
-	return (ctx.gtfs ?? getGtfs()).getRoutes(query);
+	return ctx.gtfs.getRoutes(query);
 }
 
 export function getTripUpdates(ctx: CacheContext, trip_id?: string): RealtimeTripUpdate[] {
-	const gtfs = ctx.gtfs ?? getGtfs();
-	const updates = gtfs.getRealtimeTripUpdates();
+	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
+	const updates = ctx.gtfs.getRealtimeTripUpdates();
 	if (trip_id) return updates.filter((v) => v.trip.trip_id == trip_id);
 	return updates;
 }
 
 export function getVehiclePositions(ctx: CacheContext, trip_id?: string): RealtimeVehiclePosition[] {
-	const gtfs = ctx.gtfs ?? getGtfs();
-	const positions = gtfs.getRealtimeVehiclePositions();
+	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
+	const positions = ctx.gtfs.getRealtimeVehiclePositions();
 	if (trip_id) return positions.filter((v) => v.trip.trip_id == trip_id);
 	return positions;
 }
@@ -202,7 +205,8 @@ export function getStopTimeUpdates(ctx: CacheContext, trip_id: string): Realtime
 }
 
 export function getStopTimes(ctx: CacheContext, query: qdf.StopTimeQuery): StopTime[] {
-	return (ctx.gtfs ?? getGtfs()).getStopTimes(query);
+	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
+	return ctx.gtfs.getStopTimes(query);
 }
 
 // Aliases for backward compatibility
@@ -459,11 +463,10 @@ export function getAugmentedStopTimes(ctx: CacheContext, trip_id?: string): Augm
 }
 
 export function queryAugmentedStopTimes(ctx: CacheContext, query: qdf.StopTimeQuery): AugmentedStopTime[] {
+	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
 	const context = ctx;
-	const { gtfs: ctxGtfs } = context;
 	const results: AugmentedStopTime[] = [];
-	const gtfs = ctxGtfs ?? getGtfs();
-	gtfs.getStopTimes(query).forEach((st: qdf.StopTime) => {
+	ctx.gtfs.getStopTimes(query).forEach((st: qdf.StopTime) => {
 		const augmentedTrip = getAugmentedTrips(context, st.trip_id)[0];
 		if (augmentedTrip) {
 			for (const instance of augmentedTrip.instances) {

@@ -4,13 +4,15 @@ import logger from "./utils/logger.js";
 
 let currentGtfs: GTFS | null = null;
 
-async function loadStatic(gtfs: GTFS, config: TraxConfig) {
+export async function loadStatic(gtfs: GTFS, config: TraxConfig) {
 	logger.info("Loading GTFS data...");
 	await gtfs.loadStatic(config.urls);
-	logger.info("GTFS data loaded.");
+	logger.info("Merging stops...");
+	for (const st of config.mergeStops) gtfs.actions.mergeStops(st.to, st.from);
+	logger.info("Static GTFS data loaded.");
 }
 
-async function loadRealtime(gtfs: GTFS, config: TraxConfig) {
+export async function loadRealtime(gtfs: GTFS, config: TraxConfig) {
 	if (!config.realtime) return;
 	const rt = config.realtime;
 	logger.info("Loading realtime data...");
@@ -19,7 +21,7 @@ async function loadRealtime(gtfs: GTFS, config: TraxConfig) {
 	logger.info("Realtime data loaded.");
 }
 
-export async function createGtfs(config: TraxConfig) {
+export async function createGtfs(config: TraxConfig): Promise<GTFS> {
 	let gtfs = new GTFS({
 		ansi: false,
 		logger: config.logFunction,
@@ -28,14 +30,5 @@ export async function createGtfs(config: TraxConfig) {
 		cacheDir: config.cacheDir,
 	});
 	await Promise.all([loadStatic(gtfs, config), loadRealtime(gtfs, config)]);
-	currentGtfs = gtfs;
-}
-
-export function hasGtfs() {
-	return currentGtfs != null;
-}
-
-export function getGtfs(): GTFS {
-	if (currentGtfs == null) throw new Error("Tried to access GTFS object before it's loaded!!!");
-	return currentGtfs;
+	return gtfs;
 }

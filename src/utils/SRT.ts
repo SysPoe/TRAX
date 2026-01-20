@@ -1,5 +1,4 @@
 import logger from "./logger.js";
-import { getGtfs } from "../gtfsInterfaceLayer.js";
 import { cacheFileExists, loadCacheFile, writeCacheFile } from "./fs.js";
 import * as cache from "../cache.js";
 import * as qdf from "qdf-gtfs";
@@ -67,9 +66,10 @@ function getPatternSignature(stopTimes: any[]): string {
 }
 
 function generateNetworkData(ctx: cache.CacheContext): NetworkData {
+	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
+	const gtfs = ctx.gtfs;
 	const timer = ctx.augmented.timer;
 	timer.start("SRT:generateNetworkData");
-	const gtfs = ctx.gtfs ?? getGtfs();
 	const trips = gtfs.getTrips();
 	const railTrips = trips.filter((t) => gtfs.getRoutes({ route_id: t.route_id })[0]?.route_type === 2);
 

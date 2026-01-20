@@ -2,7 +2,6 @@ import * as qdf from "qdf-gtfs";
 import { getServiceDatesByTrip } from "./calendar.js";
 import { AugmentedStopTime, augmentStopTimes } from "./augmentedStopTime.js";
 import * as cache from "../cache.js";
-import { getGtfs } from "../gtfsInterfaceLayer.js";
 import { getServiceCapacity, ServiceCapacity } from "./serviceCapacity.js";
 import { ExpressInfo, findExpress } from "./SRT.js";
 
@@ -213,7 +212,7 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 const RS_TOLERATE_SECS = 30 * 60;
 
 function trackBackwards(instance: AugmentedTripInstance, ctx: cache.CacheContext): string {
-	const gtfs = ctx.gtfs ?? getGtfs();
+	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
 	let run = instance.run;
 	let prevInstances: AugmentedTripInstance[] = [instance];
 	let currentInstance = instance;
@@ -229,7 +228,7 @@ function trackBackwards(instance: AugmentedTripInstance, ctx: cache.CacheContext
 
 		if ((time ?? 0) < RS_TOLERATE_SECS) break;
 
-		let deps_ids = gtfs.getStopTimes({
+		let deps_ids = ctx.gtfs.getStopTimes({
 			stop_id: st.scheduled_stop_id ?? undefined,
 			date: serviceDate.toString(),
 			start_time: (time ?? 0) - RS_TOLERATE_SECS,
@@ -298,7 +297,7 @@ function trackBackwards(instance: AugmentedTripInstance, ctx: cache.CacheContext
 }
 
 function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx: cache.CacheContext): void {
-	const gtfs = ctx.gtfs ?? getGtfs();
+	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
 	let run = instance.run;
 	const serviceDate = instance.serviceDate;
 
@@ -311,7 +310,7 @@ function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx: 
 		const time = st.scheduled_departure_time ?? st.scheduled_arrival_time;
 		if (time === null) break;
 
-		let deps_ids = gtfs.getStopTimes({
+		let deps_ids = ctx.gtfs.getStopTimes({
 			stop_id: st.scheduled_stop_id ?? undefined,
 			date: serviceDate.toString(),
 			start_time: time ?? 0,

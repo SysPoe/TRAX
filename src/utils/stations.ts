@@ -1,5 +1,4 @@
 import { CacheContext, getAugmentedStops } from "../cache.js";
-import { getGtfs } from "../gtfsInterfaceLayer.js";
 import { AugmentedStop } from "./augmentedStop.js";
 import * as qdf from "qdf-gtfs";
 import logger from "./logger.js";
@@ -15,7 +14,8 @@ export function getConsideredStations(ctx: CacheContext): qdf.Stop[] {
 		return ctx.augmented.railStations;
 	}
 
-	const gtfs = ctx.gtfs ?? getGtfs();
+	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
+	const gtfs = ctx.gtfs;
 	const cacheDir = ctx.config.cacheDir;
 
 	let stations: string[] | null = null;

@@ -1,19 +1,27 @@
 import { ProgressInfo, GTFSFeedConfig } from "qdf-gtfs";
 import logger from "./utils/logger.js";
 
+export type TRAXRegion = "AU/SEQ" | "CA" | "CA/GTHA";
+
+export type MergeAction = {
+	to: string;
+	from: string[];
+};
+
 export interface TraxConfig {
 	urls: (string | GTFSFeedConfig)[];
 	verbose: boolean;
 	cacheDir: string;
 	logFunction: (message: string) => void;
 	progressLog: (info: ProgressInfo) => void;
-	region: "AU/SEQ" | "CA/GTHA" | "none";
+	region: TRAXRegion | "none";
 	timezone: string;
 	realtime: {
 		realtimeAlerts: (string | GTFSFeedConfig)[] | null;
 		realtimeTripUpdates: (string | GTFSFeedConfig)[] | null;
 		realtimeVehiclePositions: (string | GTFSFeedConfig)[] | null;
 	} | null;
+	mergeStops: MergeAction[];
 }
 
 export type TraxConfigOptions = Partial<Omit<TraxConfig, "realtime">> & {
@@ -25,9 +33,10 @@ export type TraxConfigOptions = Partial<Omit<TraxConfig, "realtime">> & {
 		realtimeTripUpdates?: (string | GTFSFeedConfig)[] | string | GTFSFeedConfig | null;
 		realtimeVehiclePositions?: (string | GTFSFeedConfig)[] | string | GTFSFeedConfig | null;
 	} | null;
+	mergeStops?: MergeAction[] | null;
 };
 
-export const PRESETS: Record<"AU/SEQ" | "CA/GTHA", (apiKey?: string | undefined) => TraxConfigOptions> = {
+export const PRESETS: Record<TRAXRegion, (apiKey?: string | undefined) => TraxConfigOptions> = {
 	"AU/SEQ": () =>
 		({
 			urls: ["https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip"],
@@ -39,11 +48,32 @@ export const PRESETS: Record<"AU/SEQ" | "CA/GTHA", (apiKey?: string | undefined)
 				realtimeVehiclePositions: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions"],
 			},
 		}) as TraxConfigOptions,
+	CA: () =>
+		({
+			urls: ["https://www.viarail.ca/sites/all/files/gtfs/viarail.zip"],
+			region: "CA",
+			timezone: "America/Toronto",
+			realtime: null,
+			mergeStops: [
+				{ to: "UN", from: ["119"] },
+				{ to: "OS", from: ["367"] },
+				{ to: "KI", from: ["114"] },
+				{ to: "AL", from: ["600"] },
+				{ to: "OA", from: ["436"] },
+				{ to: "GU", from: ["450"] },
+				{ to: "BR", from: ["322"] },
+				{ to: "GE", from: ["6"] },
+				{ to: "MA", from: ["34"] },
+				{ to: "NI", from: ["346"] },
+				{ to: "SCTH", from: ["185"] },
+			],
+		}) as TraxConfigOptions,
 	"CA/GTHA": (apiKey) =>
 		({
 			urls: [
 				"https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/UP-GTFS.zip",
 				"https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/GO-GTFS.zip",
+				"https://www.viarail.ca/sites/all/files/gtfs/viarail.zip",
 			],
 			region: "CA/GTHA",
 			timezone: "America/Toronto",
@@ -61,6 +91,19 @@ export const PRESETS: Record<"AU/SEQ" | "CA/GTHA", (apiKey?: string | undefined)
 					"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/VehiclePosition?key=" + apiKey,
 				],
 			},
+			mergeStops: [
+				{ to: "UN", from: ["119"] },
+				{ to: "OS", from: ["367"] },
+				{ to: "KI", from: ["114"] },
+				{ to: "AL", from: ["600"] },
+				{ to: "OA", from: ["436"] },
+				{ to: "GU", from: ["450"] },
+				{ to: "BR", from: ["322"] },
+				{ to: "GE", from: ["6"] },
+				{ to: "MA", from: ["34"] },
+				{ to: "NI", from: ["346"] },
+				{ to: "SCTH", from: ["185"] },
+			],
 		}) as TraxConfigOptions,
 };
 
@@ -92,6 +135,7 @@ export function resolveConfig(options: TraxConfigOptions = {}): TraxConfig {
 			realtimeTripUpdates: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates"],
 			realtimeVehiclePositions: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions"],
 		},
+		mergeStops: [],
 	};
 
 	const resolvedRealtime = options.realtime
@@ -109,5 +153,6 @@ export function resolveConfig(options: TraxConfigOptions = {}): TraxConfig {
 		...options,
 		urls: staticUrls,
 		realtime: resolvedRealtime as TraxConfig["realtime"],
+		mergeStops: options.mergeStops ?? defaults.mergeStops,
 	};
 }
