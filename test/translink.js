@@ -1,4 +1,4 @@
-import TRAXClass, { logger, LogLevel } from "./dist/index.js";
+import TRAXClass, { logger, LogLevel } from "../dist/index.js";
 
 async function main() {
 	console.log("Loading gtfs data...");
@@ -7,7 +7,7 @@ async function main() {
 	logger.setLevel(LogLevel.DEBUG);
 
 	let start_static = Date.now();
-	await TRAX.loadGTFS(false);
+	await TRAX.loadGTFS(true, false);
 	let end_static = Date.now();
 
 	console.log("GTFS data loaded successfully.\n");

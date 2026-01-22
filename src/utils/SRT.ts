@@ -475,9 +475,13 @@ export function findPassingStopTimes(
 			continue;
 		}
 
-		const totalTimeDiff = endTime.arrival_time - startTime.departure_time;
 		const segmentEmus = [...currentPassingRun.map((r) => r.emu), srt.emu];
-		const interpolatedTimes = wasmInterpolateTimes(startTime.departure_time, endTime.arrival_time, segmentEmus);
+		const interpolatedTimesBig = wasmInterpolateTimes(
+			BigInt(startTime.departure_time),
+			BigInt(endTime.arrival_time),
+			segmentEmus,
+		);
+		const interpolatedTimes = interpolatedTimesBig.map(Number);
 
 		for (let i = 0; i < currentPassingRun.length; i++) {
 			const run = currentPassingRun[i];
@@ -500,6 +504,7 @@ export function findPassingStopTimes(
 				shape_dist_traveled: -1,
 				stop_headsign: "",
 				timepoint: 0,
+				feed_id: startTime.feed_id,
 			});
 		}
 

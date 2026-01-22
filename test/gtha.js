@@ -1,4 +1,4 @@
-import TRAXClass, { logger, LogLevel, PRESETS } from "./dist/index.js";
+import TRAXClass, { logger, LogLevel, PRESETS } from "../dist/index.js";
 import { config } from "dotenv";
 import { existsSync } from "node:fs";
 
@@ -13,7 +13,7 @@ async function main() {
 	logger.setLevel(LogLevel.TIMING);
 
 	let start_static = Date.now();
-	await TRAX.loadGTFS(false);
+	await TRAX.loadGTFS(true, false);
 	let end_static = Date.now();
 
 	console.log(`\nGTFS data loaded successfully in ${(end_static - start_static) / 1000}s.\n`);

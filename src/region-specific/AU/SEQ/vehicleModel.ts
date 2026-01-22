@@ -11,7 +11,7 @@ const RUN_MODEL_MAP: Record<string, string> = {
 };
 
 export function getVehicleInfo(inst: AugmentedTripInstance): VehicleInfo {
-	const prefix = inst.run?.[0]?.toUpperCase();
+	const prefix = inst.trip_number?.[0]?.toUpperCase();
 	const vehicle_model = prefix ? (RUN_MODEL_MAP[prefix] ?? null) : null;
 
 	let passenger_cars: number | null = null;
