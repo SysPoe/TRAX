@@ -13,13 +13,7 @@ import type {
 import { isConsideredTrip } from "./utils/considered.js";
 import { syncCalendarsToWasm } from "./utils/calendar.js";
 import { AugmentedStop, augmentStop } from "./utils/augmentedStop.js";
-import {
-	AugmentedTrip,
-	AugmentedTripInstance,
-	augmentTrip,
-	calculateRunSeries,
-	RunSeries,
-} from "./utils/augmentedTrip.js";
+import { AugmentedTrip, AugmentedTripInstance, augmentTrip } from "./utils/augmentedTrip.js";
 import { AugmentedStopTime, augmentStopTimes } from "./utils/augmentedStopTime.js";
 import { QRTPlace, QRTTravelTrip } from "./index.js";
 import { getPlaces, getCurrentQRTravelTrains } from "./region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
@@ -34,6 +28,7 @@ import { addVehicleModel, addVehicleModelTrip } from "./utils/vehicleModel.js";
 import { TraxConfig } from "./config.js";
 import ensureQRTEnabled from "./region-specific/AU/SEQ/qr-travel/enabled.js";
 import { getServiceDayStart } from "./utils/time.js";
+import { updateRealtime as updateVIARealtime } from "./region-specific/CA/VIA/realtime.js";
 
 class LRUCache<K, V> {
 	private cache = new Map<K, V>();
@@ -84,6 +79,8 @@ export type RawCache = {
 			railwayStationFacilities: RailwayStationFacility[];
 		};
 	};
+	injectedTripUpdates: qdf.RealtimeTripUpdate[];
+	injectedVehiclePositions: qdf.RealtimeVehiclePosition[];
 };
 
 export type AugmentedCache = {
@@ -103,7 +100,6 @@ export type AugmentedCache = {
 
 	expressInfoCache: LRUCache<string, any[]>;
 	passingStopsCache: LRUCache<string, any[]>;
-	runSeriesCache: Map<string, Map<string, RunSeries>>;
 
 	tripsStoppingAt: Map<string, Set<string>>;
 	stopDeparturesCached: Map<string, AugmentedStopTime[]>;
@@ -129,6 +125,8 @@ export function createEmptyRawCache(): RawCache {
 				railwayStationFacilities: [],
 			},
 		},
+		injectedTripUpdates: [],
+		injectedVehiclePositions: [],
 	};
 }
 
@@ -146,7 +144,6 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 		shapes: [],
 		expressInfoCache: new LRUCache<string, any[]>(1000),
 		passingStopsCache: new LRUCache<string, any[]>(5000),
-		runSeriesCache: new Map(),
 		tripsStoppingAt: new Map(),
 		stopDeparturesCached: new Map(),
 		instancesRec: new Map(),
@@ -188,20 +185,39 @@ export function getRoutes(ctx: CacheContext, filter?: Partial<Route> | string): 
 
 export function getTripUpdates(ctx: CacheContext, trip_id?: string): RealtimeTripUpdate[] {
 	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
-	const updates = ctx.gtfs.getRealtimeTripUpdates();
-	if (trip_id) return updates.filter((v) => v.trip.trip_id == trip_id);
-	return updates;
+	if (trip_id)
+		return ctx.gtfs
+			.getRealtimeTripUpdates({
+				trip_id,
+			})
+			.concat(ctx.raw.injectedTripUpdates.filter((v) => v.trip.trip_id === trip_id));
+	return ctx.gtfs.getRealtimeTripUpdates().concat(ctx.raw.injectedTripUpdates);
 }
 
 export function getVehiclePositions(ctx: CacheContext, trip_id?: string): RealtimeVehiclePosition[] {
 	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
-	const positions = ctx.gtfs.getRealtimeVehiclePositions();
-	if (trip_id) return positions.filter((v) => v.trip.trip_id == trip_id);
-	return positions;
+	if (trip_id)
+		return ctx.gtfs
+			.getRealtimeVehiclePositions({
+				trip_id,
+			})
+			.concat(ctx.raw.injectedVehiclePositions.filter((v) => v.trip.trip_id === trip_id));
+	return ctx.gtfs.getRealtimeVehiclePositions().concat(ctx.raw.injectedVehiclePositions);
 }
 
 export function getStopTimeUpdates(ctx: CacheContext, trip_id: string): RealtimeStopTimeUpdate[] {
-	return getTripUpdates(ctx, trip_id)[0]?.stop_time_updates ?? [];
+	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
+	if (trip_id)
+		return (
+			ctx.gtfs.getRealtimeTripUpdates({
+				trip_id,
+			})[0]?.stop_time_updates ?? []
+		).concat(
+			ctx.raw.injectedTripUpdates.filter((v) => v.trip.trip_id === trip_id).flatMap((v) => v.stop_time_updates),
+		);
+	return (ctx.gtfs.getRealtimeTripUpdates()[0]?.stop_time_updates ?? []).concat(
+		ctx.raw.injectedTripUpdates.flatMap((v) => v.stop_time_updates),
+	);
 }
 
 export function getStopTimes(ctx: CacheContext, query: qdf.StopTimeQuery): StopTime[] {
@@ -514,53 +530,6 @@ export function getPassingTrips(ctx: CacheContext, stopId: string): string[] {
 
 export function getShapes(ctx: CacheContext): { shape_id: string; route_id: string }[] {
 	return ctx.augmented.shapes;
-}
-
-export function getRunSeries(
-	ctx: CacheContext,
-	date: string,
-	runSeries: string,
-	calcIfNotFound: boolean = true,
-): RunSeries {
-	const context = ctx;
-	const { augmented } = context;
-
-	let dateMap = augmented.runSeriesCache.get(date);
-	if (!dateMap) {
-		dateMap = new Map();
-		augmented.runSeriesCache.set(date, dateMap);
-	}
-	if (
-		!dateMap.get(runSeries) &&
-		calcIfNotFound &&
-		augmented.serviceDateTrips.get(date)?.find((v) => v.endsWith(runSeries))
-	) {
-		const tripId = augmented.serviceDateTrips.get(date)?.find((v) => v.endsWith(runSeries));
-		if (tripId) {
-			const trip = getAugmentedTrips(context, tripId)[0];
-			const instance = trip.instances.find((i) => i.serviceDate === date);
-			if (instance) {
-				calculateRunSeries(instance, context);
-			}
-		}
-	} else if (!dateMap.get(runSeries))
-		dateMap.set(runSeries, {
-			trips: [],
-			vehicle_sightings: [],
-			series: runSeries.toUpperCase(),
-			date,
-		});
-	return dateMap.get(runSeries)!;
-}
-
-export function setRunSeries(date: string, runSeries: string, data: RunSeries, ctx: CacheContext): void {
-	const { augmented } = ctx;
-	let dateMap = augmented.runSeriesCache.get(date);
-	if (!dateMap) {
-		dateMap = new Map();
-		augmented.runSeriesCache.set(date, dateMap);
-	}
-	dateMap.set(runSeries, data);
 }
 
 export function SEQgetQRTPlaces(ctx: CacheContext): QRTPlace[] {
@@ -894,6 +863,9 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		module: "cache",
 		function: "refreshRealtimeCache",
 	});
+	if (config.region === "CA" || config.region.startsWith("CA/")) {
+		await updateVIARealtime(ctx);
+	}
 
 	let additionalPromises: Promise<any>[] = [];
 
@@ -921,8 +893,8 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		function: "refreshRealtimeCache",
 	});
 
-	const tripUpdates = gtfs.getRealtimeTripUpdates();
-	const vehiclePositions = gtfs.getRealtimeVehiclePositions();
+	const tripUpdates = [...gtfs.getRealtimeTripUpdates(), ...ctx.raw.injectedTripUpdates];
+	const vehiclePositions = [...gtfs.getRealtimeVehiclePositions(), ...ctx.raw.injectedVehiclePositions];
 
 	logger.debug(
 		`Loaded ${tripUpdates.length} trip updates with ${tripUpdates.flatMap((v) => v.stop_time_updates).length} stop time updates.`,
@@ -1023,7 +995,9 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		}
 	}
 
-	await updateAllSources(ctx, gtfs);
+	if (config.region === "CA/GTHA" || config.region.startsWith("CA/GTHA/")) {
+		await updateAllSources(ctx, gtfs);
+	}
 
 	ctx.augmented.timer.stop("refreshRealtimeCache");
 	ctx.augmented.timer.log("Realtime Cache Refresh", true);

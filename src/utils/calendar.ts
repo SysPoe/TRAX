@@ -8,8 +8,13 @@ import {
 	addWasmTripRecord,
 } from "../../build/release.js";
 
-export function getServiceDatesByTrip(trip_id: string, _ctx: CacheContext): string[] {
-	return getServiceDatesByTripWasm(trip_id);
+export function getServiceDatesByTrip(
+	trip_id: string,
+	_ctx: CacheContext,
+	minEpochDay: number = -1,
+	maxEpochDay: number = -1,
+): string[] {
+	return getServiceDatesByTripWasm(trip_id, BigInt(minEpochDay), BigInt(maxEpochDay));
 }
 
 export function syncCalendarsToWasm(ctx: CacheContext) {
@@ -31,7 +36,7 @@ export function syncCalendarsToWasm(ctx: CacheContext) {
 	}
 	const calendarDates = getCalendarDates(ctx);
 	for (const cd of calendarDates) {
-		addWasmCalendarDate(cd.service_id, String(cd.date), cd.exception_type);
+		addWasmCalendarDate(cd.service_id, String(cd.date), BigInt(cd.exception_type));
 	}
 	const trips = getRawTrips(ctx);
 	for (const t of trips) {

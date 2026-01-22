@@ -4,6 +4,7 @@ import { AugmentedStopTime, augmentStopTimes } from "./augmentedStopTime.js";
 import * as cache from "../cache.js";
 import { getServiceCapacity, ServiceCapacity } from "./serviceCapacity.js";
 import { ExpressInfo, findExpress } from "./SRT.js";
+import { getToday } from "./time.js";
 
 export type AugmentedTripInstance = qdf.Trip & {
 	instance_id: string;
@@ -13,7 +14,6 @@ export type AugmentedTripInstance = qdf.Trip & {
 	stopTimes: AugmentedStopTime[];
 	realtime_update: qdf.RealtimeTripUpdate | null;
 	expressInfo: ExpressInfo[];
-	run: string;
 	vehicle_model: string | null;
 	vehicle_id: string | null;
 	vehicle_details?: any | null;
@@ -24,7 +24,7 @@ export type AugmentedTripInstance = qdf.Trip & {
 	scheduledTripDates: string[];
 	actualTripDates: string[];
 
-	runSeries: string | null;
+	trip_number: string;
 
 	rt_start_date: string | null;
 };
@@ -34,20 +34,20 @@ export type AugmentedTrip = qdf.Trip & {
 	instances: AugmentedTripInstance[];
 };
 
-export type RunSeries = {
-	trips: {
-		trip_start_time: number;
-		trip_id: string;
-		run: string;
-	}[];
-	vehicle_sightings: string[];
-	series: string;
-	date: string;
-};
+function dateToEpochDays(ymd: number | string): number {
+	const ymdStr = ymd.toString();
+	let y = Number.parseInt(ymdStr.slice(0, 4));
+	let m = Number.parseInt(ymdStr.slice(4, 6));
+	let d = Number.parseInt(ymdStr.slice(6, 8));
+	m = (m + 9) % 12;
+	y = y - Math.floor(m / 10);
+	return 365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) + Math.floor((m * 306 + 5) / 10) + (d - 1);
+}
 
 export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedTrip {
 	ctx.augmented.timer.start("augmentTrip");
-	const serviceDates = getServiceDatesByTrip(trip.trip_id, ctx);
+	const todayEpoch = dateToEpochDays(getToday(ctx.config));
+	const serviceDates = getServiceDatesByTrip(trip.trip_id, ctx, todayEpoch - 15, todayEpoch + 365);
 
 	ctx.augmented.timer.start("augmentTrip:getRawStopTimes");
 	const rawStopTimes = cache.getRawStopTimes(ctx, trip.trip_id).sort((a, b) => a.stop_sequence - b.stop_sequence);
@@ -84,7 +84,7 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 		const startDate = update?.trip.start_date ?? serviceDate;
 		const startTime = update?.trip.start_time ?? "";
 
-		const instance_id = btoa(JSON.stringify([trip.trip_id, startDate, startTime, scheduleRelationship]));
+		const instance_id = btoa(JSON.stringify([trip.trip_id, startDate, startTime]));
 
 		ctx.augmented.timer.start("createInstance:augmentStopTimes");
 		const stopTimes = augmentStopTimes(
@@ -127,6 +127,19 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 		const actualTripDates = getUniqueDates(stopTimes, "actual");
 		ctx.augmented.timer.stop("createInstance:calculateTripDates");
 
+		let trip_number = "";
+
+		switch (ctx.config.region) {
+			case "CA":
+			case "CA/GTHA":
+				trip_number = trip.trip_id.slice(-4);
+				if (trip.trip_short_name && /^\d{1,3}$/.test(trip.trip_short_name))
+					trip_number = trip.trip_short_name; // VIA rail
+				break;
+			default:
+				trip_number = trip.trip_id.slice(-4);
+		}
+
 		const instance: AugmentedTripInstance = {
 			...trip,
 			instance_id,
@@ -135,7 +148,7 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 			stopTimes,
 			realtime_update: update,
 			expressInfo,
-			run: trip.trip_id.slice(-4),
+			trip_number,
 			vehicle_model: null,
 			vehicle_id: null,
 			passenger_cars: null,
@@ -143,7 +156,6 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 			consist: null,
 			scheduledTripDates,
 			actualTripDates,
-			runSeries: null,
 			rt_start_date: update?.trip.start_date ?? null,
 		};
 
@@ -207,168 +219,4 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 
 	ctx.augmented.timer.stop("augmentTrip");
 	return augmentedTrip;
-}
-
-const RS_TOLERATE_SECS = 30 * 60;
-
-function trackBackwards(instance: AugmentedTripInstance, ctx: cache.CacheContext): string {
-	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
-	let run = instance.run;
-	let prevInstances: AugmentedTripInstance[] = [instance];
-	let currentInstance = instance;
-
-	const serviceDate = currentInstance.serviceDate;
-
-	for (let _break = 0; _break < 100; _break++) {
-		if (currentInstance.stopTimes.length === 0) break;
-		let st = currentInstance.stopTimes[0];
-
-		const time = st.scheduled_departure_time ?? st.scheduled_arrival_time;
-		if (time === null) break;
-
-		if ((time ?? 0) < RS_TOLERATE_SECS) break;
-
-		let deps_ids = ctx.gtfs.getStopTimes({
-			stop_id: st.scheduled_stop_id ?? undefined,
-			date: serviceDate.toString(),
-			start_time: (time ?? 0) - RS_TOLERATE_SECS,
-			end_time: time ?? 0,
-		});
-
-		let candidateInstances: AugmentedTripInstance[] = [];
-		for (const d of deps_ids) {
-			const trips = cache.getAugmentedTrips(ctx, d.trip_id);
-			if (!trips.length) continue;
-			const t = trips[0];
-			const inst = t.instances.find(
-				(i) =>
-					i.serviceDate === serviceDate && i.schedule_relationship === qdf.TripScheduleRelationship.SCHEDULED,
-			);
-			if (inst) candidateInstances.push(inst);
-		}
-
-		let deps = candidateInstances
-			.map((inst) => inst.stopTimes.find((v) => v.scheduled_stop_id === st.scheduled_stop_id))
-			.filter((v): v is AugmentedStopTime => !!v);
-
-		deps = deps.filter((v) => v.trip_id.slice(-4)[0] == run[0] && v.trip_id.slice(-4) != run);
-
-		deps = deps.sort(
-			(a, b) =>
-				(a.scheduled_departure_time ?? a.scheduled_arrival_time ?? Infinity) -
-				(b.scheduled_departure_time ?? b.scheduled_arrival_time ?? Infinity),
-		);
-
-		if (deps.length === 0) break;
-
-		const bestMatchStopTime = deps.at(-1);
-		if (!bestMatchStopTime) break;
-
-		const matchTrip = cache.getAugmentedTrips(ctx, bestMatchStopTime.trip_id)[0];
-		const matchInstance = matchTrip.instances.find((i) => i.serviceDate === serviceDate);
-
-		if (!matchInstance) break;
-		if (bestMatchStopTime._stopTime?.stop_sequence != matchInstance.stopTimes.at(-1)?._stopTime?.stop_sequence)
-			break;
-
-		prevInstances.push(matchInstance);
-		run = matchInstance.run;
-		currentInstance = matchInstance;
-	}
-
-	let rs = cache.getRunSeries(ctx, serviceDate, run, false);
-	for (const prevInst of prevInstances) {
-		prevInst.runSeries = run;
-		if (!rs.trips.some((v) => v.trip_id === prevInst.trip_id))
-			rs.trips = [
-				{
-					trip_id: prevInst.trip_id,
-					trip_start_time:
-						prevInst.stopTimes[0].scheduled_departure_time ??
-						prevInst.stopTimes[0].scheduled_arrival_time ??
-						0,
-					run: prevInst.run,
-				},
-				...rs.trips,
-			];
-	}
-	cache.setRunSeries(serviceDate, run, rs, ctx);
-	return run;
-}
-
-function trackForwards(instance: AugmentedTripInstance, runSeries: string, ctx: cache.CacheContext): void {
-	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
-	let run = instance.run;
-	const serviceDate = instance.serviceDate;
-
-	let rs = cache.getRunSeries(ctx, serviceDate, runSeries, false);
-	let currentInstance = instance;
-
-	for (let _break = 0; _break < 100; _break++) {
-		if (currentInstance.stopTimes.length === 0) break;
-		let st = currentInstance.stopTimes.at(-1) as AugmentedStopTime;
-		const time = st.scheduled_departure_time ?? st.scheduled_arrival_time;
-		if (time === null) break;
-
-		let deps_ids = ctx.gtfs.getStopTimes({
-			stop_id: st.scheduled_stop_id ?? undefined,
-			date: serviceDate.toString(),
-			start_time: time ?? 0,
-			end_time: (time ?? 0) + RS_TOLERATE_SECS,
-		});
-
-		let candidateInstances: AugmentedTripInstance[] = [];
-		for (const d of deps_ids) {
-			const trips = cache.getAugmentedTrips(ctx, d.trip_id);
-			if (!trips.length) continue;
-			const inst = trips[0].instances.find(
-				(i) =>
-					i.serviceDate === serviceDate && i.schedule_relationship === qdf.TripScheduleRelationship.SCHEDULED,
-			);
-			if (inst) candidateInstances.push(inst);
-		}
-
-		let deps = candidateInstances
-			.map((inst) => inst.stopTimes.find((v) => v.scheduled_stop_id === st.scheduled_stop_id))
-			.filter((v): v is AugmentedStopTime => !!v);
-
-		deps = deps.filter((v) => v.trip_id.slice(-4)[0] == run[0] && v.trip_id.slice(-4) != run);
-
-		deps = deps.sort(
-			(a, b) =>
-				(a.scheduled_departure_time ?? a.scheduled_arrival_time ?? Infinity) -
-				(b.scheduled_departure_time ?? b.scheduled_arrival_time ?? Infinity),
-		);
-
-		if (deps.length === 0) break;
-
-		const bestMatchStopTime = deps[0];
-		const matchTrip = cache.getAugmentedTrips(ctx, bestMatchStopTime.trip_id)[0];
-		const matchInstance = matchTrip.instances.find((i) => i.serviceDate === serviceDate);
-
-		if (!matchInstance) break;
-		if (bestMatchStopTime._stopTime?.stop_sequence != 1) break;
-
-		matchInstance.runSeries = runSeries;
-		run = matchInstance.run;
-
-		if (!rs.trips.some((v) => v.trip_id === matchInstance.trip_id))
-			rs.trips.push({
-				trip_id: matchInstance.trip_id,
-				trip_start_time:
-					matchInstance.stopTimes[0].scheduled_departure_time ??
-					matchInstance.stopTimes[0].scheduled_arrival_time ??
-					0,
-				run,
-			});
-
-		currentInstance = matchInstance;
-	}
-	cache.setRunSeries(serviceDate, runSeries, rs, ctx);
-}
-
-export function calculateRunSeries(instance: AugmentedTripInstance, ctx: cache.CacheContext): void {
-	if (instance.runSeries != null) return;
-	let runSeries = trackBackwards(instance, ctx);
-	trackForwards(instance, runSeries, ctx);
 }

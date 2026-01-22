@@ -1,3 +1,5 @@
+import { TraxConfig } from "../config.js";
+
 export function timeDiff(t1: string, t2: string): string {
 	const [h1, m1] = t1.split(":").map(Number);
 	const [h2, m2] = t2.split(":").map(Number);
@@ -116,6 +118,11 @@ export function parseBrisbaneTime(dateStr: string, assume: string = "+10:00"): n
 		return new Date(dateStr).getTime();
 	}
 	return new Date(dateStr + assume).getTime();
+}
+
+export function getToday(config: TraxConfig): string {
+	const offsetMs = getTimezoneOffsetSeconds(config.timezone) * 1000;
+	return new Date(Date.now() + offsetMs).toISOString().slice(0, 10).replace(/-/g, "");
 }
 
 export default {

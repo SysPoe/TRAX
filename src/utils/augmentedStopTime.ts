@@ -52,7 +52,7 @@ export type AugmentedStopTime = {
 	scheduled_departure_date_offset: number;
 	actual_departure_date_offset: number;
 } & (
-	| {
+		| {
 			realtime: true;
 			realtime_info: {
 				delay_secs: number;
@@ -62,12 +62,12 @@ export type AugmentedStopTime = {
 				propagated: boolean;
 				rt_start_date: string | null;
 			};
-	  }
-	| {
+		}
+		| {
 			realtime: false;
 			realtime_info: null;
-	  }
-) & {
+		}
+	) & {
 		actual_stop?: AugmentedStop | null;
 		actual_parent_station?: AugmentedStop | null;
 		scheduled_stop?: AugmentedStop | null;
@@ -92,7 +92,7 @@ function attachStopReferences(
 }
 
 function calculateDelayClass(delaySecs: number) {
-	const info = calculateDelayClassWasm(delaySecs);
+	const info = calculateDelayClassWasm(BigInt(delaySecs));
 	return { str: info.str, cls: info.cls as "on-time" | "late" | "very-late" | "early" };
 }
 
@@ -102,7 +102,7 @@ function addDaysToDateString(dateStr: string, daysToAdd: number): string {
 	const key = `${dateStr}|${daysToAdd}`;
 	let cached = dateOffsetCache.get(key);
 	if (cached !== undefined) return cached;
-	const result = wasmAddDaysToDateString(dateStr, daysToAdd);
+	const result = wasmAddDaysToDateString(dateStr, BigInt(daysToAdd));
 	dateOffsetCache.set(key, result);
 	return result;
 }
@@ -252,22 +252,28 @@ export function augmentStopTimes(
 	const tripId = tripUpdate?.trip.trip_id ?? staticStopTimes?.[0]?.trip_id ?? "";
 
 	const stopTimeUpdates = tripUpdate?.stop_time_updates ?? [];
-	const sequenceMap = new Map<number, { static?: qdf.StopTime; rt?: qdf.RealtimeStopTimeUpdate }>();
+	const sequenceMap = new Map<number, { static?: qdf.StopTime; rt?: qdf.RealtimeStopTimeUpdate, feed_id: string }>();
 
 	ctx.augmented.timer.start("augmentStopTimes:mergeStaticAndRealtime");
 	if (staticStopTimes) {
 		for (const st of staticStopTimes) {
 			const seq = st.stop_sequence;
-			if (!sequenceMap.has(seq)) sequenceMap.set(seq, {});
+			if (!sequenceMap.has(seq)) sequenceMap.set(seq, {
+				feed_id: st.feed_id
+			});
 			sequenceMap.get(seq)!.static = st;
+			sequenceMap.get(seq)!.feed_id = st.feed_id;
 		}
 	}
 
 	for (const rt of stopTimeUpdates) {
 		const seq = rt.stop_sequence;
 		if (seq !== undefined && seq !== null) {
-			if (!sequenceMap.has(seq)) sequenceMap.set(seq, {});
+			if (!sequenceMap.has(seq)) sequenceMap.set(seq, {
+				feed_id: rt.feed_id,
+			});
 			sequenceMap.get(seq)!.rt = rt;
+			sequenceMap.get(seq)!.feed_id = rt.feed_id;
 		}
 	}
 	ctx.augmented.timer.stop("augmentStopTimes:mergeStaticAndRealtime");
@@ -317,6 +323,7 @@ export function augmentStopTimes(
 			continuous_drop_off: 0,
 			_rtUpdate: r,
 			_isSkipped: isSkipped,
+			feed_id: entry.feed_id,
 		});
 	}
 	ctx.augmented.timer.stop("augmentStopTimes:buildMergedList");

@@ -21,7 +21,7 @@ export async function loadRealtime(gtfs: GTFS, config: TraxConfig) {
 	logger.info("Realtime data loaded.");
 }
 
-export async function createGtfs(config: TraxConfig): Promise<GTFS> {
+export async function createGtfs(config: TraxConfig, doRealtime: boolean = true): Promise<GTFS> {
 	let gtfs = new GTFS({
 		ansi: false,
 		logger: config.logFunction,
@@ -29,6 +29,23 @@ export async function createGtfs(config: TraxConfig): Promise<GTFS> {
 		cache: true,
 		cacheDir: config.cacheDir,
 	});
-	await Promise.all([loadStatic(gtfs, config), loadRealtime(gtfs, config)]);
+	await Promise.all([
+		loadStatic(gtfs, config).catch((e) => {
+			logger.error("Error loading static gtfs!!! " + ((e as any).message ?? e), {
+				module: "GTFS",
+				function: "createGTFS",
+			});
+			console.error(e);
+		}),
+		doRealtime
+			? loadRealtime(gtfs, config).catch((e) => {
+					logger.error("Error loading realtime gtfs!!! " + ((e as any).message ?? e), {
+						module: "GTFS",
+						function: "createGTFS",
+					});
+					console.error(e);
+				})
+			: Promise.resolve(),
+	]);
 	return gtfs;
 }

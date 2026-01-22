@@ -74,15 +74,16 @@ export function getDeparturesForStop(
 	ctx.augmented.timer.stop("getDeparturesForStop:collect");
 
 	ctx.augmented.timer.start("getDeparturesForStop:wasm");
-	const originalIndices = new Int32Array(allTimestamps.length);
-	for (let i = 0; i < allTimestamps.length; i++) originalIndices[i] = i;
+	const originalIndices = new BigInt64Array(allTimestamps.length);
+	for (let i = 0; i < allTimestamps.length; i++) originalIndices[i] = BigInt(i);
 
-	const filteredIndices = filterAndSortDepartures(
+	const filteredIndicesBig = filterAndSortDepartures(
 		allTimestamps,
 		Array.from(originalIndices),
 		windowStartAbs,
 		windowEndAbs,
-	) as number[];
+	);
+	const filteredIndices = filteredIndicesBig.map(Number);
 	ctx.augmented.timer.stop("getDeparturesForStop:wasm");
 
 	ctx.augmented.timer.start("getDeparturesForStop:instantiate");
@@ -160,15 +161,16 @@ export function getServiceDateDeparturesForStop(
 	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:collect");
 
 	ctx.augmented.timer.start("getServiceDateDeparturesForStop:wasm");
-	const originalIndices = new Int32Array(allTimestamps.length);
-	for (let i = 0; i < allTimestamps.length; i++) originalIndices[i] = i;
+	const originalIndices = new BigInt64Array(allTimestamps.length);
+	for (let i = 0; i < allTimestamps.length; i++) originalIndices[i] = BigInt(i);
 
-	const filteredIndices = filterAndSortDepartures(
+	const filteredIndicesBig = filterAndSortDepartures(
 		allTimestamps,
 		Array.from(originalIndices),
 		windowStartAbs,
 		windowEndAbs,
-	) as number[];
+	);
+	const filteredIndices = filteredIndicesBig.map(Number);
 	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:wasm");
 
 	ctx.augmented.timer.start("getServiceDateDeparturesForStop:instantiate");

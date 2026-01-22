@@ -7,7 +7,6 @@ import { GTFS, RealtimeVehiclePosition, Route, Stop, Trip } from "qdf-gtfs";
 import logger from "./utils/logger.js";
 import { globalTimer } from "./utils/timer.js";
 import { findExpressString } from "./utils/SRT.js";
-import { getServiceCapacity } from "./utils/serviceCapacity.js";
 import { attachDeparturesHelpers, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
 import {
 	isConsideredRoute,
@@ -24,6 +23,7 @@ import {
 	getGTHAVehicleDetails,
 	type GOTransitVehicle,
 } from "./region-specific/CA/GTHA/vehicleDetails.js";
+import * as VIA_Consist from "./region-specific/CA/VIA/consist.js";
 import { createGtfs, loadRealtime, loadStatic } from "./gtfsInterfaceLayer.js";
 
 export interface TRAXEvent {
@@ -54,12 +54,17 @@ export class TRAX {
 	}
 
 	public async loadGTFS(
+		loadRealtime: boolean = true,
 		autoRefresh: boolean = false,
 		realtimeIntervalMs: number = 60 * 1000,
 		staticIntervalMs: number = 24 * 60 * 60 * 1000,
 	): Promise<void> {
-		await this.loadStaticInternal();
-		await this.loadRealtimeInternal();
+		if (!this.gtfs) {
+			await this.ensureGtfs(loadRealtime);
+		} else {
+			await this.refreshStatic();
+			if (loadRealtime) await this.refreshRealtime();
+		}
 
 		if (!autoRefresh) return;
 
@@ -84,7 +89,7 @@ export class TRAX {
 			this.staticInterval = setTimeout(async () => {
 				this.events.emit("static-update-start");
 				try {
-					await this.loadStaticInternal();
+					await this.refreshStatic();
 					await this.updateRealtime();
 				} catch (error: any) {
 					logger.error("Error refreshing static GTFS data: " + (error.message ?? error), {
@@ -98,59 +103,69 @@ export class TRAX {
 			}, staticIntervalMs);
 		};
 
-		if (this.config.realtime != null) scheduleNextRealtime();
+		if (this.config.realtime != null && loadRealtime) scheduleNextRealtime();
 		scheduleNextStatic();
 	}
 
-	private async loadStaticInternal() {
-		if (!this.gtfs) {
-			this.gtfs = await createGtfs(this.config);
-			this.ctx.gtfs = this.gtfs;
-		}
+	/**
+	 * Ensures GTFS is initialized and initial caches are built.
+	 * If GTFS is already initialized, this does nothing.
+	 */
+	private async ensureGtfs(loadRealtime: boolean = true): Promise<GTFS> {
+		if (this.gtfs) return this.gtfs;
 
-		globalTimer.start("loadStaticInternal");
-		logger.info("Loading GTFS data...");
-		globalTimer.start("loadStaticInternal:loadStatic");
-		await loadStatic(this.gtfs, this.config);
-		globalTimer.stop("loadStaticInternal:loadStatic");
-		logger.info("GTFS data loaded.");
+		this.gtfs = await createGtfs(this.config, loadRealtime);
+		this.ctx.gtfs = this.gtfs;
 
-		globalTimer.start("loadStaticInternal:refreshStaticCache");
+		globalTimer.start("TRAX:initialCacheRefresh");
 		this.ctx = await cache.refreshStaticCache(this.gtfs, this.config);
-		globalTimer.stop("loadStaticInternal:refreshStaticCache");
-		globalTimer.stop("loadStaticInternal");
+		if (loadRealtime) await cache.refreshRealtimeCache(this.gtfs, this.config, this.ctx);
+		globalTimer.stop("TRAX:initialCacheRefresh");
+
+		return this.gtfs;
 	}
 
-	private async loadRealtimeInternal() {
-		if (!this.gtfs) {
-			this.gtfs = await createGtfs(this.config);
-			this.ctx.gtfs = this.gtfs;
-		}
+	/**
+	 * Refreshes static GTFS data from source and rebuilds the static cache.
+	 */
+	public async refreshStatic(): Promise<void> {
+		const gtfs = await this.ensureGtfs();
+
+		globalTimer.start("refreshStatic");
+		logger.info("Loading static GTFS data...");
+		await loadStatic(gtfs, this.config);
+
+		globalTimer.start("refreshStatic:refreshCache");
+		this.ctx = await cache.refreshStaticCache(gtfs, this.config);
+		globalTimer.stop("refreshStatic:refreshCache");
+		globalTimer.stop("refreshStatic");
+	}
+
+	/**
+	 * Refreshes realtime GTFS data from source and rebuilds the realtime cache.
+	 */
+	public async refreshRealtime(): Promise<void> {
+		const gtfs = await this.ensureGtfs();
 		if (!this.config.realtime) return;
 
-		globalTimer.start("loadRealtimeInternal");
-		globalTimer.start("loadRealtimeInternal:updateRealtimeFromUrl");
-		await loadRealtime(this.gtfs, this.config);
-		globalTimer.stop("loadRealtimeInternal:updateRealtimeFromUrl");
+		globalTimer.start("refreshRealtime");
+		await loadRealtime(gtfs, this.config);
 
-		globalTimer.start("loadRealtimeInternal:refreshRealtimeCache");
-		await cache.refreshRealtimeCache(this.gtfs, this.config, this.ctx);
-		globalTimer.stop("loadRealtimeInternal:refreshRealtimeCache");
-		globalTimer.stop("loadRealtimeInternal");
+		globalTimer.start("refreshRealtime:refreshCache");
+		await cache.refreshRealtimeCache(gtfs, this.config, this.ctx);
+		globalTimer.stop("refreshRealtime:refreshCache");
+		globalTimer.stop("refreshRealtime");
 	}
 
 	public async updateRealtime(): Promise<void> {
 		if (this.config.realtime == null) return;
-		globalTimer.start("updateRealtime");
 		try {
-			await this.loadRealtimeInternal();
+			await this.refreshRealtime();
 		} catch (error: any) {
 			logger.error("Error updating realtime GTFS data: " + (error.message ?? error), {
 				module: "index",
 				function: "updateRealtime",
 			});
-		} finally {
-			globalTimer.stop("updateRealtime");
 		}
 	}
 
@@ -173,8 +188,7 @@ export class TRAX {
 	}
 
 	public today(): string {
-		const offsetMs = timeUtils.getTimezoneOffsetSeconds(this.config.timezone) * 1000;
-		return new Date(Date.now() + offsetMs).toISOString().slice(0, 10).replace(/-/g, "");
+		return timeUtils.getToday(this.config);
 	}
 
 	public getAugmentedTrips = (trip_id?: string) => cache.getAugmentedTrips(this.ctx, trip_id);
@@ -184,8 +198,6 @@ export class TRAX {
 	public getAugmentedStops = (stop_id?: string) => cache.getAugmentedStops(this.ctx, stop_id);
 	public getAugmentedStopTimes = (trip_id?: string) => cache.getAugmentedStopTimes(this.ctx, trip_id);
 	public getBaseStopTimes = (trip_id: string) => cache.getBaseStopTimes(this.ctx, trip_id);
-	public getRunSeries = (date: string, runSeries: string, calcIfNotFound: boolean = true) =>
-		cache.getRunSeries(this.ctx, date, runSeries, calcIfNotFound);
 	public getStations = () => stations.getAugmentedRailStations(this.ctx);
 	public getRawTrips = (trip_id?: string) => cache.getRawTrips(this.ctx, trip_id);
 	public getRawStops = (stop_id?: string) => cache.getRawStops(this.ctx, stop_id);
@@ -261,6 +273,9 @@ export class TRAX {
 				getGTHAVehicleDetails: (vehicleId: string) => getGTHAVehicleDetails(vehicleId),
 				getGTHAVehicleDetailsRegistry: () => GTHAVehicleDetails,
 			},
+			CA: {
+				getViaConsist: (instance_id: string) => VIA_Consist.getViaConsist(instance_id, this.ctx),
+			},
 		};
 	}
 }
@@ -275,7 +290,7 @@ export * as stations from "./utils/stations.js";
 export * as calendar from "./utils/calendar.js";
 export * as qrTravel from "./region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
 
-export type { AugmentedTrip, AugmentedTripInstance, RunSeries } from "./utils/augmentedTrip.js";
+export type { AugmentedTrip, AugmentedTripInstance } from "./utils/augmentedTrip.js";
 export type { AugmentedStopTime } from "./utils/augmentedStopTime.js";
 export type { AugmentedStop } from "./utils/augmentedStop.js";
 export { attachDeparturesHelpers, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
@@ -298,3 +313,13 @@ export type GTHAActiveVehicle = GOTransitVehicle;
 
 export type { QRTSRTStop } from "./region-specific/AU/SEQ/qr-travel/srt.js";
 export { Logger as TraxLogger, LogLevel } from "./utils/logger.js";
+
+export type {
+	CarriageLayoutRes,
+	CarriageLayout,
+	Carriage,
+	CarriageSeat,
+	SeatProperty,
+	CarriageProducts,
+	CarriageSegment,
+} from "./region-specific/CA/VIA/consist.js";

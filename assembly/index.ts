@@ -100,7 +100,7 @@ export function findPath(start: string, end: string): string[] | null {
  * Interpolate times for stops between start and end based on EMU/SRT values.
  * Returns an array of UNIX timestamps (seconds).
  */
-export function interpolateTimes(startDepartureTime: i32, endArrivalTime: i32, emus: f64[]): i32[] {
+export function interpolateTimes(startDepartureTime: i64, endArrivalTime: i64, emus: f64[]): i64[] {
 	let totalTimeDiff = endArrivalTime - startDepartureTime;
 	let totalEmu: f64 = 0;
 	for (let i = 0; i < emus.length; i++) {
@@ -110,13 +110,13 @@ export function interpolateTimes(startDepartureTime: i32, endArrivalTime: i32, e
 	let resultCount = emus.length - 1;
 	if (resultCount < 0) return [];
 
-	let result = new Array<i32>(resultCount);
+	let result = new Array<i64>(resultCount);
 	let accumulatedEmu: f64 = 0;
 
 	for (let i = 0; i < resultCount; i++) {
 		accumulatedEmu += emus[i];
 		let offset = totalEmu > 0 ? (accumulatedEmu / totalEmu) * (totalTimeDiff as f64) : 0;
-		result[i] = startDepartureTime + (Math.floor(offset) as i32);
+		result[i] = startDepartureTime + (Math.floor(offset) as i64);
 	}
 
 	return result;
@@ -128,11 +128,11 @@ export function interpolateTimes(startDepartureTime: i32, endArrivalTime: i32, e
  */
 export function filterAndSortDepartures(
 	timestamps: f64[],
-	originalIndices: i32[],
+	originalIndices: i64[],
 	windowStart: f64,
 	windowEnd: f64,
-): i32[] {
-	let filteredIndices = new Array<i32>();
+): i64[] {
+	let filteredIndices = new Array<i64>();
 	let filteredTimestamps = new Array<f64>();
 
 	for (let i = 0, len = timestamps.length; i < len; i++) {
@@ -151,7 +151,7 @@ export function filterAndSortDepartures(
 	return filteredIndices;
 }
 
-function quickSort(indices: i32[], timestamps: f64[], left: i32, right: i32): void {
+function quickSort(indices: i64[], timestamps: f64[], left: i32, right: i32): void {
 	if (left < right) {
 		let pivotIndex = partition(indices, timestamps, left, right);
 		quickSort(indices, timestamps, left, pivotIndex - 1);
@@ -159,7 +159,7 @@ function quickSort(indices: i32[], timestamps: f64[], left: i32, right: i32): vo
 	}
 }
 
-function partition(indices: i32[], timestamps: f64[], left: i32, right: i32): i32 {
+function partition(indices: i64[], timestamps: f64[], left: i32, right: i32): i32 {
 	let pivot = timestamps[right];
 	let i = left - 1;
 	for (let j = left; j < right; j++) {
@@ -174,7 +174,7 @@ function partition(indices: i32[], timestamps: f64[], left: i32, right: i32): i3
 	return i + 1;
 }
 
-function swap(arr: i32[], i: i32, j: i32): void {
+function swap(arr: i64[], i: i32, j: i32): void {
 	let temp = arr[i];
 	arr[i] = arr[j];
 	arr[j] = temp;
@@ -193,13 +193,13 @@ class DelayInfo {
 	cls: string = "";
 }
 
-export function calculateDelayClassWasm(delaySecs: i32): DelayInfo {
+export function calculateDelayClassWasm(delaySecs: i64): DelayInfo {
 	if (Math.abs(delaySecs as f64) <= 60) return { str: "on time", cls: "on-time" };
-	if (delaySecs > 0 && delaySecs <= 300)
-		return { str: (Math.round((delaySecs as f64) / 60) as i64).toString() + "m late", cls: "late" };
-	if (delaySecs > 300)
-		return { str: (Math.round((delaySecs as f64) / 60) as i64).toString() + "m late", cls: "very-late" };
-	return { str: (Math.round(Math.abs(delaySecs as f64) / 60) as i64).toString() + "m early", cls: "early" };
+	let absDelayMinutes = Math.round(Math.abs(delaySecs as f64) / 60) as i64;
+	if (delaySecs > 0) {
+		return { str: absDelayMinutes.toString() + "m late", cls: delaySecs <= 300 ? "late" : "very-late" };
+	}
+	return { str: absDelayMinutes.toString() + "m early", cls: "early" };
 }
 
 // --- Static Data Store for Augmentation ---
@@ -225,7 +225,7 @@ class WasmCalendar {
 class WasmCalendarDate {
 	serviceId: string = "";
 	date: string = "";
-	exceptionType: i32 = 0;
+	exceptionType: i64 = 0;
 }
 
 const stops = new Map<string, WasmStop>();
@@ -269,7 +269,7 @@ export function addWasmCalendar(
 	});
 }
 
-export function addWasmCalendarDate(serviceId: string, date: string, type: i32): void {
+export function addWasmCalendarDate(serviceId: string, date: string, type: i64): void {
 	calendarDates.push({ serviceId, date, exceptionType: type });
 }
 
@@ -279,13 +279,13 @@ export function addWasmTripRecord(tripId: string, serviceId: string): void {
 
 // --- Date Utilities ---
 
-function dateToEpochDays(y: i32, m: i32, d: i32): i32 {
+function dateToEpochDays(y: i64, m: i64, d: i64): i64 {
 	m = (m + 9) % 12;
 	y = y - m / 10;
 	return 365 * y + y / 4 - y / 100 + y / 400 + (m * 306 + 5) / 10 + (d - 1);
 }
 
-function epochDaysToDateString(g: i32): string {
+function epochDaysToDateString(g: i64): string {
 	let y = (10000 * g + 1478010) / 3652425;
 	let ddt = g - (365 * y + y / 4 - y / 100 + y / 400);
 	if (ddt < 0) {
@@ -306,36 +306,43 @@ function epochDaysToDateString(g: i32): string {
 	return yearStr + monthStr + dayStr;
 }
 
-function getDayOfWeek(epochDays: i32): i32 {
+function getDayOfWeek(epochDays: i64): i64 {
 	// 1970-01-01 was a Thursday (index 4)
 	// EPOCH_ADJUSTMENT is for 0001-01-01 which was a Monday (index 1)
 	return (epochDays + 1) % 7;
 }
 
-export function addDaysToDateString(dateStr: string, daysToAdd: i32): string {
+export function addDaysToDateString(dateStr: string, daysToAdd: i64): string {
 	if (daysToAdd == 0) return dateStr;
-	let y = I32.parseInt(dateStr.slice(0, 4));
-	let m = I32.parseInt(dateStr.slice(4, 6));
-	let d = I32.parseInt(dateStr.slice(6, 8));
+	let y = i64.parse(dateStr.slice(0, 4));
+	let m = i64.parse(dateStr.slice(4, 6));
+	let d = i64.parse(dateStr.slice(6, 8));
 
 	let epochDays = dateToEpochDays(y, m, d) + daysToAdd;
 	return epochDaysToDateString(epochDays);
 }
 
-export function getServiceDatesWasm(serviceId: string): string[] {
+export function getServiceDatesWasm(serviceId: string, minEpochDay: i64 = -1, maxEpochDay: i64 = -1): string[] {
 	let dates = new Array<string>();
 	if (calendars.has(serviceId)) {
 		let cal = calendars.get(serviceId);
-		let startY = I32.parseInt(cal.startDate.slice(0, 4));
-		let startM = I32.parseInt(cal.startDate.slice(4, 6));
-		let startD = I32.parseInt(cal.startDate.slice(6, 8));
+		let startY = i64.parse(cal.startDate.slice(0, 4));
+		let startM = i64.parse(cal.startDate.slice(4, 6));
+		let startD = i64.parse(cal.startDate.slice(6, 8));
 
-		let endY = I32.parseInt(cal.endDate.slice(0, 4));
-		let endM = I32.parseInt(cal.endDate.slice(4, 6));
-		let endD = I32.parseInt(cal.endDate.slice(6, 8));
+		let endY = i64.parse(cal.endDate.slice(0, 4));
+		let endM = i64.parse(cal.endDate.slice(4, 6));
+		let endD = i64.parse(cal.endDate.slice(6, 8));
 
 		let currentEpoch = dateToEpochDays(startY, startM, startD);
 		let endEpoch = dateToEpochDays(endY, endM, endD);
+
+		if (minEpochDay > -1 && currentEpoch < minEpochDay) {
+			currentEpoch = minEpochDay;
+		}
+		if (maxEpochDay > -1 && endEpoch > maxEpochDay) {
+			endEpoch = maxEpochDay;
+		}
 
 		while (currentEpoch <= endEpoch) {
 			let dow = getDayOfWeek(currentEpoch); // 0=Sun, 1=Mon, ..., 6=Sat
@@ -356,9 +363,15 @@ export function getServiceDatesWasm(serviceId: string): string[] {
 	}
 
 	// Apply exceptions
+	let minDateStr = minEpochDay > -1 ? epochDaysToDateString(minEpochDay) : "";
+	let maxDateStr = maxEpochDay > -1 ? epochDaysToDateString(maxEpochDay) : "";
+
 	for (let i = 0; i < calendarDates.length; i++) {
 		let cd = calendarDates[i];
 		if (cd.serviceId != serviceId) continue;
+
+		if (minEpochDay > -1 && cd.date < minDateStr) continue;
+		if (maxEpochDay > -1 && cd.date > maxDateStr) continue;
 
 		if (cd.exceptionType == 1) {
 			if (dates.indexOf(cd.date) == -1) {
@@ -375,7 +388,7 @@ export function getServiceDatesWasm(serviceId: string): string[] {
 	return dates.sort();
 }
 
-export function getServiceDatesByTripWasm(tripId: string): string[] {
+export function getServiceDatesByTripWasm(tripId: string, minEpochDay: i64 = -1, maxEpochDay: i64 = -1): string[] {
 	if (!tripServiceIds.has(tripId)) return [];
-	return getServiceDatesWasm(tripServiceIds.get(tripId));
+	return getServiceDatesWasm(tripServiceIds.get(tripId), minEpochDay, maxEpochDay);
 }

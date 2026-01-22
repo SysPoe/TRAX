@@ -1,5 +1,6 @@
 import { ProgressInfo, GTFSFeedConfig } from "qdf-gtfs";
 import logger from "./utils/logger.js";
+import { VIA_MERGE_STOPS } from "./region-specific/CA/VIA/realtime.js";
 
 export type TRAXRegion = "AU/SEQ" | "CA" | "CA/GTHA";
 
@@ -39,71 +40,107 @@ export type TraxConfigOptions = Partial<Omit<TraxConfig, "realtime">> & {
 export const PRESETS: Record<TRAXRegion, (apiKey?: string | undefined) => TraxConfigOptions> = {
 	"AU/SEQ": () =>
 		({
-			urls: ["https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip"],
+			urls: [
+				{
+					url: "https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip",
+					feed_id: "SEQ",
+				},
+			],
 			region: "AU/SEQ",
 			timezone: "Australia/Brisbane",
 			realtime: {
-				realtimeAlerts: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts"],
-				realtimeTripUpdates: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates"],
-				realtimeVehiclePositions: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions"],
+				realtimeAlerts: [
+					{
+						url: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts",
+						feed_id: "SEQ-RTA",
+					},
+				],
+				realtimeTripUpdates: [
+					{
+						url: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates",
+						feed_id: "SEQ-RTTU",
+					},
+				],
+				realtimeVehiclePositions: [
+					{
+						url: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions",
+						feed_id: "SEQ-RTVP",
+					},
+				],
 			},
 		}) as TraxConfigOptions,
 	CA: () =>
 		({
-			urls: ["https://www.viarail.ca/sites/all/files/gtfs/viarail.zip"],
+			urls: [
+				{
+					url: "https://www.viarail.ca/sites/all/files/gtfs/viarail.zip",
+					feed_id: "VIA",
+				},
+			],
 			region: "CA",
 			timezone: "America/Toronto",
 			realtime: null,
-			mergeStops: [
-				{ to: "UN", from: ["119"] },
-				{ to: "OS", from: ["367"] },
-				{ to: "KI", from: ["114"] },
-				{ to: "AL", from: ["600"] },
-				{ to: "OA", from: ["436"] },
-				{ to: "GU", from: ["450"] },
-				{ to: "BR", from: ["322"] },
-				{ to: "GE", from: ["6"] },
-				{ to: "MA", from: ["34"] },
-				{ to: "NI", from: ["346"] },
-				{ to: "SCTH", from: ["185"] },
-			],
+			mergeStops: VIA_MERGE_STOPS,
 		}) as TraxConfigOptions,
 	"CA/GTHA": (apiKey) =>
 		({
 			urls: [
-				"https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/UP-GTFS.zip",
-				"https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/GO-GTFS.zip",
-				"https://www.viarail.ca/sites/all/files/gtfs/viarail.zip",
+				{
+					url: "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/UP-GTFS.zip",
+					feed_id: "UP",
+				},
+				{
+					url: "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/GO-GTFS.zip",
+					feed_id: "GO",
+				},
+				{
+					url: "https://www.viarail.ca/sites/all/files/gtfs/viarail.zip",
+					feed_id: "VIA",
+				},
 			],
 			region: "CA/GTHA",
 			timezone: "America/Toronto",
 			realtime: {
 				realtimeAlerts: [
-					"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/Alerts?key=" + apiKey,
-					"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/Alerts?key=" + apiKey,
+					{
+						url: "https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/Alerts?key=" + apiKey,
+						feed_id: "UP-RTA",
+					},
+					{
+						url: "https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/Alerts?key=" + apiKey,
+						feed_id: "GO-RTA",
+					},
 				],
 				realtimeTripUpdates: [
-					"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/TripUpdates?key=" + apiKey,
-					"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/TripUpdates?key=" + apiKey,
+					{
+						url:
+							"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/TripUpdates?key=" +
+							apiKey,
+						feed_id: "UP-RTTU",
+					},
+					{
+						url:
+							"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/TripUpdates?key=" +
+							apiKey,
+						feed_id: "GO-RTTU",
+					},
 				],
 				realtimeVehiclePositions: [
-					"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/VehiclePosition?key=" + apiKey,
-					"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/VehiclePosition?key=" + apiKey,
+					{
+						url:
+							"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/VehiclePosition?key=" +
+							apiKey,
+						feed_id: "UP-RTVP",
+					},
+					{
+						url:
+							"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/VehiclePosition?key=" +
+							apiKey,
+						feed_id: "GO-RTVP",
+					},
 				],
 			},
-			mergeStops: [
-				{ to: "UN", from: ["119"] },
-				{ to: "OS", from: ["367"] },
-				{ to: "KI", from: ["114"] },
-				{ to: "AL", from: ["600"] },
-				{ to: "OA", from: ["436"] },
-				{ to: "GU", from: ["450"] },
-				{ to: "BR", from: ["322"] },
-				{ to: "GE", from: ["6"] },
-				{ to: "MA", from: ["34"] },
-				{ to: "NI", from: ["346"] },
-				{ to: "SCTH", from: ["185"] },
-			],
+			mergeStops: VIA_MERGE_STOPS,
 		}) as TraxConfigOptions,
 };
 

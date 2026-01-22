@@ -19,30 +19,30 @@ export function loadDataFile(filePath: string): string {
 	return fs.readFileSync(path, "utf-8");
 }
 
-export function writeDataFile(filePath: string, data: string): void {
-	const fullPath = getDataFilePath(filePath);
-	fs.writeFileSync(fullPath, data, "utf-8");
-}
-
-export async function loadDataFileAsync(filePath: string): Promise<string> {
-	const candidates = [
-		filePath,
-		path.join(__dirname, "data", filePath),
-		path.join(__dirname, "..", "data", filePath),
-		path.join(__dirname, "..", "..", "data", filePath),
-	];
-	const actual: string[] = [];
-	const promises: Promise<any>[] = [];
-	for (const p of candidates)
-		promises.push(
-			fs.promises
-				.access(p)
-				.then(() => actual.push(p))
-				.catch(() => {}),
-		);
-	await Promise.all(promises);
-	if (actual.length > 0) return fs.promises.readFile(actual[0], "utf-8");
-	throw new Error(`Data file not found: ${filePath}`);
+export function loadDataFileAsync(filePath: string): Promise<string> {
+	return new Promise((res, rej) => {
+		const candidates = [
+			filePath,
+			path.join(__dirname, "data", filePath),
+			path.join(__dirname, "..", "data", filePath),
+			path.join(__dirname, "..", "..", "data", filePath),
+		];
+		let resolved = false;
+		const promises: Promise<any>[] = [];
+		for (const p of candidates)
+			promises.push(
+				fs.promises
+					.access(p)
+					.then(() => {
+						resolved = true;
+						fs.promises.readFile(p, "utf-8").then(res).catch(rej)
+					})
+					.catch(() => { }),
+			);
+		Promise.all(promises).then(() => {
+			if (!resolved) rej(`Data file not found: ${filePath}`);
+		});
+	})
 }
 
 export function getDataFilePath(filePath: string): string {
@@ -86,7 +86,6 @@ export function writeCacheFile(filePath: string, data: string, cacheDir: string)
 export default {
 	loadDataFile,
 	getDataFilePath,
-	writeDataFile,
 	loadDataFileAsync,
 	getCacheFilePath,
 	loadCacheFile,
