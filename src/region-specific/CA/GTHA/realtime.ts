@@ -265,7 +265,7 @@ function propagateVehicleInfoToBlock(
 		? blockMap.get(blockId) || []
 		: (ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [])
 				.map((id) => ctx.augmented.tripsRec.get(id))
-				.filter(Boolean)
+				.filter((v) => v && v.block_id === blockId)
 				.flatMap((at) => at!.instances.filter((i) => i.serviceDate === serviceDateStr));
 
 	if (blockTrips.length === 0) return;

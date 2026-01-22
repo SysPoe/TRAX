@@ -1,0 +1,4433 @@
+{
+	"1": {
+		"from": "TORONTO",
+		"to": "VANCOUVER",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Washago",
+				"code": "WSHG"
+			},
+			{
+				"station": "South Parry",
+				"code": "SPAR"
+			},
+			{
+				"station": "Sudbury (Jct.)",
+				"code": "SUDJ"
+			},
+			{
+				"station": "Capreol",
+				"code": "CAPR"
+			},
+			{
+				"station": "Laforest",
+				"code": "LAFO"
+			},
+			{
+				"station": "McKee's Camp",
+				"code": "MCKC"
+			},
+			{
+				"station": "Felix",
+				"code": "FELX"
+			},
+			{
+				"station": "Ruel",
+				"code": "RUEL"
+			},
+			{
+				"station": "Westree",
+				"code": "WSTR"
+			},
+			{
+				"station": "Gogama",
+				"code": "GOGA"
+			},
+			{
+				"station": "Foleyet",
+				"code": "FOLE"
+			},
+			{
+				"station": "Elsas",
+				"code": "ELSA"
+			},
+			{
+				"station": "Oba",
+				"code": "OBAX"
+			},
+			{
+				"station": "Hornepayne",
+				"code": "HNPN"
+			},
+			{
+				"station": "Hillsport",
+				"code": "HLSP"
+			},
+			{
+				"station": "Caramat",
+				"code": "CARA"
+			},
+			{
+				"station": "Longlac",
+				"code": "LLAC"
+			},
+			{
+				"station": "Nakina",
+				"code": "NAKI"
+			},
+			{
+				"station": "Auden",
+				"code": "AUDN"
+			},
+			{
+				"station": "Ferland",
+				"code": "FERL"
+			},
+			{
+				"station": "Mud River",
+				"code": "MUDR"
+			},
+			{
+				"station": "Armstrong",
+				"code": "ARMG"
+			},
+			{
+				"station": "Collins",
+				"code": "COLL"
+			},
+			{
+				"station": "Allanwater Bridge",
+				"code": "ALWB"
+			},
+			{
+				"station": "Flindt Landing",
+				"code": "FLTL"
+			},
+			{
+				"station": "Savant Lake",
+				"code": "SAVL"
+			},
+			{
+				"station": "Sioux Lookout",
+				"code": "SLKT"
+			},
+			{
+				"station": "Richan",
+				"code": "RCHN"
+			},
+			{
+				"station": "Red Lake Road",
+				"code": "RLRX"
+			},
+			{
+				"station": "Canyon",
+				"code": "CNYK"
+			},
+			{
+				"station": "Farlane",
+				"code": "FARL"
+			},
+			{
+				"station": "Redditt",
+				"code": "RDDT"
+			},
+			{
+				"station": "Minaki",
+				"code": "MNKI"
+			},
+			{
+				"station": "Ottermere",
+				"code": "OTTM"
+			},
+			{
+				"station": "Malachi",
+				"code": "MLCH"
+			},
+			{
+				"station": "Copelands Landing",
+				"code": "COPE"
+			},
+			{
+				"station": "Rice Lake",
+				"code": "RCLK"
+			},
+			{
+				"station": "Winnitoba",
+				"code": "WNTB"
+			},
+			{
+				"station": "Ophir",
+				"code": "OPHR"
+			},
+			{
+				"station": "Brereton Lake",
+				"code": "BRTL"
+			},
+			{
+				"station": "Elma",
+				"code": "ELMA"
+			},
+			{
+				"station": "Winnipeg",
+				"code": "WNPG"
+			},
+			{
+				"station": "Portage La Prairie",
+				"code": "PLPX"
+			},
+			{
+				"station": "Rivers",
+				"code": "RVRS"
+			},
+			{
+				"station": "Melville",
+				"code": "MELV"
+			},
+			{
+				"station": "Watrous",
+				"code": "WATR"
+			},
+			{
+				"station": "Saskatoon",
+				"code": "SASK"
+			},
+			{
+				"station": "Biggar",
+				"code": "BIGG"
+			},
+			{
+				"station": "Unity",
+				"code": "UNIT"
+			},
+			{
+				"station": "Wainwright",
+				"code": "WAIN"
+			},
+			{
+				"station": "Viking",
+				"code": "VKNG"
+			},
+			{
+				"station": "Edmonton",
+				"code": "EDMO"
+			},
+			{
+				"station": "Evansburg",
+				"code": "EVAN"
+			},
+			{
+				"station": "Edson",
+				"code": "EDSN"
+			},
+			{
+				"station": "Hinton",
+				"code": "HINT"
+			},
+			{
+				"station": "Jasper",
+				"code": "JASP"
+			},
+			{
+				"station": "Valemount",
+				"code": "VLMT"
+			},
+			{
+				"station": "Blue River",
+				"code": "BLUE"
+			},
+			{
+				"station": "Clearwater",
+				"code": "CLWT"
+			},
+			{
+				"station": "Kamloops North",
+				"code": "KAMN"
+			},
+			{
+				"station": "Ashcroft",
+				"code": "ASHN"
+			},
+			{
+				"station": "Boston Bar",
+				"code": "BBAR"
+			},
+			{
+				"station": "Hope",
+				"code": "HOPE"
+			},
+			{
+				"station": "Chilliwack",
+				"code": "CHIL"
+			},
+			{
+				"station": "Abbotsford",
+				"code": "ABBO"
+			},
+			{
+				"station": "Vancouver",
+				"code": "VCVR"
+			}
+		]
+	},
+	"2": {
+		"lat": 50.1494,
+		"lng": -91.6181,
+		"speed": 90,
+		"direction": 62,
+		"poll": "2026-01-22T18:35:00Z",
+		"from": "VANCOUVER",
+		"to": "TORONTO",
+		"pollMin": 29,
+		"pollRadius": 44370,
+		"stations": [
+			{
+				"station": "Vancouver",
+				"code": "VCVR"
+			},
+			{
+				"station": "Mission Harbour",
+				"code": "MSNH"
+			},
+			{
+				"station": "Agassiz",
+				"code": "AGAS"
+			},
+			{
+				"station": "Katz",
+				"code": "KATZ"
+			},
+			{
+				"station": "North Bend",
+				"code": "NBND"
+			},
+			{
+				"station": "Ashcroft",
+				"code": "ASHN"
+			},
+			{
+				"station": "Kamloops North",
+				"code": "KAMN"
+			},
+			{
+				"station": "Clearwater",
+				"code": "CLWT"
+			},
+			{
+				"station": "Blue River",
+				"code": "BLUE"
+			},
+			{
+				"station": "Valemount",
+				"code": "VLMT"
+			},
+			{
+				"station": "Jasper",
+				"code": "JASP"
+			},
+			{
+				"station": "Hinton",
+				"code": "HINT"
+			},
+			{
+				"station": "Edson",
+				"code": "EDSN"
+			},
+			{
+				"station": "Evansburg",
+				"code": "EVAN"
+			},
+			{
+				"station": "Edmonton",
+				"code": "EDMO"
+			},
+			{
+				"station": "Viking",
+				"code": "VKNG"
+			},
+			{
+				"station": "Wainwright",
+				"code": "WAIN"
+			},
+			{
+				"station": "Unity",
+				"code": "UNIT"
+			},
+			{
+				"station": "Biggar",
+				"code": "BIGG"
+			},
+			{
+				"station": "Saskatoon",
+				"code": "SASK"
+			},
+			{
+				"station": "Watrous",
+				"code": "WATR"
+			},
+			{
+				"station": "Melville",
+				"code": "MELV"
+			},
+			{
+				"station": "Rivers",
+				"code": "RVRS"
+			},
+			{
+				"station": "Portage La Prairie",
+				"code": "PLPX"
+			},
+			{
+				"station": "Winnipeg",
+				"code": "WNPG"
+			},
+			{
+				"station": "Elma",
+				"code": "ELMA"
+			},
+			{
+				"station": "Brereton Lake",
+				"code": "BRTL"
+			},
+			{
+				"station": "Ophir",
+				"code": "OPHR"
+			},
+			{
+				"station": "Winnitoba",
+				"code": "WNTB"
+			},
+			{
+				"station": "Rice Lake",
+				"code": "RCLK"
+			},
+			{
+				"station": "Copelands Landing",
+				"code": "COPE"
+			},
+			{
+				"station": "Malachi",
+				"code": "MLCH"
+			},
+			{
+				"station": "Ottermere",
+				"code": "OTTM"
+			},
+			{
+				"station": "Minaki",
+				"code": "MNKI"
+			},
+			{
+				"station": "Redditt",
+				"code": "RDDT"
+			},
+			{
+				"station": "Farlane",
+				"code": "FARL"
+			},
+			{
+				"station": "Canyon",
+				"code": "CNYK"
+			},
+			{
+				"station": "Red Lake Road",
+				"code": "RLRX"
+			},
+			{
+				"station": "Richan",
+				"code": "RCHN"
+			},
+			{
+				"station": "Sioux Lookout",
+				"code": "SLKT"
+			},
+			{
+				"station": "Savant Lake",
+				"code": "SAVL"
+			},
+			{
+				"station": "Flindt Landing",
+				"code": "FLTL"
+			},
+			{
+				"station": "Allanwater Bridge",
+				"code": "ALWB"
+			},
+			{
+				"station": "Collins",
+				"code": "COLL"
+			},
+			{
+				"station": "Armstrong",
+				"code": "ARMG"
+			},
+			{
+				"station": "Mud River",
+				"code": "MUDR"
+			},
+			{
+				"station": "Ferland",
+				"code": "FERL"
+			},
+			{
+				"station": "Auden",
+				"code": "AUDN"
+			},
+			{
+				"station": "Nakina",
+				"code": "NAKI"
+			},
+			{
+				"station": "Longlac",
+				"code": "LLAC"
+			},
+			{
+				"station": "Caramat",
+				"code": "CARA"
+			},
+			{
+				"station": "Hillsport",
+				"code": "HLSP"
+			},
+			{
+				"station": "Hornepayne",
+				"code": "HNPN"
+			},
+			{
+				"station": "Oba",
+				"code": "OBAX"
+			},
+			{
+				"station": "Elsas",
+				"code": "ELSA"
+			},
+			{
+				"station": "Foleyet",
+				"code": "FOLE"
+			},
+			{
+				"station": "Gogama",
+				"code": "GOGA"
+			},
+			{
+				"station": "Westree",
+				"code": "WSTR"
+			},
+			{
+				"station": "Ruel",
+				"code": "RUEL"
+			},
+			{
+				"station": "Felix",
+				"code": "FELX"
+			},
+			{
+				"station": "McKee's Camp",
+				"code": "MCKC"
+			},
+			{
+				"station": "Laforest",
+				"code": "LAFO"
+			},
+			{
+				"station": "Capreol",
+				"code": "CAPR"
+			}
+		]
+	},
+	"693": {
+		"from": "WINNIPEG",
+		"to": "CHURCHILL",
+		"stations": [
+			{
+				"station": "Winnipeg",
+				"code": "WNPG"
+			},
+			{
+				"station": "Portage La Prairie",
+				"code": "PLPX"
+			},
+			{
+				"station": "Gladstone",
+				"code": "GSTO"
+			},
+			{
+				"station": "Plumas",
+				"code": "PLUM"
+			},
+			{
+				"station": "Glenella",
+				"code": "GLNA"
+			},
+			{
+				"station": "Mccreary",
+				"code": "MCCR"
+			},
+			{
+				"station": "Laurier",
+				"code": "LRIE"
+			},
+			{
+				"station": "Ochre River",
+				"code": "OCHR"
+			},
+			{
+				"station": "Dauphin",
+				"code": "DAUP"
+			},
+			{
+				"station": "Gilbert Plains",
+				"code": "GLBP"
+			},
+			{
+				"station": "Grandview",
+				"code": "GVIE"
+			},
+			{
+				"station": "Roblin",
+				"code": "RBLN"
+			},
+			{
+				"station": "Togo",
+				"code": "TOGO"
+			},
+			{
+				"station": "Kamsack",
+				"code": "KAMS"
+			},
+			{
+				"station": "Veregin",
+				"code": "VERE"
+			},
+			{
+				"station": "Mikado",
+				"code": "MIKA"
+			},
+			{
+				"station": "Canora",
+				"code": "CANO"
+			},
+			{
+				"station": "Sturgis",
+				"code": "STGS"
+			},
+			{
+				"station": "Endeavour",
+				"code": "ENDV"
+			},
+			{
+				"station": "Reserve",
+				"code": "RSRV"
+			},
+			{
+				"station": "Hudson Bay",
+				"code": "HBAY"
+			},
+			{
+				"station": "The Pas",
+				"code": "TPAS"
+			},
+			{
+				"station": "Orok",
+				"code": "OROK"
+			},
+			{
+				"station": "Halcrow",
+				"code": "HALC"
+			},
+			{
+				"station": "Cormorant",
+				"code": "CORM"
+			},
+			{
+				"station": "Dering",
+				"code": "DERI"
+			},
+			{
+				"station": "Dyce",
+				"code": "DYCE"
+			},
+			{
+				"station": "Wekusko",
+				"code": "WEKU"
+			},
+			{
+				"station": "Turnbull",
+				"code": "TURN"
+			},
+			{
+				"station": "Ponton",
+				"code": "PNTN"
+			},
+			{
+				"station": "Pipun",
+				"code": "PIPN"
+			},
+			{
+				"station": "Wabowden",
+				"code": "WBDN"
+			},
+			{
+				"station": "Lyddal",
+				"code": "LYDD"
+			},
+			{
+				"station": "Odhill",
+				"code": "ODHI"
+			},
+			{
+				"station": "Hockin",
+				"code": "HOCK"
+			},
+			{
+				"station": "Thicket Portage",
+				"code": "THKP"
+			},
+			{
+				"station": "Leven",
+				"code": "LEVN"
+			},
+			{
+				"station": "Thompson",
+				"code": "THOM"
+			},
+			{
+				"station": "Sipiwesk",
+				"code": "SIPI"
+			},
+			{
+				"station": "Pikwitonei",
+				"code": "PIKW"
+			},
+			{
+				"station": "Bridgar",
+				"code": "BRGR"
+			},
+			{
+				"station": "Pit Siding",
+				"code": "PITS"
+			},
+			{
+				"station": "Ilford",
+				"code": "ILFO"
+			},
+			{
+				"station": "Wivenhoe",
+				"code": "WVHO"
+			},
+			{
+				"station": "Gillam",
+				"code": "GILL"
+			},
+			{
+				"station": "Bird",
+				"code": "BIRD"
+			},
+			{
+				"station": "Amery",
+				"code": "AMRY"
+			},
+			{
+				"station": "Weir River",
+				"code": "WEIR"
+			},
+			{
+				"station": "Thibaudeau",
+				"code": "THIB"
+			},
+			{
+				"station": "Herchmer",
+				"code": "HERC"
+			},
+			{
+				"station": "O'Day",
+				"code": "ODAY"
+			},
+			{
+				"station": "M'Clintock",
+				"code": "MCLI"
+			},
+			{
+				"station": "Chesnaye",
+				"code": "CHES"
+			},
+			{
+				"station": "Tidal",
+				"code": "TIDL"
+			},
+			{
+				"station": "Churchill",
+				"code": "CHUR"
+			}
+		]
+	},
+	"690": {
+		"from": "CHURCHILL",
+		"to": "THE PAS",
+		"stations": [
+			{
+				"station": "Churchill",
+				"code": "CHUR"
+			},
+			{
+				"station": "Tidal",
+				"code": "TIDL"
+			},
+			{
+				"station": "Chesnaye",
+				"code": "CHES"
+			},
+			{
+				"station": "M'Clintock",
+				"code": "MCLI"
+			},
+			{
+				"station": "O'Day",
+				"code": "ODAY"
+			},
+			{
+				"station": "Herchmer",
+				"code": "HERC"
+			},
+			{
+				"station": "Thibaudeau",
+				"code": "THIB"
+			},
+			{
+				"station": "Weir River",
+				"code": "WEIR"
+			},
+			{
+				"station": "Amery",
+				"code": "AMRY"
+			},
+			{
+				"station": "Bird",
+				"code": "BIRD"
+			},
+			{
+				"station": "Gillam",
+				"code": "GILL"
+			},
+			{
+				"station": "Wivenhoe",
+				"code": "WVHO"
+			},
+			{
+				"station": "Ilford",
+				"code": "ILFO"
+			},
+			{
+				"station": "Pit Siding",
+				"code": "PITS"
+			},
+			{
+				"station": "Bridgar",
+				"code": "BRGR"
+			},
+			{
+				"station": "Pikwitonei",
+				"code": "PIKW"
+			},
+			{
+				"station": "Sipiwesk",
+				"code": "SIPI"
+			},
+			{
+				"station": "Thompson",
+				"code": "THOM"
+			},
+			{
+				"station": "Leven",
+				"code": "LEVN"
+			},
+			{
+				"station": "Thicket Portage",
+				"code": "THKP"
+			},
+			{
+				"station": "Hockin",
+				"code": "HOCK"
+			},
+			{
+				"station": "Odhill",
+				"code": "ODHI"
+			},
+			{
+				"station": "Lyddal",
+				"code": "LYDD"
+			},
+			{
+				"station": "Wabowden",
+				"code": "WBDN"
+			},
+			{
+				"station": "Pipun",
+				"code": "PIPN"
+			},
+			{
+				"station": "Ponton",
+				"code": "PNTN"
+			},
+			{
+				"station": "Turnbull",
+				"code": "TURN"
+			},
+			{
+				"station": "Wekusko",
+				"code": "WEKU"
+			},
+			{
+				"station": "Dyce",
+				"code": "DYCE"
+			},
+			{
+				"station": "Dering",
+				"code": "DERI"
+			},
+			{
+				"station": "Cormorant",
+				"code": "CORM"
+			},
+			{
+				"station": "Halcrow",
+				"code": "HALC"
+			},
+			{
+				"station": "Orok",
+				"code": "OROK"
+			},
+			{
+				"station": "The Pas",
+				"code": "TPAS"
+			}
+		]
+	},
+	"6": {
+		"lat": 53.5402,
+		"lng": -120.6501,
+		"speed": 64,
+		"direction": 173.86,
+		"poll": "2026-01-22T19:01:22Z",
+		"from": "PRINCE RUPERT",
+		"to": "JASPER",
+		"pollMin": 2,
+		"stations": [
+			{
+				"station": "Prince Rupert",
+				"code": "PRUP"
+			},
+			{
+				"station": "Cassiar Cannery",
+				"code": "CASS"
+			},
+			{
+				"station": "Kwinitsa",
+				"code": "KWIN"
+			},
+			{
+				"station": "Terrace",
+				"code": "TRRC"
+			},
+			{
+				"station": "Usk",
+				"code": "USKX"
+			},
+			{
+				"station": "Pacific",
+				"code": "PACI"
+			},
+			{
+				"station": "Dorreen",
+				"code": "DORR"
+			},
+			{
+				"station": "Cedarvale",
+				"code": "CEDA"
+			},
+			{
+				"station": "Kitwanga",
+				"code": "KITW"
+			},
+			{
+				"station": "New Hazelton",
+				"code": "NHAZ"
+			},
+			{
+				"station": "Smithers",
+				"code": "SMTR"
+			},
+			{
+				"station": "Telkwa",
+				"code": "TELK"
+			},
+			{
+				"station": "Houston",
+				"code": "HOUS"
+			},
+			{
+				"station": "Burns Lake",
+				"code": "BRNL"
+			},
+			{
+				"station": "Endako",
+				"code": "ENDA"
+			},
+			{
+				"station": "Fort Fraser",
+				"code": "FFRA"
+			},
+			{
+				"station": "Vanderhoof",
+				"code": "VDRH"
+			},
+			{
+				"station": "Prince George",
+				"code": "PGEO"
+			},
+			{
+				"station": "Willow River",
+				"code": "WILR"
+			},
+			{
+				"station": "Aleza Lake",
+				"code": "ALZL"
+			},
+			{
+				"station": "Upper Fraser",
+				"code": "UFRZ"
+			},
+			{
+				"station": "Mcgregor",
+				"code": "MCGR"
+			},
+			{
+				"station": "Sinclair Mills",
+				"code": "SINM"
+			},
+			{
+				"station": "Hutton",
+				"code": "HUTT"
+			},
+			{
+				"station": "Longworth",
+				"code": "LWTH"
+			},
+			{
+				"station": "Penny",
+				"code": "PENN"
+			},
+			{
+				"station": "Bend",
+				"code": "BEND"
+			},
+			{
+				"station": "Dome Creek",
+				"code": "DOMC"
+			},
+			{
+				"station": "Loos",
+				"code": "LOOS"
+			},
+			{
+				"station": "Goat River",
+				"code": "GOAT"
+			},
+			{
+				"station": "Mcbride",
+				"code": "MCBR"
+			},
+			{
+				"station": "Dunster",
+				"code": "DNST"
+			},
+			{
+				"station": "Harvey",
+				"code": "HRVY"
+			},
+			{
+				"station": "Jasper",
+				"code": "JASP"
+			}
+		]
+	},
+	"15": {
+		"from": "HALIFAX",
+		"to": "MONTRÉAL",
+		"stations": [
+			{
+				"station": "Halifax",
+				"code": "HLFX"
+			},
+			{
+				"station": "Truro",
+				"code": "TRUR"
+			},
+			{
+				"station": "Springhill Jct",
+				"code": "SPRJ"
+			},
+			{
+				"station": "Amherst",
+				"code": "AMHS"
+			},
+			{
+				"station": "Sackville",
+				"code": "SACK"
+			},
+			{
+				"station": "Moncton",
+				"code": "MCTN"
+			},
+			{
+				"station": "Rogersville",
+				"code": "RGRV"
+			},
+			{
+				"station": "Miramichi",
+				"code": "MIRA"
+			},
+			{
+				"station": "Bathurst",
+				"code": "BTRS"
+			},
+			{
+				"station": "Petit Rocher",
+				"code": "PROC"
+			},
+			{
+				"station": "Jacquet River",
+				"code": "JACR"
+			},
+			{
+				"station": "Charlo",
+				"code": "CHLO"
+			},
+			{
+				"station": "Campbellton",
+				"code": "CBTN"
+			},
+			{
+				"station": "Matapedia",
+				"code": "MTPD"
+			},
+			{
+				"station": "Causapscal",
+				"code": "CAUS"
+			},
+			{
+				"station": "Amqui",
+				"code": "AMQU"
+			},
+			{
+				"station": "Sayabec",
+				"code": "SAYA"
+			},
+			{
+				"station": "Mont-Joli",
+				"code": "MJLI"
+			},
+			{
+				"station": "Rimouski",
+				"code": "RMSK"
+			},
+			{
+				"station": "Trois Pistoles",
+				"code": "TPIS"
+			},
+			{
+				"station": "Rivière-Du-Loup",
+				"code": "RDLX"
+			},
+			{
+				"station": "La Pocatière",
+				"code": "LPOC"
+			},
+			{
+				"station": "Montmagny",
+				"code": "MMGY"
+			},
+			{
+				"station": "Ste-Foy",
+				"code": "SFOY"
+			},
+			{
+				"station": "Drummondville",
+				"code": "DRMV"
+			},
+			{
+				"station": "St. Hyacinthe",
+				"code": "SHYA"
+			},
+			{
+				"station": "St. Lambert",
+				"code": "SLAM"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			}
+		]
+	},
+	"5": {
+		"lat": 54.1013,
+		"lng": -125.1334,
+		"speed": 69,
+		"direction": 275.19,
+		"poll": "2026-01-22T19:03:06Z",
+		"from": "JASPER",
+		"to": "PRINCE RUPERT",
+		"pollMin": 1,
+		"stations": [
+			{
+				"station": "Jasper",
+				"code": "JASP"
+			},
+			{
+				"station": "Harvey",
+				"code": "HRVY"
+			},
+			{
+				"station": "Dunster",
+				"code": "DNST"
+			},
+			{
+				"station": "Mcbride",
+				"code": "MCBR"
+			},
+			{
+				"station": "Goat River",
+				"code": "GOAT"
+			},
+			{
+				"station": "Loos",
+				"code": "LOOS"
+			},
+			{
+				"station": "Dome Creek",
+				"code": "DOMC"
+			},
+			{
+				"station": "Bend",
+				"code": "BEND"
+			},
+			{
+				"station": "Penny",
+				"code": "PENN"
+			},
+			{
+				"station": "Longworth",
+				"code": "LWTH"
+			},
+			{
+				"station": "Hutton",
+				"code": "HUTT"
+			},
+			{
+				"station": "Sinclair Mills",
+				"code": "SINM"
+			},
+			{
+				"station": "Mcgregor",
+				"code": "MCGR"
+			},
+			{
+				"station": "Upper Fraser",
+				"code": "UFRZ"
+			},
+			{
+				"station": "Aleza Lake",
+				"code": "ALZL"
+			},
+			{
+				"station": "Willow River",
+				"code": "WILR"
+			},
+			{
+				"station": "Prince George",
+				"code": "PGEO"
+			},
+			{
+				"station": "Vanderhoof",
+				"code": "VDRH"
+			},
+			{
+				"station": "Fort Fraser",
+				"code": "FFRA"
+			},
+			{
+				"station": "Endako",
+				"code": "ENDA"
+			},
+			{
+				"station": "Burns Lake",
+				"code": "BRNL"
+			},
+			{
+				"station": "Houston",
+				"code": "HOUS"
+			},
+			{
+				"station": "Telkwa",
+				"code": "TELK"
+			},
+			{
+				"station": "Smithers",
+				"code": "SMTR"
+			},
+			{
+				"station": "New Hazelton",
+				"code": "NHAZ"
+			},
+			{
+				"station": "Kitwanga",
+				"code": "KITW"
+			},
+			{
+				"station": "Cedarvale",
+				"code": "CEDA"
+			},
+			{
+				"station": "Dorreen",
+				"code": "DORR"
+			},
+			{
+				"station": "Pacific",
+				"code": "PACI"
+			},
+			{
+				"station": "Usk",
+				"code": "USKX"
+			},
+			{
+				"station": "Terrace",
+				"code": "TRRC"
+			},
+			{
+				"station": "Kwinitsa",
+				"code": "KWIN"
+			},
+			{
+				"station": "Cassiar Cannery",
+				"code": "CASS"
+			},
+			{
+				"station": "Prince Rupert",
+				"code": "PRUP"
+			}
+		]
+	},
+	"14": {
+		"from": "MONTRÉAL",
+		"to": "HALIFAX",
+		"stations": [
+			{
+				"station": "Montréal",
+				"code": "MTRL",
+				"cancelled": true
+			},
+			{
+				"station": "St. Lambert",
+				"code": "SLAM",
+				"cancelled": true
+			},
+			{
+				"station": "St. Hyacinthe",
+				"code": "SHYA",
+				"cancelled": true
+			},
+			{
+				"station": "Drummondville",
+				"code": "DRMV",
+				"cancelled": true
+			},
+			{
+				"station": "Ste-Foy",
+				"code": "SFOY",
+				"cancelled": true
+			},
+			{
+				"station": "Montmagny",
+				"code": "MMGY",
+				"cancelled": true
+			},
+			{
+				"station": "La Pocatière",
+				"code": "LPOC",
+				"cancelled": true
+			},
+			{
+				"station": "Rivière-Du-Loup",
+				"code": "RDLX",
+				"cancelled": true
+			},
+			{
+				"station": "Trois Pistoles",
+				"code": "TPIS",
+				"cancelled": true
+			},
+			{
+				"station": "Rimouski",
+				"code": "RMSK",
+				"cancelled": true
+			},
+			{
+				"station": "Mont-Joli",
+				"code": "MJLI",
+				"cancelled": true
+			},
+			{
+				"station": "Sayabec",
+				"code": "SAYA",
+				"cancelled": true
+			},
+			{
+				"station": "Amqui",
+				"code": "AMQU",
+				"cancelled": true
+			},
+			{
+				"station": "Causapscal",
+				"code": "CAUS",
+				"cancelled": true
+			},
+			{
+				"station": "Matapedia",
+				"code": "MTPD",
+				"cancelled": true
+			},
+			{
+				"station": "Campbellton",
+				"code": "CBTN",
+				"cancelled": true
+			},
+			{
+				"station": "Charlo",
+				"code": "CHLO",
+				"cancelled": true
+			},
+			{
+				"station": "Jacquet River",
+				"code": "JACR",
+				"cancelled": true
+			},
+			{
+				"station": "Petit Rocher",
+				"code": "PROC",
+				"cancelled": true
+			},
+			{
+				"station": "Bathurst",
+				"code": "BTRS",
+				"cancelled": true
+			},
+			{
+				"station": "Miramichi",
+				"code": "MIRA",
+				"cancelled": true
+			},
+			{
+				"station": "Rogersville",
+				"code": "RGRV",
+				"cancelled": true
+			},
+			{
+				"station": "Moncton",
+				"code": "MCTN",
+				"cancelled": true
+			},
+			{
+				"station": "Sackville",
+				"code": "SACK",
+				"cancelled": true
+			},
+			{
+				"station": "Amherst",
+				"code": "AMHS",
+				"cancelled": true
+			},
+			{
+				"station": "Springhill Jct",
+				"code": "SPRJ",
+				"cancelled": true
+			},
+			{
+				"station": "Truro",
+				"code": "TRUR",
+				"cancelled": true
+			},
+			{
+				"station": "Halifax",
+				"code": "HLFX",
+				"cancelled": true
+			}
+		]
+	},
+	"31": {
+		"from": "MONTRÉAL",
+		"to": "OTTAWA",
+		"stations": [
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Alexandria",
+				"code": "ALEX"
+			},
+			{
+				"station": "Casselman",
+				"code": "CSLM"
+			},
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			}
+		]
+	},
+	"53": {
+		"lat": 44.2361,
+		"lng": -76.6262,
+		"speed": 123,
+		"direction": 213,
+		"poll": "2026-01-22T19:04:09Z",
+		"from": "OTTAWA",
+		"to": "TORONTO",
+		"pollMin": 0,
+		"stations": [
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			},
+			{
+				"station": "Fallowfield",
+				"code": "FALL"
+			},
+			{
+				"station": "Brockville",
+				"code": "BRKV"
+			},
+			{
+				"station": "Gananoque",
+				"code": "GANA"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"45": {
+		"lat": 43.9539,
+		"lng": -78.2432,
+		"speed": 120,
+		"direction": 271.39,
+		"poll": "2026-01-22T19:03:01Z",
+		"from": "OTTAWA",
+		"to": "TORONTO",
+		"pollMin": 1,
+		"stations": [
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			},
+			{
+				"station": "Fallowfield",
+				"code": "FALL"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"65": {
+		"lat": 44.2136,
+		"lng": -76.7681,
+		"speed": 119,
+		"direction": 259,
+		"poll": "2026-01-22T19:04:14Z",
+		"from": "MONTRÉAL",
+		"to": "TORONTO",
+		"pollMin": 0,
+		"stations": [
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Cornwall",
+				"code": "CWLL"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"64": {
+		"lat": 44.2274,
+		"lng": -76.7153,
+		"speed": 53,
+		"direction": 76.24,
+		"poll": "2026-01-22T19:03:05Z",
+		"from": "TORONTO",
+		"to": "MONTRÉAL",
+		"pollMin": 1,
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Guildwood",
+				"code": "GUIL"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Brockville",
+				"code": "BRKV"
+			},
+			{
+				"station": "Cornwall",
+				"code": "CWLL"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			}
+		]
+	},
+	"600": {
+		"from": "JONQUIÈRE",
+		"to": "MONTRÉAL",
+		"stations": [
+			{
+				"station": "Jonquière",
+				"code": "JONQ"
+			},
+			{
+				"station": "Hébertville",
+				"code": "HEBV"
+			},
+			{
+				"station": "Chambord",
+				"code": "CHBD"
+			},
+			{
+				"station": "Lac-Bouchette",
+				"code": "LBOU"
+			},
+			{
+				"station": "Club Lizotte",
+				"code": "LIZO"
+			},
+			{
+				"station": "Kondiaronk",
+				"code": "KOND"
+			},
+			{
+				"station": "Lac Des Roches",
+				"code": "LDES"
+			},
+			{
+				"station": "Van Bruyssel",
+				"code": "VBRU"
+			},
+			{
+				"station": "Kiskissink",
+				"code": "KISK"
+			},
+			{
+				"station": "Brooks",
+				"code": "BRQU"
+			},
+			{
+				"station": "Summit",
+				"code": "SMQU"
+			},
+			{
+				"station": "Club Sommet",
+				"code": "SMMC"
+			},
+			{
+				"station": "Club Grégoire",
+				"code": "GRGC"
+			},
+			{
+				"station": "Caribou",
+				"code": "CARI"
+			},
+			{
+				"station": "Cherokee",
+				"code": "CHER"
+			},
+			{
+				"station": "Lac-Édouard",
+				"code": "LEDW"
+			},
+			{
+				"station": "Club Triton",
+				"code": "TRTC"
+			},
+			{
+				"station": "Club Nicole",
+				"code": "NCLC"
+			},
+			{
+				"station": "Hirondelle",
+				"code": "HRDL"
+			},
+			{
+				"station": "Pearl Lake",
+				"code": "PRLL"
+			},
+			{
+				"station": "Sanford",
+				"code": "SANF"
+			},
+			{
+				"station": "Stadacona",
+				"code": "STAD"
+			},
+			{
+				"station": "Club Iroquois",
+				"code": "IRQC"
+			},
+			{
+				"station": "Lac Malouin",
+				"code": "LMAL"
+			},
+			{
+				"station": "Bima",
+				"code": "BIMA"
+			},
+			{
+				"station": "Saint-Hilaire",
+				"code": "SHPN"
+			},
+			{
+				"station": "Pont Beaudet",
+				"code": "PBDT"
+			},
+			{
+				"station": "Falrie",
+				"code": "FALR"
+			},
+			{
+				"station": "Club Jacques-Cartier",
+				"code": "JACC"
+			},
+			{
+				"station": "Miquick",
+				"code": "MIQK"
+			},
+			{
+				"station": "Rivière-À-Pierre",
+				"code": "RAPX"
+			},
+			{
+				"station": "Rousseau",
+				"code": "ROUS"
+			},
+			{
+				"station": "Hervey",
+				"code": "HERV"
+			},
+			{
+				"station": "Saint-Tite",
+				"code": "STIT"
+			},
+			{
+				"station": "Garneau",
+				"code": "GARN"
+			},
+			{
+				"station": "Grand-Mère",
+				"code": "GMRE"
+			},
+			{
+				"station": "Shawinigan",
+				"code": "SHWN"
+			},
+			{
+				"station": "Charette",
+				"code": "CHRT"
+			},
+			{
+				"station": "St-Paulin",
+				"code": "SPAU"
+			},
+			{
+				"station": "St-Justin",
+				"code": "SJUS"
+			},
+			{
+				"station": "Joliette",
+				"code": "JOLI"
+			},
+			{
+				"station": "Anjou",
+				"code": "ANJO"
+			},
+			{
+				"station": "Sauvé",
+				"code": "SAUV"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			}
+		]
+	},
+	"61": {
+		"from": "MONTRÉAL",
+		"to": "TORONTO",
+		"stations": [
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Cornwall",
+				"code": "CWLL"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Guildwood",
+				"code": "GUIL"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"643": {
+		"from": "OTTAWA",
+		"to": "TORONTO",
+		"stations": [
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			},
+			{
+				"station": "Fallowfield",
+				"code": "FALL"
+			},
+			{
+				"station": "Smiths Falls",
+				"code": "SMTF"
+			},
+			{
+				"station": "Brockville",
+				"code": "BRKV"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Napanee",
+				"code": "NAPN"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Trenton Jct.",
+				"code": "TRNJ"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Port Hope",
+				"code": "PHOP"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Guildwood",
+				"code": "GUIL"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"70": {
+		"from": "WINDSOR",
+		"to": "TORONTO",
+		"stations": [
+			{
+				"station": "Windsor",
+				"code": "WDON"
+			},
+			{
+				"station": "Chatham",
+				"code": "CHAT"
+			},
+			{
+				"station": "London",
+				"code": "LNDN"
+			},
+			{
+				"station": "Ingersoll",
+				"code": "INGR"
+			},
+			{
+				"station": "Woodstock",
+				"code": "WDST"
+			},
+			{
+				"station": "Brantford",
+				"code": "BRTF"
+			},
+			{
+				"station": "Aldershot",
+				"code": "ALDR"
+			},
+			{
+				"station": "Oakville",
+				"code": "OAKV"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"35": {
+		"lat": 45.318,
+		"lng": -75.1218,
+		"speed": 122,
+		"direction": 271.38,
+		"poll": "2026-01-22T19:03:02Z",
+		"from": "QUÉBEC",
+		"to": "OTTAWA",
+		"pollMin": 1,
+		"stations": [
+			{
+				"station": "Québec",
+				"code": "QBEC"
+			},
+			{
+				"station": "Ste-Foy",
+				"code": "SFOY"
+			},
+			{
+				"station": "Charny",
+				"code": "CHNY"
+			},
+			{
+				"station": "Drummondville",
+				"code": "DRMV"
+			},
+			{
+				"station": "St. Hyacinthe",
+				"code": "SHYA"
+			},
+			{
+				"station": "St. Lambert",
+				"code": "SLAM"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Coteau",
+				"code": "COTO"
+			},
+			{
+				"station": "Alexandria",
+				"code": "ALEX"
+			},
+			{
+				"station": "Casselman",
+				"code": "CSLM"
+			},
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			}
+		]
+	},
+	"97": {
+		"from": "TORONTO",
+		"to": "NIAGARA FALLS",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Oakville",
+				"code": "OAKV"
+			},
+			{
+				"station": "Aldershot",
+				"code": "ALDR"
+			},
+			{
+				"station": "Grimsby",
+				"code": "GRIM"
+			},
+			{
+				"station": "St. Catharines",
+				"code": "SCAT"
+			},
+			{
+				"station": "Niagara Falls",
+				"code": "NIAG"
+			}
+		]
+	},
+	"24": {
+		"lat": 45.8978,
+		"lng": -72.4657,
+		"speed": 91,
+		"direction": 58,
+		"poll": "2026-01-22T19:04:07Z",
+		"from": "OTTAWA",
+		"to": "QUÉBEC",
+		"pollMin": 0,
+		"stations": [
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			},
+			{
+				"station": "Alexandria",
+				"code": "ALEX"
+			},
+			{
+				"station": "Coteau",
+				"code": "COTO"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			},
+			{
+				"station": "St. Lambert",
+				"code": "SLAM"
+			},
+			{
+				"station": "St. Hyacinthe",
+				"code": "SHYA"
+			},
+			{
+				"station": "Drummondville",
+				"code": "DRMV"
+			},
+			{
+				"station": "Charny",
+				"code": "CHNY"
+			},
+			{
+				"station": "Ste-Foy",
+				"code": "SFOY"
+			},
+			{
+				"station": "Québec",
+				"code": "QBEC"
+			}
+		]
+	},
+	"22": {
+		"from": "OTTAWA",
+		"to": "QUÉBEC",
+		"stations": [
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			},
+			{
+				"station": "Casselman",
+				"code": "CSLM"
+			},
+			{
+				"station": "Alexandria",
+				"code": "ALEX"
+			},
+			{
+				"station": "Coteau",
+				"code": "COTO"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			},
+			{
+				"station": "St. Lambert",
+				"code": "SLAM"
+			},
+			{
+				"station": "St. Hyacinthe",
+				"code": "SHYA"
+			},
+			{
+				"station": "Drummondville",
+				"code": "DRMV"
+			},
+			{
+				"station": "Ste-Foy",
+				"code": "SFOY"
+			},
+			{
+				"station": "Québec",
+				"code": "QBEC"
+			}
+		]
+	},
+	"52": {
+		"lat": 45.3631,
+		"lng": -75.6813,
+		"speed": 70,
+		"direction": 24.12,
+		"poll": "2026-01-22T19:03:09Z",
+		"from": "TORONTO",
+		"to": "OTTAWA",
+		"pollMin": 1,
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Guildwood",
+				"code": "GUIL"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Brockville",
+				"code": "BRKV"
+			},
+			{
+				"station": "Smiths Falls",
+				"code": "SMTF"
+			},
+			{
+				"station": "Fallowfield",
+				"code": "FALL"
+			},
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			}
+		]
+	},
+	"50": {
+		"from": "TORONTO",
+		"to": "OTTAWA",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Guildwood",
+				"code": "GUIL"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Brockville",
+				"code": "BRKV"
+			},
+			{
+				"station": "Smiths Falls",
+				"code": "SMTF"
+			},
+			{
+				"station": "Fallowfield",
+				"code": "FALL"
+			},
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			}
+		]
+	},
+	"40": {
+		"lat": 44.6159,
+		"lng": -75.6987,
+		"speed": 81,
+		"direction": 338.28,
+		"poll": "2026-01-22T19:03:06Z",
+		"from": "TORONTO",
+		"to": "OTTAWA",
+		"pollMin": 1,
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Fallowfield",
+				"code": "FALL"
+			},
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			}
+		]
+	},
+	"185": {
+		"lat": 47.7976,
+		"lng": -83.3821,
+		"speed": 70,
+		"direction": 335.44,
+		"poll": "2026-01-22T19:03:06Z",
+		"from": "SUDBURY",
+		"to": "WHITE RIVER",
+		"pollMin": 1,
+		"stations": [
+			{
+				"station": "Sudbury",
+				"code": "SUDB"
+			},
+			{
+				"station": "Azilda",
+				"code": "AZIL"
+			},
+			{
+				"station": "Chelmsford",
+				"code": "CHEL"
+			},
+			{
+				"station": "Larchwood",
+				"code": "LARC"
+			},
+			{
+				"station": "Levack",
+				"code": "LEVA"
+			},
+			{
+				"station": "Cartier",
+				"code": "CART"
+			},
+			{
+				"station": "Benny",
+				"code": "BENN"
+			},
+			{
+				"station": "Stralak",
+				"code": "STRL"
+			},
+			{
+				"station": "Pogamasing",
+				"code": "POGA"
+			},
+			{
+				"station": "Sheahan",
+				"code": "SHEA"
+			},
+			{
+				"station": "Forks",
+				"code": "FRKS"
+			},
+			{
+				"station": "Metagama",
+				"code": "MTGM"
+			},
+			{
+				"station": "Sinker",
+				"code": "SNKR"
+			},
+			{
+				"station": "Biscotasing",
+				"code": "BISC"
+			},
+			{
+				"station": "Roberts",
+				"code": "RBRT"
+			},
+			{
+				"station": "Ramsey",
+				"code": "RAMS"
+			},
+			{
+				"station": "Woman River",
+				"code": "WOMR"
+			},
+			{
+				"station": "Sultan",
+				"code": "SULT"
+			},
+			{
+				"station": "Kormak",
+				"code": "KORM"
+			},
+			{
+				"station": "Kinogama",
+				"code": "KINO"
+			},
+			{
+				"station": "Nemegos",
+				"code": "NEME"
+			},
+			{
+				"station": "Devon",
+				"code": "DEVN"
+			},
+			{
+				"station": "Chapleau",
+				"code": "CHAP"
+			},
+			{
+				"station": "Esher",
+				"code": "ESHR"
+			},
+			{
+				"station": "Musk",
+				"code": "MUSK"
+			},
+			{
+				"station": "Nicholson",
+				"code": "NICH"
+			},
+			{
+				"station": "Bolkow",
+				"code": "BOLK"
+			},
+			{
+				"station": "Dalton",
+				"code": "DALT"
+			},
+			{
+				"station": "Missanabie",
+				"code": "MSBI"
+			},
+			{
+				"station": "Lochalsh",
+				"code": "LOCH"
+			},
+			{
+				"station": "Franz",
+				"code": "FRNZ"
+			},
+			{
+				"station": "Swanson",
+				"code": "SWAN"
+			},
+			{
+				"station": "Girdwood",
+				"code": "GIRD"
+			},
+			{
+				"station": "Amyot",
+				"code": "AMYO"
+			},
+			{
+				"station": "O'Brien",
+				"code": "OBRI"
+			},
+			{
+				"station": "White River",
+				"code": "WHTR"
+			}
+		]
+	},
+	"604": {
+		"lat": 47.4145,
+		"lng": -72.7649,
+		"speed": 76,
+		"direction": 130.97,
+		"poll": "2026-01-22T19:03:05Z",
+		"from": "SENNETERRE",
+		"to": "MONTRÉAL",
+		"pollMin": 1,
+		"stations": [
+			{
+				"station": "Senneterre",
+				"code": "SENN"
+			},
+			{
+				"station": "Mégiscane",
+				"code": "MEGI"
+			},
+			{
+				"station": "Signai",
+				"code": "SIGN"
+			},
+			{
+				"station": "Press",
+				"code": "PRSS"
+			},
+			{
+				"station": "Forsythe",
+				"code": "FORS"
+			},
+			{
+				"station": "Bolger",
+				"code": "BGQU"
+			},
+			{
+				"station": "Dix",
+				"code": "DIXX"
+			},
+			{
+				"station": "Gagnon",
+				"code": "GAGN"
+			},
+			{
+				"station": "Da-Rou-Lac Lodge",
+				"code": "DRLL"
+			},
+			{
+				"station": "Langlade",
+				"code": "LNGL"
+			},
+			{
+				"station": "Club Beaudin Inc.",
+				"code": "BDNC"
+			},
+			{
+				"station": "Bourmont",
+				"code": "BRMT"
+			},
+			{
+				"station": "Club Kapitachuan",
+				"code": "KPTC"
+			},
+			{
+				"station": "Consolidated Bathurst",
+				"code": "CBAT"
+			},
+			{
+				"station": "Monet",
+				"code": "MNET"
+			},
+			{
+				"station": "Coquar",
+				"code": "COQU"
+			},
+			{
+				"station": "Clova",
+				"code": "CLOV"
+			},
+			{
+				"station": "Rivière Oskélanéo",
+				"code": "OSKR"
+			},
+			{
+				"station": "Oskelaneo Lodge",
+				"code": "OSKL"
+			},
+			{
+				"station": "Greening",
+				"code": "GRNG"
+			},
+			{
+				"station": "Club Maniwawa",
+				"code": "MWWC"
+			},
+			{
+				"station": "Strachan",
+				"code": "STRN"
+			},
+			{
+				"station": "Club Rita Inc.",
+				"code": "RTAC"
+			},
+			{
+				"station": "Timbrell",
+				"code": "TIMB"
+			},
+			{
+				"station": "Parent",
+				"code": "PARE"
+			},
+			{
+				"station": "Manjobagues",
+				"code": "MJBG"
+			},
+			{
+				"station": "Club Sisco",
+				"code": "SSCC"
+			},
+			{
+				"station": "Mccarthy",
+				"code": "MCCA"
+			},
+			{
+				"station": "Casey",
+				"code": "CASY"
+			},
+			{
+				"station": "Hibbard",
+				"code": "HIBB"
+			},
+			{
+				"station": "Club Belanger",
+				"code": "BLGC"
+			},
+			{
+				"station": "Cann",
+				"code": "CANN"
+			},
+			{
+				"station": "Sanmaur",
+				"code": "SANM"
+			},
+			{
+				"station": "Weymont",
+				"code": "WYMT"
+			},
+			{
+				"station": "Saint-Maurice Rivière-Boom",
+				"code": "SMRB"
+			},
+			{
+				"station": "Dessane",
+				"code": "DESS"
+			},
+			{
+				"station": "Vandry",
+				"code": "VDRY"
+			},
+			{
+				"station": "Club Wigwam",
+				"code": "WGWC"
+			},
+			{
+				"station": "Ferguson",
+				"code": "FERG"
+			},
+			{
+				"station": "Windigo",
+				"code": "WNDG"
+			},
+			{
+				"station": "Mctavish",
+				"code": "MCTC"
+			},
+			{
+				"station": "Duplessis",
+				"code": "DUPL"
+			},
+			{
+				"station": "Lac-Darey",
+				"code": "LDAR"
+			},
+			{
+				"station": "Rapide-Blanc",
+				"code": "RAPB"
+			},
+			{
+				"station": "Club Vermillion",
+				"code": "VMLC"
+			},
+			{
+				"station": "Cressman",
+				"code": "CRSM"
+			},
+			{
+				"station": "Fitzpatrick",
+				"code": "FITZ"
+			},
+			{
+				"station": "La Tuque",
+				"code": "LTUQ"
+			},
+			{
+				"station": "Hervey",
+				"code": "HERV"
+			},
+			{
+				"station": "Saint-Tite",
+				"code": "STIT"
+			},
+			{
+				"station": "Garneau",
+				"code": "GARN"
+			},
+			{
+				"station": "Grand-Mère",
+				"code": "GMRE"
+			},
+			{
+				"station": "Shawinigan",
+				"code": "SHWN"
+			},
+			{
+				"station": "Charette",
+				"code": "CHRT"
+			},
+			{
+				"station": "St-Paulin",
+				"code": "SPAU"
+			},
+			{
+				"station": "St-Justin",
+				"code": "SJUS"
+			},
+			{
+				"station": "Joliette",
+				"code": "JOLI"
+			},
+			{
+				"station": "Anjou",
+				"code": "ANJO"
+			},
+			{
+				"station": "Sauvé",
+				"code": "SAUV"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			}
+		]
+	},
+	"82": {
+		"from": "LONDON",
+		"to": "TORONTO",
+		"stations": [
+			{
+				"station": "London",
+				"code": "LNDN"
+			},
+			{
+				"station": "Woodstock",
+				"code": "WDST"
+			},
+			{
+				"station": "Brantford",
+				"code": "BRTF"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"20": {
+		"from": "MONTRÉAL",
+		"to": "QUÉBEC",
+		"stations": [
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			},
+			{
+				"station": "St. Lambert",
+				"code": "SLAM"
+			},
+			{
+				"station": "St. Hyacinthe",
+				"code": "SHYA"
+			},
+			{
+				"station": "Drummondville",
+				"code": "DRMV"
+			},
+			{
+				"station": "Ste-Foy",
+				"code": "SFOY"
+			},
+			{
+				"station": "Québec",
+				"code": "QBEC"
+			}
+		]
+	},
+	"37": {
+		"lat": 46.2685,
+		"lng": -72.1322,
+		"speed": 81,
+		"direction": 184,
+		"poll": "2026-01-22T19:04:09Z",
+		"from": "QUÉBEC",
+		"to": "OTTAWA",
+		"pollMin": 0,
+		"stations": [
+			{
+				"station": "Québec",
+				"code": "QBEC"
+			},
+			{
+				"station": "Ste-Foy",
+				"code": "SFOY"
+			},
+			{
+				"station": "Drummondville",
+				"code": "DRMV"
+			},
+			{
+				"station": "St. Hyacinthe",
+				"code": "SHYA"
+			},
+			{
+				"station": "St. Lambert",
+				"code": "SLAM"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Coteau",
+				"code": "COTO"
+			},
+			{
+				"station": "Alexandria",
+				"code": "ALEX"
+			},
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			}
+		]
+	},
+	"33": {
+		"from": "QUÉBEC",
+		"to": "OTTAWA",
+		"stations": [
+			{
+				"station": "Québec",
+				"code": "QBEC"
+			},
+			{
+				"station": "Ste-Foy",
+				"code": "SFOY"
+			},
+			{
+				"station": "Charny",
+				"code": "CHNY"
+			},
+			{
+				"station": "Drummondville",
+				"code": "DRMV"
+			},
+			{
+				"station": "St. Hyacinthe",
+				"code": "SHYA"
+			},
+			{
+				"station": "St. Lambert",
+				"code": "SLAM"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Alexandria",
+				"code": "ALEX"
+			},
+			{
+				"station": "Casselman",
+				"code": "CSLM"
+			},
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			}
+		]
+	},
+	"41": {
+		"from": "OTTAWA",
+		"to": "TORONTO",
+		"stations": [
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			},
+			{
+				"station": "Fallowfield",
+				"code": "FALL"
+			},
+			{
+				"station": "Smiths Falls",
+				"code": "SMTF"
+			},
+			{
+				"station": "Brockville",
+				"code": "BRKV"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Napanee",
+				"code": "NAPN"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Trenton Jct.",
+				"code": "TRNJ"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"73": {
+		"lat": 42.9782,
+		"lng": -81.2566,
+		"speed": 28,
+		"direction": 249.36,
+		"poll": "2026-01-22T19:03:10Z",
+		"from": "TORONTO",
+		"to": "WINDSOR",
+		"pollMin": 1,
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Oakville",
+				"code": "OAKV"
+			},
+			{
+				"station": "Aldershot",
+				"code": "ALDR"
+			},
+			{
+				"station": "Brantford",
+				"code": "BRTF"
+			},
+			{
+				"station": "Woodstock",
+				"code": "WDST"
+			},
+			{
+				"station": "London",
+				"code": "LNDN"
+			},
+			{
+				"station": "Chatham",
+				"code": "CHAT"
+			},
+			{
+				"station": "Windsor",
+				"code": "WDON"
+			}
+		]
+	},
+	"84": {
+		"from": "SARNIA",
+		"to": "TORONTO",
+		"stations": [
+			{
+				"station": "Sarnia",
+				"code": "SARN"
+			},
+			{
+				"station": "Wyoming",
+				"code": "WYOM"
+			},
+			{
+				"station": "Strathroy",
+				"code": "STRR"
+			},
+			{
+				"station": "London",
+				"code": "LNDN"
+			},
+			{
+				"station": "St.Marys",
+				"code": "SMYS"
+			},
+			{
+				"station": "Stratford",
+				"code": "STRF"
+			},
+			{
+				"station": "Kitchener",
+				"code": "KITC"
+			},
+			{
+				"station": "Guelph",
+				"code": "GUEL"
+			},
+			{
+				"station": "Georgetown",
+				"code": "GEOR"
+			},
+			{
+				"station": "Brampton",
+				"code": "BRMP"
+			},
+			{
+				"station": "Malton",
+				"code": "MALT"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"641": {
+		"from": "OTTAWA",
+		"to": "TORONTO",
+		"stations": [
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			},
+			{
+				"station": "Fallowfield",
+				"code": "FALL"
+			},
+			{
+				"station": "Smiths Falls",
+				"code": "SMTF"
+			},
+			{
+				"station": "Brockville",
+				"code": "BRKV"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Port Hope",
+				"code": "PHOP"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"644": {
+		"lat": 43.8711,
+		"lng": -78.8836,
+		"speed": 0,
+		"direction": 64.97,
+		"poll": "2026-01-22T19:02:36Z",
+		"from": "TORONTO",
+		"to": "OTTAWA",
+		"pollMin": 1,
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Fallowfield",
+				"code": "FALL"
+			},
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			}
+		]
+	},
+	"63": {
+		"lat": 43.8768,
+		"lng": -78.8671,
+		"speed": 97,
+		"direction": 247.48,
+		"poll": "2026-01-22T19:03:02Z",
+		"from": "MONTRÉAL",
+		"to": "TORONTO",
+		"pollMin": 1,
+		"stations": [
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Cornwall",
+				"code": "CWLL"
+			},
+			{
+				"station": "Brockville",
+				"code": "BRKV"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Guildwood",
+				"code": "GUIL"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"67": {
+		"lat": 45.4371,
+		"lng": -73.8388,
+		"speed": 150,
+		"direction": 249,
+		"poll": "2026-01-22T19:04:09Z",
+		"from": "MONTRÉAL",
+		"to": "TORONTO",
+		"pollMin": 0,
+		"stations": [
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Cornwall",
+				"code": "CWLL"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"62": {
+		"from": "TORONTO",
+		"to": "MONTRÉAL",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Guildwood",
+				"code": "GUIL"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Cornwall",
+				"code": "CWLL"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			}
+		]
+	},
+	"72": {
+		"from": "WINDSOR",
+		"to": "TORONTO",
+		"stations": [
+			{
+				"station": "Windsor",
+				"code": "WDON"
+			},
+			{
+				"station": "Chatham",
+				"code": "CHAT"
+			},
+			{
+				"station": "Glencoe",
+				"code": "GLNC"
+			},
+			{
+				"station": "London",
+				"code": "LNDN"
+			},
+			{
+				"station": "Ingersoll",
+				"code": "INGR"
+			},
+			{
+				"station": "Woodstock",
+				"code": "WDST"
+			},
+			{
+				"station": "Brantford",
+				"code": "BRTF"
+			},
+			{
+				"station": "Aldershot",
+				"code": "ALDR"
+			},
+			{
+				"station": "Oakville",
+				"code": "OAKV"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"47": {
+		"lat": 44.5338,
+		"lng": -75.8183,
+		"speed": 139,
+		"direction": 220.31,
+		"poll": "2026-01-22T19:03:05Z",
+		"from": "OTTAWA",
+		"to": "TORONTO",
+		"pollMin": 1,
+		"stations": [
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			},
+			{
+				"station": "Fallowfield",
+				"code": "FALL"
+			},
+			{
+				"station": "Smiths Falls",
+				"code": "SMTF"
+			},
+			{
+				"station": "Brockville",
+				"code": "BRKV"
+			},
+			{
+				"station": "Gananoque",
+				"code": "GANA"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Guildwood",
+				"code": "GUIL"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"60": {
+		"from": "TORONTO",
+		"to": "MONTRÉAL",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Guildwood",
+				"code": "GUIL"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Cornwall",
+				"code": "CWLL"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			}
+		]
+	},
+	"76": {
+		"lat": 42.4568,
+		"lng": -82.1001,
+		"speed": 93,
+		"direction": 44.6,
+		"poll": "2026-01-22T19:03:05Z",
+		"from": "WINDSOR",
+		"to": "TORONTO",
+		"pollMin": 1,
+		"stations": [
+			{
+				"station": "Windsor",
+				"code": "WDON"
+			},
+			{
+				"station": "Chatham",
+				"code": "CHAT"
+			},
+			{
+				"station": "Glencoe",
+				"code": "GLNC"
+			},
+			{
+				"station": "London",
+				"code": "LNDN"
+			},
+			{
+				"station": "Brantford",
+				"code": "BRTF"
+			},
+			{
+				"station": "Aldershot",
+				"code": "ALDR"
+			},
+			{
+				"station": "Oakville",
+				"code": "OAKV"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"71": {
+		"from": "TORONTO",
+		"to": "WINDSOR",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Oakville",
+				"code": "OAKV"
+			},
+			{
+				"station": "Aldershot",
+				"code": "ALDR"
+			},
+			{
+				"station": "Brantford",
+				"code": "BRTF"
+			},
+			{
+				"station": "Woodstock",
+				"code": "WDST"
+			},
+			{
+				"station": "Ingersoll",
+				"code": "INGR"
+			},
+			{
+				"station": "London",
+				"code": "LNDN"
+			},
+			{
+				"station": "Glencoe",
+				"code": "GLNC"
+			},
+			{
+				"station": "Chatham",
+				"code": "CHAT"
+			},
+			{
+				"station": "Windsor",
+				"code": "WDON"
+			}
+		]
+	},
+	"44": {
+		"from": "TORONTO",
+		"to": "OTTAWA",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Brockville",
+				"code": "BRKV"
+			},
+			{
+				"station": "Smiths Falls",
+				"code": "SMTF"
+			},
+			{
+				"station": "Fallowfield",
+				"code": "FALL"
+			},
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			}
+		]
+	},
+	"26": {
+		"from": "OTTAWA",
+		"to": "QUÉBEC",
+		"stations": [
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			},
+			{
+				"station": "Alexandria",
+				"code": "ALEX"
+			},
+			{
+				"station": "Coteau",
+				"code": "COTO"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			},
+			{
+				"station": "St. Lambert",
+				"code": "SLAM"
+			},
+			{
+				"station": "St. Hyacinthe",
+				"code": "SHYA"
+			},
+			{
+				"station": "Drummondville",
+				"code": "DRMV"
+			},
+			{
+				"station": "Charny",
+				"code": "CHNY"
+			},
+			{
+				"station": "Ste-Foy",
+				"code": "SFOY"
+			},
+			{
+				"station": "Québec",
+				"code": "QBEC"
+			}
+		]
+	},
+	"645": {
+		"from": "OTTAWA",
+		"to": "TORONTO",
+		"stations": [
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			},
+			{
+				"station": "Fallowfield",
+				"code": "FALL"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"39": {
+		"from": "QUÉBEC",
+		"to": "OTTAWA",
+		"stations": [
+			{
+				"station": "Québec",
+				"code": "QBEC"
+			},
+			{
+				"station": "Ste-Foy",
+				"code": "SFOY"
+			},
+			{
+				"station": "Drummondville",
+				"code": "DRMV"
+			},
+			{
+				"station": "St. Lambert",
+				"code": "SLAM"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Coteau",
+				"code": "COTO"
+			},
+			{
+				"station": "Alexandria",
+				"code": "ALEX"
+			},
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			}
+		]
+	},
+	"66": {
+		"from": "TORONTO",
+		"to": "MONTRÉAL",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Guildwood",
+				"code": "GUIL"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Cornwall",
+				"code": "CWLL"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			}
+		]
+	},
+	"46": {
+		"from": "TORONTO",
+		"to": "OTTAWA",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Brockville",
+				"code": "BRKV"
+			},
+			{
+				"station": "Fallowfield",
+				"code": "FALL"
+			},
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			}
+		]
+	},
+	"28": {
+		"from": "OTTAWA",
+		"to": "QUÉBEC",
+		"stations": [
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			},
+			{
+				"station": "Casselman",
+				"code": "CSLM"
+			},
+			{
+				"station": "Alexandria",
+				"code": "ALEX"
+			},
+			{
+				"station": "Coteau",
+				"code": "COTO"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			},
+			{
+				"station": "St. Lambert",
+				"code": "SLAM"
+			},
+			{
+				"station": "St. Hyacinthe",
+				"code": "SHYA"
+			},
+			{
+				"station": "Drummondville",
+				"code": "DRMV"
+			},
+			{
+				"station": "Charny",
+				"code": "CHNY"
+			},
+			{
+				"station": "Ste-Foy",
+				"code": "SFOY"
+			},
+			{
+				"station": "Québec",
+				"code": "QBEC"
+			}
+		]
+	},
+	"83": {
+		"from": "TORONTO",
+		"to": "LONDON",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Aldershot",
+				"code": "ALDR"
+			},
+			{
+				"station": "Brantford",
+				"code": "BRTF"
+			},
+			{
+				"station": "Woodstock",
+				"code": "WDST"
+			},
+			{
+				"station": "London",
+				"code": "LNDN"
+			}
+		]
+	},
+	"646": {
+		"from": "TORONTO",
+		"to": "OTTAWA",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Fallowfield",
+				"code": "FALL"
+			},
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			}
+		]
+	},
+	"69": {
+		"from": "MONTRÉAL",
+		"to": "TORONTO",
+		"stations": [
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Cornwall",
+				"code": "CWLL"
+			},
+			{
+				"station": "Brockville",
+				"code": "BRKV"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Guildwood",
+				"code": "GUIL"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"68": {
+		"from": "TORONTO",
+		"to": "MONTRÉAL",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Brockville",
+				"code": "BRKV"
+			},
+			{
+				"station": "Cornwall",
+				"code": "CWLL"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			}
+		]
+	},
+	"75": {
+		"from": "TORONTO",
+		"to": "WINDSOR",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Oakville",
+				"code": "OAKV"
+			},
+			{
+				"station": "Aldershot",
+				"code": "ALDR"
+			},
+			{
+				"station": "Brantford",
+				"code": "BRTF"
+			},
+			{
+				"station": "Woodstock",
+				"code": "WDST"
+			},
+			{
+				"station": "Ingersoll",
+				"code": "INGR"
+			},
+			{
+				"station": "London",
+				"code": "LNDN"
+			},
+			{
+				"station": "Glencoe",
+				"code": "GLNC"
+			},
+			{
+				"station": "Chatham",
+				"code": "CHAT"
+			},
+			{
+				"station": "Windsor",
+				"code": "WDON"
+			}
+		]
+	},
+	"54": {
+		"from": "TORONTO",
+		"to": "OTTAWA",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Guildwood",
+				"code": "GUIL"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Port Hope",
+				"code": "PHOP"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Trenton Jct.",
+				"code": "TRNJ"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Napanee",
+				"code": "NAPN"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Brockville",
+				"code": "BRKV"
+			},
+			{
+				"station": "Smiths Falls",
+				"code": "SMTF"
+			},
+			{
+				"station": "Fallowfield",
+				"code": "FALL"
+			},
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			}
+		]
+	},
+	"87": {
+		"from": "TORONTO",
+		"to": "SARNIA",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Malton",
+				"code": "MALT"
+			},
+			{
+				"station": "Brampton",
+				"code": "BRMP"
+			},
+			{
+				"station": "Georgetown",
+				"code": "GEOR"
+			},
+			{
+				"station": "Guelph",
+				"code": "GUEL"
+			},
+			{
+				"station": "Kitchener",
+				"code": "KITC"
+			},
+			{
+				"station": "Stratford",
+				"code": "STRF"
+			},
+			{
+				"station": "St.Marys",
+				"code": "SMYS"
+			},
+			{
+				"station": "London",
+				"code": "LNDN"
+			},
+			{
+				"station": "Strathroy",
+				"code": "STRR"
+			},
+			{
+				"station": "Wyoming",
+				"code": "WYOM"
+			},
+			{
+				"station": "Sarnia",
+				"code": "SARN"
+			}
+		]
+	},
+	"78": {
+		"from": "WINDSOR",
+		"to": "TORONTO",
+		"stations": [
+			{
+				"station": "Windsor",
+				"code": "WDON"
+			},
+			{
+				"station": "Chatham",
+				"code": "CHAT"
+			},
+			{
+				"station": "Glencoe",
+				"code": "GLNC"
+			},
+			{
+				"station": "London",
+				"code": "LNDN"
+			},
+			{
+				"station": "Ingersoll",
+				"code": "INGR"
+			},
+			{
+				"station": "Woodstock",
+				"code": "WDST"
+			},
+			{
+				"station": "Brantford",
+				"code": "BRTF"
+			},
+			{
+				"station": "Aldershot",
+				"code": "ALDR"
+			},
+			{
+				"station": "Oakville",
+				"code": "OAKV"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"29": {
+		"from": "QUÉBEC",
+		"to": "MONTRÉAL",
+		"stations": [
+			{
+				"station": "Québec",
+				"code": "QBEC"
+			},
+			{
+				"station": "Ste-Foy",
+				"code": "SFOY"
+			},
+			{
+				"station": "Drummondville",
+				"code": "DRMV"
+			},
+			{
+				"station": "St. Hyacinthe",
+				"code": "SHYA"
+			},
+			{
+				"station": "St. Lambert",
+				"code": "SLAM"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			}
+		]
+	},
+	"98": {
+		"from": "NIAGARA FALLS",
+		"to": "TORONTO",
+		"stations": [
+			{
+				"station": "Niagara Falls",
+				"code": "NIAG"
+			},
+			{
+				"station": "St. Catharines",
+				"code": "SCAT"
+			},
+			{
+				"station": "Grimsby",
+				"code": "GRIM"
+			},
+			{
+				"station": "Aldershot",
+				"code": "ALDR"
+			},
+			{
+				"station": "Oakville",
+				"code": "OAKV"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"38": {
+		"from": "OTTAWA",
+		"to": "MONTRÉAL",
+		"stations": [
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			},
+			{
+				"station": "Casselman",
+				"code": "CSLM"
+			},
+			{
+				"station": "Alexandria",
+				"code": "ALEX"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			}
+		]
+	},
+	"59": {
+		"from": "OTTAWA",
+		"to": "TORONTO",
+		"stations": [
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			},
+			{
+				"station": "Fallowfield",
+				"code": "FALL"
+			},
+			{
+				"station": "Smiths Falls",
+				"code": "SMTF"
+			},
+			{
+				"station": "Brockville",
+				"code": "BRKV"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Trenton Jct.",
+				"code": "TRNJ"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Guildwood",
+				"code": "GUIL"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"668": {
+		"from": "TORONTO",
+		"to": "MONTRÉAL",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Guildwood",
+				"code": "GUIL"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Cornwall",
+				"code": "CWLL"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			}
+		]
+	},
+	"669": {
+		"from": "MONTRÉAL",
+		"to": "TORONTO",
+		"stations": [
+			{
+				"station": "Montréal",
+				"code": "MTRL"
+			},
+			{
+				"station": "Dorval",
+				"code": "DORV"
+			},
+			{
+				"station": "Cornwall",
+				"code": "CWLL"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			}
+		]
+	},
+	"48": {
+		"from": "TORONTO",
+		"to": "OTTAWA",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Oshawa",
+				"code": "OSHA"
+			},
+			{
+				"station": "Port Hope",
+				"code": "PHOP"
+			},
+			{
+				"station": "Cobourg",
+				"code": "CBRG"
+			},
+			{
+				"station": "Trenton Jct.",
+				"code": "TRNJ"
+			},
+			{
+				"station": "Belleville",
+				"code": "BLVL"
+			},
+			{
+				"station": "Napanee",
+				"code": "NAPN"
+			},
+			{
+				"station": "Kingston",
+				"code": "KGON"
+			},
+			{
+				"station": "Gananoque",
+				"code": "GANA"
+			},
+			{
+				"station": "Brockville",
+				"code": "BRKV"
+			},
+			{
+				"station": "Smiths Falls",
+				"code": "SMTF"
+			},
+			{
+				"station": "Fallowfield",
+				"code": "FALL"
+			},
+			{
+				"station": "Ottawa",
+				"code": "OTTW"
+			}
+		]
+	},
+	"79": {
+		"from": "TORONTO",
+		"to": "WINDSOR",
+		"stations": [
+			{
+				"station": "Toronto",
+				"code": "TRTO"
+			},
+			{
+				"station": "Oakville",
+				"code": "OAKV"
+			},
+			{
+				"station": "Aldershot",
+				"code": "ALDR"
+			},
+			{
+				"station": "Brantford",
+				"code": "BRTF"
+			},
+			{
+				"station": "Woodstock",
+				"code": "WDST"
+			},
+			{
+				"station": "Ingersoll",
+				"code": "INGR"
+			},
+			{
+				"station": "London",
+				"code": "LNDN"
+			},
+			{
+				"station": "Glencoe",
+				"code": "GLNC"
+			},
+			{
+				"station": "Chatham",
+				"code": "CHAT"
+			},
+			{
+				"station": "Windsor",
+				"code": "WDON"
+			}
+		]
+	},
+	"692": {
+		"from": "CHURCHILL",
+		"to": "WINNIPEG",
+		"stations": [
+			{
+				"station": "Churchill",
+				"code": "CHUR"
+			},
+			{
+				"station": "Tidal",
+				"code": "TIDL"
+			},
+			{
+				"station": "Chesnaye",
+				"code": "CHES"
+			},
+			{
+				"station": "M'Clintock",
+				"code": "MCLI"
+			},
+			{
+				"station": "O'Day",
+				"code": "ODAY"
+			},
+			{
+				"station": "Herchmer",
+				"code": "HERC"
+			},
+			{
+				"station": "Thibaudeau",
+				"code": "THIB"
+			},
+			{
+				"station": "Weir River",
+				"code": "WEIR"
+			}
+		]
+	}
+}
