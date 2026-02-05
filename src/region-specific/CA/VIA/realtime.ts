@@ -98,21 +98,53 @@ const VIA_CODE_SWAP: Record<string, string> = {
 };
 
 export const VIA_MERGE_STOPS: MergeAction[] = [
-	{ to: "UN", from: [VIA_CODE_SWAP["TRTO"]] },
-	{ to: "OS", from: [VIA_CODE_SWAP["OSHA"]] },
-	{ to: "KI", from: [VIA_CODE_SWAP["KITC"]] },
-	{ to: "AL", from: [VIA_CODE_SWAP["ALDR"]] },
-	{ to: "OA", from: [VIA_CODE_SWAP["OAKV"]] },
-	{ to: "GU", from: [VIA_CODE_SWAP["GUIL"]] },
-	{ to: "BR", from: [VIA_CODE_SWAP["BRMP"]] },
-	{ to: "GE", from: [VIA_CODE_SWAP["GEOR"]] },
-	{ to: "MA", from: [VIA_CODE_SWAP["MALT"]] },
-	{ to: "NI", from: [VIA_CODE_SWAP["NIAG"]] },
-	{ to: "SCTH", from: [VIA_CODE_SWAP["SCAT"]] },
+	{ to: VIA_CODE_SWAP["TRTO"], from: ["UN"] },
+	{ to: VIA_CODE_SWAP["OSHA"], from: ["OS"] },
+	{ to: VIA_CODE_SWAP["KITC"], from: ["KI"] },
+	{ to: VIA_CODE_SWAP["ALDR"], from: ["AL"] },
+	{ to: VIA_CODE_SWAP["OAKV"], from: ["OA"] },
+	{ to: VIA_CODE_SWAP["GUIL"], from: ["GU"] },
+	{ to: VIA_CODE_SWAP["BRMP"], from: ["BR"] },
+	{ to: VIA_CODE_SWAP["GEOR"], from: ["GE"] },
+	{ to: VIA_CODE_SWAP["MALT"], from: ["MA"] },
+	{ to: VIA_CODE_SWAP["NIAG"], from: ["NI"] },
+	{ to: VIA_CODE_SWAP["SCAT"], from: ["SCTH"] },
 ];
+
+export const VIA_UPDATE_STOPS: {
+	stop_id: string;
+	new: Partial<qdf.Stop>;
+}[] = [
+	{
+		stop_id: VIA_CODE_SWAP["TRTO"],
+		new: {
+			stop_name: "Toronto Union",
+		},
+	},
+];
+
+let prevTrainData: AllTrainData | null = null;
+export function getPrevTrainData(): AllTrainData | null {
+	return prevTrainData;
+}
 
 let lastUpdateMs = 0;
 const UPDATE_THROTTLE_MS = 2 * 60 * 1000;
+
+export async function fetchTrainData() {
+	logger.debug("Fetching VIA Rail realtime data...", {
+		module: "VIA",
+		function: "fetchTrainData",
+	});
+	let res = await fetch("https://tsimobile.viarail.ca/data/allData.json");
+	const data: AllTrainData = await res.json();
+	prevTrainData = data;
+	logger.debug("Done!", {
+		module: "VIA",
+		function: "fetchTrainData",
+	});
+	return data;
+}
 
 export async function updateRealtime(ctx: CacheContext) {
 	const now = Date.now();
@@ -161,6 +193,8 @@ export async function updateRealtime(ctx: CacheContext) {
 		let res = await fetch("https://tsimobile.viarail.ca/data/allData.json");
 		const data: AllTrainData = await res.json();
 
+		prevTrainData = data;
+
 		const tripUpdates: qdf.RealtimeTripUpdate[] = [];
 		const vehiclePositions: qdf.RealtimeVehiclePosition[] = [];
 
@@ -168,6 +202,7 @@ export async function updateRealtime(ctx: CacheContext) {
 			// Find matching trip_id in GTFS. Check trip_id and trip_short_name.
 			const matchingTrips = ctx.gtfs.getTrips({
 				trip_short_name: tripNumber,
+				feed_id: "VIA",
 			});
 			if (matchingTrips.length === 0) continue;
 

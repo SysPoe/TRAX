@@ -76,7 +76,9 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 	const uniquePatterns: any[][] = [];
 	const seenSignatures = new Set<string>();
 
-	logger.debug("Topology: Extracting unique stopping patterns...");
+	logger.debug("Extracting unique stopping patterns...", {
+		module: "topology"
+	});
 
 	railTrips.forEach((trip) => {
 		const stopTimes = gtfs.getStopTimes({ trip_id: trip.trip_id });
@@ -110,7 +112,9 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		}
 	});
 
-	logger.debug(`Topology: Found ${validEdges.size} potential edges. Pruning express skips...`);
+	logger.debug(`Found ${validEdges.size} potential edges. Pruning express skips...`, {
+		module: "topology"
+	});
 
 	uniquePatterns.forEach((pattern) => {
 		for (let i = 0; i < pattern.length - 2; i++) {
@@ -130,7 +134,9 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		validEdges.delete("KE|UN");
 	}
 
-	logger.debug(`Topology: Reduced to ${validEdges.size} physical edges. Building graph and matrix...`);
+	logger.debug(`Reduced to ${validEdges.size} physical edges. Building graph and matrix...`, {
+		module: "topology"
+	});
 
 	const matrix: SRTMatrix = {};
 	const adjacency: Record<string, string[]> = {};

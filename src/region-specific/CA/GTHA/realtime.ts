@@ -138,6 +138,16 @@ export function getActivePassengerCars(): Set<number> {
 	return activePassengerCars;
 }
 
+function unmergeId(ctx: CacheContext, stopId: string): string {
+	const merge = ctx.config.mergeStops.find((m) => m.to === stopId);
+	return merge ? merge.from[0] : stopId;
+}
+
+function mergeId(ctx: CacheContext, stopId: string): string {
+	const merge = ctx.config.mergeStops.find((m) => m.from.includes(stopId));
+	return merge ? merge.to : stopId;
+}
+
 function applyPlatformUpdate(
 	ctx: CacheContext,
 	stopTime: {
@@ -371,7 +381,10 @@ function getUniqueStopTimesForRange(
 	stopId?: string,
 ) {
 	const stopTimes = gtfs
-		.getStopTimes({ date: serviceDateStr, start_time: nowSecs, end_time: nowSecs + lookaheadSecs, stop_id: stopId })
+		.getStopTimes({
+			...{ date: serviceDateStr, start_time: nowSecs, end_time: nowSecs + lookaheadSecs },
+			...(stopId ? { stop_id: mergeId(ctx, stopId) } : {}),
+		})
 		.filter((v) => isConsideredTripId(v.trip_id, gtfs))
 		.map((v) => ({ stop_id: v.stop_id, trip_id: v.trip_id }))
 		.concat(
@@ -506,7 +519,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	);
 	timer.stop("updateAllSources:getStopTimesSourceD");
 
-	const sourceDStopIds = Array.from(new Set(uniqueStopTimesSourceD.map((v) => v.stop_id)));
+	const sourceDStopIds = Array.from(new Set(uniqueStopTimesSourceD.map((v) => unmergeId(ctx, v.stop_id))));
 	const sourceDFetches = sourceDStopIds
 		.filter((stop_id) => {
 			if (nowMs - (lastSourceDFetchMs[stop_id] ?? 0) < SOURCE_CD_THROTTLE_MS) return false;
@@ -514,7 +527,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 			return true;
 		})
 		.map((stop_id) => ({
-			stop_id,
+			stop_id: mergeId(ctx, stop_id),
 			promise: fetch(SOURCE_D_URL_TEMPLATE(stop_id))
 				.then(async (r) => (r.ok ? ((await r.json()) as GTHADeparturesResponse) : null))
 				.catch((e) => {
@@ -540,7 +553,11 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	}
 
 	const sourceEStopIds = Array.from(
-		new Set(uniqueStopTimesSourceE.filter((v) => !SOURCE_E_EXCLUDED_STOPS.has(v.stop_id)).map((v) => v.stop_id)),
+		new Set(
+			uniqueStopTimesSourceE
+				.filter((v) => !SOURCE_E_EXCLUDED_STOPS.has(unmergeId(ctx, v.stop_id)))
+				.map((v) => unmergeId(ctx, v.stop_id)),
+		),
 	);
 	const sourceEFetches = sourceEStopIds
 		.filter((stop_id) => {
@@ -551,7 +568,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 		.map((stop_id) => {
 			const corridor_codes = SOURCE_E_STOP_CONVERSION[stop_id] ?? [];
 			return {
-				stop_id,
+				stop_id: mergeId(ctx, stop_id),
 				corridors: corridor_codes.map((code) => ({
 					code,
 					promise: fetch(SOURCE_E_URL_TEMPLATE(code, stop_id), { headers: { Referer: SOURCE_E_REFERRER } })
@@ -635,8 +652,9 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 					getAugmentedTrips(ctx, st.trip_id)[0]?.instances.find((v) => v.serviceDate === dateStr) ??
 					getAugmentedTrips(ctx, st.trip_id)[0]?.instances[0];
 
-				const ast = instance?.stopTimes.find((ast) => ast.actual_stop_id === item.stop_id);
-				if (ast) applyPlatformUpdate(ctx, ast, item.stop_id, platform, null, "Source C", blockMap);
+				const ast = instance?.stopTimes.find((ast) => ast.actual_stop_id === mergeId(ctx, item.stop_id));
+				if (ast)
+					applyPlatformUpdate(ctx, ast, mergeId(ctx, item.stop_id), platform, null, "Source C", blockMap);
 			}
 		}
 	}

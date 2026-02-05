@@ -2,6 +2,7 @@ import * as qdf from "qdf-gtfs";
 import { AugmentedStop } from "./augmentedStop.js";
 import * as cache from "../cache.js";
 import { findPassingStopTimes } from "./SRT.js";
+import { findPassingStopTimesWasm } from "../../build/release.js";
 import { getPlatformData as loadPlatformData } from "./platformData.js";
 import { ServiceCapacity } from "./serviceCapacity.js";
 import { getServiceDayStart } from "./time.js";
@@ -52,7 +53,7 @@ export type AugmentedStopTime = {
 	scheduled_departure_date_offset: number;
 	actual_departure_date_offset: number;
 } & (
-		| {
+	| {
 			realtime: true;
 			realtime_info: {
 				delay_secs: number;
@@ -62,12 +63,12 @@ export type AugmentedStopTime = {
 				propagated: boolean;
 				rt_start_date: string | null;
 			};
-		}
-		| {
+	  }
+	| {
 			realtime: false;
 			realtime_info: null;
-		}
-	) & {
+	  }
+) & {
 		actual_stop?: AugmentedStop | null;
 		actual_parent_station?: AugmentedStop | null;
 		scheduled_stop?: AugmentedStop | null;
@@ -92,7 +93,7 @@ function attachStopReferences(
 }
 
 function calculateDelayClass(delaySecs: number) {
-	const info = calculateDelayClassWasm(BigInt(delaySecs));
+	const info = calculateDelayClassWasm(delaySecs);
 	return { str: info.str, cls: info.cls as "on-time" | "late" | "very-late" | "early" };
 }
 
@@ -102,7 +103,7 @@ function addDaysToDateString(dateStr: string, daysToAdd: number): string {
 	const key = `${dateStr}|${daysToAdd}`;
 	let cached = dateOffsetCache.get(key);
 	if (cached !== undefined) return cached;
-	const result = wasmAddDaysToDateString(dateStr, BigInt(daysToAdd));
+	const result = wasmAddDaysToDateString(dateStr, daysToAdd);
 	dateOffsetCache.set(key, result);
 	return result;
 }
@@ -243,37 +244,30 @@ export function augmentStopTimes(
 		serviceDate: string;
 		tripUpdate: qdf.RealtimeTripUpdate | null;
 		scheduleRelationship: qdf.TripScheduleRelationship;
-		initialDelay?: number;
 	},
 	ctx: cache.CacheContext,
 ): AugmentedStopTime[] {
 	ctx.augmented.timer.start("augmentStopTimes");
-	const { serviceDate, tripUpdate, scheduleRelationship, initialDelay } = instanceContext;
+	const { serviceDate, tripUpdate, scheduleRelationship } = instanceContext;
 	const tripId = tripUpdate?.trip.trip_id ?? staticStopTimes?.[0]?.trip_id ?? "";
 
 	const stopTimeUpdates = tripUpdate?.stop_time_updates ?? [];
-	const sequenceMap = new Map<number, { static?: qdf.StopTime; rt?: qdf.RealtimeStopTimeUpdate, feed_id: string }>();
+	const sequenceMap = new Map<number, { static?: qdf.StopTime; rt?: qdf.RealtimeStopTimeUpdate }>();
 
 	ctx.augmented.timer.start("augmentStopTimes:mergeStaticAndRealtime");
 	if (staticStopTimes) {
 		for (const st of staticStopTimes) {
 			const seq = st.stop_sequence;
-			if (!sequenceMap.has(seq)) sequenceMap.set(seq, {
-				feed_id: st.feed_id
-			});
+			if (!sequenceMap.has(seq)) sequenceMap.set(seq, {});
 			sequenceMap.get(seq)!.static = st;
-			sequenceMap.get(seq)!.feed_id = st.feed_id;
 		}
 	}
 
 	for (const rt of stopTimeUpdates) {
 		const seq = rt.stop_sequence;
 		if (seq !== undefined && seq !== null) {
-			if (!sequenceMap.has(seq)) sequenceMap.set(seq, {
-				feed_id: rt.feed_id,
-			});
+			if (!sequenceMap.has(seq)) sequenceMap.set(seq, {});
 			sequenceMap.get(seq)!.rt = rt;
-			sequenceMap.get(seq)!.feed_id = rt.feed_id;
 		}
 	}
 	ctx.augmented.timer.stop("augmentStopTimes:mergeStaticAndRealtime");
@@ -323,13 +317,50 @@ export function augmentStopTimes(
 			continuous_drop_off: 0,
 			_rtUpdate: r,
 			_isSkipped: isSkipped,
-			feed_id: entry.feed_id,
 		});
 	}
 	ctx.augmented.timer.stop("augmentStopTimes:buildMergedList");
 
 	const activeStops = mergedList.filter((s) => !s._isSkipped);
-	const interpolatedActiveStops = findPassingStopTimes(activeStops, ctx);
+	const interpolatedActiveStops = (() => {
+		const stopIds = activeStops.map((s) => s.stop_id);
+		const sequences = activeStops.map((s) => s.stop_sequence ?? 0);
+		const arrivals = activeStops.map((s) => s.arrival_time ?? 0);
+		const departures = activeStops.map((s) => s.departure_time ?? 0);
+
+		try {
+			const res = findPassingStopTimesWasm(stopIds, sequences, arrivals, departures);
+			if (
+				res &&
+				Array.isArray(res.stopIds) &&
+				Array.isArray(res.passing) &&
+				Array.isArray(res.sequences) &&
+				Array.isArray(res.arrivals) &&
+				Array.isArray(res.departures)
+			) {
+				const wasmStops = res.stopIds.map((id, idx) => ({
+					trip_id: tripId,
+					stop_id: id,
+					stop_sequence: res.sequences[idx],
+					arrival_time: res.arrivals[idx],
+					departure_time: res.departures[idx],
+					stop_headsign: "",
+					pickup_type: 0,
+					drop_off_type: 0,
+					shape_dist_traveled: 0,
+					timepoint: 1,
+					continuous_pickup: 0,
+					continuous_drop_off: 0,
+					_passing: !!res.passing[idx],
+				})) as any;
+				return wasmStops as any;
+			}
+		} catch (err) {
+			ctx.augmented.timer.log("WASM passing fallback", false);
+		}
+
+		return findPassingStopTimes(activeStops, ctx);
+	})();
 	const finalStops: IntermediateAST[] = [];
 
 	const firstValid = interpolatedActiveStops[0];
@@ -345,7 +376,7 @@ export function augmentStopTimes(
 		actDep: Math.floor(initialActualDep / 86400),
 	};
 
-	let lastDelay = initialDelay ?? 0;
+	let lastDelay = 0;
 	const propagateOnTime = scheduleRelationship === qdf.TripScheduleRelationship.SCHEDULED && !!tripUpdate;
 
 	let currentSequence = -1;

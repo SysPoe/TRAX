@@ -1,6 +1,6 @@
-import { ProgressInfo, GTFSFeedConfig } from "qdf-gtfs";
+import { ProgressInfo, GTFSFeedConfig, Stop } from "qdf-gtfs";
 import logger from "./utils/logger.js";
-import { VIA_MERGE_STOPS } from "./region-specific/CA/VIA/realtime.js";
+import { VIA_MERGE_STOPS, VIA_UPDATE_STOPS } from "./region-specific/CA/VIA/realtime.js";
 
 export type TRAXRegion = "AU/SEQ" | "CA" | "CA/GTHA";
 
@@ -23,6 +23,10 @@ export interface TraxConfig {
 		realtimeVehiclePositions: (string | GTFSFeedConfig)[] | null;
 	} | null;
 	mergeStops: MergeAction[];
+	updateStopActions: {
+		stop_id: string;
+		new: Partial<Stop>;
+	}[];
 }
 
 export type TraxConfigOptions = Partial<Omit<TraxConfig, "realtime">> & {
@@ -35,6 +39,10 @@ export type TraxConfigOptions = Partial<Omit<TraxConfig, "realtime">> & {
 		realtimeVehiclePositions?: (string | GTFSFeedConfig)[] | string | GTFSFeedConfig | null;
 	} | null;
 	mergeStops?: MergeAction[] | null;
+	updateStopActions?: {
+		stop_id: string;
+		new: Partial<Stop>;
+	}[];
 };
 
 export const PRESETS: Record<TRAXRegion, (apiKey?: string | undefined) => TraxConfigOptions> = {
@@ -81,6 +89,7 @@ export const PRESETS: Record<TRAXRegion, (apiKey?: string | undefined) => TraxCo
 			timezone: "America/Toronto",
 			realtime: null,
 			mergeStops: VIA_MERGE_STOPS,
+			updateStopActions: VIA_UPDATE_STOPS,
 		}) as TraxConfigOptions,
 	"CA/GTHA": (apiKey) =>
 		({
@@ -141,6 +150,7 @@ export const PRESETS: Record<TRAXRegion, (apiKey?: string | undefined) => TraxCo
 				],
 			},
 			mergeStops: VIA_MERGE_STOPS,
+			updateStopActions: VIA_UPDATE_STOPS,
 		}) as TraxConfigOptions,
 };
 
@@ -173,6 +183,7 @@ export function resolveConfig(options: TraxConfigOptions = {}): TraxConfig {
 			realtimeVehiclePositions: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions"],
 		},
 		mergeStops: [],
+		updateStopActions: [],
 	};
 
 	const resolvedRealtime = options.realtime

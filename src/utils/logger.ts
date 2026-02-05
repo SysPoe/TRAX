@@ -42,7 +42,7 @@ class Logger {
 		return this.level;
 	}
 
-	private writeLog(message: string): void {
+	public writeLog(message: string): void {
 		this.stream.write(message + "\n");
 	}
 

@@ -1,6 +1,7 @@
 import { CacheContext, getAugmentedTripInstance } from "../../../cache.js";
 import { loadDataFile } from "../../../utils/fs.js";
 import logger from "../../../utils/logger.js";
+import { fetchTrainData, getPrevTrainData } from "./realtime.js";
 
 // --- Configuration & Constants ---
 
@@ -107,7 +108,7 @@ export interface CarriageSegment {
 let cachedToken: { token: string; expiry: number } | null = null;
 let cachedBooking: { booking: any; timestamp: number } | null = null;
 const layoutCache = new Map<string, { data: CarriageLayoutRes; timestamp: number }>();
-const consistCache = new Map<string, { data: string[]; timestamp: number }>();
+const consistCache = new Map<string, { data: CarriageLayoutRes; timestamp: number }>();
 
 let tripsData: Record<string, { from: string; to: string; stations: { station: string; code: string }[] }> | null =
 	null;
@@ -146,12 +147,61 @@ async function getToken(): Promise<string> {
 	return data.access_token;
 }
 
+async function getDummySegment(token: string): Promise<any> {
+	let date = new Date();
+	date.setDate(date.getDate() + 1);
+	let res = await fetch("https://api.reservia.viarail.ca/orientation/journey", {
+		headers: {
+			accept: "application/json, text/plain, */*",
+			"accept-language": "en-CA",
+			authorization: "Bearer " + token,
+			"cache-control": "no-cache",
+			"content-type": "application/json",
+			pragma: "no-cache",
+			"sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Microsoft Edge";v="144"',
+			"sec-ch-ua-mobile": "?0",
+			"sec-ch-ua-platform": '"Windows"',
+			"sec-fetch-dest": "empty",
+			"sec-fetch-mode": "cors",
+			"sec-fetch-site": "same-site",
+			"sec-gpc": "1",
+		},
+		referrer: "https://reservia.viarail.ca/",
+		body: JSON.stringify({
+			currency: "CAD",
+			passengers: [{ id: "passenger_1", type: "ADT" }],
+			travels: [
+				{
+					origin: "TRTO",
+					destination: "OTTW",
+					departure: date.toISOString().slice(0, 10),
+					direction: "outbound",
+					product_types: ["ST"],
+				},
+			],
+		}),
+		method: "POST",
+	});
+	let json = await res.json();
+	let leg = json.data.offer.travels[0].routes[0].legs[0];
+	return {
+		origin: "TRTO",
+		destination: "OTTW",
+		direction: "outbound",
+		start_validity_date: leg.service_schedule_date.slice(0, 10),
+		service_name: leg.service_name,
+		service_identifier: leg.service_identifier,
+		items: [{ tariff_code: "ESC", passenger_id: "passenger_1" }],
+	};
+}
+
 async function getBooking(token: string): Promise<any> {
 	if (cachedBooking && cachedBooking.timestamp > Date.now() - BOOKING_CACHE_MS) {
 		return cachedBooking.booking;
 	}
 
 	logger.debug("Creating dummy VIA booking for layout requests...", { module: "VIA", function: "getBooking" });
+
 	// Minimal booking needed for the layout API.
 	const res = await fetch(BOOKING_URL, {
 		headers: {
@@ -161,17 +211,7 @@ async function getBooking(token: string): Promise<any> {
 			Referer,
 		},
 		body: JSON.stringify({
-			segments: [
-				{
-					origin: "TRTO",
-					destination: "OTTW",
-					direction: "outbound",
-					start_validity_date: new Date().toISOString().split("T")[0],
-					service_name: "VIA50",
-					service_identifier: "",
-					items: [{ tariff_code: "ESC", passenger_id: "passenger_1" }],
-				},
-			],
+			segments: [await getDummySegment(token)],
 			passengers: [
 				{ id: "passenger_1", type: "ADT", travel_passes: [], discount_cards: [], disability_type: "ND" },
 			],
@@ -246,7 +286,7 @@ export async function getCarriageLayout(
 		module: "VIA",
 		function: "getCarriageLayout",
 	});
-	const res = await fetch(LAYOUT_URL, {
+	let res = await fetch(LAYOUT_URL, {
 		headers: {
 			accept: "application/json, text/plain, */*",
 			authorization: "Bearer " + token,
@@ -266,7 +306,6 @@ export async function getCarriageLayout(
 				service_name: "VIA" + tripNumStr,
 				start_validity_date: date,
 				start_validity_time: "00:00:00",
-				direction: "outward",
 			},
 			comfort_zones: ["ESC"],
 			product_code: "ESC",
@@ -276,7 +315,46 @@ export async function getCarriageLayout(
 
 	if (!res.ok) {
 		const errText = await res.text();
-		throw new Error(`Failed to fetch carriage layout: ${res.status} ${errText}`);
+		logger.warn(
+			`Failed to fetch carriage layout (initial): ${res.status} ${errText}. Retrying with swapped stations...`,
+			{
+				module: "VIA",
+				function: "getCarriageLayout",
+			},
+		);
+
+		// Retry with swapped stations (sometimes the API is picky about direction)
+		res = await fetch(LAYOUT_URL, {
+			headers: {
+				accept: "application/json, text/plain, */*",
+				authorization: "Bearer " + token,
+				"content-type": "application/json",
+				Referer,
+			},
+			body: JSON.stringify({
+				from_station: toStation,
+				to_station: fromStation,
+				date,
+				service_name: "VIA" + tripNumStr,
+				booking,
+				segment: {
+					id: "segment_1",
+					destination_station: fromStation,
+					origin_station: toStation,
+					service_name: "VIA" + tripNumStr,
+					start_validity_date: date,
+					start_validity_time: "00:00:00",
+				},
+				comfort_zones: ["ESC"],
+				product_code: "ESC",
+			}),
+			method: "POST",
+		});
+
+		if (!res.ok) {
+			const errText = await res.text();
+			throw new Error(`Failed to fetch carriage layout after retry: ${res.status} ${errText}`);
+		}
 	}
 
 	const data: CarriageLayoutRes = await res.json();
@@ -288,7 +366,7 @@ export async function getCarriageLayout(
  * Gets the VIA consist (car sequence) for a given instance_id.
  * Matches trip trip_number to tripNumber.
  */
-export async function getViaConsist(instance_id: string, ctx: CacheContext): Promise<string[] | null> {
+export async function getViaConsist(instance_id: string, ctx: CacheContext): Promise<CarriageLayoutRes | null> {
 	try {
 		const cached = consistCache.get(instance_id);
 		if (cached && cached.timestamp > Date.now() - CONSIST_CACHE_MS) {
@@ -346,9 +424,8 @@ export async function getViaConsist(instance_id: string, ctx: CacheContext): Pro
 			return null;
 		}
 
-		const consist = layout.carriageLayout.carriages.map((c) => c.carriage_number || c.carriage_name);
-		consistCache.set(instance_id, { data: consist, timestamp: Date.now() });
-		return consist;
+		consistCache.set(instance_id, { data: layout, timestamp: Date.now() });
+		return layout;
 	} catch (e) {
 		logger.error(`Error in getViaConsist for ${instance_id}: ${(e as any).message ?? e}`, {
 			module: "VIA",

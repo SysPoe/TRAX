@@ -18,9 +18,9 @@ async function main() {
 
 	console.log(`\nGTFS data loaded successfully in ${(end_static - start_static) / 1000}s.\n`);
 
-	const stop = TRAX.getAugmentedStops("UN")[0];
+	const stop = TRAX.getAugmentedStops("TRTO")[0];
 	if (!stop) {
-		console.error("Could not find stop UN");
+		console.error("Could not find stop TRTO");
 		process.exit(1);
 	}
 
@@ -34,7 +34,7 @@ async function main() {
 	console.log(`Getting departures for ${stop.stop_name} on ${date}...`);
 
 	let depstart = Date.now();
-	const deps = TRAX.utils.departures.getDeparturesForStop(stop, date, "08:00:00", "23:59:59");
+	const deps = TRAX.utils.departures.getDeparturesForStop(stop, date, "00:00:00", "23:59:59");
 	let depend = Date.now();
 
 	console.log(`\nFound ${deps.length} departures.`);

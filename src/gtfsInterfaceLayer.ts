@@ -9,6 +9,8 @@ export async function loadStatic(gtfs: GTFS, config: TraxConfig) {
 	await gtfs.loadStatic(config.urls);
 	logger.info("Merging stops...");
 	for (const st of config.mergeStops) gtfs.actions.mergeStops(st.to, st.from);
+	logger.info("Updating stops...");
+	for (const st of config.updateStopActions) gtfs.actions.updateStop(st.stop_id, st.new);
 	logger.info("Static GTFS data loaded.");
 }
 
