@@ -74,12 +74,12 @@ export function getDeparturesForStop(
 	ctx.augmented.timer.stop("getDeparturesForStop:collect");
 
 	ctx.augmented.timer.start("getDeparturesForStop:wasm");
-	const originalIndices = new BigInt64Array(allTimestamps.length);
-	for (let i = 0; i < allTimestamps.length; i++) originalIndices[i] = BigInt(i);
+	const originalIndices: number[] = new Array(allTimestamps.length);
+	for (let i = 0; i < allTimestamps.length; i++) originalIndices[i] = i;
 
 	const filteredIndicesBig = filterAndSortDepartures(
 		allTimestamps,
-		Array.from(originalIndices),
+		originalIndices,
 		windowStartAbs,
 		windowEndAbs,
 	);
@@ -161,12 +161,12 @@ export function getServiceDateDeparturesForStop(
 	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:collect");
 
 	ctx.augmented.timer.start("getServiceDateDeparturesForStop:wasm");
-	const originalIndices = new BigInt64Array(allTimestamps.length);
-	for (let i = 0; i < allTimestamps.length; i++) originalIndices[i] = BigInt(i);
+	const originalIndices: number[] = new Array(allTimestamps.length);
+	for (let i = 0; i < allTimestamps.length; i++) originalIndices[i] = i;
 
 	const filteredIndicesBig = filterAndSortDepartures(
 		allTimestamps,
-		Array.from(originalIndices),
+		originalIndices,
 		windowStartAbs,
 		windowEndAbs,
 	);

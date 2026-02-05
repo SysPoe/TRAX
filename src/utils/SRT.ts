@@ -482,12 +482,11 @@ export function findPassingStopTimes(
 		}
 
 		const segmentEmus = [...currentPassingRun.map((r) => r.emu), srt.emu];
-		const interpolatedTimesBig = wasmInterpolateTimes(
-			BigInt(startTime.departure_time),
-			BigInt(endTime.arrival_time),
+		const interpolatedTimes = wasmInterpolateTimes(
+			startTime.departure_time,
+			endTime.arrival_time,
 			segmentEmus,
 		);
-		const interpolatedTimes = interpolatedTimesBig.map(Number);
 
 		for (let i = 0; i < currentPassingRun.length; i++) {
 			const run = currentPassingRun[i];

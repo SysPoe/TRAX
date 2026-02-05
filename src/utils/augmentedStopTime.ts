@@ -2,7 +2,6 @@ import * as qdf from "qdf-gtfs";
 import { AugmentedStop } from "./augmentedStop.js";
 import * as cache from "../cache.js";
 import { findPassingStopTimes } from "./SRT.js";
-import { findPassingStopTimesWasm } from "../../build/release.js";
 import { getPlatformData as loadPlatformData } from "./platformData.js";
 import { ServiceCapacity } from "./serviceCapacity.js";
 import { getServiceDayStart } from "./time.js";
@@ -315,6 +314,7 @@ export function augmentStopTimes(
 			timepoint: s?.timepoint ?? 1,
 			continuous_pickup: 0,
 			continuous_drop_off: 0,
+			feed_id: s?.feed_id ?? (r as any)?.feed_id ?? "",
 			_rtUpdate: r,
 			_isSkipped: isSkipped,
 		});
@@ -322,45 +322,7 @@ export function augmentStopTimes(
 	ctx.augmented.timer.stop("augmentStopTimes:buildMergedList");
 
 	const activeStops = mergedList.filter((s) => !s._isSkipped);
-	const interpolatedActiveStops = (() => {
-		const stopIds = activeStops.map((s) => s.stop_id);
-		const sequences = activeStops.map((s) => s.stop_sequence ?? 0);
-		const arrivals = activeStops.map((s) => s.arrival_time ?? 0);
-		const departures = activeStops.map((s) => s.departure_time ?? 0);
-
-		try {
-			const res = findPassingStopTimesWasm(stopIds, sequences, arrivals, departures);
-			if (
-				res &&
-				Array.isArray(res.stopIds) &&
-				Array.isArray(res.passing) &&
-				Array.isArray(res.sequences) &&
-				Array.isArray(res.arrivals) &&
-				Array.isArray(res.departures)
-			) {
-				const wasmStops = res.stopIds.map((id, idx) => ({
-					trip_id: tripId,
-					stop_id: id,
-					stop_sequence: res.sequences[idx],
-					arrival_time: res.arrivals[idx],
-					departure_time: res.departures[idx],
-					stop_headsign: "",
-					pickup_type: 0,
-					drop_off_type: 0,
-					shape_dist_traveled: 0,
-					timepoint: 1,
-					continuous_pickup: 0,
-					continuous_drop_off: 0,
-					_passing: !!res.passing[idx],
-				})) as any;
-				return wasmStops as any;
-			}
-		} catch (err) {
-			ctx.augmented.timer.log("WASM passing fallback", false);
-		}
-
-		return findPassingStopTimes(activeStops, ctx);
-	})();
+	const interpolatedActiveStops = findPassingStopTimes(activeStops, ctx);
 	const finalStops: IntermediateAST[] = [];
 
 	const firstValid = interpolatedActiveStops[0];

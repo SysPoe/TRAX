@@ -4,6 +4,11 @@ import logger from "./utils/logger.js";
 
 let currentGtfs: GTFS | null = null;
 
+export function getGtfs(): GTFS {
+	if (!currentGtfs) throw new Error("GTFS has not been initialized yet.");
+	return currentGtfs;
+}
+
 export async function loadStatic(gtfs: GTFS, config: TraxConfig) {
 	logger.info("Loading GTFS data...");
 	await gtfs.loadStatic(config.urls);
@@ -49,5 +54,6 @@ export async function createGtfs(config: TraxConfig, doRealtime: boolean = true)
 				})
 			: Promise.resolve(),
 	]);
+	currentGtfs = gtfs;
 	return gtfs;
 }

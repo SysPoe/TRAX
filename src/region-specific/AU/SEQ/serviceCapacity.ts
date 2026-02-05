@@ -12,8 +12,6 @@ import { ServiceCapacity } from "../../../utils/serviceCapacity.js";
 
 const pipe = promisify(pipeline);
 
-// const FILE_PATH = getCacheFilePath("service_capacity.csv");
-
 export type ServiceCapacityData = {
 	_id: string;
 	route: string;
@@ -40,7 +38,7 @@ function getMap<K, V>(map: Map<K, V>, key: K, factory: () => V): V {
 
 export async function ensureServiceCapacityData(config: TraxConfig): Promise<void> {
 	const cacheDir = config.cacheDir;
-	const FILE_PATH = getCacheFilePath("service_capacity.csv", cacheDir);
+	const FILE_PATH = getCacheFilePath("region-specific/seq/service_capacity.csv", cacheDir);
 
 	if (!fs.existsSync(cacheDir)) {
 		fs.mkdirSync(cacheDir, { recursive: true });
@@ -50,7 +48,7 @@ export async function ensureServiceCapacityData(config: TraxConfig): Promise<voi
 	if (!fs.existsSync(FILE_PATH)) {
 		logger.debug("Extracting service capacity data from local archive...", { module: "serviceCapacity" });
 		try {
-			const zipPath = getDataFilePath("service_capacity.csv.gz");
+			const zipPath = getDataFilePath("region-specific/seq/service_capacity.csv.gz");
 
 			await pipe(fs.createReadStream(zipPath), zlib.createGunzip(), fs.createWriteStream(FILE_PATH));
 			logger.debug("Service capacity data extracted.", { module: "serviceCapacity" });
@@ -63,7 +61,7 @@ export async function ensureServiceCapacityData(config: TraxConfig): Promise<voi
 }
 
 function loadServiceCapacityData(cacheDir: string) {
-	const FILE_PATH = getCacheFilePath("service_capacity.csv", cacheDir);
+	const FILE_PATH = getCacheFilePath("region-specific/seq/service_capacity.csv", cacheDir);
 
 	if (!fs.existsSync(FILE_PATH)) {
 		logger.warn("Service capacity file not found.", { module: "serviceCapacity" });

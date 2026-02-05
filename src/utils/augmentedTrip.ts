@@ -34,6 +34,13 @@ export type AugmentedTrip = qdf.Trip & {
 	instances: AugmentedTripInstance[];
 };
 
+export type RunSeries = {
+	series: string;
+	date: string;
+	trips: string[];
+	vehicle_sightings: { vehicle_id: string; trip_id: string }[];
+};
+
 function dateToEpochDays(ymd: number | string): number {
 	const ymdStr = ymd.toString();
 	let y = Number.parseInt(ymdStr.slice(0, 4));
@@ -219,4 +226,24 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 
 	ctx.augmented.timer.stop("augmentTrip");
 	return augmentedTrip;
+}
+
+export function calculateRunSeries(instance: AugmentedTripInstance, ctx: cache.CacheContext): RunSeries {
+	const seriesRaw = instance.trip_number || instance.trip_id.slice(-4);
+	const series = seriesRaw.toUpperCase();
+	const vehicle_sightings: { vehicle_id: string; trip_id: string }[] = [];
+	if (instance.vehicle_id) vehicle_sightings.push({ vehicle_id: instance.vehicle_id, trip_id: instance.trip_id });
+	if (instance.consist) {
+		for (const carId of instance.consist) {
+			vehicle_sightings.push({ vehicle_id: carId, trip_id: instance.trip_id });
+		}
+	}
+	const runSeries: RunSeries = {
+		series,
+		date: instance.serviceDate,
+		trips: [instance.trip_id],
+		vehicle_sightings,
+	};
+	cache.setRunSeries(instance.serviceDate, series, runSeries, ctx);
+	return runSeries;
 }

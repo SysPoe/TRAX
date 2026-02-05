@@ -14,7 +14,9 @@ export function getServiceDatesByTrip(
 	minEpochDay: number = -1,
 	maxEpochDay: number = -1,
 ): string[] {
-	return getServiceDatesByTripWasm(trip_id, BigInt(minEpochDay), BigInt(maxEpochDay));
+	void minEpochDay;
+	void maxEpochDay;
+	return getServiceDatesByTripWasm(trip_id);
 }
 
 export function syncCalendarsToWasm(ctx: CacheContext) {
@@ -36,7 +38,7 @@ export function syncCalendarsToWasm(ctx: CacheContext) {
 	}
 	const calendarDates = getCalendarDates(ctx);
 	for (const cd of calendarDates) {
-		addWasmCalendarDate(cd.service_id, String(cd.date), BigInt(cd.exception_type));
+		addWasmCalendarDate(cd.service_id, String(cd.date), cd.exception_type ?? 0);
 	}
 	const trips = getRawTrips(ctx);
 	for (const t of trips) {
