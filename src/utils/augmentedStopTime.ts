@@ -6,10 +6,7 @@ import { getPlatformData as loadPlatformData } from "./platformData.js";
 import { ServiceCapacity } from "./serviceCapacity.js";
 import { getServiceDayStart } from "./time.js";
 import { Timer } from "./timer.js";
-import {
-	addDaysToDateString as wasmAddDaysToDateString,
-	calculateDelayClassWasm,
-} from "../../build/release.js";
+import { addDaysToDateString as wasmAddDaysToDateString, calculateDelayClassWasm } from "../../build/release.js";
 
 export type AugmentedStopTime = {
 	_stopTime: qdf.StopTime | null;
@@ -195,11 +192,11 @@ function assignPlatformSides(st: IntermediateAST[], platformDataMap: any): Augme
 		}
 
 		if (actPlat?.trackCode === prevActualTrack && schPlat?.trackCode === prevScheduledTrack) {
-			pathBuffer = [...candidatePathB];
+			pathBuffer = candidatePathB.slice();
 		} else if (actPlat?.trackCode === prevActualTrack) {
-			pathBuffer = [...candidatePathA];
+			pathBuffer = candidatePathA.slice();
 		} else if (schPlat?.trackCode === prevScheduledTrack) {
-			pathBuffer = [...candidatePathS];
+			pathBuffer = candidatePathS.slice();
 		}
 
 		let actSide: "left" | "right" | "both" | null = null;
@@ -226,9 +223,9 @@ function assignPlatformSides(st: IntermediateAST[], platformDataMap: any): Augme
 		attachStopReferences(newEntry, refs);
 
 		pathBuffer.push(newEntry);
-		candidatePathB = [...pathBuffer];
-		candidatePathA = [...pathBuffer];
-		candidatePathS = [...pathBuffer];
+		candidatePathB = pathBuffer.slice();
+		candidatePathA = pathBuffer.slice();
+		candidatePathS = pathBuffer.slice();
 
 		prevActualTrack = actPlat?.trackCode ?? "";
 		prevScheduledTrack = schPlat?.trackCode ?? "";

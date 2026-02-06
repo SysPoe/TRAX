@@ -10,13 +10,14 @@ async function main() {
 	console.log("Loading gtfs data...");
 
 	const TRAX = new TRAXClass(PRESETS["CA/GTHA"](process.env.METROLINX_KEY));
-	logger.setLevel(LogLevel.TIMING);
+	logger.setLevel(LogLevel.DEBUG);
 
 	let start_static = Date.now();
 	await TRAX.loadGTFS(true, false);
 	let end_static = Date.now();
 
-	console.log(`\nGTFS data loaded successfully in ${(end_static - start_static) / 1000}s.\n`);
+	const loadTime = (end_static - start_static) / 1000;
+	console.log(`\nGTFS data loaded successfully in ${loadTime.toFixed(2)}s.\n`);
 
 	const stop = TRAX.getAugmentedStops("TRTO")[0];
 	if (!stop) {

@@ -6,13 +6,16 @@ export class Timer {
 	private counts: Map<string, number> = new Map();
 	private minTimes: Map<string, number> = new Map();
 	private maxTimes: Map<string, number> = new Map();
+	public disabled = false;
 
 	public start(category: string) {
+		if (this.disabled) return;
 		this.activeTimers.set(category, performance.now());
 		this.counts.set(category, (this.counts.get(category) ?? 0) + 1);
 	}
 
 	public stop(category: string) {
+		if (this.disabled) return;
 		const start = this.activeTimers.get(category);
 		if (start !== undefined) {
 			const elapsed = performance.now() - start;

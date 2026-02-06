@@ -48,7 +48,7 @@ export class TRAX {
 
 		this.ctx = {
 			raw: cache.createEmptyRawCache(),
-			augmented: cache.createEmptyAugmentedCache(),
+			augmented: cache.createAugmentedCacheWithConfig(this.config),
 			config: this.config,
 		};
 	}

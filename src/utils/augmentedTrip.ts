@@ -48,10 +48,21 @@ function dateToEpochDays(ymd: number | string): number {
 	let d = Number.parseInt(ymdStr.slice(6, 8));
 	m = (m + 9) % 12;
 	y = y - Math.floor(m / 10);
-	return 365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) + Math.floor((m * 306 + 5) / 10) + (d - 1);
+	return (
+		365 * y +
+		Math.floor(y / 4) -
+		Math.floor(y / 100) +
+		Math.floor(y / 400) +
+		Math.floor((m * 306 + 5) / 10) +
+		(d - 1)
+	);
 }
 
-export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedTrip {
+export function augmentTrip(
+	trip: qdf.Trip,
+	ctx: cache.CacheContext,
+	tripUpdatesCache?: Map<string, qdf.RealtimeTripUpdate[]>,
+): AugmentedTrip {
 	ctx.augmented.timer.start("augmentTrip");
 	const todayEpoch = dateToEpochDays(getToday(ctx.config));
 	const serviceDates = getServiceDatesByTrip(trip.trip_id, ctx, todayEpoch - 15, todayEpoch + 365);
@@ -61,25 +72,30 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 	ctx.augmented.timer.stop("augmentTrip:getRawStopTimes");
 
 	ctx.augmented.timer.start("augmentTrip:getParentStops");
-	const getParentStationId = (stopId: string): string => {
-		const cached = ctx.augmented.stopsRec.get(stopId);
-		if (cached) return cached.parent_stop_id ?? "";
-		const aug = cache.getAugmentedStops(ctx, stopId)[0];
-		return aug?.parent_stop_id ?? "";
-	};
-
-	let parentStops = rawStopTimes.map((st) => getParentStationId(st.stop_id));
+	const parentStops = new Array<string>(rawStopTimes.length);
+	const stopsRec = ctx.augmented.stopsRec;
+	for (let i = 0; i < rawStopTimes.length; i++) {
+		const cached = stopsRec.get(rawStopTimes[i].stop_id);
+		parentStops[i] = cached?.parent_stop_id ?? "";
+	}
 	ctx.augmented.timer.stop("augmentTrip:getParentStops");
 
 	ctx.augmented.timer.start("augmentTrip:findExpress");
-	let expressInfo = findExpress(
-		parentStops.filter((id): id is string => !!id),
-		ctx,
-	);
+	const parentStopSignature = parentStops.join("|");
+	let expressInfo = ctx.augmented.expressInfoCache.get(parentStopSignature);
+	if (!expressInfo) {
+		expressInfo = findExpress(
+			parentStops.filter((id): id is string => !!id),
+			ctx,
+		);
+		ctx.augmented.expressInfoCache.set(parentStopSignature, expressInfo);
+	}
 	ctx.augmented.timer.stop("augmentTrip:findExpress");
 
 	ctx.augmented.timer.start("augmentTrip:getTripUpdates");
-	const updates = cache.getTripUpdates(ctx, trip.trip_id);
+	const updates = tripUpdatesCache
+		? (tripUpdatesCache.get(trip.trip_id) ?? [])
+		: cache.getTripUpdates(ctx, trip.trip_id);
 	ctx.augmented.timer.stop("augmentTrip:getTripUpdates");
 
 	const createInstance = (
@@ -120,7 +136,8 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 			}
 			if (dates.size === 1) {
 				const singleDate = dates.values().next().value as string;
-				if (singleDate === serviceDate) return (type === "scheduled" ? scheduled_dates : actual_dates) ?? [singleDate];
+				if (singleDate === serviceDate)
+					return (type === "scheduled" ? scheduled_dates : actual_dates) ?? [singleDate];
 				return [singleDate];
 			}
 			return Array.from(dates).sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
@@ -140,8 +157,7 @@ export function augmentTrip(trip: qdf.Trip, ctx: cache.CacheContext): AugmentedT
 			case "CA":
 			case "CA/GTHA":
 				trip_number = trip.trip_id.slice(-4);
-				if (trip.trip_short_name && /^\d{1,3}$/.test(trip.trip_short_name))
-					trip_number = trip.trip_short_name; // VIA rail
+				if (trip.trip_short_name && /^\d{1,3}$/.test(trip.trip_short_name)) trip_number = trip.trip_short_name; // VIA rail
 				break;
 			default:
 				trip_number = trip.trip_id.slice(-4);

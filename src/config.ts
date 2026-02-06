@@ -17,6 +17,7 @@ export interface TraxConfig {
 	progressLog: (info: ProgressInfo) => void;
 	region: TRAXRegion | "none";
 	timezone: string;
+	disableTimers: boolean;
 	realtime: {
 		realtimeAlerts: (string | GTFSFeedConfig)[] | null;
 		realtimeTripUpdates: (string | GTFSFeedConfig)[] | null;
@@ -33,6 +34,7 @@ export type TraxConfigOptions = Partial<Omit<TraxConfig, "realtime">> & {
 	url?: string;
 	headers?: { [key: string]: string } | null;
 	timezone?: string;
+	disableTimers?: boolean;
 	realtime?: {
 		realtimeAlerts?: (string | GTFSFeedConfig)[] | string | GTFSFeedConfig | null;
 		realtimeTripUpdates?: (string | GTFSFeedConfig)[] | string | GTFSFeedConfig | null;
@@ -177,6 +179,7 @@ export function resolveConfig(options: TraxConfigOptions = {}): TraxConfig {
 		progressLog: (info: ProgressInfo) => logger.progress(info),
 		region: "AU/SEQ",
 		timezone: "Australia/Brisbane",
+		disableTimers: true,
 		realtime: {
 			realtimeAlerts: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts"],
 			realtimeTripUpdates: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates"],
