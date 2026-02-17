@@ -77,7 +77,7 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 	const seenSignatures = new Set<string>();
 
 	logger.debug("Extracting unique stopping patterns...", {
-		module: "topology"
+		module: "topology",
 	});
 
 	railTrips.forEach((trip) => {
@@ -113,7 +113,7 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 	});
 
 	logger.debug(`Found ${validEdges.size} potential edges. Pruning express skips...`, {
-		module: "topology"
+		module: "topology",
 	});
 
 	uniquePatterns.forEach((pattern) => {
@@ -135,7 +135,7 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 	}
 
 	logger.debug(`Reduced to ${validEdges.size} physical edges. Building graph and matrix...`, {
-		module: "topology"
+		module: "topology",
 	});
 
 	const matrix: SRTMatrix = {};
@@ -482,11 +482,7 @@ export function findPassingStopTimes(
 		}
 
 		const segmentEmus = [...currentPassingRun.map((r) => r.emu), srt.emu];
-		const interpolatedTimes = wasmInterpolateTimes(
-			startTime.departure_time,
-			endTime.arrival_time,
-			segmentEmus,
-		);
+		const interpolatedTimes = wasmInterpolateTimes(startTime.departure_time, endTime.arrival_time, segmentEmus);
 
 		for (let i = 0; i < currentPassingRun.length; i++) {
 			const run = currentPassingRun[i];
@@ -499,7 +495,7 @@ export function findPassingStopTimes(
 				stop_sequence:
 					(startTime.stop_sequence ?? 0) +
 					((i + 1) * ((endTime.stop_sequence ?? 0) - (startTime.stop_sequence ?? 0))) /
-					(currentPassingRun.length + 1),
+						(currentPassingRun.length + 1),
 				departure_time: interpolatedTime,
 				arrival_time: interpolatedTime,
 				drop_off_type: 1,

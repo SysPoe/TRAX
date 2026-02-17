@@ -22,16 +22,12 @@ export interface AugmentationContext {
 	facilitiesByStopId?: Map<string, RailwayStationFacility>;
 }
 
-export function augmentStop(
-	stop: qdf.Stop,
-	ctx: cache.CacheContext,
-	augCtx?: AugmentationContext,
-): AugmentedStop {
+export function augmentStop(stop: qdf.Stop, ctx: cache.CacheContext, augCtx?: AugmentationContext): AugmentedStop {
 	const parentId = stop.parent_station ?? null;
 
 	let childIds: string[] = [];
 	if (augCtx?.childrenByParent) {
-		childIds = augCtx.childrenByParent.get(stop.stop_id)?.map(s => s.stop_id) ?? [];
+		childIds = augCtx.childrenByParent.get(stop.stop_id)?.map((s) => s.stop_id) ?? [];
 	} else {
 		const childStops = cache.getRawStops(ctx).filter((s) => s.parent_station === stop.stop_id);
 		childIds = childStops.map((s) => s.stop_id);
@@ -49,7 +45,8 @@ export function augmentStop(
 		let myPlace = null;
 		const trimmedStopName = stop.stop_name?.toLowerCase().replace("station", "").trim();
 		if (augCtx?.qrtPlacesByName) {
-			myPlace = augCtx.qrtPlacesByName.get(trimmedStopName!) ||
+			myPlace =
+				augCtx.qrtPlacesByName.get(trimmedStopName!) ||
 				(trimmedStopName === "roma street" ? augCtx.qrtPlacesByName.get("roma street") : null);
 		} else {
 			const qrt_Places = cache.SEQgetQRTPlaces(ctx);
@@ -62,7 +59,8 @@ export function augmentStop(
 
 		let myFacility = null;
 		if (augCtx?.facilitiesByStopId) {
-			myFacility = augCtx.facilitiesByStopId.get(stop.stop_id) ||
+			myFacility =
+				augCtx.facilitiesByStopId.get(stop.stop_id) ||
 				(stop.parent_station ? augCtx.facilitiesByStopId.get(stop.parent_station) : null);
 		} else {
 			const facilities = cache.SEQgetRailwayStationFacilities(ctx);

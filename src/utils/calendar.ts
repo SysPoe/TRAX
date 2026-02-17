@@ -33,7 +33,7 @@ export function syncCalendarsToWasm(ctx: CacheContext) {
 			!!c.saturday,
 			!!c.sunday,
 			String(c.start_date),
-			String(c.end_date)
+			String(c.end_date),
 		);
 	}
 	const calendarDates = getCalendarDates(ctx);

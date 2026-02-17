@@ -35,14 +35,14 @@ export function loadDataFileAsync(filePath: string): Promise<string> {
 					.access(p)
 					.then(() => {
 						resolved = true;
-						fs.promises.readFile(p, "utf-8").then(res).catch(rej)
+						fs.promises.readFile(p, "utf-8").then(res).catch(rej);
 					})
-					.catch(() => { }),
+					.catch(() => {}),
 			);
 		Promise.all(promises).then(() => {
 			if (!resolved) rej(`Data file not found: ${filePath}`);
 		});
-	})
+	});
 }
 
 export function getDataFilePath(filePath: string): string {

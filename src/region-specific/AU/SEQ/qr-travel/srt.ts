@@ -26,20 +26,20 @@ export interface QRTSRTStop {
 }
 
 function getSRTData(ctx: CacheContext): SRTEntry[] {
-    if (ctx.raw.regionSpecific.SEQ.platformData?.srtData) {
-        return ctx.raw.regionSpecific.SEQ.platformData.srtData;
-    }
-    let data: SRTEntry[] = JSON.parse(loadDataFile("region-specific/seq/SRT_qrt.json"));
-    data = data.concat(
-        data.map((v) => ({
-            from: v.to,
-            to: v.from,
-            travelTrain: v.travelTrain,
-        })),
-    );
-    if (!ctx.raw.regionSpecific.SEQ.platformData) ctx.raw.regionSpecific.SEQ.platformData = {};
-    ctx.raw.regionSpecific.SEQ.platformData.srtData = data;
-    return data;
+	if (ctx.raw.regionSpecific.SEQ.platformData?.srtData) {
+		return ctx.raw.regionSpecific.SEQ.platformData.srtData;
+	}
+	let data: SRTEntry[] = JSON.parse(loadDataFile("region-specific/seq/SRT_qrt.json"));
+	data = data.concat(
+		data.map((v) => ({
+			from: v.to,
+			to: v.from,
+			travelTrain: v.travelTrain,
+		})),
+	);
+	if (!ctx.raw.regionSpecific.SEQ.platformData) ctx.raw.regionSpecific.SEQ.platformData = {};
+	ctx.raw.regionSpecific.SEQ.platformData.srtData = data;
+	return data;
 }
 
 function getDelay(delaySecs: number | null = null, departureTime: string | null, config: TraxConfig) {
@@ -53,10 +53,10 @@ function getDelay(delaySecs: number | null = null, departureTime: string | null,
 			? delaySecs == 0
 				? "on time"
 				: `${Math.floor(roundedDelay / 3600)}h ${Math.floor(
-					(Math.abs(roundedDelay) % 3600) / 60,
-				)}m ${delaySecs > 0 ? "late" : "early"}`
-					.replace(/^0h/, "")
-					.trim()
+						(Math.abs(roundedDelay) % 3600) / 60,
+					)}m ${delaySecs > 0 ? "late" : "early"}`
+						.replace(/^0h/, "")
+						.trim()
 			: "scheduled";
 	const delayClass: "very-late" | "late" | "early" | "on-time" | "scheduled" =
 		delaySecs != null && roundedDelay != null
@@ -73,8 +73,11 @@ function getDelay(delaySecs: number | null = null, departureTime: string | null,
 
 function pushSRT(
 	arr: QRTSRTStop[],
-	stop: Exclude<QRTSRTStop, "departureDelayClass" | "departureDelayString" | "arrivalDelayClass" | "arrivalDelayString">,
-	config: TraxConfig
+	stop: Exclude<
+		QRTSRTStop,
+		"departureDelayClass" | "departureDelayString" | "arrivalDelayClass" | "arrivalDelayString"
+	>,
+	config: TraxConfig,
 ) {
 	let arrivalDelayInfo = getDelay(stop.arrivalDelaySeconds ?? null, stop.actualArrival ?? null, config);
 	let departureDelayInfo = getDelay(stop.departureDelaySeconds ?? null, stop.actualDeparture ?? null, config);
@@ -101,7 +104,7 @@ function pushSRT(
 }
 
 export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO[], ctx: CacheContext): QRTSRTStop[] {
-    const srtData = getSRTData(ctx);
+	const srtData = getSRTData(ctx);
 	const config = ctx.config;
 	function calcDelay(actual?: string, planned?: string): number | null {
 		if (!actual || !planned || actual === "0001-01-01T00:00:00" || planned === "0001-01-01T00:00:00") return null;
@@ -130,18 +133,22 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 		const from = stoppingMovements[i];
 		const to = stoppingMovements[i + 1];
 		if (i === 0) {
-			pushSRT(result, {
-				placeCode: from.PlaceCode,
-				gtfsStopId: from.gtfsStopId ?? null,
-				placeName: from.PlaceName,
-				isStop: true,
-				plannedArrival: from.PlannedArrival,
-				plannedDeparture: from.PlannedDeparture,
-				actualArrival: from.ActualArrival,
-				actualDeparture: from.ActualDeparture,
-				arrivalDelaySeconds: calcDelay(from.ActualArrival, from.PlannedArrival),
-				departureDelaySeconds: calcDelay(from.ActualDeparture, from.PlannedDeparture),
-			}, config);
+			pushSRT(
+				result,
+				{
+					placeCode: from.PlaceCode,
+					gtfsStopId: from.gtfsStopId ?? null,
+					placeName: from.PlaceName,
+					isStop: true,
+					plannedArrival: from.PlannedArrival,
+					plannedDeparture: from.PlannedDeparture,
+					actualArrival: from.ActualArrival,
+					actualDeparture: from.ActualDeparture,
+					arrivalDelaySeconds: calcDelay(from.ActualArrival, from.PlannedArrival),
+					departureDelaySeconds: calcDelay(from.ActualDeparture, from.PlannedDeparture),
+				},
+				config,
+			);
 			if (from.ActualDeparture && from.ActualDeparture !== "0001-01-01T00:00:00") {
 				prevTime = parseTimeWithConfig(from.ActualDeparture, config.timezone);
 			} else if (from.PlannedDeparture && from.PlannedDeparture !== "0001-01-01T00:00:00") {
@@ -159,31 +166,35 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 			let estPass: number | undefined =
 				prevTime && seg.travelTrain ? prevTime + seg.travelTrain * 60000 : undefined;
 			let estPassDate = estPass ? new Date(estPass) : undefined;
-			pushSRT(result, {
-				placeCode: to.PlaceCode,
-				gtfsStopId: to.gtfsStopId ?? null,
-				placeName: to.PlaceName,
-				isStop: true,
-				plannedArrival: to.PlannedArrival,
-				plannedDeparture: to.PlannedDeparture,
-				actualArrival: to.ActualArrival,
-				actualDeparture: to.ActualDeparture,
-				srtMinutes: seg.travelTrain,
-				estimatedPassingTime: estPassDate ? getLocalISOString(estPassDate, config.timezone) : undefined,
-				arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
-				departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
-			}, config);
+			pushSRT(
+				result,
+				{
+					placeCode: to.PlaceCode,
+					gtfsStopId: to.gtfsStopId ?? null,
+					placeName: to.PlaceName,
+					isStop: true,
+					plannedArrival: to.PlannedArrival,
+					plannedDeparture: to.PlannedDeparture,
+					actualArrival: to.ActualArrival,
+					actualDeparture: to.ActualDeparture,
+					srtMinutes: seg.travelTrain,
+					estimatedPassingTime: estPassDate ? getLocalISOString(estPassDate, config.timezone) : undefined,
+					arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
+					departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
+				},
+				config,
+			);
 			prevTime = estPass ?? null;
 			continue;
 		}
-		let queue: { path: SRTEntry[]; last: string }[] = srtData.filter(
-			(s) => s.from.trim().toLocaleLowerCase() === from.PlaceName.trim().toLowerCase(),
-		).map((s) => ({ path: [s], last: s.to }));
+		let queue: { path: SRTEntry[]; last: string }[] = srtData
+			.filter((s) => s.from.trim().toLocaleLowerCase() === from.PlaceName.trim().toLowerCase())
+			.map((s) => ({ path: [s], last: s.to }));
 		queue =
 			queue.length == 0
-				? srtData.filter((s) => s.to.trim().toLocaleLowerCase() === from.PlaceName.trim().toLowerCase()).map(
-					(s) => ({ path: [s], last: s.from }),
-				)
+				? srtData
+						.filter((s) => s.to.trim().toLocaleLowerCase() === from.PlaceName.trim().toLowerCase())
+						.map((s) => ({ path: [s], last: s.from }))
 				: queue;
 		let found: SRTEntry[] | null = null;
 		let visited = new Set<string>();
@@ -251,42 +262,50 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 					let estPassDate = estPass ? new Date(estPass) : undefined;
 					let estPassStr = estPassDate ? getLocalISOString(estPassDate, config.timezone) : undefined;
 
-					pushSRT(result, {
-					placeCode: orig?.PlaceCode ?? "",
-					gtfsStopId: orig?.gtfsStopId ?? null,
-					placeName: stopName,
-					isStop: false,
-					plannedArrival: orig?.PlannedArrival ?? "",
-					plannedDeparture: orig?.PlannedDeparture ?? "",
-						actualArrival: orig?.ActualArrival,
-						actualDeparture: orig?.ActualDeparture,
-						srtMinutes: foundSeg.travelTrain,
-						estimatedPassingTime: estPassStr,
-						arrivalDelaySeconds: calcDelay(
-							orig?.ActualArrival ?? estPassStr,
-							orig?.PlannedArrival ?? estPassStr,
-						),
-						departureDelaySeconds: calcDelay(
-							orig?.ActualDeparture ?? estPassStr,
-							orig?.PlannedDeparture ?? estPassStr,
-						),
-					}, config);
+					pushSRT(
+						result,
+						{
+							placeCode: orig?.PlaceCode ?? "",
+							gtfsStopId: orig?.gtfsStopId ?? null,
+							placeName: stopName,
+							isStop: false,
+							plannedArrival: orig?.PlannedArrival ?? "",
+							plannedDeparture: orig?.PlannedDeparture ?? "",
+							actualArrival: orig?.ActualArrival,
+							actualDeparture: orig?.ActualDeparture,
+							srtMinutes: foundSeg.travelTrain,
+							estimatedPassingTime: estPassStr,
+							arrivalDelaySeconds: calcDelay(
+								orig?.ActualArrival ?? estPassStr,
+								orig?.PlannedArrival ?? estPassStr,
+							),
+							departureDelaySeconds: calcDelay(
+								orig?.ActualDeparture ?? estPassStr,
+								orig?.PlannedDeparture ?? estPassStr,
+							),
+						},
+						config,
+					);
 					prevTime = estPass ?? null;
 				}
 			}
-			pushSRT(result, {
-				placeCode: to.PlaceCode,
-				gtfsStopId: to.gtfsStopId ?? null,
-				placeName: to.PlaceName,
-				isStop: true,
-				plannedArrival: to.PlannedArrival,
-				plannedDeparture: to.PlannedDeparture,
-				actualArrival: to.ActualArrival,
-				actualDeparture: to.ActualDeparture,
-				srtMinutes: totalSRT,
-				arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
-				departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
-			}, config);
+			pushSRT(
+				result,
+				{
+					placeCode: to.PlaceCode,
+					gtfsStopId: to.gtfsStopId ?? null,
+					placeName: to.PlaceName,
+					isStop: true,
+					plannedArrival: to.PlannedArrival,
+					plannedDeparture: to.PlannedDeparture,
+					actualArrival: to.ActualArrival,
+					actualDeparture: to.ActualDeparture,
+					srtMinutes: totalSRT,
+					arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
+					departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
+				},
+				config,
+			);
 			if (to.ActualDeparture && to.ActualDeparture !== "0001-01-01T00:00:00") {
 				prevTime = parseTimeWithConfig(to.ActualDeparture, config.timezone);
 			} else if (to.PlannedDeparture && to.PlannedDeparture !== "0001-01-01T00:00:00") {
@@ -296,18 +315,22 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 			}
 			continue;
 		}
-		pushSRT(result, {
-			placeCode: to.PlaceCode ?? "",
-			gtfsStopId: to.gtfsStopId ?? null,
-			placeName: to.PlaceName,
-			isStop: true,
-			plannedArrival: to.PlannedArrival ?? "",
-			plannedDeparture: to.PlannedDeparture ?? "",
-			actualArrival: to.ActualArrival,
-			actualDeparture: to.ActualDeparture,
-			arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
-			departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
-		}, config);
+		pushSRT(
+			result,
+			{
+				placeCode: to.PlaceCode ?? "",
+				gtfsStopId: to.gtfsStopId ?? null,
+				placeName: to.PlaceName,
+				isStop: true,
+				plannedArrival: to.PlannedArrival ?? "",
+				plannedDeparture: to.PlannedDeparture ?? "",
+				actualArrival: to.ActualArrival,
+				actualDeparture: to.ActualDeparture,
+				arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
+				departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
+			},
+			config,
+		);
 		if (to.ActualDeparture && to.ActualDeparture !== "0001-01-01T00:00:00") {
 			prevTime = parseTimeWithConfig(to.ActualDeparture, config.timezone);
 		} else if (to.PlannedDeparture && to.PlannedDeparture !== "0001-01-01T00:00:00") {

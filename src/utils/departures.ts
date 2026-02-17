@@ -77,12 +77,7 @@ export function getDeparturesForStop(
 	const originalIndices: number[] = new Array(allTimestamps.length);
 	for (let i = 0; i < allTimestamps.length; i++) originalIndices[i] = i;
 
-	const filteredIndicesBig = filterAndSortDepartures(
-		allTimestamps,
-		originalIndices,
-		windowStartAbs,
-		windowEndAbs,
-	);
+	const filteredIndicesBig = filterAndSortDepartures(allTimestamps, originalIndices, windowStartAbs, windowEndAbs);
 	const filteredIndices = filteredIndicesBig.map(Number);
 	ctx.augmented.timer.stop("getDeparturesForStop:wasm");
 
@@ -164,12 +159,7 @@ export function getServiceDateDeparturesForStop(
 	const originalIndices: number[] = new Array(allTimestamps.length);
 	for (let i = 0; i < allTimestamps.length; i++) originalIndices[i] = i;
 
-	const filteredIndicesBig = filterAndSortDepartures(
-		allTimestamps,
-		originalIndices,
-		windowStartAbs,
-		windowEndAbs,
-	);
+	const filteredIndicesBig = filterAndSortDepartures(allTimestamps, originalIndices, windowStartAbs, windowEndAbs);
 	const filteredIndices = filteredIndicesBig.map(Number);
 	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:wasm");
 

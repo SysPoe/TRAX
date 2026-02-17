@@ -677,14 +677,30 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 
 	if (config.region === "AU/SEQ") {
 		ctx.augmented.timer.start("refreshStaticCache:loadQRTPlaces");
-		newRawCache.regionSpecific.SEQ.qrtPlaces = await getPlaces(config);
+		try {
+			newRawCache.regionSpecific.SEQ.qrtPlaces = await getPlaces(config);
+		} catch (error: any) {
+			logger.error("Failed to load QRT places: " + (error.message ?? error), {
+				module: "cache",
+				function: "refreshStaticCache",
+			});
+			newRawCache.regionSpecific.SEQ.qrtPlaces = [];
+		}
 		ctx.augmented.timer.stop("refreshStaticCache:loadQRTPlaces");
 		logger.debug(`Loaded ${newRawCache.regionSpecific.SEQ.qrtPlaces.length} QRT places.`, {
 			module: "cache",
 			function: "refreshStaticCache",
 		});
 		ctx.augmented.timer.start("refreshStaticCache:loadRailwayFacilities");
-		newRawCache.regionSpecific.SEQ.railwayStationFacilities = await getRailwayStationFacilities(config);
+		try {
+			newRawCache.regionSpecific.SEQ.railwayStationFacilities = await getRailwayStationFacilities(config);
+		} catch (error: any) {
+			logger.error("Failed to load railway station facilities: " + (error.message ?? error), {
+				module: "cache",
+				function: "refreshStaticCache",
+			});
+			newRawCache.regionSpecific.SEQ.railwayStationFacilities = [];
+		}
 		ctx.augmented.timer.stop("refreshStaticCache:loadRailwayFacilities");
 		logger.debug(
 			`Loaded ${newRawCache.regionSpecific.SEQ.railwayStationFacilities.length} railway station facilities.`,
@@ -908,14 +924,22 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		});
 		additionalPromises.push(
 			new Promise<void>((rs) => {
-				getCurrentQRTravelTrains(ctx).then((trains: QRTTravelTrip[]) => {
-					rawCache.regionSpecific.SEQ.qrtTrains = trains;
-					logger.debug(`Loaded ${rawCache.regionSpecific.SEQ.qrtTrains.length} QRT trains.`, {
-						module: "cache",
-						function: "refreshRealtimeCache",
+				getCurrentQRTravelTrains(ctx)
+					.then((trains: QRTTravelTrip[]) => {
+						rawCache.regionSpecific.SEQ.qrtTrains = trains;
+						logger.debug(`Loaded ${rawCache.regionSpecific.SEQ.qrtTrains.length} QRT trains.`, {
+							module: "cache",
+							function: "refreshRealtimeCache",
+						});
+						rs();
+					})
+					.catch((error: any) => {
+						logger.error("Failed to load QRT trains: " + (error.message ?? error), {
+							module: "cache",
+							function: "refreshRealtimeCache",
+						});
+						rs();
 					});
-					rs();
-				});
 			}),
 		);
 	}

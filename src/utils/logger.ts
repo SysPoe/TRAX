@@ -190,8 +190,9 @@ class Logger {
 				: `[f:${context.function}]`
 			: "";
 
-		return `${colorize ? chalk.gray(timestamp) : timestamp
-			} ${levelStr} ${prefixStr}${moduleStr}${functionStr} ${contextStr} ${message}`;
+		return `${
+			colorize ? chalk.gray(timestamp) : timestamp
+		} ${levelStr} ${prefixStr}${moduleStr}${functionStr} ${contextStr} ${message}`;
 	}
 }
 
