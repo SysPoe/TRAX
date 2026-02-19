@@ -35,7 +35,7 @@ export interface TRAXEvent {
 
 export class TRAX {
 	public config: TraxConfig;
-	private gtfs?: GTFS;
+	public gtfs?: GTFS;
 	public events: EventEmitter;
 
 	private ctx: cache.CacheContext;

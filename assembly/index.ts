@@ -1,5 +1,3 @@
-// assembly/index.ts
-
 /**
  * Topology Graph and SRT Interpolation in WebAssembly
  */
@@ -186,21 +184,6 @@ function swapF64(arr: f64[], i: i32, j: i32): void {
 	arr[j] = temp;
 }
 
-// --- Delay Logic ---
-
-class DelayInfo {
-	str: string = "";
-	cls: string = "";
-}
-
-export function calculateDelayClassWasm(delaySecs: i32): DelayInfo {
-	if (Math.abs(delaySecs as f64) <= 60) return { str: "on time", cls: "on-time" };
-	if (delaySecs > 0 && delaySecs <= 300)
-		return { str: Math.round((delaySecs as f64) / 60).toString() + "m late", cls: "late" };
-	if (delaySecs > 300) return { str: Math.round((delaySecs as f64) / 60).toString() + "m late", cls: "very-late" };
-	return { str: Math.round(Math.abs(delaySecs as f64) / 60).toString() + "m early", cls: "early" };
-}
-
 // --- Static Data Store for Augmentation ---
 
 class WasmStop {
@@ -278,38 +261,104 @@ export function addWasmTripRecord(tripId: string, serviceId: string): void {
 
 // --- Date Utilities ---
 
-function dateToEpochDays(y: i32, m: i32, d: i32): i32 {
-	m = (m + 9) % 12;
-	y = y - m / 10;
-	return 365 * y + y / 4 - y / 100 + y / 400 + (m * 306 + 5) / 10 + (d - 1);
+function isLeapYear(year: i32): bool {
+	return (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
 }
 
-function epochDaysToDateString(g: i32): string {
-	let y = (10000 * g + 1478010) / 3652425;
-	let ddt = g - (365 * y + y / 4 - y / 100 + y / 400);
-	if (ddt < 0) {
-		y = y - 1;
-		ddt = g - (365 * y + y / 4 - y / 100 + y / 400);
+function daysInMonthForYM(year: i32, month: i32): i32 {
+	if (month == 2) return isLeapYear(year) ? 29 : 28;
+	if (month == 4 || month == 6 || month == 9 || month == 11) return 30;
+	return 31;
+}
+
+function formatDateYMD(y: i32, m: i32, d: i32): string {
+	let ms = m.toString();
+	let ds = d.toString();
+	if (ms.length < 2) ms = "0" + ms;
+	if (ds.length < 2) ds = "0" + ds;
+	return y.toString() + ms + ds;
+}
+
+// Tomohiko Sakamoto's algorithm: returns 0=Sun, 1=Mon, ..., 6=Sat
+function dowFromYMD(y: i32, m: i32, d: i32): i32 {
+	let t: i32 = 0;
+	if (m == 1) t = 0;
+	else if (m == 2) t = 3;
+	else if (m == 3) t = 2;
+	else if (m == 4) t = 5;
+	else if (m == 5) t = 0;
+	else if (m == 6) t = 3;
+	else if (m == 7) t = 5;
+	else if (m == 8) t = 1;
+	else if (m == 9) t = 4;
+	else if (m == 10) t = 6;
+	else if (m == 11) t = 2;
+	else t = 4; // month == 12
+	if (m < 3) y = y - 1;
+	return (y + y / 4 - y / 100 + y / 400 + t + d) % 7;
+}
+
+export function getServiceDatesForServiceIdWasm(serviceId: string): string[] {
+	if (!calendars.has(serviceId)) return [];
+	let cal = calendars.get(serviceId);
+	let dates = new Array<string>();
+
+	// Step 1: Add exception_type=1 (added) dates first
+	for (let i = 0; i < calendarDates.length; i++) {
+		let entry = calendarDates[i];
+		if (entry.serviceId != serviceId) continue;
+		if (entry.exceptionType == 1 && entry.date.length > 0) {
+			if (dates.indexOf(entry.date) == -1) dates.push(entry.date);
+		}
 	}
-	let mi = (100 * ddt + 52) / 3060;
-	let mm = ((mi + 2) % 12) + 1;
-	y = y + (mi + 2) / 12;
-	let dd = ddt - (mi * 306 + 5) / 10 + 1;
 
-	let yearStr = y.toString();
-	let monthStr = mm.toString();
-	if (monthStr.length < 2) monthStr = "0" + monthStr;
-	let dayStr = dd.toString();
-	if (dayStr.length < 2) dayStr = "0" + dayStr;
+	// Step 2: Iterate calendar range and add dates matching day-of-week schedule
+	let sy = I32.parseInt(cal.startDate.slice(0, 4));
+	let sm = I32.parseInt(cal.startDate.slice(4, 6));
+	let sd = I32.parseInt(cal.startDate.slice(6, 8));
+	let ey = I32.parseInt(cal.endDate.slice(0, 4));
+	let em = I32.parseInt(cal.endDate.slice(4, 6));
+	let eday = I32.parseInt(cal.endDate.slice(6, 8));
 
-	return yearStr + monthStr + dayStr;
+	let cy = sy, cm = sm, cday = sd;
+	while (cy < ey || (cy == ey && (cm < em || (cm == em && cday <= eday)))) {
+		let dow = dowFromYMD(cy, cm, cday);
+		let runs = false;
+		if (dow == 0 && cal.sunday) runs = true;
+		else if (dow == 1 && cal.monday) runs = true;
+		else if (dow == 2 && cal.tuesday) runs = true;
+		else if (dow == 3 && cal.wednesday) runs = true;
+		else if (dow == 4 && cal.thursday) runs = true;
+		else if (dow == 5 && cal.friday) runs = true;
+		else if (dow == 6 && cal.saturday) runs = true;
+
+		if (runs) {
+			let dateStr = formatDateYMD(cy, cm, cday);
+			if (dates.indexOf(dateStr) == -1) dates.push(dateStr);
+		}
+
+		cday++;
+		if (cday > daysInMonthForYM(cy, cm)) {
+			cday = 1;
+			cm++;
+			if (cm > 12) { cm = 1; cy++; }
+		}
+	}
+
+	// Step 3: Remove exception_type=2 (removed) dates
+	for (let i = 0; i < calendarDates.length; i++) {
+		let entry = calendarDates[i];
+		if (entry.serviceId != serviceId) continue;
+		if (entry.exceptionType == 2 && entry.date.length > 0) {
+			let idx = dates.indexOf(entry.date);
+			if (idx > -1) dates.splice(idx, 1);
+		}
+	}
+
+	return dates.sort();
 }
 
-function getDayOfWeek(epochDays: i32): i32 {
-	// 1970-01-01 was a Thursday (index 4)
-	// EPOCH_ADJUSTMENT is for 0001-01-01 which was a Monday (index 1)
-	return (epochDays + 1) % 7;
-}
+// --- Date String Arithmetic ---
 
 export function addDaysToDateString(dateStr: string, daysToAdd: i32): string {
 	if (daysToAdd == 0) return dateStr;
@@ -317,64 +366,37 @@ export function addDaysToDateString(dateStr: string, daysToAdd: i32): string {
 	let m = I32.parseInt(dateStr.slice(4, 6));
 	let d = I32.parseInt(dateStr.slice(6, 8));
 
-	let epochDays = dateToEpochDays(y, m, d) + daysToAdd;
-	return epochDaysToDateString(epochDays);
-}
+	d += daysToAdd;
 
-export function getServiceDatesWasm(serviceId: string): string[] {
-	let dates = new Array<string>();
-	if (calendars.has(serviceId)) {
-		let cal = calendars.get(serviceId);
-		let startY = I32.parseInt(cal.startDate.slice(0, 4));
-		let startM = I32.parseInt(cal.startDate.slice(4, 6));
-		let startD = I32.parseInt(cal.startDate.slice(6, 8));
-
-		let endY = I32.parseInt(cal.endDate.slice(0, 4));
-		let endM = I32.parseInt(cal.endDate.slice(4, 6));
-		let endD = I32.parseInt(cal.endDate.slice(6, 8));
-
-		let currentEpoch = dateToEpochDays(startY, startM, startD);
-		let endEpoch = dateToEpochDays(endY, endM, endD);
-
-		while (currentEpoch <= endEpoch) {
-			let dow = getDayOfWeek(currentEpoch); // 0=Sun, 1=Mon, ..., 6=Sat
-			let runs = false;
-			if (dow == 0 && cal.sunday) runs = true;
-			else if (dow == 1 && cal.monday) runs = true;
-			else if (dow == 2 && cal.tuesday) runs = true;
-			else if (dow == 3 && cal.wednesday) runs = true;
-			else if (dow == 4 && cal.thursday) runs = true;
-			else if (dow == 5 && cal.friday) runs = true;
-			else if (dow == 6 && cal.saturday) runs = true;
-
-			if (runs) {
-				dates.push(epochDaysToDateString(currentEpoch));
-			}
-			currentEpoch++;
-		}
+	// Handle forward overflow
+	while (d > daysInMonthForYM(y, m)) {
+		d -= daysInMonthForYM(y, m);
+		m++;
+		if (m > 12) { m = 1; y++; }
 	}
 
-	// Apply exceptions
-	for (let i = 0; i < calendarDates.length; i++) {
-		let cd = calendarDates[i];
-		if (cd.serviceId != serviceId) continue;
-
-		if (cd.exceptionType == 1) {
-			if (dates.indexOf(cd.date) == -1) {
-				dates.push(cd.date);
-			}
-		} else if (cd.exceptionType == 2) {
-			let idx = dates.indexOf(cd.date);
-			if (idx > -1) {
-				dates.splice(idx, 1);
-			}
-		}
+	// Handle backward overflow
+	while (d < 1) {
+		m--;
+		if (m < 1) { m = 12; y--; }
+		d += daysInMonthForYM(y, m);
 	}
 
-	return dates.sort();
+	return formatDateYMD(y, m, d);
 }
 
-export function getServiceDatesByTripWasm(tripId: string): string[] {
-	if (!tripServiceIds.has(tripId)) return [];
-	return getServiceDatesWasm(tripServiceIds.get(tripId));
+// --- Delay Classification ---
+
+class DelayInfo {
+	str: string = "";
+	cls: string = "";
+}
+
+export function calculateDelayClassWasm(delaySecs: i32): DelayInfo {
+	if (Math.abs(delaySecs as f64) <= 60) return { str: "on time", cls: "on-time" };
+	if (delaySecs > 0 && delaySecs <= 300)
+		return { str: Math.round((delaySecs as f64) / 60).toString() + "m late", cls: "late" };
+	if (delaySecs > 300)
+		return { str: Math.round((delaySecs as f64) / 60).toString() + "m late", cls: "very-late" };
+	return { str: Math.round(Math.abs(delaySecs as f64) / 60).toString() + "m early", cls: "early" };
 }
