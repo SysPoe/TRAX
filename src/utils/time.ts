@@ -1,5 +1,7 @@
 import { TraxConfig } from "../config.js";
 
+const serviceDayStartCache = new Map<string, number>();
+
 export function timeDiff(t1: string, t2: string): string {
 	const [h1, m1] = t1.split(":").map(Number);
 	const [h2, m2] = t2.split(":").map(Number);
@@ -78,6 +80,9 @@ export function getTimezoneOffsetSeconds(timezone: string, date: Date = new Date
 
 export function getServiceDayStart(serviceDate: string, timezone: string): number {
 	if (!serviceDate || serviceDate.length < 8) return 0;
+	const cacheKey = `${serviceDate}|${timezone}`;
+	const cached = serviceDayStartCache.get(cacheKey);
+	if (cached !== undefined) return cached;
 	const y = parseInt(serviceDate.slice(0, 4), 10);
 	const m = parseInt(serviceDate.slice(4, 6), 10) - 1;
 	const d = parseInt(serviceDate.slice(6, 8), 10);
@@ -91,10 +96,58 @@ export function getServiceDayStart(serviceDate: string, timezone: string): numbe
 
 	const offsetAtResult = getTimezoneOffsetSeconds(timezone, new Date(result * 1000));
 	if (offsetAtResult !== offsetAtUtcMidnight) {
-		return (utcMidnight - offsetAtResult * 1000) / 1000;
+		const adjusted = (utcMidnight - offsetAtResult * 1000) / 1000;
+		serviceDayStartCache.set(cacheKey, adjusted);
+		return adjusted;
 	}
 
+	serviceDayStartCache.set(cacheKey, result);
 	return result;
+}
+
+function epochDaysToServiceDate(epochDays: number): string {
+	let y = Math.floor((10000 * epochDays + 1478010) / 3652425);
+	let ddt = epochDays - (365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400));
+	if (ddt < 0) {
+		y = y - 1;
+		ddt = epochDays - (365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400));
+	}
+	const mi = Math.floor((100 * ddt + 52) / 3060);
+	const mm = Math.floor(((mi + 2) % 12) + 1);
+	y = Math.floor(y + (mi + 2) / 12);
+	const dd = Math.floor(ddt - Math.floor((mi * 306 + 5) / 10) + 1);
+
+	const yearStr = y.toString().padStart(4, "0");
+	const monthStr = mm.toString().padStart(2, "0");
+	const dayStr = dd.toString().padStart(2, "0");
+
+	return `${yearStr}${monthStr}${dayStr}`;
+}
+
+export function getEpochDayFromServiceDate(serviceDate: string): number {
+	if (!serviceDate || serviceDate.length < 8) return Number.NaN;
+	const y = parseInt(serviceDate.slice(0, 4), 10);
+	const m = parseInt(serviceDate.slice(4, 6), 10);
+	const d = parseInt(serviceDate.slice(6, 8), 10);
+	if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) return Number.NaN;
+
+	let month = (m + 9) % 12;
+	let year = y - Math.floor(month / 10);
+	return (
+		365 * year +
+		Math.floor(year / 4) -
+		Math.floor(year / 100) +
+		Math.floor(year / 400) +
+		Math.floor((month * 306 + 5) / 10) +
+		(d - 1)
+	);
+}
+
+export function addDaysToServiceDate(serviceDate: string, daysToAdd: number): string {
+	if (!daysToAdd) return serviceDate;
+	const epochDay = getEpochDayFromServiceDate(serviceDate);
+	if (!Number.isFinite(epochDay)) return serviceDate;
+	return epochDaysToServiceDate(epochDay + daysToAdd);
 }
 
 export function parseTimeWithConfig(dateStr: string, timezone: string): number {
@@ -130,6 +183,8 @@ export default {
 	secTimeDiff,
 	getTimezoneOffsetSeconds,
 	getServiceDayStart,
+	getEpochDayFromServiceDate,
+	addDaysToServiceDate,
 	getServiceDate,
 	getLocalISOString,
 	parseTimeWithConfig,

@@ -1,5 +1,6 @@
 import type * as qdf from "qdf-gtfs";
 import { getRawTrips, getCalendars, getCalendarDates, CacheContext } from "../cache.js";
+import { getEpochDayFromServiceDate } from "./time.js";
 import {
 	clearStaticData,
 	addWasmCalendar,
@@ -14,9 +15,18 @@ export function getServiceDatesByTrip(
 	minEpochDay: number = -1,
 	maxEpochDay: number = -1,
 ): string[] {
-	void minEpochDay;
-	void maxEpochDay;
-	return getServiceDatesByTripWasm(trip_id);
+	const dates = getServiceDatesByTripWasm(trip_id);
+	const hasMin = minEpochDay >= 0;
+	const hasMax = maxEpochDay >= 0;
+	if (!hasMin && !hasMax) return dates;
+
+	return dates.filter((date) => {
+		const epochDay = getEpochDayFromServiceDate(date);
+		if (!Number.isFinite(epochDay)) return false;
+		if (hasMin && epochDay < minEpochDay) return false;
+		if (hasMax && epochDay > maxEpochDay) return false;
+		return true;
+	});
 }
 
 export function syncCalendarsToWasm(ctx: CacheContext) {

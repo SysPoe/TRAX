@@ -4,7 +4,7 @@ import { getServiceCapacity, ServiceCapacity } from "./serviceCapacity.js";
 import { AugmentedStop } from "./augmentedStop.js";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { AugmentedTripInstance } from "./augmentedTrip.js";
-import { getServiceDayStart } from "./time.js";
+import { addDaysToServiceDate, getServiceDayStart } from "./time.js";
 import { filterAndSortDepartures } from "../../build/release.js";
 
 function timeSeconds(time: string): number {
@@ -28,14 +28,6 @@ export function getDeparturesForStop(
 	const childIds = stop.child_stop_ids;
 	const validStops = new Set<string>([stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]);
 	const instanceCache = new Map<string, AugmentedTripInstance>();
-	const results: { st: AugmentedStopTime; inst: AugmentedTripInstance }[] = [];
-
-	const toDate = (d: string): Date => {
-		const dstr = d.padStart(8, "0");
-		return new Date(dstr.slice(0, 4) + "-" + dstr.slice(4, 6) + "-" + dstr.slice(6, 8));
-	};
-
-	const baseDate = toDate(date);
 	const baseDayStart = getServiceDayStart(date, ctx.config.timezone);
 	const windowStartAbs = baseDayStart + startSec;
 	const windowEndAbs = baseDayStart + endSec;
@@ -52,12 +44,10 @@ export function getDeparturesForStop(
 
 	ctx.augmented.timer.start("getDeparturesForStop:collect");
 	const allTimestamps: number[] = [];
-	const allStopsAndInsts: { st: AugmentedStopTime; inst: AugmentedTripInstance }[] = [];
+	const allStopsAndInsts: { st: AugmentedStopTime; inst: AugmentedTripInstance | null }[] = [];
 
 	for (let df = daysForwardStart; df <= daysForwardEnd; df++) {
-		const checkDate = new Date(baseDate);
-		checkDate.setDate(checkDate.getDate() + df);
-		const serviceDateStr = checkDate.toISOString().slice(0, 10).replace(/-/g, "");
+		const serviceDateStr = addDaysToServiceDate(date, df);
 		const dayStart = getServiceDayStart(serviceDateStr, ctx.config.timezone);
 
 		for (const stopId of validStops) {
@@ -67,7 +57,7 @@ export function getDeparturesForStop(
 				const absTs = dayStart + timeSecs;
 
 				allTimestamps.push(absTs);
-				allStopsAndInsts.push({ st, inst: null as any }); // inst will be fetched later for filtered results
+				allStopsAndInsts.push({ st, inst: null }); // inst will be fetched later for filtered results
 			}
 		}
 	}
@@ -111,8 +101,15 @@ export function getDeparturesForStop(
 	});
 	ctx.augmented.timer.stop("getDeparturesForStop:map");
 
+	const seenInstanceIds = new Set<string>();
+	const dedupedResults = sortedResults.filter((dep) => {
+		if (seenInstanceIds.has(dep.instance_id)) return false;
+		seenInstanceIds.add(dep.instance_id);
+		return true;
+	});
+
 	ctx.augmented.timer.stop("getDeparturesForStop");
-	return sortedResults;
+	return dedupedResults;
 }
 
 export function getServiceDateDeparturesForStop(
@@ -141,7 +138,7 @@ export function getServiceDateDeparturesForStop(
 
 	ctx.augmented.timer.start("getServiceDateDeparturesForStop:collect");
 	const allTimestamps: number[] = [];
-	const allStopsAndInsts: { st: AugmentedStopTime; inst: AugmentedTripInstance }[] = [];
+	const allStopsAndInsts: { st: AugmentedStopTime; inst: AugmentedTripInstance | null }[] = [];
 
 	for (const stopId of validStops) {
 		const stopDepartures = cache.getStopDeparturesCached(ctx, stopId, serviceDate);
@@ -150,7 +147,7 @@ export function getServiceDateDeparturesForStop(
 			const absTs = dayStart + timeSecs;
 
 			allTimestamps.push(absTs);
-			allStopsAndInsts.push({ st, inst: null as any });
+			allStopsAndInsts.push({ st, inst: null });
 		}
 	}
 	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:collect");
@@ -193,8 +190,15 @@ export function getServiceDateDeparturesForStop(
 	});
 	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:map");
 
+	const seenInstanceIds = new Set<string>();
+	const dedupedResults = sortedResults.filter((dep) => {
+		if (seenInstanceIds.has(dep.instance_id)) return false;
+		seenInstanceIds.add(dep.instance_id);
+		return true;
+	});
+
 	ctx.augmented.timer.stop("getServiceDateDeparturesForStop");
-	return sortedResults;
+	return dedupedResults;
 }
 
 export function attachDeparturesHelpers(stop: AugmentedStop, ctx: cache.CacheContext): AugmentedStop {
