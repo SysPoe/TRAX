@@ -5,9 +5,24 @@ let routeCache: Map<string, boolean> = new Map();
 let stopCache: Map<string, boolean> = new Map();
 let tripIdCache: Map<string, boolean> = new Map();
 
+export function clearConsideredCaches(): void {
+	routeCache.clear();
+	stopCache.clear();
+	tripIdCache.clear();
+}
+
+function isRailLikeRouteType(routeType: number | null | undefined): boolean {
+	if (routeType === null || routeType === undefined) return false;
+	if (routeType === qdf.RouteType.Rail || routeType === qdf.RouteType.Subway) return true;
+	// GTFS extended route types
+	if (routeType >= 100 && routeType < 200) return true; // Railway Service
+	if (routeType >= 400 && routeType < 500) return true; // Metro Service
+	return false;
+}
+
 export function isConsideredRoute(route: qdf.Route): boolean {
 	if (routeCache.has(route.route_id)) return routeCache.get(route.route_id)!;
-	const valid = route.route_type === qdf.RouteType.Rail || route.route_type === qdf.RouteType.Subway;
+	const valid = isRailLikeRouteType(route.route_type);
 	routeCache.set(route.route_id, valid);
 	return valid;
 }

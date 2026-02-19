@@ -63,7 +63,7 @@ export interface QRTServiceLine {
 export interface QRTAllServicesResponse {
 	ServiceLines: QRTServiceLine[];
 	Success: boolean;
-	Error: any;
+	Error: unknown;
 }
 
 export interface QRTService {

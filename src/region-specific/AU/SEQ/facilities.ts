@@ -1,4 +1,4 @@
-import { TraxConfig } from "../../../config.js";
+import type { TraxConfig } from "../../../config.js";
 import logger from "../../../utils/logger.js";
 import { RailwayStationFacility } from "./facilities-types.js";
 import { loadDataFile, hasDataFile } from "../../../utils/fs.js";
@@ -13,8 +13,9 @@ export async function getRailwayStationFacilities(config: TraxConfig): Promise<R
 			logger.warn(`Railway station facilities file not found at ${relativePath}`, { module: "SEQ-facilities" });
 			return [];
 		}
-	} catch (error: any) {
-		logger.error(`Failed to load railway station facilities: ${error.message}`, { module: "SEQ-facilities" });
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		logger.error(`Failed to load railway station facilities: ${message}`, { module: "SEQ-facilities" });
 		return [];
 	}
 }

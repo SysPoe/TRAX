@@ -3,8 +3,8 @@ export type SRTEntry = { from: string; to: string; travelTrain: number };
 import type { QRTTrainMovementDTO } from "./types.js";
 import { loadDataFile } from "../../../../utils/fs.js";
 import { parseTimeWithConfig, getLocalISOString } from "../../../../utils/time.js";
-import { TraxConfig } from "../../../../config.js";
-import { CacheContext } from "../../../../cache.js";
+import type { TraxConfig } from "../../../../config.js";
+import type { CacheContext } from "../../../../cache.js";
 
 export interface QRTSRTStop {
 	placeName: string;
@@ -26,8 +26,9 @@ export interface QRTSRTStop {
 }
 
 function getSRTData(ctx: CacheContext): SRTEntry[] {
-	if (ctx.raw.regionSpecific.SEQ.platformData?.srtData) {
-		return ctx.raw.regionSpecific.SEQ.platformData.srtData;
+	const cached = ctx.raw.regionSpecific.SEQ.platformData?.srtData;
+	if (cached) {
+		return cached as SRTEntry[];
 	}
 	let data: SRTEntry[] = JSON.parse(loadDataFile("region-specific/seq/SRT_qrt.json"));
 	data = data.concat(

@@ -33,8 +33,7 @@ export class Timer {
 
 	public log(label: string, clear: boolean) {
 		if (logger.getLevel() < LogLevel.TIMING) return;
-		console.log(`\n--- Detailed Timing Report: ${label} ---`);
-		logger.writeLog(`\n--- Detailed Timing Report: ${label} ---`);
+		logger.raw(`\n--- Detailed Timing Report: ${label} ---`);
 
 		const sorted = Array.from(this.times.entries()).sort((a, b) => b[1] - a[1]);
 		for (const [category, total] of sorted) {
@@ -49,14 +48,12 @@ export class Timer {
 
 			const str = `${displayName.padEnd(45)} | ${total.toFixed(2).padStart(10)}ms | x${count.toString().padEnd(6)} | avg: ${avg.toFixed(3).padStart(8)}ms | [${min.toFixed(2)}, ${max.toFixed(2)}]`;
 
-			console.log(str);
-			logger.writeLog(str);
+			logger.raw(str);
 		}
 
 		if (clear) this.clear();
 
-		console.log("-".repeat(110) + "\n");
-		logger.writeLog("-".repeat(110) + "\n");
+		logger.raw("-".repeat(110) + "\n");
 	}
 
 	public clear() {

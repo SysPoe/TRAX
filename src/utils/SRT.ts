@@ -2,6 +2,7 @@ import logger from "./logger.js";
 import { cacheFileExists, loadCacheFile, writeCacheFile } from "./fs.js";
 import * as cache from "../cache.js";
 import * as qdf from "qdf-gtfs";
+import { isRegion } from "../config.js";
 import {
 	findPath as wasmFindPath,
 	resetGraph,
@@ -61,7 +62,7 @@ function loadNetworkData(ctx: cache.CacheContext): NetworkData | null {
 	return null;
 }
 
-function getPatternSignature(stopTimes: any[]): string {
+function getPatternSignature(stopTimes: qdf.StopTime[]): string {
 	return stopTimes.map((st) => st.stop_id).join("|");
 }
 
@@ -73,7 +74,7 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 	const trips = gtfs.getTrips();
 	const railTrips = trips.filter((t) => gtfs.getRoutes({ route_id: t.route_id })[0]?.route_type === 2);
 
-	const uniquePatterns: any[][] = [];
+	const uniquePatterns: { id: string; timeFromPrev: number }[][] = [];
 	const seenSignatures = new Set<string>();
 
 	logger.debug("Extracting unique stopping patterns...", {
@@ -129,7 +130,7 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		}
 	});
 
-	if (ctx.config.region === "CA/GTHA") {
+	if (isRegion(ctx.config.region, "CA/GTHA")) {
 		validEdges.delete("UN|KE");
 		validEdges.delete("KE|UN");
 	}
@@ -180,7 +181,7 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		if (!matrix[to][from]) matrix[to][from] = parseFloat(avg.toFixed(2));
 	}
 
-	if (ctx.config.region === "CA/GTHA") {
+	if (isRegion(ctx.config.region, "CA/GTHA")) {
 		if (!matrix["KE"]) matrix["KE"] = {};
 		matrix["KE"]["SC"] = 2;
 		if (!matrix["SC"]) matrix["SC"] = {};
@@ -356,13 +357,15 @@ export function findExpressString(
 
 const loggedMissingSRT = new Set<string>();
 
-function findPassingStops(stops: string[], ctx: cache.CacheContext): { stop_id: string; passing: boolean }[] {
+export type PassingStop = { stop_id: string; passing: boolean };
+
+function findPassingStops(stops: string[], ctx: cache.CacheContext): PassingStop[] {
 	const stopListHash = stops.join("|");
 	const cached = cache.getCachedPassingStops(ctx, stopListHash);
 	if (cached) return cached;
 
 	const expressSegments = findExpress(stops, ctx);
-	const allStops: { stop_id: string; passing: boolean }[] = [];
+	const allStops: PassingStop[] = [];
 
 	const addStop = (id: string, passing: boolean) => {
 		if (allStops.at(-1)?.stop_id !== id) {

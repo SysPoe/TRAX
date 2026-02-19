@@ -28,7 +28,7 @@ export function loadDataFileAsync(filePath: string): Promise<string> {
 			path.join(__dirname, "..", "..", "data", filePath),
 		];
 		let resolved = false;
-		const promises: Promise<any>[] = [];
+		const promises: Promise<unknown>[] = [];
 		for (const p of candidates)
 			promises.push(
 				fs.promises
@@ -60,6 +60,16 @@ export function getDataFilePath(filePath: string): string {
 }
 
 export function getCacheFilePath(filePath: string, cacheDir: string): string {
+	// Create cache directory if it doesn't exist
+	if (!fs.existsSync(cacheDir)) {
+		fs.mkdirSync(cacheDir, { recursive: true });
+	}
+	// Create filePath parent dir if it doesn't exist
+	if (!fs.existsSync(path.join(cacheDir, filePath, ".."))) {
+		fs.mkdirSync(path.join(cacheDir, filePath, ".."), {
+			recursive: true,
+		});
+	}
 	return path.join(cacheDir, filePath);
 }
 

@@ -12,30 +12,31 @@ import type {
 } from "qdf-gtfs";
 import { isConsideredTrip } from "./utils/considered.js";
 import { syncCalendarsToWasm } from "./utils/calendar.js";
-import { AugmentedStop, augmentStop } from "./utils/augmentedStop.js";
-import {
-	AugmentedTrip,
-	AugmentedTripInstance,
-	augmentTrip,
-	calculateRunSeries,
-	RunSeries,
-} from "./utils/augmentedTrip.js";
-import { AugmentedStopTime } from "./utils/augmentedStopTime.js";
-import { QRTPlace, QRTTravelTrip } from "./index.js";
+import { augmentStop } from "./utils/augmentedStop.js";
+import type { AugmentedStop } from "./utils/augmentedStop.js";
+import { augmentTrip, calculateRunSeries } from "./utils/augmentedTrip.js";
+import type { AugmentedTrip, AugmentedTripInstance, RunSeries } from "./utils/augmentedTrip.js";
+import { clearAugmentedStopTimeCaches } from "./utils/augmentedStopTime.js";
+import type { AugmentedStopTime } from "./utils/augmentedStopTime.js";
+import type { QRTPlace, QRTTravelTrip } from "./index.js";
 import { getPlaces, getCurrentQRTravelTrains } from "./region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
-import { Timer, globalTimer } from "./utils/timer.js";
+import { globalTimer } from "./utils/timer.js";
+import type { Timer } from "./utils/timer.js";
 import { getRailwayStationFacilities } from "./region-specific/AU/SEQ/facilities.js";
-import { RailwayStationFacility } from "./region-specific/AU/SEQ/facilities-types.js";
+import type { RailwayStationFacility } from "./region-specific/AU/SEQ/facilities-types.js";
 import { updateAllSources as updateGTHAPlatforms } from "./region-specific/CA/GTHA/realtime.js";
 import logger from "./utils/logger.js";
 import { getGtfs } from "./gtfsInterfaceLayer.js";
 import * as qdf from "qdf-gtfs";
 import { addSC, addSCI, ensureServiceCapacityData } from "./utils/serviceCapacity.js";
 import { addVehicleModel, addVehicleModelTrip } from "./utils/vehicleModel.js";
-import { TraxConfig } from "./config.js";
+import { isRegion, TraxConfig } from "./config.js";
 import ensureQRTEnabled from "./region-specific/AU/SEQ/qr-travel/enabled.js";
 import { getServiceDayStart } from "./utils/time.js";
 import { addWasmStop } from "../build/release.js";
+import type { ExpressInfo, PassingStop } from "./utils/SRT.js";
+import type { PlatformData } from "./utils/platformData.js";
+import { clearConsideredCaches } from "./utils/considered.js";
 
 class LRUCache<K, V> {
 	private cache = new Map<K, V>();
@@ -82,7 +83,7 @@ export type RawCache = {
 		SEQ: {
 			qrtPlaces: QRTPlace[];
 			qrtTrains: QRTTravelTrip[];
-			platformData?: any;
+			platformData?: PlatformData;
 			railwayStationFacilities: RailwayStationFacility[];
 		};
 	};
@@ -102,17 +103,18 @@ export type AugmentedCache = {
 	stopsRec: Map<string, AugmentedStop>;
 
 	serviceDateTrips: Map<string, string[]>;
+	serviceDateTripsSet: Map<string, Set<string>>;
 	passingTrips: Map<string, string[]>;
 
 	shapes: { shape_id: string; route_id: string }[];
 
-	expressInfoCache: LRUCache<string, any[]>;
-	passingStopsCache: LRUCache<string, any[]>;
+	expressInfoCache: LRUCache<string, ExpressInfo[]>;
+	passingStopsCache: LRUCache<string, PassingStop[]>;
 	runSeriesCache: Map<string, Map<string, RunSeries>>;
 	carTrips: Map<string, Set<string>>;
 
 	tripsStoppingAt: Map<string, Set<string>>;
-	stopDeparturesCached: Map<string, AugmentedStopTime[]>;
+	stopDeparturesCached: Map<string, Map<string, AugmentedStopTime[]>>;
 	instancesRec: Map<string, AugmentedTripInstance>;
 	tripUpdatesCache: Map<string, qdf.RealtimeTripUpdate[]>;
 	timer: Timer;
@@ -151,10 +153,11 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 		tripsRec: new Map(),
 		stopsRec: new Map(),
 		serviceDateTrips: new Map(),
+		serviceDateTripsSet: new Map(),
 		passingTrips: new Map(),
 		shapes: [],
-		expressInfoCache: new LRUCache<string, any[]>(1000),
-		passingStopsCache: new LRUCache<string, any[]>(5000),
+		expressInfoCache: new LRUCache<string, ExpressInfo[]>(1000),
+		passingStopsCache: new LRUCache<string, PassingStop[]>(5000),
 		runSeriesCache: new Map(),
 		carTrips: new Map(),
 		tripsStoppingAt: new Map(),
@@ -227,7 +230,40 @@ export function getVehiclePositions(ctx: CacheContext, trip_id?: string): Realti
 }
 
 export function getStopTimeUpdates(ctx: CacheContext, trip_id: string): RealtimeStopTimeUpdate[] {
-	return getTripUpdates(ctx, trip_id)[0]?.stop_time_updates ?? [];
+	const updates = getTripUpdates(ctx, trip_id);
+	if (!updates.length) return [];
+
+	const updateStopTimes = new Map<number, RealtimeStopTimeUpdate>();
+	const updateStopIds = new Map<string, RealtimeStopTimeUpdate>();
+	const updatePriority = new Map<string, number>();
+	for (let index = 0; index < updates.length; index += 1) {
+		const update = updates[index];
+		const timestamp = update.timestamp ?? 0;
+		const priority = timestamp + index * 1e-6;
+		for (const stu of update.stop_time_updates ?? []) {
+			const seq = stu.stop_sequence;
+			if (seq !== null && seq !== undefined) {
+				const key = `seq:${seq}`;
+				const prevPriority = updatePriority.get(key) ?? -Infinity;
+				if (priority >= prevPriority) {
+					updateStopTimes.set(seq, stu);
+					updatePriority.set(key, priority);
+				}
+				continue;
+			}
+			const stopId = stu.stop_id;
+			if (stopId) {
+				const key = `stop:${stopId}`;
+				const prevPriority = updatePriority.get(key) ?? -Infinity;
+				if (priority >= prevPriority) {
+					updateStopIds.set(stopId, stu);
+					updatePriority.set(key, priority);
+				}
+			}
+		}
+	}
+
+	return [...updateStopTimes.values(), ...updateStopIds.values()];
 }
 
 export function getStopTimes(ctx: CacheContext, query: qdf.StopTimeQuery): StopTime[] {
@@ -268,9 +304,7 @@ export function unregisterAugmentedTrip(ctx: CacheContext, tripId: string): void
 				if (tripSet) {
 					tripSet.delete(tripId);
 					// Clear all date-based caches for this stop
-					for (const key of augmented.stopDeparturesCached.keys()) {
-						if (key.startsWith(`${stopId}|`)) augmented.stopDeparturesCached.delete(key);
-					}
+					augmented.stopDeparturesCached.delete(stopId);
 				}
 			}
 		}
@@ -301,9 +335,7 @@ export function registerAugmentedTrip(ctx: CacheContext, trip: AugmentedTrip): v
 				}
 				tripSet.add(tripId);
 				// Invalidate cache for this stop across all dates (since a trip changed)
-				for (const key of augmented.stopDeparturesCached.keys()) {
-					if (key.startsWith(`${stopId}|`)) augmented.stopDeparturesCached.delete(key);
-				}
+				augmented.stopDeparturesCached.delete(stopId);
 			}
 		}
 	}
@@ -317,8 +349,8 @@ export function getStopDeparturesCached(ctx: CacheContext, stopId: string, servi
 	const timer = ctx.augmented.timer;
 	timer.start("getStopDeparturesCached");
 	const { augmented } = ctx;
-	const cacheKey = `${stopId}|${serviceDate}`;
-	let cached = augmented.stopDeparturesCached.get(cacheKey);
+	const cachedByStop = augmented.stopDeparturesCached.get(stopId);
+	const cached = cachedByStop?.get(serviceDate);
 	if (cached) {
 		timer.stop("getStopDeparturesCached");
 		return cached;
@@ -326,7 +358,14 @@ export function getStopDeparturesCached(ctx: CacheContext, stopId: string, servi
 
 	timer.start("getStopDeparturesCached:idIntersection");
 	const tripIdsForStop = augmented.tripsStoppingAt.get(stopId);
-	const tripIdsForDate = augmented.serviceDateTrips.get(serviceDate);
+	let tripIdsForDate = augmented.serviceDateTripsSet.get(serviceDate);
+	if (!tripIdsForDate) {
+		const tripIdsList = augmented.serviceDateTrips.get(serviceDate);
+		if (tripIdsList) {
+			tripIdsForDate = new Set(tripIdsList);
+			augmented.serviceDateTripsSet.set(serviceDate, tripIdsForDate);
+		}
+	}
 
 	if (!tripIdsForStop || !tripIdsForDate) {
 		timer.stop("getStopDeparturesCached:idIntersection");
@@ -335,10 +374,16 @@ export function getStopDeparturesCached(ctx: CacheContext, stopId: string, servi
 	}
 
 	// Intersect trips for stop and trips for date
-	const relevantTripIds =
-		tripIdsForStop.size < tripIdsForDate.length
-			? Array.from(tripIdsForStop).filter((id) => tripIdsForDate.includes(id))
-			: tripIdsForDate.filter((id) => tripIdsForStop.has(id));
+	const relevantTripIds: string[] = [];
+	if (tripIdsForStop.size < tripIdsForDate.size) {
+		for (const id of tripIdsForStop) {
+			if (tripIdsForDate.has(id)) relevantTripIds.push(id);
+		}
+	} else {
+		for (const id of tripIdsForDate) {
+			if (tripIdsForStop.has(id)) relevantTripIds.push(id);
+		}
+	}
 	timer.stop("getStopDeparturesCached:idIntersection");
 
 	timer.start("getStopDeparturesCached:processInstances");
@@ -377,7 +422,12 @@ export function getStopDeparturesCached(ctx: CacheContext, stopId: string, servi
 	results.sort((a, b) => getAbsTime(a) - getAbsTime(b));
 	timer.stop("getStopDeparturesCached:sort");
 
-	augmented.stopDeparturesCached.set(cacheKey, results);
+	let stopCache = augmented.stopDeparturesCached.get(stopId);
+	if (!stopCache) {
+		stopCache = new Map();
+		augmented.stopDeparturesCached.set(stopId, stopCache);
+	}
+	stopCache.set(serviceDate, results);
 	timer.stop("getStopDeparturesCached");
 	return results;
 }
@@ -521,22 +571,22 @@ export function getBaseStopTimes(ctx: CacheContext, trip_id: string): AugmentedS
 	return augmented.baseStopTimes?.[trip_id] ?? [];
 }
 
-export function cacheExpressInfo(ctx: CacheContext, stopListHash: string, expressInfo: any[]) {
+export function cacheExpressInfo(ctx: CacheContext, stopListHash: string, expressInfo: ExpressInfo[]) {
 	const { augmented } = ctx;
 	augmented.expressInfoCache.set(stopListHash, expressInfo);
 }
 
-export function getCachedExpressInfo(ctx: CacheContext, stopListHash: string): any[] | undefined {
+export function getCachedExpressInfo(ctx: CacheContext, stopListHash: string): ExpressInfo[] | undefined {
 	const { augmented } = ctx;
 	return augmented.expressInfoCache.get(stopListHash);
 }
 
-export function cachePassingStops(ctx: CacheContext, stopListHash: string, passingStops: any[]) {
+export function cachePassingStops(ctx: CacheContext, stopListHash: string, passingStops: PassingStop[]) {
 	const { augmented } = ctx;
 	augmented.passingStopsCache.set(stopListHash, passingStops);
 }
 
-export function getCachedPassingStops(ctx: CacheContext, stopListHash: string): any[] | undefined {
+export function getCachedPassingStops(ctx: CacheContext, stopListHash: string): PassingStop[] | undefined {
 	const { augmented } = ctx;
 	return augmented.passingStopsCache.get(stopListHash);
 }
@@ -628,8 +678,10 @@ function resetRealtimeCacheIncremental(updatedTripIds: Set<string>, ctx: CacheCo
 		const filteredTripIds = tripIds.filter((id) => !updatedTripIds.has(id));
 		if (filteredTripIds.length === 0) {
 			augmentedCache.serviceDateTrips.delete(serviceDate);
+			augmentedCache.serviceDateTripsSet.delete(serviceDate);
 		} else {
 			augmentedCache.serviceDateTrips.set(serviceDate, filteredTripIds);
+			augmentedCache.serviceDateTripsSet.set(serviceDate, new Set(filteredTripIds));
 		}
 	}
 
@@ -655,6 +707,8 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	const startTotal = Date.now();
 	ctx.augmented.timer.clear();
 	ctx.augmented.timer.start("refreshStaticCache");
+	clearConsideredCaches();
+	clearAugmentedStopTimeCaches();
 
 	const serviceDateTripsMap = new Map<string, Set<string>>();
 	const passingTripsMap = new Map<string, Set<string>>();
@@ -675,12 +729,13 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	}
 	ctx.augmented.timer.stop("refreshStaticCache:preloadTripUpdates");
 
-	if (config.region === "AU/SEQ") {
+	if (isRegion(config.region, "AU/SEQ")) {
 		ctx.augmented.timer.start("refreshStaticCache:loadQRTPlaces");
 		try {
 			newRawCache.regionSpecific.SEQ.qrtPlaces = await getPlaces(config);
-		} catch (error: any) {
-			logger.error("Failed to load QRT places: " + (error.message ?? error), {
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			logger.error("Failed to load QRT places: " + message, {
 				module: "cache",
 				function: "refreshStaticCache",
 			});
@@ -694,8 +749,9 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 		ctx.augmented.timer.start("refreshStaticCache:loadRailwayFacilities");
 		try {
 			newRawCache.regionSpecific.SEQ.railwayStationFacilities = await getRailwayStationFacilities(config);
-		} catch (error: any) {
-			logger.error("Failed to load railway station facilities: " + (error.message ?? error), {
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			logger.error("Failed to load railway station facilities: " + message, {
 				module: "cache",
 				function: "refreshStaticCache",
 			});
@@ -755,12 +811,14 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 		function: "refreshStaticCache",
 	});
 
-	ctx.augmented.timer.start("refreshStaticCache:preloadStopTimes");
-	for (const trip of trips) {
-		const stopTimes = gtfs.getStopTimes({ trip_id: trip.trip_id });
-		ctx.augmented.rawStopTimesCache.set(trip.trip_id, stopTimes);
+	if (config.preloadStopTimes) {
+		ctx.augmented.timer.start("refreshStaticCache:preloadStopTimes");
+		for (const trip of trips) {
+			const stopTimes = gtfs.getStopTimes({ trip_id: trip.trip_id });
+			ctx.augmented.rawStopTimesCache.set(trip.trip_id, stopTimes);
+		}
+		ctx.augmented.timer.stop("refreshStaticCache:preloadStopTimes");
 	}
-	ctx.augmented.timer.stop("refreshStaticCache:preloadStopTimes");
 
 	ctx.augmented.timer.start("refreshStaticCache:processShapes");
 	const shapeSet = new Set<string>();
@@ -780,7 +838,7 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	// Sync stops into WASM for downstream augmentation (passing stop detection, parent lookup)
 	for (let i = 0; i < stops.length; i++) {
 		const s = stops[i];
-		addWasmStop(s.stop_id, s.parent_station ?? "", (s as any).platform_code ?? "");
+		addWasmStop(s.stop_id, s.parent_station ?? "", s.platform_code ?? "");
 	}
 
 	const childrenByParent = new Map<string, Stop[]>();
@@ -791,9 +849,9 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 		childrenByParent.set(s.parent_station, list);
 	}
 
-	const qrtPlacesByName = new Map<string, any>();
+	const qrtPlacesByName = new Map<string, QRTPlace>();
 	const facilitiesByStopId = new Map<string, RailwayStationFacility>();
-	if (config.region === "AU/SEQ") {
+	if (isRegion(config.region, "AU/SEQ")) {
 		for (const p of newRawCache.regionSpecific.SEQ.qrtPlaces ?? []) {
 			if (!p?.Title) continue;
 			const key = p.Title.toLowerCase().replace("station", "").trim();
@@ -882,6 +940,7 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	ctx.augmented.timer.start("refreshStaticCache:buildServiceDateTrips");
 	for (const [date, set] of serviceDateTripsMap) {
 		newAugmentedCache.serviceDateTrips.set(date, Array.from(set));
+		newAugmentedCache.serviceDateTripsSet.set(date, set);
 	}
 	ctx.augmented.timer.stop("refreshStaticCache:buildServiceDateTrips");
 
@@ -915,9 +974,9 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		function: "refreshRealtimeCache",
 	});
 
-	let additionalPromises: Promise<any>[] = [];
+	let additionalPromises: Promise<unknown>[] = [];
 
-	if (config.region === "AU/SEQ") {
+	if (isRegion(config.region, "AU/SEQ")) {
 		logger.debug("Refreshing qrtTrains cache...", {
 			module: "cache",
 			function: "refreshRealtimeCache",
@@ -933,8 +992,9 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 						});
 						rs();
 					})
-					.catch((error: any) => {
-						logger.error("Failed to load QRT trains: " + (error.message ?? error), {
+					.catch((error) => {
+						const message = error instanceof Error ? error.message : String(error);
+						logger.error("Failed to load QRT trains: " + message, {
 							module: "cache",
 							function: "refreshRealtimeCache",
 						});
@@ -951,6 +1011,7 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 
 	const tripUpdates = gtfs.getRealtimeTripUpdates();
 	const vehiclePositions = gtfs.getRealtimeVehiclePositions();
+	ctx.augmented.tripUpdatesCache.clear();
 
 	logger.debug(
 		`Loaded ${tripUpdates.length} trip updates with ${tripUpdates.flatMap((v) => v.stop_time_updates).length} stop time updates.`,
@@ -964,7 +1025,12 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		function: "refreshRealtimeCache",
 	});
 
-	const updatedTripIds = new Set([...tripUpdates.map((u) => u.trip.trip_id).filter((id) => id !== undefined)]);
+	const updatedTripIds = new Set(
+		tripUpdates
+			.concat(ctx.raw.injectedTripUpdates ?? [])
+			.map((u) => u.trip.trip_id)
+			.filter((id) => id !== undefined),
+	);
 
 	logger.debug(`Found ${updatedTripIds.size} trips with realtime updates.`, {
 		module: "cache",
@@ -977,6 +1043,13 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 			function: "refreshRealtimeCache",
 		});
 	} else {
+		for (const update of tripUpdates.concat(ctx.raw.injectedTripUpdates ?? [])) {
+			const tripId = update.trip.trip_id;
+			if (!tripId) continue;
+			const cached = ctx.augmented.tripUpdatesCache.get(tripId);
+			if (cached) cached.push(update);
+			else ctx.augmented.tripUpdatesCache.set(tripId, [update]);
+		}
 		resetRealtimeCacheIncremental(updatedTripIds, ctx);
 
 		logger.debug("Re-augmenting updated trips...", {
@@ -1024,6 +1097,13 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 						augmentedCache.serviceDateTrips.set(date, tripIds);
 					}
 					if (!tripIds.includes(trip.trip_id)) tripIds.push(trip.trip_id);
+
+					let tripSet = augmentedCache.serviceDateTripsSet.get(date);
+					if (!tripSet) {
+						tripSet = new Set(tripIds);
+						augmentedCache.serviceDateTripsSet.set(date, tripSet);
+					}
+					tripSet.add(trip.trip_id);
 				}
 
 				for (const st of instance.stopTimes) {
@@ -1042,7 +1122,9 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		for (const stop of augmentedCache.stops) augmentedCache.stopsRec.set(stop.stop_id, stop);
 	}
 
-	await updateGTHAPlatforms(ctx, gtfs);
+	if (isRegion(ctx.config.region, "CA/GTHA")) {
+		await updateGTHAPlatforms(ctx, gtfs);
+	}
 
 	ctx.augmented.timer.stop("refreshRealtimeCache");
 	ctx.augmented.timer.log("Realtime Cache Refresh", true);
@@ -1078,11 +1160,11 @@ async function processWithProgress<T, U>(
 	});
 
 	for (let i = 0; i < total; i += chunkSize) {
-		const chunk = items.slice(i, i + chunkSize);
-		for (const item of chunk) {
-			results.push(processFn(item));
+		const end = Math.min(i + chunkSize, total);
+		for (let j = i; j < end; j++) {
+			results.push(processFn(items[j]));
 		}
-		current += chunk.length;
+		current = end;
 
 		await new Promise((resolve) => setImmediate(resolve));
 

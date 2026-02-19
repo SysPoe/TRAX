@@ -1,6 +1,8 @@
 import type * as qdf from "qdf-gtfs";
 import * as cache from "../cache.js";
+import { isRegion } from "../config.js";
 import { RailwayStationFacility } from "../region-specific/AU/SEQ/facilities-types.js";
+import type { QRTPlace } from "../region-specific/AU/SEQ/qr-travel/types.js";
 
 export type AugmentedStop = qdf.Stop & {
 	regionSpecific?: {
@@ -18,7 +20,7 @@ export type AugmentedStop = qdf.Stop & {
 
 export interface AugmentationContext {
 	childrenByParent?: Map<string, qdf.Stop[]>;
-	qrtPlacesByName?: Map<string, any>;
+	qrtPlacesByName?: Map<string, QRTPlace>;
 	facilitiesByStopId?: Map<string, RailwayStationFacility>;
 }
 
@@ -41,7 +43,7 @@ export function augmentStop(stop: qdf.Stop, ctx: cache.CacheContext, augCtx?: Au
 		children: [],
 	};
 
-	if (ctx.config.region === "AU/SEQ") {
+	if (isRegion(ctx.config.region, "AU/SEQ")) {
 		let myPlace = null;
 		const trimmedStopName = stop.stop_name?.toLowerCase().replace("station", "").trim();
 		if (augCtx?.qrtPlacesByName) {

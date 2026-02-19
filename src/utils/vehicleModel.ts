@@ -1,4 +1,4 @@
-import { TraxConfig } from "../config.js";
+import { isRegion, TraxConfig } from "../config.js";
 import { CacheContext } from "../cache.js";
 import { AugmentedTrip, AugmentedTripInstance } from "./augmentedTrip.js";
 import { getVehicleInfo as getSEQVehicleInfo } from "../region-specific/AU/SEQ/vehicleModel.js";
@@ -10,18 +10,13 @@ export type VehicleInfo = {
 	passenger_cars?: number | null;
 	scheduled_passenger_cars?: number | null;
 	consist?: string[] | null;
-	details?: any | null;
+	details?: unknown | null;
 };
 
 function resolveVehicleInfo(inst: AugmentedTripInstance, ctx: CacheContext, config: TraxConfig): VehicleInfo {
-	switch (config.region) {
-		case "AU/SEQ":
-			return getSEQVehicleInfo(inst);
-		case "CA/GTHA":
-			return getGTHAVehicleInfo(inst, ctx);
-		default:
-			return { vehicle_model: null, vehicle_id: null };
-	}
+	if (isRegion(config.region, "AU/SEQ")) return getSEQVehicleInfo(inst);
+	if (isRegion(config.region, "CA/GTHA")) return getGTHAVehicleInfo(inst, ctx);
+	return { vehicle_model: null, vehicle_id: null };
 }
 
 const previousVehicleInfo: Record<string, VehicleInfo> = {};

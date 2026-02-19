@@ -1,4 +1,4 @@
-import { TraxConfig } from "../config.js";
+import { isRegion, TraxConfig } from "../config.js";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { AugmentedTrip, AugmentedTripInstance } from "./augmentedTrip.js";
 import {
@@ -25,20 +25,12 @@ export function getServiceCapacity(
 	ctx: CacheContext,
 	config: TraxConfig,
 ): ServiceCapacity {
-	switch (config.region) {
-		case "AU/SEQ":
-			return SEQServCap(inst, stopTime, dateStr, _dirOverride, ctx);
-		case "none":
-		default:
-			return ServiceCapacity.UNKNOWN;
-	}
+	if (isRegion(config.region, "AU/SEQ")) return SEQServCap(inst, stopTime, dateStr, _dirOverride, ctx);
+	return ServiceCapacity.UNKNOWN;
 }
 
 export async function ensureServiceCapacityData(config: TraxConfig) {
-	switch (config.region) {
-		case "AU/SEQ":
-			return SEQEnsCapData(config);
-	}
+	if (isRegion(config.region, "AU/SEQ")) return SEQEnsCapData(config);
 }
 
 export function addSCI(inst: AugmentedTripInstance, ctx: CacheContext, config: TraxConfig): AugmentedTripInstance {

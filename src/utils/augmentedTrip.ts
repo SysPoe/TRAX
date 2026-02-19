@@ -4,6 +4,7 @@ import { AugmentedStopTime, augmentStopTimes } from "./augmentedStopTime.js";
 import * as cache from "../cache.js";
 import { getServiceCapacity, ServiceCapacity } from "./serviceCapacity.js";
 import { ExpressInfo, findExpress } from "./SRT.js";
+import { isRegion } from "../config.js";
 import { getToday } from "./time.js";
 
 export type AugmentedTripInstance = qdf.Trip & {
@@ -16,7 +17,8 @@ export type AugmentedTripInstance = qdf.Trip & {
 	expressInfo: ExpressInfo[];
 	vehicle_model: string | null;
 	vehicle_id: string | null;
-	vehicle_details?: any | null;
+	vehicle_details?: unknown | null;
+	_seq_direction_data?: { centralIndex: number; romaIndex: number; firstCityIndex: number } | null;
 	passenger_cars: number | null;
 	scheduled_passenger_cars: number | null;
 	consist: string[] | null;
@@ -153,14 +155,11 @@ export function augmentTrip(
 
 		let trip_number = "";
 
-		switch (ctx.config.region) {
-			case "CA":
-			case "CA/GTHA":
-				trip_number = trip.trip_id.slice(-4);
-				if (trip.trip_short_name && /^\d{1,3}$/.test(trip.trip_short_name)) trip_number = trip.trip_short_name; // VIA rail
-				break;
-			default:
-				trip_number = trip.trip_id.slice(-4);
+		if (isRegion(ctx.config.region, "CA")) {
+			trip_number = trip.trip_id.slice(-4);
+			if (trip.trip_short_name && /^\d{1,3}$/.test(trip.trip_short_name)) trip_number = trip.trip_short_name; // VIA rail
+		} else {
+			trip_number = trip.trip_id.slice(-4);
 		}
 
 		const instance: AugmentedTripInstance = {

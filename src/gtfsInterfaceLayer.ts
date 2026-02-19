@@ -9,7 +9,7 @@ export function getGtfs(): GTFS {
 	return currentGtfs;
 }
 
-export async function loadStatic(gtfs: GTFS, config: TraxConfig) {
+export async function loadStatic(gtfs: GTFS, config: TraxConfig): Promise<void> {
 	logger.info("Loading GTFS data...");
 	await gtfs.loadStatic(config.urls);
 	logger.info("Merging stops...");
@@ -19,7 +19,7 @@ export async function loadStatic(gtfs: GTFS, config: TraxConfig) {
 	logger.info("Static GTFS data loaded.");
 }
 
-export async function loadRealtime(gtfs: GTFS, config: TraxConfig) {
+export async function loadRealtime(gtfs: GTFS, config: TraxConfig): Promise<void> {
 	if (!config.realtime) return;
 	const rt = config.realtime;
 	logger.info("Loading realtime data...");
@@ -36,24 +36,25 @@ export async function createGtfs(config: TraxConfig, doRealtime: boolean = true)
 		cache: true,
 		cacheDir: config.cacheDir,
 	});
-	await Promise.all([
-		loadStatic(gtfs, config).catch((e) => {
-			logger.error("Error loading static gtfs!!! " + ((e as any).message ?? e), {
+	await loadStatic(gtfs, config).catch((e) => {
+		const message = e instanceof Error ? e.message : String(e);
+		logger.error("Error loading static gtfs!!! " + message, {
+			module: "GTFS",
+			function: "createGTFS",
+		});
+		return Promise.reject(e);
+	});
+
+	if (doRealtime) {
+		await loadRealtime(gtfs, config).catch((e) => {
+			const message = e instanceof Error ? e.message : String(e);
+			logger.error("Error loading realtime gtfs!!! " + message, {
 				module: "GTFS",
 				function: "createGTFS",
 			});
-			console.error(e);
-		}),
-		doRealtime
-			? loadRealtime(gtfs, config).catch((e) => {
-					logger.error("Error loading realtime gtfs!!! " + ((e as any).message ?? e), {
-						module: "GTFS",
-						function: "createGTFS",
-					});
-					console.error(e);
-				})
-			: Promise.resolve(),
-	]);
+			return Promise.reject(e);
+		});
+	}
 	currentGtfs = gtfs;
 	return gtfs;
 }

@@ -3,6 +3,7 @@ import { AugmentedStop } from "./augmentedStop.js";
 import * as cache from "../cache.js";
 import { findPassingStopTimes } from "./SRT.js";
 import { getPlatformData as loadPlatformData } from "./platformData.js";
+import type { PlatformData, PlatformDefinition } from "./platformData.js";
 import { ServiceCapacity } from "./serviceCapacity.js";
 import { getServiceDayStart } from "./time.js";
 import { Timer } from "./timer.js";
@@ -114,10 +115,15 @@ export function getServiceDateArray(date: string): string[] {
 	return cached;
 }
 
+export function clearAugmentedStopTimeCaches(): void {
+	dateOffsetCache.clear();
+	serviceDateArrayCache.clear();
+}
+
 function resolveExitSide(
 	stops: IntermediateAST[],
 	index: number,
-	platformDataList: any[],
+	platformDataList: PlatformDefinition[],
 	platformCode: number,
 ): "left" | "right" | "both" | null {
 	const platform = platformDataList?.find((v) => v.platform_code === platformCode);
@@ -127,8 +133,8 @@ function resolveExitSide(
 	const nextId =
 		index < stops.length - 1 ? (stops[index + 1].actual_parent_station_id ?? stops[index + 1].actual_stop_id) : "";
 
-	const matchesNext = platform.next.includes(nextId);
-	const matchesPrev = platform.from.includes(prevId);
+	const matchesNext = nextId ? platform.next.includes(nextId) : false;
+	const matchesPrev = prevId ? platform.from.includes(prevId) : false;
 
 	const swap = { left: "right", right: "left", both: "both" } as const;
 
@@ -138,10 +144,11 @@ function resolveExitSide(
 	return swap[platform.exitSide as keyof typeof swap];
 }
 
-function assignPlatformSides(st: IntermediateAST[], platformDataMap: any): AugmentedStopTime[] {
+function assignPlatformSides(st: IntermediateAST[], platformDataMap: PlatformData): AugmentedStopTime[] {
 	const getPlatformData = (stopId: string | null | undefined) => {
 		if (!stopId) return null;
-		return platformDataMap[stopId];
+		const data = platformDataMap[stopId];
+		return Array.isArray(data) ? data : null;
 	};
 
 	let prevActualTrack = "";
@@ -156,10 +163,10 @@ function assignPlatformSides(st: IntermediateAST[], platformDataMap: any): Augme
 		const item = st[i];
 		if (item.realtime && item.realtime_info?.schedule_relationship === qdf.StopTimeScheduleRelationship.SKIPPED) {
 			const refs = {
-				actualStop: (item as any).actual_stop ?? null,
-				actualParent: (item as any).actual_parent_station ?? null,
-				scheduledStop: (item as any).scheduled_stop ?? null,
-				scheduledParent: (item as any).scheduled_parent_station ?? null,
+				actualStop: item.actual_stop ?? null,
+				actualParent: item.actual_parent_station ?? null,
+				scheduledStop: item.scheduled_stop ?? null,
+				scheduledParent: item.scheduled_parent_station ?? null,
 			};
 			const skippedWithSides = {
 				...item,
@@ -177,18 +184,17 @@ function assignPlatformSides(st: IntermediateAST[], platformDataMap: any): Augme
 		const actData = getPlatformData(actId);
 		const schData = getPlatformData(schId);
 
-		let actPlat: any = null;
-		let schPlat: any = null;
+		let actPlat: PlatformDefinition | null = null;
+		let schPlat: PlatformDefinition | null = null;
 
 		if (item.passing) {
-			actPlat = actData?.find((v: any) => v.trackCode === prevActualTrack) ?? null;
-			schPlat = schData?.find((v: any) => v.trackCode === prevScheduledTrack) ?? null;
+			actPlat = actData?.find((v) => v.trackCode === prevActualTrack) ?? null;
+			schPlat = schData?.find((v) => v.trackCode === prevScheduledTrack) ?? null;
 			if (!actPlat) prevActualTrack = "";
 			if (!schPlat) prevScheduledTrack = "";
 		} else {
-			actPlat = actData?.find((v: any) => v.platform_code === parseInt(item.actual_platform_code ?? "0")) ?? null;
-			schPlat =
-				schData?.find((v: any) => v.platform_code === parseInt(item.scheduled_platform_code ?? "0")) ?? null;
+			actPlat = actData?.find((v) => v.platform_code === parseInt(item.actual_platform_code ?? "0")) ?? null;
+			schPlat = schData?.find((v) => v.platform_code === parseInt(item.scheduled_platform_code ?? "0")) ?? null;
 		}
 
 		if (actPlat?.trackCode === prevActualTrack && schPlat?.trackCode === prevScheduledTrack) {
@@ -208,10 +214,10 @@ function assignPlatformSides(st: IntermediateAST[], platformDataMap: any): Augme
 		}
 
 		const refs = {
-			actualStop: (item as any).actual_stop ?? null,
-			actualParent: (item as any).actual_parent_station ?? null,
-			scheduledStop: (item as any).scheduled_stop ?? null,
-			scheduledParent: (item as any).scheduled_parent_station ?? null,
+			actualStop: item.actual_stop ?? null,
+			actualParent: item.actual_parent_station ?? null,
+			scheduledStop: item.scheduled_stop ?? null,
+			scheduledParent: item.scheduled_parent_station ?? null,
 		};
 		const newEntry: AugmentedStopTime = {
 			...item,
@@ -311,7 +317,7 @@ export function augmentStopTimes(
 			timepoint: s?.timepoint ?? 1,
 			continuous_pickup: 0,
 			continuous_drop_off: 0,
-			feed_id: s?.feed_id ?? (r as any)?.feed_id ?? "",
+			feed_id: s?.feed_id ?? (r as qdf.StopTime | undefined)?.feed_id ?? "",
 			_rtUpdate: r,
 			_isSkipped: isSkipped,
 		});
@@ -343,7 +349,7 @@ export function augmentStopTimes(
 	ctx.augmented.timer.start("augmentStopTimes:processStops");
 	for (const stopTime of interpolatedActiveStops) {
 		const seq = stopTime.stop_sequence;
-		const isPassing = (stopTime as any)._passing;
+		const isPassing = Boolean((stopTime as qdf.StopTime & { _passing?: boolean })._passing);
 
 		const prevWholeSeq = Math.floor(currentSequence);
 		const currWholeSeq = Math.floor(seq);
@@ -602,7 +608,7 @@ export function augmentStopTimes(
 	}
 	ctx.augmented.timer.stop("augmentStopTimes:processStops");
 
-	let platformData = {};
+	let platformData: PlatformData = {};
 	if (ctx.raw.regionSpecific.SEQ.platformData === undefined) {
 		ctx.raw.regionSpecific.SEQ.platformData = loadPlatformData(ctx.config);
 	}

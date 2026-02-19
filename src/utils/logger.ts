@@ -46,6 +46,11 @@ class Logger {
 		this.stream.write(message + "\n");
 	}
 
+	public raw(message: string): void {
+		this.writeLog(stripAnsi(message));
+		this.print(message, "log");
+	}
+
 	private print(message: string, method: "log" | "warn" | "error" | "debug" = "log"): void {
 		// If multibar is active, use its log method to avoid breaking layout
 		if (this.multibar) {

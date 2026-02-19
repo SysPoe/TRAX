@@ -5,7 +5,7 @@ import logger from "./logger.js";
 import { cacheFileExists, getCacheFilePath, loadCacheFile, writeCacheFile } from "./fs.js";
 import fs from "fs";
 
-function getPatternSignature(stopTimes: any[]): string {
+function getPatternSignature(stopTimes: qdf.StopTime[]): string {
 	return stopTimes.map((st) => st.stop_id).join("|");
 }
 

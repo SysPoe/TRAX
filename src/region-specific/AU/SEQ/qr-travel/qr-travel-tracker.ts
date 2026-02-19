@@ -8,6 +8,7 @@ import {
 	getLocalISOString,
 } from "../../../../utils/time.js";
 import type {
+	QRTDirection,
 	QRTGetServiceResponse,
 	QRTPlace,
 	QRTServiceLine,
@@ -18,8 +19,8 @@ import type {
 	QRTTravelTrip,
 } from "./types.js";
 import ensureQRTEnabled from "./enabled.js";
-import { TraxConfig } from "../../../../config.js";
-import { CacheContext } from "../../../../cache.js";
+import type { TraxConfig } from "../../../../config.js";
+import type { CacheContext } from "../../../../cache.js";
 
 export async function trackTrain(
 	serviceID: string,
@@ -37,7 +38,7 @@ export async function trackTrain(
 		logger.error(
 			`Failed to fetch service data for ${serviceID} @ "${url}": ${response.status} ${response.statusText} ${errorText}`,
 			{
-				module: "qr-travel-tracker",
+				module: "qtt",
 				function: "trackTrain",
 			},
 		);
@@ -71,7 +72,7 @@ export async function getServiceLines(config: TraxConfig) {
 	let res = await fetch("https://www.queenslandrailtravel.com.au/SPWebApp/api/ServiceUpdates/AllServices");
 	if (!res.ok) {
 		logger.error(`Failed to fetch service lines: ${res.status} ${res.statusText}`, {
-			module: "qr-travel-tracker",
+			module: "qtt",
 			function: "getServiceLines",
 		});
 		throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
@@ -96,7 +97,7 @@ export async function getAllServices(config: TraxConfig) {
 	const responseText = await res.json();
 	const json = JSON.parse(responseText);
 	logger.debug(`Successfully fetched ${json.length} services`, {
-		module: "qr-travel-tracker",
+		module: "qtt",
 		function: "getAllServices",
 	});
 	return json as QRTService[];
@@ -172,7 +173,7 @@ export async function getServiceUpdates(
 	const responseText = await res.json();
 	const json = JSON.parse(responseText);
 	logger.debug(`Successfully fetched ${json.length} service updates`, {
-		module: "qr-travel-tracker",
+		module: "qtt",
 		function: "getServiceUpdates",
 	});
 	return json as QRTServiceUpdate[];
@@ -334,8 +335,8 @@ function getDelay(delaySecs: number | null = null, departureTime: string | null,
 
 async function processService(
 	serviceLine: QRTServiceLine,
-	direction: any,
-	service: any,
+	direction: QRTDirection,
+	service: QRTService,
 	services: QRTService[],
 	ctx: CacheContext,
 ): Promise<QRTTravelTrip | null> {
@@ -390,28 +391,29 @@ async function processService(
 				};
 			} else {
 				logger.warn(`No matching QRT service found for service ${service.ServiceId}`, {
-					module: "qr-travel-tracker",
+					module: "qtt",
 					function: "getCurrentQRTravelTrains",
 				});
 				return null;
 			}
 		} else {
 			logger.warn(`Service response not successful for service ${service.ServiceId}`, {
-				module: "qr-travel-tracker",
+				module: "qtt",
 				function: "getCurrentQRTravelTrains",
 			});
 			return null;
 		}
-	} catch (error: any) {
-		logger.warn(`Failed to track service ${service.ServiceId}: ${error.message ?? error}`, {
-			module: "qr-travel-tracker",
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		logger.warn(`Failed to track service ${service.ServiceId}: ${message}`, {
+			module: "qtt",
 			function: "getCurrentQRTravelTrains",
 		});
 		return null;
 	}
 }
 
-export async function getCurrentQRTravelTrains(ctx: CacheContext, retries = 5): Promise<QRTTravelTrip[]> {
+export async function getCurrentQRTravelTrains(ctx: CacheContext, retries = 2): Promise<QRTTravelTrip[]> {
 	ensureQRTEnabled(ctx.config);
 	try {
 		const [services, serviceLines] = await Promise.all([getAllServices(ctx.config), getServiceLines(ctx.config)]);
@@ -429,21 +431,19 @@ export async function getCurrentQRTravelTrains(ctx: CacheContext, retries = 5): 
 		const travelTrips = results.filter((trip): trip is QRTTravelTrip => trip !== null);
 
 		return travelTrips;
-	} catch (error: any) {
-		let secs = 5 * (6 - retries);
-		logger.error(
-			`Failed to get current QR Travel trains: ${error.message ?? error}. Retrying in ${secs} seconds.`,
-			{
-				module: "qr-travel-tracker",
-				function: "getCurrentQRTravelTrains",
-			},
-		);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		let secs = 5 * (3 - retries);
+		logger.error(`Failed to get current QR Travel trains: ${message}. Retrying in ${secs} seconds.`, {
+			module: "qtt",
+			function: "getCurrentQRTravelTrains",
+		});
 		retries--;
 		if (retries > 0) {
 			await new Promise((resolve) => setTimeout(resolve, secs * 1000));
 			return getCurrentQRTravelTrains(ctx, retries);
 		} else {
-			throw new Error(`Failed to get current QR Travel trains after multiple retries: ${error.message ?? error}`);
+			throw new Error(`Failed to get current QR Travel trains after multiple retries: ${message}`);
 		}
 	}
 }

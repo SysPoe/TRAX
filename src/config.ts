@@ -18,6 +18,7 @@ export interface TraxConfig {
 	region: TRAXRegion | "none";
 	timezone: string;
 	disableTimers: boolean;
+	preloadStopTimes: boolean;
 	realtime: {
 		realtimeAlerts: (string | GTFSFeedConfig)[] | null;
 		realtimeTripUpdates: (string | GTFSFeedConfig)[] | null;
@@ -30,11 +31,17 @@ export interface TraxConfig {
 	}[];
 }
 
+export function isRegion(region: TraxConfig["region"] | null | undefined, target: string): boolean {
+	if (!region) return false;
+	return region === target || region.startsWith(`${target}/`);
+}
+
 export type TraxConfigOptions = Partial<Omit<TraxConfig, "realtime">> & {
 	url?: string;
 	headers?: { [key: string]: string } | null;
 	timezone?: string;
 	disableTimers?: boolean;
+	preloadStopTimes?: boolean;
 	realtime?: {
 		realtimeAlerts?: (string | GTFSFeedConfig)[] | string | GTFSFeedConfig | null;
 		realtimeTripUpdates?: (string | GTFSFeedConfig)[] | string | GTFSFeedConfig | null;
@@ -58,6 +65,7 @@ export const PRESETS: Record<TRAXRegion, (apiKey?: string | undefined) => TraxCo
 			],
 			region: "AU/SEQ",
 			timezone: "Australia/Brisbane",
+			preloadStopTimes: false,
 			realtime: {
 				realtimeAlerts: [
 					{
@@ -89,6 +97,7 @@ export const PRESETS: Record<TRAXRegion, (apiKey?: string | undefined) => TraxCo
 			],
 			region: "CA",
 			timezone: "America/Toronto",
+			preloadStopTimes: false,
 			realtime: null,
 			mergeStops: VIA_MERGE_STOPS,
 			updateStopActions: VIA_UPDATE_STOPS,
@@ -111,6 +120,7 @@ export const PRESETS: Record<TRAXRegion, (apiKey?: string | undefined) => TraxCo
 			],
 			region: "CA/GTHA",
 			timezone: "America/Toronto",
+			preloadStopTimes: false,
 			realtime: {
 				realtimeAlerts: [
 					{
@@ -180,6 +190,7 @@ export function resolveConfig(options: TraxConfigOptions = {}): TraxConfig {
 		region: "AU/SEQ",
 		timezone: "Australia/Brisbane",
 		disableTimers: true,
+		preloadStopTimes: false,
 		realtime: {
 			realtimeAlerts: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts"],
 			realtimeTripUpdates: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates"],

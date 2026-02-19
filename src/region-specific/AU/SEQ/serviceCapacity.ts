@@ -1,4 +1,5 @@
 import fs from "fs";
+import path from "path";
 import logger from "../../../utils/logger.js";
 import { AugmentedStopTime } from "../../../utils/augmentedStopTime.js";
 import { AugmentedTripInstance, AugmentedTrip } from "../../../utils/augmentedTrip.js";
@@ -39,9 +40,13 @@ function getMap<K, V>(map: Map<K, V>, key: K, factory: () => V): V {
 export async function ensureServiceCapacityData(config: TraxConfig): Promise<void> {
 	const cacheDir = config.cacheDir;
 	const FILE_PATH = getCacheFilePath("region-specific/seq/service_capacity.csv", cacheDir);
+	const fileDir = path.dirname(FILE_PATH);
 
 	if (!fs.existsSync(cacheDir)) {
 		fs.mkdirSync(cacheDir, { recursive: true });
+	}
+	if (!fs.existsSync(fileDir)) {
+		fs.mkdirSync(fileDir, { recursive: true });
 	}
 
 	// If file doesn't exist, extract from embedded archive
@@ -200,10 +205,7 @@ function getTripDirection(inst: AugmentedTripInstance, currentStopSequence: numb
 
 	if (stopTimes.length === 0) return null;
 
-	const cache =
-		(inst as any)._seq_direction_data || (inst as any)._seq_direction_data === null
-			? (inst as any)._seq_direction_data
-			: null;
+	const cache = inst._seq_direction_data ?? null;
 
 	let centralIndex = -1;
 	let romaIndex = -1;
@@ -221,7 +223,7 @@ function getTripDirection(inst: AugmentedTripInstance, currentStopSequence: numb
 				if (stopId === "place_romsta") romaIndex = i;
 			}
 		}
-		(inst as any)._seq_direction_data = { centralIndex, romaIndex, firstCityIndex };
+		inst._seq_direction_data = { centralIndex, romaIndex, firstCityIndex };
 	}
 
 	if (firstCityIndex === -1) {
