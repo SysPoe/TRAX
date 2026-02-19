@@ -284,10 +284,11 @@ function convertQRTServiceToTravelTrip(
 
 	const runChars: { [key: string]: string } = {
 		Gulflander: "5",
+		"Kuranda Scenic Railway": "3"
 	};
 
 	return {
-		run:
+		trip_number:
 			service.Title.split(" ")[0].length == 4
 				? service.Title.split(" ")[0]
 				: `${runChars[line] ?? "?"}${serviceMeta.ServiceId.slice(0, 3)}`,

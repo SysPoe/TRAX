@@ -34,10 +34,6 @@ async function main() {
 
 		console.log(`Completed in: ${time.toFixed(2)}s`);
 
-		if (time > 30) {
-			console.log(`  ⚠️  WARNING: Target is < 30s`);
-		}
-
 		TRAX.clearIntervals();
 	}
 
@@ -50,9 +46,9 @@ async function main() {
 	console.log(`Time saved: ${(results[0].time - results[1].time).toFixed(2)}s`);
 
 	if (results[1].time < 30) {
-		console.log(`\n✅ Target achieved: < 30s augmentation time`);
+		console.log(`\nTarget achieved: < 30s augmentation time`);
 	} else {
-		console.log(`\n❌ Target NOT achieved: ${results[1].time.toFixed(2)}s > 30s`);
+		console.log(`\nTarget NOT achieved: ${results[1].time.toFixed(2)}s > 30s`);
 	}
 }
 

@@ -109,7 +109,7 @@ import type { QRTSRTStop } from "./srt.js";
 export interface QRTTravelTrip {
 	serviceId: string;
 	serviceName: string;
-	run: string;
+	trip_number: string;
 	direction: string;
 	line: string;
 	status: string;

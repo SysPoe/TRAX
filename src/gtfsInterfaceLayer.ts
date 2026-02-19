@@ -52,7 +52,6 @@ export async function createGtfs(config: TraxConfig, doRealtime: boolean = true)
 				module: "GTFS",
 				function: "createGTFS",
 			});
-			return Promise.reject(e);
 		});
 	}
 	currentGtfs = gtfs;

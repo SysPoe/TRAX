@@ -87,6 +87,7 @@ export type RawCache = {
 			railwayStationFacilities: RailwayStationFacility[];
 		};
 	};
+	tripServiceIds?: Map<string, string>;
 	injectedTripUpdates?: RealtimeTripUpdate[];
 	injectedVehiclePositions?: RealtimeVehiclePosition[];
 };
@@ -137,6 +138,7 @@ export function createEmptyRawCache(): RawCache {
 				railwayStationFacilities: [],
 			},
 		},
+		tripServiceIds: new Map(),
 		injectedTripUpdates: [],
 		injectedVehiclePositions: [],
 	};
@@ -804,9 +806,13 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	});
 
 	ctx.augmented.timer.start("refreshStaticCache:loadTrips");
-	const trips = gtfs.getTrips().filter((v: Trip) => isConsideredTrip(v, gtfs));
+	const allTrips = gtfs.getTrips();
+	const trips = allTrips.filter((v: Trip) => isConsideredTrip(v, gtfs));
+	for (const t of allTrips) {
+		newRawCache.tripServiceIds!.set(t.trip_id, t.service_id);
+	}
 	ctx.augmented.timer.stop("refreshStaticCache:loadTrips");
-	logger.debug(`Loaded ${trips.length} trips.`, {
+	logger.debug(`Loaded ${trips.length} considered trips out of ${allTrips.length} total.`, {
 		module: "cache",
 		function: "refreshStaticCache",
 	});

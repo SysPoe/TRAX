@@ -1,0 +1,1719 @@
+{
+  "success": true,
+  "href": "https://queenslandrailtravel-booking.opendestinations.com/bookingsiteapi/api/rail/searchinput",
+  "fields": {
+    "btpt": [
+      {
+        "defaultpricetypeid": 10110,
+        "bookingtypeid": 1,
+        "bookingtypename": "FIT",
+        "pricetypeid": 11,
+        "pricetypename": "EKKA",
+        "defaultpricetypesequence": 1,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 89,
+        "bookingtypeid": 1,
+        "bookingtypename": "FIT",
+        "pricetypeid": 6,
+        "pricetypename": "XPlorer Fare",
+        "defaultpricetypesequence": 2,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 90,
+        "bookingtypeid": 1,
+        "bookingtypename": "FIT",
+        "pricetypeid": 5,
+        "pricetypename": "USave",
+        "defaultpricetypesequence": 3,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 3,
+        "bookingtypeid": 1,
+        "bookingtypename": "FIT",
+        "pricetypeid": 2,
+        "pricetypename": "BQuick",
+        "defaultpricetypesequence": 4,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 7,
+        "bookingtypeid": 1,
+        "bookingtypename": "FIT",
+        "pricetypeid": 3,
+        "pricetypename": "AChoice",
+        "defaultpricetypesequence": 5,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 92,
+        "bookingtypeid": 1,
+        "bookingtypename": "FIT",
+        "pricetypeid": 8,
+        "pricetypename": "Kuranda Scenic Railway",
+        "defaultpricetypesequence": 6,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 9094,
+        "bookingtypeid": 1,
+        "bookingtypename": "FIT",
+        "pricetypeid": 10,
+        "pricetypename": "Gulflander",
+        "defaultpricetypesequence": 7,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 13894,
+        "bookingtypeid": 1,
+        "bookingtypename": "FIT",
+        "pricetypeid": 12,
+        "pricetypename": "Spring Bluff Shuttle",
+        "defaultpricetypesequence": 8,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 93,
+        "bookingtypeid": 7,
+        "bookingtypename": "Education Queensland",
+        "pricetypeid": 3,
+        "pricetypename": "AChoice",
+        "defaultpricetypesequence": 9,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 94,
+        "bookingtypeid": 2,
+        "bookingtypename": "Group",
+        "pricetypeid": 5,
+        "pricetypename": "USave",
+        "defaultpricetypesequence": 10,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 95,
+        "bookingtypeid": 2,
+        "bookingtypename": "Group",
+        "pricetypeid": 6,
+        "pricetypename": "XPlorer Fare",
+        "defaultpricetypesequence": 11,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 96,
+        "bookingtypeid": 2,
+        "bookingtypename": "Group",
+        "pricetypeid": 7,
+        "pricetypename": "Wholesale",
+        "defaultpricetypesequence": 12,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 97,
+        "bookingtypeid": 2,
+        "bookingtypename": "Group",
+        "pricetypeid": 2,
+        "pricetypename": "BQuick",
+        "defaultpricetypesequence": 13,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 98,
+        "bookingtypeid": 2,
+        "bookingtypename": "Group",
+        "pricetypeid": 3,
+        "pricetypename": "AChoice",
+        "defaultpricetypesequence": 14,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 99,
+        "bookingtypeid": 2,
+        "bookingtypename": "Group",
+        "pricetypeid": 8,
+        "pricetypename": "Kuranda Scenic Railway",
+        "defaultpricetypesequence": 15,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 8666,
+        "bookingtypeid": 2,
+        "bookingtypename": "Group",
+        "pricetypeid": 9,
+        "pricetypename": "Edusaver",
+        "defaultpricetypesequence": 16,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 9095,
+        "bookingtypeid": 2,
+        "bookingtypename": "Group",
+        "pricetypeid": 10,
+        "pricetypename": "Gulflander",
+        "defaultpricetypesequence": 17,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 100,
+        "bookingtypeid": 5,
+        "bookingtypename": "Account Holders",
+        "pricetypeid": 3,
+        "pricetypename": "AChoice",
+        "defaultpricetypesequence": 18,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 9108,
+        "bookingtypeid": 5,
+        "bookingtypename": "Account Holders",
+        "pricetypeid": 8,
+        "pricetypename": "Kuranda Scenic Railway",
+        "defaultpricetypesequence": 19,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 9109,
+        "bookingtypeid": 5,
+        "bookingtypename": "Account Holders",
+        "pricetypeid": 10,
+        "pricetypename": "Gulflander",
+        "defaultpricetypesequence": 20,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      },
+      {
+        "defaultpricetypeid": 101,
+        "bookingtypeid": 6,
+        "bookingtypename": "Hospital",
+        "pricetypeid": 3,
+        "pricetypename": "AChoice",
+        "defaultpricetypesequence": 21,
+        "clientid": 0,
+        "pricetypeinactive": false,
+        "bookingtypeinactive": false,
+        "enquirypricetypeid": null
+      }
+    ],
+    "stations": [
+      {
+        "isstart": true,
+        "genericid": 6002,
+        "name": "BNE - Brisbane (Roma St)"
+      },
+      {
+        "isstart": true,
+        "genericid": 6026,
+        "name": "CAB - Caboolture"
+      },
+      {
+        "isstart": true,
+        "genericid": 6027,
+        "name": "NBR - Nambour"
+      },
+      {
+        "isstart": true,
+        "genericid": 6028,
+        "name": "COO - Cooroy"
+      },
+      {
+        "isstart": true,
+        "genericid": 6029,
+        "name": "GYN - Gympie North"
+      },
+      {
+        "isstart": true,
+        "genericid": 6030,
+        "name": "MBJ - Maryborough West"
+      },
+      {
+        "isstart": true,
+        "genericid": 6031,
+        "name": "BDB - Bundaberg"
+      },
+      {
+        "isstart": true,
+        "genericid": 6032,
+        "name": "MIR - Miriam Vale"
+      },
+      {
+        "isstart": true,
+        "genericid": 6033,
+        "name": "GLT - Gladstone"
+      },
+      {
+        "isstart": true,
+        "genericid": 6034,
+        "name": "MLM - Mount Larcom"
+      },
+      {
+        "isstart": true,
+        "genericid": 6035,
+        "name": "ROK - Rockhampton"
+      },
+      {
+        "isstart": true,
+        "genericid": 6036,
+        "name": "SLW - St Lawrence"
+      },
+      {
+        "isstart": true,
+        "genericid": 6037,
+        "name": "CAA - Carmila"
+      },
+      {
+        "isstart": true,
+        "genericid": 6038,
+        "name": "SAR - Sarina"
+      },
+      {
+        "isstart": true,
+        "genericid": 6039,
+        "name": "MKY - Mackay"
+      },
+      {
+        "isstart": true,
+        "genericid": 6040,
+        "name": "PPP - Proserpine"
+      },
+      {
+        "isstart": true,
+        "genericid": 6042,
+        "name": "ZBO - Bowen"
+      },
+      {
+        "isstart": true,
+        "genericid": 6043,
+        "name": "HMH - Home Hill"
+      },
+      {
+        "isstart": true,
+        "genericid": 6044,
+        "name": "AYR - Ayr"
+      },
+      {
+        "isstart": true,
+        "genericid": 6045,
+        "name": "GIR - Giru"
+      },
+      {
+        "isstart": true,
+        "genericid": 6046,
+        "name": "TSV - Townsville (Charters Towers Road)"
+      },
+      {
+        "isstart": true,
+        "genericid": 6048,
+        "name": "IGH - Ingham"
+      },
+      {
+        "isstart": true,
+        "genericid": 6049,
+        "name": "CAR - Cardwell"
+      },
+      {
+        "isstart": true,
+        "genericid": 6050,
+        "name": "TLY - Tully"
+      },
+      {
+        "isstart": true,
+        "genericid": 6051,
+        "name": "IFL - Innisfail"
+      },
+      {
+        "isstart": true,
+        "genericid": 6054,
+        "name": "CNS - Cairns"
+      },
+      {
+        "isstart": true,
+        "genericid": 6055,
+        "name": "CXT - Charters Towers"
+      },
+      {
+        "isstart": true,
+        "genericid": 6056,
+        "name": "BZB - Babinda"
+      },
+      {
+        "isstart": true,
+        "genericid": 6057,
+        "name": "GOR - Gordonvale"
+      },
+      {
+        "isstart": true,
+        "genericid": 6058,
+        "name": "PLD - Pentland"
+      },
+      {
+        "isstart": true,
+        "genericid": 6059,
+        "name": "TCK - Torrens Creek"
+      },
+      {
+        "isstart": true,
+        "genericid": 6061,
+        "name": "HGD - Hughenden"
+      },
+      {
+        "isstart": true,
+        "genericid": 6064,
+        "name": "RCM - Richmond"
+      },
+      {
+        "isstart": true,
+        "genericid": 6066,
+        "name": "JCK - Julia Creek"
+      },
+      {
+        "isstart": true,
+        "genericid": 6068,
+        "name": "CNJ - Cloncurry"
+      },
+      {
+        "isstart": true,
+        "genericid": 6071,
+        "name": "DCH - Duchess"
+      },
+      {
+        "isstart": true,
+        "genericid": 6073,
+        "name": "ISA - Mount Isa"
+      },
+      {
+        "isstart": true,
+        "genericid": 6108,
+        "name": "ANA - Anakie"
+      },
+      {
+        "isstart": true,
+        "genericid": 6180,
+        "name": "CNV - Cannonvale"
+      },
+      {
+        "isstart": true,
+        "genericid": 6181,
+        "name": "CSM - Coral Sea Marina"
+      },
+      {
+        "isstart": true,
+        "genericid": 6182,
+        "name": "AIR - Airlie Beach"
+      },
+      {
+        "isstart": true,
+        "genericid": 6183,
+        "name": "POA - Port Of Airlie"
+      },
+      {
+        "isstart": true,
+        "genericid": 6184,
+        "name": "JUB - Jubilee Pocket"
+      },
+      {
+        "isstart": true,
+        "genericid": 6185,
+        "name": "CDI - Cooladdi"
+      },
+      {
+        "isstart": true,
+        "genericid": 6186,
+        "name": "CHE - Cheepie"
+      },
+      {
+        "isstart": true,
+        "genericid": 6187,
+        "name": "ULP - Quilpie"
+      },
+      {
+        "isstart": true,
+        "genericid": 6188,
+        "name": "WYR - Wyandra"
+      },
+      {
+        "isstart": true,
+        "genericid": 6189,
+        "name": "CMA - Cunnamulla"
+      },
+      {
+        "isstart": true,
+        "genericid": 6190,
+        "name": "MOA - Morella Junction"
+      },
+      {
+        "isstart": true,
+        "genericid": 6191,
+        "name": "WIN - Winton"
+      },
+      {
+        "isstart": true,
+        "genericid": 6192,
+        "name": "MTC - Maryborough Town"
+      },
+      {
+        "isstart": true,
+        "genericid": 6193,
+        "name": "HBT - Hervey Bay (Pialba)"
+      },
+      {
+        "isstart": true,
+        "genericid": 6194,
+        "name": "URN - Hervey Bay (Urangan)"
+      },
+      {
+        "isstart": true,
+        "genericid": 6195,
+        "name": "TQY - Hervey Bay (Torquay)"
+      },
+      {
+        "isstart": true,
+        "genericid": 6196,
+        "name": "SCN - Hervey Bay (Scarness)"
+      },
+      {
+        "isstart": true,
+        "genericid": 6197,
+        "name": "GYP - Gympie Town"
+      },
+      {
+        "isstart": true,
+        "genericid": 6198,
+        "name": "EKA - Exhibition Station"
+      },
+      {
+        "isstart": true,
+        "genericid": 6199,
+        "name": "JHQ - Shute Harbour"
+      },
+      {
+        "isstart": true,
+        "genericid": 6200,
+        "name": "DUA - Duaringa"
+      },
+      {
+        "isstart": true,
+        "genericid": 6201,
+        "name": "BLU - Bluff"
+      },
+      {
+        "isstart": true,
+        "genericid": 6202,
+        "name": "BLT - Blackwater"
+      },
+      {
+        "isstart": true,
+        "genericid": 6203,
+        "name": "EMD - Emerald"
+      },
+      {
+        "isstart": true,
+        "genericid": 6204,
+        "name": "ABH - Alpha"
+      },
+      {
+        "isstart": true,
+        "genericid": 6205,
+        "name": "JCO - Jericho"
+      },
+      {
+        "isstart": true,
+        "genericid": 6206,
+        "name": "BCI - Barcaldine"
+      },
+      {
+        "isstart": true,
+        "genericid": 6207,
+        "name": "ILF - Ilfracombe"
+      },
+      {
+        "isstart": true,
+        "genericid": 6208,
+        "name": "LRE - Longreach"
+      },
+      {
+        "isstart": true,
+        "genericid": 6209,
+        "name": "CQD - Corinda"
+      },
+      {
+        "isstart": true,
+        "genericid": 6210,
+        "name": "IPS - Ipswich"
+      },
+      {
+        "isstart": true,
+        "genericid": 6211,
+        "name": "RSW - Rosewood"
+      },
+      {
+        "isstart": true,
+        "genericid": 6212,
+        "name": "LAI - Laidley"
+      },
+      {
+        "isstart": true,
+        "genericid": 6213,
+        "name": "GAT - Gatton"
+      },
+      {
+        "isstart": true,
+        "genericid": 6214,
+        "name": "HIN - Helidon"
+      },
+      {
+        "isstart": true,
+        "genericid": 6215,
+        "name": "TWB - Toowoomba"
+      },
+      {
+        "isstart": true,
+        "genericid": 6216,
+        "name": "OKY - Oakey"
+      },
+      {
+        "isstart": true,
+        "genericid": 6217,
+        "name": "DBY - Dalby"
+      },
+      {
+        "isstart": true,
+        "genericid": 6218,
+        "name": "CCL - Chinchilla"
+      },
+      {
+        "isstart": true,
+        "genericid": 6219,
+        "name": "MIQ - Miles"
+      },
+      {
+        "isstart": true,
+        "genericid": 6220,
+        "name": "YLB - Yuleba"
+      },
+      {
+        "isstart": true,
+        "genericid": 6221,
+        "name": "RMA - Roma"
+      },
+      {
+        "isstart": true,
+        "genericid": 6222,
+        "name": "MTQ - Mitchell"
+      },
+      {
+        "isstart": true,
+        "genericid": 6223,
+        "name": "MVE - Morven"
+      },
+      {
+        "isstart": true,
+        "genericid": 6224,
+        "name": "CTL - Charleville"
+      },
+      {
+        "isstart": true,
+        "genericid": 6225,
+        "name": "BTU - Bogantungan"
+      },
+      {
+        "isstart": true,
+        "genericid": 6226,
+        "name": "WWS - Willows Siding"
+      },
+      {
+        "isstart": true,
+        "genericid": 6227,
+        "name": "COM - Comet"
+      },
+      {
+        "isstart": true,
+        "genericid": 6228,
+        "name": "DIN - Dingo"
+      },
+      {
+        "isstart": true,
+        "genericid": 6230,
+        "name": "BFA - Barron Falls"
+      },
+      {
+        "isstart": true,
+        "genericid": 6231,
+        "name": "FRW - Freshwater"
+      },
+      {
+        "isstart": true,
+        "genericid": 6232,
+        "name": "NTN - Normanton"
+      },
+      {
+        "isstart": true,
+        "genericid": 6233,
+        "name": "CJA - Clarina"
+      },
+      {
+        "isstart": true,
+        "genericid": 6234,
+        "name": "CRC - Critters Camp"
+      },
+      {
+        "isstart": true,
+        "genericid": 6235,
+        "name": "GEZ - Glenore"
+      },
+      {
+        "isstart": true,
+        "genericid": 6236,
+        "name": "HAY - Haydon"
+      },
+      {
+        "isstart": true,
+        "genericid": 6237,
+        "name": "HYD - East Haydon"
+      },
+      {
+        "isstart": true,
+        "genericid": 6238,
+        "name": "BKU - Blackbull"
+      },
+      {
+        "isstart": true,
+        "genericid": 6239,
+        "name": "ELV - Ellavale"
+      },
+      {
+        "isstart": true,
+        "genericid": 6240,
+        "name": "GGT - Golden Gate"
+      },
+      {
+        "isstart": true,
+        "genericid": 6241,
+        "name": "KUR - Kuranda"
+      },
+      {
+        "isstart": true,
+        "genericid": 6242,
+        "name": "CDQ - Croydon"
+      },
+      {
+        "isstart": true,
+        "genericid": 6243,
+        "name": "HOW - Howard"
+      },
+      {
+        "isstart": true,
+        "genericid": 6244,
+        "name": "LSH - Landsborough"
+      },
+      {
+        "isstart": true,
+        "genericid": 6245,
+        "name": "WMA - Wallumbilla"
+      },
+      {
+        "isstart": false,
+        "genericid": 6002,
+        "name": "BNE - Brisbane (Roma St)"
+      },
+      {
+        "isstart": false,
+        "genericid": 6026,
+        "name": "CAB - Caboolture"
+      },
+      {
+        "isstart": false,
+        "genericid": 6027,
+        "name": "NBR - Nambour"
+      },
+      {
+        "isstart": false,
+        "genericid": 6028,
+        "name": "COO - Cooroy"
+      },
+      {
+        "isstart": false,
+        "genericid": 6029,
+        "name": "GYN - Gympie North"
+      },
+      {
+        "isstart": false,
+        "genericid": 6030,
+        "name": "MBJ - Maryborough West"
+      },
+      {
+        "isstart": false,
+        "genericid": 6031,
+        "name": "BDB - Bundaberg"
+      },
+      {
+        "isstart": false,
+        "genericid": 6032,
+        "name": "MIR - Miriam Vale"
+      },
+      {
+        "isstart": false,
+        "genericid": 6033,
+        "name": "GLT - Gladstone"
+      },
+      {
+        "isstart": false,
+        "genericid": 6034,
+        "name": "MLM - Mount Larcom"
+      },
+      {
+        "isstart": false,
+        "genericid": 6035,
+        "name": "ROK - Rockhampton"
+      },
+      {
+        "isstart": false,
+        "genericid": 6036,
+        "name": "SLW - St Lawrence"
+      },
+      {
+        "isstart": false,
+        "genericid": 6037,
+        "name": "CAA - Carmila"
+      },
+      {
+        "isstart": false,
+        "genericid": 6038,
+        "name": "SAR - Sarina"
+      },
+      {
+        "isstart": false,
+        "genericid": 6039,
+        "name": "MKY - Mackay"
+      },
+      {
+        "isstart": false,
+        "genericid": 6040,
+        "name": "PPP - Proserpine"
+      },
+      {
+        "isstart": false,
+        "genericid": 6042,
+        "name": "ZBO - Bowen"
+      },
+      {
+        "isstart": false,
+        "genericid": 6043,
+        "name": "HMH - Home Hill"
+      },
+      {
+        "isstart": false,
+        "genericid": 6044,
+        "name": "AYR - Ayr"
+      },
+      {
+        "isstart": false,
+        "genericid": 6045,
+        "name": "GIR - Giru"
+      },
+      {
+        "isstart": false,
+        "genericid": 6046,
+        "name": "TSV - Townsville (Charters Towers Road)"
+      },
+      {
+        "isstart": false,
+        "genericid": 6048,
+        "name": "IGH - Ingham"
+      },
+      {
+        "isstart": false,
+        "genericid": 6049,
+        "name": "CAR - Cardwell"
+      },
+      {
+        "isstart": false,
+        "genericid": 6050,
+        "name": "TLY - Tully"
+      },
+      {
+        "isstart": false,
+        "genericid": 6051,
+        "name": "IFL - Innisfail"
+      },
+      {
+        "isstart": false,
+        "genericid": 6054,
+        "name": "CNS - Cairns"
+      },
+      {
+        "isstart": false,
+        "genericid": 6055,
+        "name": "CXT - Charters Towers"
+      },
+      {
+        "isstart": false,
+        "genericid": 6056,
+        "name": "BZB - Babinda"
+      },
+      {
+        "isstart": false,
+        "genericid": 6057,
+        "name": "GOR - Gordonvale"
+      },
+      {
+        "isstart": false,
+        "genericid": 6058,
+        "name": "PLD - Pentland"
+      },
+      {
+        "isstart": false,
+        "genericid": 6059,
+        "name": "TCK - Torrens Creek"
+      },
+      {
+        "isstart": false,
+        "genericid": 6061,
+        "name": "HGD - Hughenden"
+      },
+      {
+        "isstart": false,
+        "genericid": 6064,
+        "name": "RCM - Richmond"
+      },
+      {
+        "isstart": false,
+        "genericid": 6066,
+        "name": "JCK - Julia Creek"
+      },
+      {
+        "isstart": false,
+        "genericid": 6068,
+        "name": "CNJ - Cloncurry"
+      },
+      {
+        "isstart": false,
+        "genericid": 6071,
+        "name": "DCH - Duchess"
+      },
+      {
+        "isstart": false,
+        "genericid": 6073,
+        "name": "ISA - Mount Isa"
+      },
+      {
+        "isstart": false,
+        "genericid": 6108,
+        "name": "ANA - Anakie"
+      },
+      {
+        "isstart": false,
+        "genericid": 6180,
+        "name": "CNV - Cannonvale"
+      },
+      {
+        "isstart": false,
+        "genericid": 6181,
+        "name": "CSM - Coral Sea Marina"
+      },
+      {
+        "isstart": false,
+        "genericid": 6182,
+        "name": "AIR - Airlie Beach"
+      },
+      {
+        "isstart": false,
+        "genericid": 6183,
+        "name": "POA - Port Of Airlie"
+      },
+      {
+        "isstart": false,
+        "genericid": 6184,
+        "name": "JUB - Jubilee Pocket"
+      },
+      {
+        "isstart": false,
+        "genericid": 6185,
+        "name": "CDI - Cooladdi"
+      },
+      {
+        "isstart": false,
+        "genericid": 6186,
+        "name": "CHE - Cheepie"
+      },
+      {
+        "isstart": false,
+        "genericid": 6187,
+        "name": "ULP - Quilpie"
+      },
+      {
+        "isstart": false,
+        "genericid": 6188,
+        "name": "WYR - Wyandra"
+      },
+      {
+        "isstart": false,
+        "genericid": 6189,
+        "name": "CMA - Cunnamulla"
+      },
+      {
+        "isstart": false,
+        "genericid": 6190,
+        "name": "MOA - Morella Junction"
+      },
+      {
+        "isstart": false,
+        "genericid": 6191,
+        "name": "WIN - Winton"
+      },
+      {
+        "isstart": false,
+        "genericid": 6192,
+        "name": "MTC - Maryborough Town"
+      },
+      {
+        "isstart": false,
+        "genericid": 6193,
+        "name": "HBT - Hervey Bay (Pialba)"
+      },
+      {
+        "isstart": false,
+        "genericid": 6194,
+        "name": "URN - Hervey Bay (Urangan)"
+      },
+      {
+        "isstart": false,
+        "genericid": 6195,
+        "name": "TQY - Hervey Bay (Torquay)"
+      },
+      {
+        "isstart": false,
+        "genericid": 6196,
+        "name": "SCN - Hervey Bay (Scarness)"
+      },
+      {
+        "isstart": false,
+        "genericid": 6197,
+        "name": "GYP - Gympie Town"
+      },
+      {
+        "isstart": false,
+        "genericid": 6198,
+        "name": "EKA - Exhibition Station"
+      },
+      {
+        "isstart": false,
+        "genericid": 6199,
+        "name": "JHQ - Shute Harbour"
+      },
+      {
+        "isstart": false,
+        "genericid": 6200,
+        "name": "DUA - Duaringa"
+      },
+      {
+        "isstart": false,
+        "genericid": 6201,
+        "name": "BLU - Bluff"
+      },
+      {
+        "isstart": false,
+        "genericid": 6202,
+        "name": "BLT - Blackwater"
+      },
+      {
+        "isstart": false,
+        "genericid": 6203,
+        "name": "EMD - Emerald"
+      },
+      {
+        "isstart": false,
+        "genericid": 6204,
+        "name": "ABH - Alpha"
+      },
+      {
+        "isstart": false,
+        "genericid": 6205,
+        "name": "JCO - Jericho"
+      },
+      {
+        "isstart": false,
+        "genericid": 6206,
+        "name": "BCI - Barcaldine"
+      },
+      {
+        "isstart": false,
+        "genericid": 6207,
+        "name": "ILF - Ilfracombe"
+      },
+      {
+        "isstart": false,
+        "genericid": 6208,
+        "name": "LRE - Longreach"
+      },
+      {
+        "isstart": false,
+        "genericid": 6209,
+        "name": "CQD - Corinda"
+      },
+      {
+        "isstart": false,
+        "genericid": 6210,
+        "name": "IPS - Ipswich"
+      },
+      {
+        "isstart": false,
+        "genericid": 6211,
+        "name": "RSW - Rosewood"
+      },
+      {
+        "isstart": false,
+        "genericid": 6212,
+        "name": "LAI - Laidley"
+      },
+      {
+        "isstart": false,
+        "genericid": 6213,
+        "name": "GAT - Gatton"
+      },
+      {
+        "isstart": false,
+        "genericid": 6214,
+        "name": "HIN - Helidon"
+      },
+      {
+        "isstart": false,
+        "genericid": 6215,
+        "name": "TWB - Toowoomba"
+      },
+      {
+        "isstart": false,
+        "genericid": 6216,
+        "name": "OKY - Oakey"
+      },
+      {
+        "isstart": false,
+        "genericid": 6217,
+        "name": "DBY - Dalby"
+      },
+      {
+        "isstart": false,
+        "genericid": 6218,
+        "name": "CCL - Chinchilla"
+      },
+      {
+        "isstart": false,
+        "genericid": 6219,
+        "name": "MIQ - Miles"
+      },
+      {
+        "isstart": false,
+        "genericid": 6220,
+        "name": "YLB - Yuleba"
+      },
+      {
+        "isstart": false,
+        "genericid": 6221,
+        "name": "RMA - Roma"
+      },
+      {
+        "isstart": false,
+        "genericid": 6222,
+        "name": "MTQ - Mitchell"
+      },
+      {
+        "isstart": false,
+        "genericid": 6223,
+        "name": "MVE - Morven"
+      },
+      {
+        "isstart": false,
+        "genericid": 6224,
+        "name": "CTL - Charleville"
+      },
+      {
+        "isstart": false,
+        "genericid": 6225,
+        "name": "BTU - Bogantungan"
+      },
+      {
+        "isstart": false,
+        "genericid": 6226,
+        "name": "WWS - Willows Siding"
+      },
+      {
+        "isstart": false,
+        "genericid": 6227,
+        "name": "COM - Comet"
+      },
+      {
+        "isstart": false,
+        "genericid": 6228,
+        "name": "DIN - Dingo"
+      },
+      {
+        "isstart": false,
+        "genericid": 6230,
+        "name": "BFA - Barron Falls"
+      },
+      {
+        "isstart": false,
+        "genericid": 6231,
+        "name": "FRW - Freshwater"
+      },
+      {
+        "isstart": false,
+        "genericid": 6232,
+        "name": "NTN - Normanton"
+      },
+      {
+        "isstart": false,
+        "genericid": 6233,
+        "name": "CJA - Clarina"
+      },
+      {
+        "isstart": false,
+        "genericid": 6234,
+        "name": "CRC - Critters Camp"
+      },
+      {
+        "isstart": false,
+        "genericid": 6235,
+        "name": "GEZ - Glenore"
+      },
+      {
+        "isstart": false,
+        "genericid": 6236,
+        "name": "HAY - Haydon"
+      },
+      {
+        "isstart": false,
+        "genericid": 6237,
+        "name": "HYD - East Haydon"
+      },
+      {
+        "isstart": false,
+        "genericid": 6238,
+        "name": "BKU - Blackbull"
+      },
+      {
+        "isstart": false,
+        "genericid": 6239,
+        "name": "ELV - Ellavale"
+      },
+      {
+        "isstart": false,
+        "genericid": 6240,
+        "name": "GGT - Golden Gate"
+      },
+      {
+        "isstart": false,
+        "genericid": 6241,
+        "name": "KUR - Kuranda"
+      },
+      {
+        "isstart": false,
+        "genericid": 6242,
+        "name": "CDQ - Croydon"
+      },
+      {
+        "isstart": false,
+        "genericid": 6243,
+        "name": "HOW - Howard"
+      },
+      {
+        "isstart": false,
+        "genericid": 6244,
+        "name": "LSH - Landsborough"
+      },
+      {
+        "isstart": false,
+        "genericid": 6245,
+        "name": "WMA - Wallumbilla"
+      },
+      {
+        "isstart": false,
+        "genericid": 6248,
+        "name": "SPB - Spring Bluff"
+      }
+    ],
+    "trains": [
+      {
+        "genericid": 1008,
+        "name": "Train 1"
+      },
+      {
+        "genericid": 1010,
+        "name": "xxx_VC73 Spirit of Queensland"
+      },
+      {
+        "genericid": 1011,
+        "name": "ZRailBus North Spirit of Queensland Proserpine"
+      },
+      {
+        "genericid": 1012,
+        "name": "3M34 Inlander"
+      },
+      {
+        "genericid": 1013,
+        "name": "3K32  Kuranda Scenic Railway"
+      },
+      {
+        "genericid": 1014,
+        "name": "3C65  Kuranda Scenic Railway"
+      },
+      {
+        "genericid": 1015,
+        "name": "3231 Inlander"
+      },
+      {
+        "genericid": 1018,
+        "name": "Q994 Bundaberg Tilt Train"
+      },
+      {
+        "genericid": 1019,
+        "name": "Q301 Rockhampton Tilt Train"
+      },
+      {
+        "genericid": 1020,
+        "name": "Q311 Rockhampton Tilt Train"
+      },
+      {
+        "genericid": 1021,
+        "name": "Q992 Rockhampton Tilt Train"
+      },
+      {
+        "genericid": 1022,
+        "name": "3987 Westlander"
+      },
+      {
+        "genericid": 1023,
+        "name": "3S86 Westlander"
+      },
+      {
+        "genericid": 1024,
+        "name": "V976 Spirit of Queensland"
+      },
+      {
+        "genericid": 1025,
+        "name": "VC79 Spirit of Queensland"
+      },
+      {
+        "genericid": 1026,
+        "name": "PW57 1 Spirit of the Outback"
+      },
+      {
+        "genericid": 1027,
+        "name": "QJ11 Bundaberg Tilt Train"
+      },
+      {
+        "genericid": 1028,
+        "name": "P986 Spirit of the Outback"
+      },
+      {
+        "genericid": 1029,
+        "name": "V982 Spirit of Queensland"
+      },
+      {
+        "genericid": 1030,
+        "name": "V980 Spirit of Queensland"
+      },
+      {
+        "genericid": 1031,
+        "name": "V972 Spirit of Queensland"
+      },
+      {
+        "genericid": 1032,
+        "name": "VC81 Spirit of Queensland"
+      },
+      {
+        "genericid": 1033,
+        "name": "VC75 Spirit of Queensland"
+      },
+      {
+        "genericid": 1034,
+        "name": "V974 Spirit of Queensland"
+      },
+      {
+        "genericid": 1035,
+        "name": "VC71 Spirit of Queensland"
+      },
+      {
+        "genericid": 1036,
+        "name": "VC73 Spirit of Queensland"
+      },
+      {
+        "genericid": 1038,
+        "name": "5U02 Gulflander Classic"
+      },
+      {
+        "genericid": 1039,
+        "name": "5D01 Gulflander Classic"
+      },
+      {
+        "genericid": 1040,
+        "name": "ZRailBus P986 Winton to Longreach"
+      },
+      {
+        "genericid": 1041,
+        "name": "ZRailBus Q992 Urangan to Maryborough West"
+      },
+      {
+        "genericid": 1042,
+        "name": "xxx_GCC300 RailBus"
+      },
+      {
+        "genericid": 1043,
+        "name": "xxx_GCC400 RailBus"
+      },
+      {
+        "genericid": 1044,
+        "name": "ZRailBus North Spirit of Queensland Shute Harbour"
+      },
+      {
+        "genericid": 1045,
+        "name": "ZRailBus Q301 Maryborough West to Scarness"
+      },
+      {
+        "genericid": 1046,
+        "name": "ZRailBus PW57 Longreach to Winton"
+      },
+      {
+        "genericid": 1047,
+        "name": "ZRailBus South Spirit of Queensland Proserpine"
+      },
+      {
+        "genericid": 1048,
+        "name": "ZRailBus South Spirit of Queensland Shute Harbour"
+      },
+      {
+        "genericid": 1049,
+        "name": "ZRailBus Q301 Hervey Bay to Maryborough West"
+      },
+      {
+        "genericid": 1050,
+        "name": "ZRailBus PW57/VC81 Maryborough West to Hervey Bay"
+      },
+      {
+        "genericid": 1051,
+        "name": "ZRailBus QJ11 Maryborough West to Hervey Bay"
+      },
+      {
+        "genericid": 1052,
+        "name": "ZRailBus Q311 Hervey Bay to Maryborough West"
+      },
+      {
+        "genericid": 1053,
+        "name": "ZRailBus Q992 Maryborough West to Hervey Bay"
+      },
+      {
+        "genericid": 1054,
+        "name": "ZRailBus South Spirit of Queensland MBJ to HBT"
+      },
+      {
+        "genericid": 1055,
+        "name": "ZRailBus South Spirit of Queensland HBT to MBJ"
+      },
+      {
+        "genericid": 1056,
+        "name": "xxxxx"
+      },
+      {
+        "genericid": 1057,
+        "name": "xxxx"
+      },
+      {
+        "genericid": 1058,
+        "name": "ZRailBus P986 Maryborough West to Hervey Bay"
+      },
+      {
+        "genericid": 1059,
+        "name": "ZRailBus P986 Maryborough Town to Maryborough West"
+      },
+      {
+        "genericid": 1060,
+        "name": "ZRailBus North Spirit of Queensland Maryborough W"
+      },
+      {
+        "genericid": 1061,
+        "name": "ZRailBus North Spirit of Queensland Hervey Bay"
+      },
+      {
+        "genericid": 1062,
+        "name": "ZRailBus South Spirit of Queensland Maryborough W"
+      },
+      {
+        "genericid": 1063,
+        "name": "ZRailBus South Spirit of Queensland Maryborough T"
+      },
+      {
+        "genericid": 1064,
+        "name": "ZRailBus PW57 Hervey Bay to Maryborough West"
+      },
+      {
+        "genericid": 1065,
+        "name": "ZRailBus Q311 Maryborough West to Hervey Bay"
+      },
+      {
+        "genericid": 1066,
+        "name": "ZRailBus North Spirit of Queensland Gympie North"
+      },
+      {
+        "genericid": 1067,
+        "name": "ZRailBus North Spirit of Queensland Gympie Town"
+      },
+      {
+        "genericid": 1068,
+        "name": "ZRailBus Q301 Gympie North to Gympie Town"
+      },
+      {
+        "genericid": 1069,
+        "name": "ZRailBus Q301 Gympie Town to Gympie North"
+      },
+      {
+        "genericid": 1070,
+        "name": "ZRailBus Q311 Gympie North to Gympie Town"
+      },
+      {
+        "genericid": 1071,
+        "name": "ZRailBus QJ11 Gympie North to Gympie Town"
+      },
+      {
+        "genericid": 1072,
+        "name": "ZRailBus Q311 Gympie Town to Gympie North"
+      },
+      {
+        "genericid": 1073,
+        "name": "ZRailBus QJ11 Gympie Town to Gympie North"
+      },
+      {
+        "genericid": 1074,
+        "name": "ZRailBus PW57 Gympie North to Gympie Town"
+      },
+      {
+        "genericid": 1075,
+        "name": "ZRailBus PW57 Gympie Town to Gympie North"
+      },
+      {
+        "genericid": 1076,
+        "name": "ZRailBus South Spirit of Queensland Gympie Town"
+      },
+      {
+        "genericid": 1077,
+        "name": "ZRailBus South Spirit of Queensland Gympie North"
+      },
+      {
+        "genericid": 1078,
+        "name": "ZRailBus V976 Gympie Town to Gympie North"
+      },
+      {
+        "genericid": 1079,
+        "name": "ZRailBus Q992 Gympie Town to Gympie North"
+      },
+      {
+        "genericid": 1080,
+        "name": "ZRailBus Q994 Gympie Town to Gympie North"
+      },
+      {
+        "genericid": 1081,
+        "name": "ZRailBus Q992 Gympie North to Gympie Town"
+      },
+      {
+        "genericid": 1082,
+        "name": "ZRailBus Q994 Gympie North to Gympie Town"
+      },
+      {
+        "genericid": 1083,
+        "name": "ZRailBus P986/Q994 Gympie Town to Gympie North"
+      },
+      {
+        "genericid": 1084,
+        "name": "ZRailBus P986 Gympie North to Gympie Town"
+      },
+      {
+        "genericid": 1085,
+        "name": "ZRailBus PW57 1 Maryborough West to Maryborough T"
+      },
+      {
+        "genericid": 1086,
+        "name": "ZRailBus QJ11 Hervey Bay to Maryborough West"
+      },
+      {
+        "genericid": 1088,
+        "name": "ZRailBus PW57/VC81 SAT Hervey Bay to MBJ"
+      },
+      {
+        "genericid": 1089,
+        "name": "ZRailBus 3S86 Charleville to Quilpie"
+      },
+      {
+        "genericid": 1090,
+        "name": "ZRailBus 3987 Quilpie to Charleville"
+      },
+      {
+        "genericid": 1091,
+        "name": "ZRailBus 3S86 Charleville to Cunnamulla"
+      },
+      {
+        "genericid": 1092,
+        "name": "ZRailBus 3987 Cunnamulla to Charleville"
+      },
+      {
+        "genericid": 1093,
+        "name": "3K30 Kuranda Scenic Railway"
+      },
+      {
+        "genericid": 1094,
+        "name": "3C61 Kuranda Scenic Railway"
+      },
+      {
+        "genericid": 1095,
+        "name": "5U04 Normanton 9:00"
+      },
+      {
+        "genericid": 1096,
+        "name": "5U06 Normanton 13:00"
+      },
+      {
+        "genericid": 1097,
+        "name": "RM60 Experience Normanton 10:00"
+      },
+      {
+        "genericid": 1098,
+        "name": "RM60 Experience Normanton 12:00"
+      },
+      {
+        "genericid": 1099,
+        "name": "RM60 Experience Normanton 14:00"
+      },
+      {
+        "genericid": 1100,
+        "name": "5D03 Critters Camp 10:15"
+      },
+      {
+        "genericid": 1101,
+        "name": "5D05 Critters Camp 14:15"
+      },
+      {
+        "genericid": 1107,
+        "name": "Croydon Golden Sunset Tour"
+      },
+      {
+        "genericid": 1108,
+        "name": "Billy Tea & Damper Excursion"
+      },
+      {
+        "genericid": 1110,
+        "name": "PW57 2 Spirit of the Outback"
+      },
+      {
+        "genericid": 1111,
+        "name": "B111 Coach North"
+      },
+      {
+        "genericid": 1112,
+        "name": "B222 Coach South"
+      },
+      {
+        "genericid": 1113,
+        "name": "B333 Coach North"
+      },
+      {
+        "genericid": 1114,
+        "name": "Spring Bluff Return Shuttle 3603"
+      },
+      {
+        "genericid": 1115,
+        "name": "Spring Bluff Return Shuttle 3605"
+      },
+      {
+        "genericid": 1116,
+        "name": "ZRailbus Replacement MBJ-HBT"
+      },
+      {
+        "genericid": 1117,
+        "name": "ZRailbus Replacement HBT-MBJ"
+      },
+      {
+        "genericid": 1118,
+        "name": "ZRailbus Replacement MBJ-MTC"
+      },
+      {
+        "genericid": 1119,
+        "name": "ZRailBus North Spirit of Queensland MBJ to HBT"
+      },
+      {
+        "genericid": 1120,
+        "name": "Q311 R Rockhampton Tilt Train"
+      },
+      {
+        "genericid": 1121,
+        "name": "ZRailBus Q994 Hervey Bay to Maryborough West"
+      },
+      {
+        "genericid": 1122,
+        "name": "ZRailBus Q994/P986 Maryborough West to Hervey Bay"
+      },
+      {
+        "genericid": 1123,
+        "name": "ZRailBus Q994 Maryborough West to Hervey Bay"
+      }
+    ]
+  }
+}

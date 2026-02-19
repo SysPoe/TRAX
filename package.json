@@ -6,6 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
     "@types/node": "^24.0.14",
     "assemblyscript": "^0.28.9",
     "prettier": "^3.6.2",
@@ -16,6 +17,7 @@
     "@types/cli-progress": "^3.11.6",
     "chalk": "^5.4.1",
     "cli-progress": "^3.12.0",
+    "crypto-js": "^4.2.0",
     "dotenv": "^17.2.3",
     "node-html-parser": "^7.0.2",
     "qdf-gtfs": "github:SysPoe/QDF-GTFS",
@@ -28,8 +30,7 @@
     "asbuild:debug": "asc assembly/index.ts --target debug --enable threads --initialMemory 100 --maximumMemory 1000 --sharedMemory",
     "asbuild:release": "asc assembly/index.ts --target release --enable threads --initialMemory 100 --maximumMemory 1000 --sharedMemory",
     "asbuild": "npm run asbuild:debug && npm run asbuild:release",
-    "test": "node tests",
-    "start": "npx serve ."
+    "test": "npm run build && node test/translink.js"
   },
   "files": [
     "dist",
