@@ -101,6 +101,8 @@ type SearchResultResponse = {
     success: boolean;
     href: string;
     fields: SearchResultFields;
+    errorCode?: number;
+    errorMessage?: string;
 };
 
 type SearchResultFields = {
@@ -116,10 +118,10 @@ type SearchResultFields = {
 
 type RailServiceResult = {
     serviceid: number;
-    servicE_NAME: string;
-    starT_STATION: string;
-    enD_STATION: string;
-    traiN_NAME: string;
+    servicE_NAME: string; // e.g. BRISBANE (ROMA ST) - MIRIAM VALE
+    starT_STATION: string; // e.g. Brisbane (Roma St)
+    enD_STATION: string; // e.g. Miriam Vale
+    traiN_NAME: string; // e.g. VC75 Spirit of Queensland
     traveL_DATE: string; // e.g. 2026-02-21T00:00:00
     currency: string; // e.g. AUD
     departurE_TIME: string; // uses sentinel date like 9999-12-31T05:15:00
@@ -299,6 +301,10 @@ function buildOdlAppSignature(
 }
 
 async function getSearchInput(): Promise<SearchInputResponse> {
+    const FILE_PATH = "searchinput.json"; // TODO replace with cache file dir
+    if (fs.existsSync(FILE_PATH)) {
+        return JSON.parse(fs.readFileSync(FILE_PATH, "utf-8")) as SearchInputResponse;
+    }
     const url = "https://queenslandrailtravel-booking.opendestinations.com/bookingsiteapi/api/rail/searchinput";
 
     let res = await fetch(url, {
@@ -324,7 +330,9 @@ async function getSearchInput(): Promise<SearchInputResponse> {
         body: null,
         method: "GET",
     });
-    return await res.json();
+    const json = await res.json();
+    if (res.ok) fs.writeFileSync(FILE_PATH, JSON.stringify(json, null, 2));
+    return json;
 }
 
 async function searchRailServices(
@@ -369,15 +377,18 @@ async function searchRailServices(
     if (!fromStation) {
         throw new Error("Could not find 'Roma St' station");
     }
-    const toStation = searchInput.fields.stations.find(v => v.name.toLowerCase().includes("miriam vale"));
+    const toStation = searchInput.fields.stations.find(v => v.name.toLowerCase().includes("gympie north"));
     if (!toStation) {
-        throw new Error("Could not find 'Miriam Vale' station");
+        throw new Error("Could not find 'Gympie North' station");
     }
-    fs.writeFileSync("testout.json", JSON.stringify(await searchRailServices(
+    let res = await searchRailServices(
         createRailServiceSearchRequest({
             fromRegionId: fromStation.genericid,
             toRegionId: toStation.genericid,
-            travelDate: "20 Feb 2026",
+            travelDate: "25 Feb 2026",
         })
-    ), null, 2));
+    );
+    if (!res.success) console.error(res.errorMessage)
+    res.fields.raiL_SERVICES.forEach(v => v.raiL_OPTIONS.forEach(o => console.log(v.traiN_NAME, o.pricE_TYPE.trim(), o.servicE_OPTION_NAME, o.availablE_QUANTITY)));
+    fs.writeFileSync("testout.json", JSON.stringify(res, null, 2));
 })().catch(err => console.error(err));
