@@ -67,7 +67,7 @@ export function augmentTrip(
 ): AugmentedTrip {
 	ctx.augmented.timer.start("augmentTrip");
 	const todayEpoch = dateToEpochDays(getToday(ctx.config));
-	const serviceDates = getServiceDatesByTrip(trip.trip_id, ctx, todayEpoch - 15, todayEpoch + 365);
+	const serviceDates = getServiceDatesByTrip(trip.trip_id, ctx, todayEpoch - 15, todayEpoch + 60);
 
 	ctx.augmented.timer.start("augmentTrip:getRawStopTimes");
 	const rawStopTimes = cache.getRawStopTimes(ctx, trip.trip_id).sort((a, b) => a.stop_sequence - b.stop_sequence);

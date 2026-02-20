@@ -254,6 +254,19 @@ export function augmentStopTimes(
 	const tripId = tripUpdate?.trip.trip_id ?? staticStopTimes?.[0]?.trip_id ?? "";
 
 	const stopTimeUpdates = tripUpdate?.stop_time_updates ?? [];
+
+	// Build O(1) lookup maps for realtime updates so the per-stop loop below avoids
+	// repeated linear scans of stopTimeUpdates.
+	const rtBySeq = new Map<number, qdf.RealtimeStopTimeUpdate>();
+	const rtByStopId = new Map<string, qdf.RealtimeStopTimeUpdate>();
+	for (const rt of stopTimeUpdates) {
+		if (rt.stop_sequence != null) {
+			rtBySeq.set(rt.stop_sequence, rt);
+		} else if (rt.stop_id) {
+			rtByStopId.set(rt.stop_id, rt);
+		}
+	}
+
 	const sequenceMap = new Map<number, { static?: qdf.StopTime; rt?: qdf.RealtimeStopTimeUpdate }>();
 
 	ctx.augmented.timer.start("augmentStopTimes:mergeStaticAndRealtime");
@@ -419,9 +432,7 @@ export function augmentStopTimes(
 		currentSequence = seq;
 
 		const stopId = stopTime.stop_id;
-		const rtUpdate =
-			stopTimeUpdates.find((u) => u.stop_sequence === seq && !isPassing) ??
-			(isPassing ? undefined : stopTimeUpdates.find((u) => u.stop_id === stopId));
+		const rtUpdate = isPassing ? undefined : (rtBySeq.get(seq) ?? rtByStopId.get(stopId));
 
 		const scheduledStop = cache.getAugmentedStops(ctx, stopId)[0];
 		const scheduledParentId = scheduledStop?.parent_stop_id ?? scheduledStop?.parent_station ?? null;

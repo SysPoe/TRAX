@@ -19,7 +19,7 @@ import type { AugmentedTrip, AugmentedTripInstance, RunSeries } from "./utils/au
 import { clearAugmentedStopTimeCaches } from "./utils/augmentedStopTime.js";
 import type { AugmentedStopTime } from "./utils/augmentedStopTime.js";
 import type { QRTPlace, QRTTravelTrip } from "./index.js";
-import { getPlaces, getCurrentQRTravelTrains } from "./region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
+import { getPlaces, getCurrentQRTravelTrains, getPlacesWithCache } from "./region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
 import { globalTimer } from "./utils/timer.js";
 import type { Timer } from "./utils/timer.js";
 import { getRailwayStationFacilities } from "./region-specific/AU/SEQ/facilities.js";
@@ -734,7 +734,7 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	if (isRegion(config.region, "AU/SEQ")) {
 		ctx.augmented.timer.start("refreshStaticCache:loadQRTPlaces");
 		try {
-			newRawCache.regionSpecific.SEQ.qrtPlaces = await getPlaces(config);
+			newRawCache.regionSpecific.SEQ.qrtPlaces = await getPlacesWithCache(config);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			logger.error("Failed to load QRT places: " + message, {

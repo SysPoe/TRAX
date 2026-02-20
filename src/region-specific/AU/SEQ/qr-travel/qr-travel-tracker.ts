@@ -21,6 +21,81 @@ import type {
 import ensureQRTEnabled from "./enabled.js";
 import type { TraxConfig } from "../../../../config.js";
 import type { CacheContext } from "../../../../cache.js";
+import { cacheFileExists, loadCacheFile, writeCacheFile } from "../../../../utils/fs.js";
+
+// ---------------------------------------------------------------------------
+// QRT places disk-cache helpers
+// ---------------------------------------------------------------------------
+
+const QRT_PLACES_CACHE_FILE = "qrt-places.json";
+/** Re-use cached places for up to 6 hours; the list changes very rarely. */
+const QRT_PLACES_TTL_MS = 6 * 60 * 60 * 1000;
+/** Maximum time we'll wait for a live fetch before falling back to cache. */
+const QRT_PLACES_FETCH_TIMEOUT_MS = 10_000;
+
+type QRTPlacesDiskCache = {
+	lastUpdated: number;
+	data: QRTPlace[];
+};
+
+function loadQRTPlacesFromDisk(config: TraxConfig): QRTPlacesDiskCache | null {
+	try {
+		if (!cacheFileExists(QRT_PLACES_CACHE_FILE, config.cacheDir)) return null;
+		return JSON.parse(loadCacheFile(QRT_PLACES_CACHE_FILE, config.cacheDir)) as QRTPlacesDiskCache;
+	} catch {
+		return null;
+	}
+}
+
+function saveQRTPlacesToDisk(places: QRTPlace[], config: TraxConfig): void {
+	try {
+		writeCacheFile(QRT_PLACES_CACHE_FILE, JSON.stringify({ lastUpdated: Date.now(), data: places }), config.cacheDir);
+	} catch {
+		// Non-fatal — the cache will be re-fetched on the next refresh.
+	}
+}
+
+/**
+ * Fetch QRT places, with disk-cache TTL and fallback.
+ *
+ * - If the on-disk cache is fresher than TTL: return immediately (no network).
+ * - Otherwise: race a live fetch against a timeout.  On success the result is
+ *   persisted to disk (fire-and-forget) for next time.  On failure the stale
+ *   cached value (if any) is returned so a slow/failed endpoint never blocks
+ *   the static-cache refresh.
+ */
+export async function getPlacesWithCache(config: TraxConfig): Promise<QRTPlace[]> {
+	ensureQRTEnabled(config);
+
+	const disk = loadQRTPlacesFromDisk(config);
+	if (disk && Date.now() - disk.lastUpdated < QRT_PLACES_TTL_MS) {
+		logger.debug(`Using cached QRT places (age ${Math.round((Date.now() - disk.lastUpdated) / 60_000)}m).`, {
+			module: "qtt",
+			function: "getPlacesWithCache",
+		});
+		return disk.data;
+	}
+
+	try {
+		const timeoutPromise = new Promise<never>((_, reject) =>
+			setTimeout(() => reject(new Error("QRT places fetch timed out")), QRT_PLACES_FETCH_TIMEOUT_MS),
+		);
+		const places = await Promise.race([getPlaces(config), timeoutPromise]);
+		// Persist to disk asynchronously so we don't delay the caller.
+		setImmediate(() => saveQRTPlacesToDisk(places, config));
+		return places;
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		if (disk) {
+			logger.warn(`QRT places fetch failed (${message}); using stale cache (age ${Math.round((Date.now() - disk.lastUpdated) / 60_000)}m).`, {
+				module: "qtt",
+				function: "getPlacesWithCache",
+			});
+			return disk.data;
+		}
+		throw error;
+	}
+}
 
 export async function trackTrain(
 	serviceID: string,
