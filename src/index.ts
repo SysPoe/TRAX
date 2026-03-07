@@ -262,6 +262,7 @@ export class TRAX {
 		return {
 			SEQ: {
 				getQRTPlaces: () => cache.SEQgetQRTPlaces(this.ctx),
+				getQRTStations: () => cache.SEQgetQRTStations(this.ctx),
 				getQRTTrains: () => cache.SEQgetQRTTrains(this.ctx),
 				qrTravel,
 			},
@@ -300,6 +301,9 @@ export type {
 	QRTServiceDisruption,
 	QRTGetServiceResponse,
 	QRTPlace,
+	QRTStationDetails,
+	QRTStationFacility,
+	QRTStations,
 	QRTService,
 	QRTDirection,
 	QRTServiceLine,

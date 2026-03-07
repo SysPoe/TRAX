@@ -18,8 +18,14 @@ import { augmentTrip, calculateRunSeries } from "./utils/augmentedTrip.js";
 import type { AugmentedTrip, AugmentedTripInstance, RunSeries } from "./utils/augmentedTrip.js";
 import { clearAugmentedStopTimeCaches } from "./utils/augmentedStopTime.js";
 import type { AugmentedStopTime } from "./utils/augmentedStopTime.js";
-import type { QRTPlace, QRTTravelTrip } from "./index.js";
-import { getPlaces, getCurrentQRTravelTrains, getPlacesWithCache } from "./region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
+import type {
+	QRTPlace,
+	QRTStationDetails,
+	QRTStations,
+	QRTTravelTrip,
+} from "./region-specific/AU/SEQ/qr-travel/types.js";
+import { getCurrentQRTravelTrains, getPlacesWithCache } from "./region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
+import { getQRTStationLookupKeys, getQRTStations } from "./region-specific/AU/SEQ/qr-travel/stations.js";
 import { globalTimer } from "./utils/timer.js";
 import type { Timer } from "./utils/timer.js";
 import { getRailwayStationFacilities } from "./region-specific/AU/SEQ/facilities.js";
@@ -82,6 +88,7 @@ export type RawCache = {
 	regionSpecific: {
 		SEQ: {
 			qrtPlaces: QRTPlace[];
+			qrtStations: QRTStations;
 			qrtTrains: QRTTravelTrip[];
 			platformData?: PlatformData;
 			railwayStationFacilities: RailwayStationFacility[];
@@ -133,6 +140,7 @@ export function createEmptyRawCache(): RawCache {
 		regionSpecific: {
 			SEQ: {
 				qrtPlaces: [],
+				qrtStations: {},
 				qrtTrains: [],
 				platformData: undefined,
 				railwayStationFacilities: [],
@@ -655,6 +663,12 @@ export function SEQgetQRTPlaces(ctx: CacheContext): QRTPlace[] {
 	return raw.regionSpecific.SEQ.qrtPlaces;
 }
 
+export function SEQgetQRTStations(ctx: CacheContext): QRTStations {
+	ensureQRTEnabled(ctx.config);
+	const { raw } = ctx;
+	return raw.regionSpecific.SEQ.qrtStations;
+}
+
 export function SEQgetQRTTrains(ctx: CacheContext): QRTTravelTrip[] {
 	ensureQRTEnabled(ctx.config);
 	const { raw } = ctx;
@@ -745,6 +759,22 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 		}
 		ctx.augmented.timer.stop("refreshStaticCache:loadQRTPlaces");
 		logger.debug(`Loaded ${newRawCache.regionSpecific.SEQ.qrtPlaces.length} QRT places.`, {
+			module: "cache",
+			function: "refreshStaticCache",
+		});
+		ctx.augmented.timer.start("refreshStaticCache:loadQRTStations");
+		try {
+			newRawCache.regionSpecific.SEQ.qrtStations = await getQRTStations(config);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			logger.error("Failed to load QRT stations: " + message, {
+				module: "cache",
+				function: "refreshStaticCache",
+			});
+			newRawCache.regionSpecific.SEQ.qrtStations = {};
+		}
+		ctx.augmented.timer.stop("refreshStaticCache:loadQRTStations");
+		logger.debug(`Loaded ${Object.keys(newRawCache.regionSpecific.SEQ.qrtStations).length} QRT stations.`, {
 			module: "cache",
 			function: "refreshStaticCache",
 		});
@@ -856,12 +886,21 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	}
 
 	const qrtPlacesByName = new Map<string, QRTPlace>();
+	const qrtStationsByKey = new Map<string, QRTStationDetails>();
 	const facilitiesByStopId = new Map<string, RailwayStationFacility>();
 	if (isRegion(config.region, "AU/SEQ")) {
 		for (const p of newRawCache.regionSpecific.SEQ.qrtPlaces ?? []) {
 			if (!p?.Title) continue;
 			const key = p.Title.toLowerCase().replace("station", "").trim();
 			qrtPlacesByName.set(key, p);
+		}
+		for (const station of Object.values(newRawCache.regionSpecific.SEQ.qrtStations ?? {})) {
+			for (const key of station.stops ?? []) {
+				if (!qrtStationsByKey.has(key)) qrtStationsByKey.set(key, station);
+			}
+			for (const key of getQRTStationLookupKeys(station)) {
+				if (!qrtStationsByKey.has(key)) qrtStationsByKey.set(key, station);
+			}
 		}
 		const facilities = newRawCache.regionSpecific.SEQ.railwayStationFacilities ?? [];
 		for (const f of facilities) {
@@ -878,6 +917,7 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 		augmentStop(stop, ctx, {
 			childrenByParent,
 			qrtPlacesByName: qrtPlacesByName.size ? qrtPlacesByName : undefined,
+			qrtStationsByKey: qrtStationsByKey.size ? qrtStationsByKey : undefined,
 			facilitiesByStopId: facilitiesByStopId.size ? facilitiesByStopId : undefined,
 		}),
 	);

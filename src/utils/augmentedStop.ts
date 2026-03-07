@@ -2,13 +2,15 @@ import type * as qdf from "qdf-gtfs";
 import * as cache from "../cache.js";
 import { isRegion } from "../config.js";
 import { RailwayStationFacility } from "../region-specific/AU/SEQ/facilities-types.js";
-import type { QRTPlace } from "../region-specific/AU/SEQ/qr-travel/types.js";
+import { getQRTStationLookupKeys, normalizeQRTStationLookupKey } from "../region-specific/AU/SEQ/qr-travel/stations.js";
+import type { QRTPlace, QRTStationDetails } from "../region-specific/AU/SEQ/qr-travel/types.js";
 
 export type AugmentedStop = qdf.Stop & {
 	regionSpecific?: {
 		SEQ?: {
 			qrt_Place: boolean;
 			qrt_PlaceCode?: string;
+			qrt_Station?: QRTStationDetails;
 			facilities?: RailwayStationFacility;
 		};
 	};
@@ -21,6 +23,7 @@ export type AugmentedStop = qdf.Stop & {
 export interface AugmentationContext {
 	childrenByParent?: Map<string, qdf.Stop[]>;
 	qrtPlacesByName?: Map<string, QRTPlace>;
+	qrtStationsByKey?: Map<string, QRTStationDetails>;
 	facilitiesByStopId?: Map<string, RailwayStationFacility>;
 }
 
@@ -46,6 +49,7 @@ export function augmentStop(stop: qdf.Stop, ctx: cache.CacheContext, augCtx?: Au
 	if (isRegion(ctx.config.region, "AU/SEQ")) {
 		let myPlace = null;
 		const trimmedStopName = stop.stop_name?.toLowerCase().replace("station", "").trim();
+		const normalizedStopName = stop.stop_name ? normalizeQRTStationLookupKey(stop.stop_name) : "";
 		if (augCtx?.qrtPlacesByName) {
 			myPlace =
 				augCtx.qrtPlacesByName.get(trimmedStopName!) ||
@@ -57,6 +61,21 @@ export function augmentStop(stop: qdf.Stop, ctx: cache.CacheContext, augCtx?: Au
 					v.Title?.toLowerCase().trim() === trimmedStopName ||
 					(trimmedStopName === "roma street" && v.Title?.toLowerCase().trim().includes("roma street")),
 			);
+		}
+
+		let myQRTStation = null;
+		if (augCtx?.qrtStationsByKey) {
+			myQRTStation =
+				augCtx.qrtStationsByKey.get(stop.stop_id) ||
+				(stop.parent_station ? augCtx.qrtStationsByKey.get(stop.parent_station) : null) ||
+				(normalizedStopName ? augCtx.qrtStationsByKey.get(normalizedStopName) : null);
+		} else {
+			const qrtStations = cache.SEQgetQRTStations(ctx);
+			myQRTStation = Object.values(qrtStations).find((station) => {
+				if (station.stops?.includes(stop.stop_id)) return true;
+				if (stop.parent_station && station.stops?.includes(stop.parent_station)) return true;
+				return normalizedStopName ? getQRTStationLookupKeys(station).includes(normalizedStopName) : false;
+			});
 		}
 
 		let myFacility = null;
@@ -77,6 +96,7 @@ export function augmentStop(stop: qdf.Stop, ctx: cache.CacheContext, augCtx?: Au
 			SEQ: {
 				qrt_Place: !!myPlace,
 				qrt_PlaceCode: myPlace?.qrt_PlaceCode,
+				qrt_Station: myQRTStation ?? undefined,
 				facilities: myFacility as RailwayStationFacility,
 			},
 		};

@@ -34,6 +34,46 @@ export interface QRTPlace {
 	qrt_PlaceCode: string;
 }
 
+export interface QRTStationFacility {
+	nm: string;
+	exists: boolean;
+}
+
+export interface QRTStationDetails {
+	al: string;
+	adhours: string;
+	cbay: string;
+	stops: string[];
+	facs: QRTStationFacility[];
+	lat: string;
+	lng: string;
+	ln: string[];
+	ohours: string;
+	pcode: string;
+	st: string;
+	sub: string;
+	ph: string;
+	Title: string;
+	zn: string;
+	stdet: string;
+	hpdet: string;
+	ahrnote: string;
+	sginfor: string;
+	audiofile: string;
+	pdffile: string;
+	socialmedia: string;
+	stationmapthumb1: string;
+	stationmapthumb2: string;
+	stationmaporiginal1: string;
+	stationmaporiginal2: string;
+	stationthumbnailtitle1: string;
+	stationthumbnailtitle2: string;
+	texttranscriptstring: string;
+	[key: string]: unknown;
+}
+
+export type QRTStations = Record<string, QRTStationDetails>;
+
 export interface QRTService {
 	ServiceId: string;
 	ServiceName: string;

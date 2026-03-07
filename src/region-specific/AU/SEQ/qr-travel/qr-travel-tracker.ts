@@ -23,6 +23,8 @@ import type { TraxConfig } from "../../../../config.js";
 import type { CacheContext } from "../../../../cache.js";
 import { cacheFileExists, loadCacheFile, writeCacheFile } from "../../../../utils/fs.js";
 
+export { getQRTStations } from "./stations.js";
+
 // ---------------------------------------------------------------------------
 // QRT places disk-cache helpers
 // ---------------------------------------------------------------------------
@@ -49,7 +51,11 @@ function loadQRTPlacesFromDisk(config: TraxConfig): QRTPlacesDiskCache | null {
 
 function saveQRTPlacesToDisk(places: QRTPlace[], config: TraxConfig): void {
 	try {
-		writeCacheFile(QRT_PLACES_CACHE_FILE, JSON.stringify({ lastUpdated: Date.now(), data: places }), config.cacheDir);
+		writeCacheFile(
+			QRT_PLACES_CACHE_FILE,
+			JSON.stringify({ lastUpdated: Date.now(), data: places }),
+			config.cacheDir,
+		);
 	} catch {
 		// Non-fatal — the cache will be re-fetched on the next refresh.
 	}
@@ -87,10 +93,13 @@ export async function getPlacesWithCache(config: TraxConfig): Promise<QRTPlace[]
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		if (disk) {
-			logger.warn(`QRT places fetch failed (${message}); using stale cache (age ${Math.round((Date.now() - disk.lastUpdated) / 60_000)}m).`, {
-				module: "qtt",
-				function: "getPlacesWithCache",
-			});
+			logger.warn(
+				`QRT places fetch failed (${message}); using stale cache (age ${Math.round((Date.now() - disk.lastUpdated) / 60_000)}m).`,
+				{
+					module: "qtt",
+					function: "getPlacesWithCache",
+				},
+			);
 			return disk.data;
 		}
 		throw error;
@@ -359,7 +368,7 @@ function convertQRTServiceToTravelTrip(
 
 	const runChars: { [key: string]: string } = {
 		Gulflander: "5",
-		"Kuranda Scenic Railway": "3"
+		"Kuranda Scenic Railway": "3",
 	};
 
 	return {
