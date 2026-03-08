@@ -2282,98 +2282,6 @@
     "stationthumbnailtitle2": "",
     "texttranscriptstring": "<p></p><p>Bundaberg railway station is located between McLean Street to the east, Burrum Street to the west, and Bourbong Street to the north. The station has one main platform that serves trains travelling north to Rockhampton and Cairns, south to Brisbane and west to Longreach. The station can be accessed via McLean Street from the carpark, which provides both a ramp and steps for access. The carpark is the primary entry point to the station and has accessible space.&#160;</p><p>There is a Travel Centre located at Bundaberg railway station, where you can purchase long-distance train tickets. There are also luggage trolleys and scales and the luggage check-in service. This is to the left when you enter the station.&#160;</p><p>You will also find the following facilities on the platform&#58;&#160;</p><ul><li>customer seating and shelter</li><li>toilets, with accessible option, baby change facilities, and a sharps bin&#160;<br></li><li>a payphone for public use</li><li>next train information</li><li>luggage trolleys</li><li>a help phone for assistance</li><li>vending machines&#160;</li><li>a hearing loop.</li></ul><p>There is a bus stop on McLean Street for onward journeys.&#160;</p><p>There is no level access to the train itself from the platform. If you need assistance boarding, please let our staff know at the time of booking, and we will be happy to help.<br></p>"
   },
-  "Brisbane Central Travel Centre": {
-    "al": "305 Edward Street",
-    "adhours": "<div class=\"ExternalClass862E78500CDB4F3096CA6F5E83785546\"><h3>​​​​Luggage check-in<br></h3><p></p><p></p><p>No luggage check in at this location​.​<br></p><br></div>",
-    "cbay": "",
-    "stops": [],
-    "facs": [
-      {
-        "nm": "Ramp access",
-        "exists": true
-      },
-      {
-        "nm": "Drop off zone",
-        "exists": true
-      },
-      {
-        "nm": "Short term parking",
-        "exists": false
-      },
-      {
-        "nm": "Help phone",
-        "exists": true
-      },
-      {
-        "nm": "Waiting area",
-        "exists": true
-      },
-      {
-        "nm": "Unisex Accessible toilet",
-        "exists": true
-      },
-      {
-        "nm": "Toilets",
-        "exists": true
-      },
-      {
-        "nm": "Tactile platform edges",
-        "exists": true
-      },
-      {
-        "nm": "Taxi phone/call button",
-        "exists": false
-      },
-      {
-        "nm": "Hearing loop",
-        "exists": true
-      },
-      {
-        "nm": "Train Timetable Information",
-        "exists": true
-      },
-      {
-        "nm": "Luggage trolleys",
-        "exists": false
-      },
-      {
-        "nm": "Vending machine",
-        "exists": true
-      },
-      {
-        "nm": "Closed Circuit TV",
-        "exists": true
-      },
-      {
-        "nm": "Luggage check-in",
-        "exists": false
-      }
-    ],
-    "lat": "-27.466287",
-    "lng": "153.025613",
-    "ln": [],
-    "ohours": "<div class=\"ExternalClass5B20829B35E8455AB32945940F704503\"><h4 class=\"specialHeading\">Travel Centre opening hours </h4><p>Monday to Friday - 8&#58;30am to 5&#58;00pm<br></p><h4 class=\"specialHeading\"></h4><div class=\"ExternalClass0027CCC05D99414B9814E026A87F10D9\">​The Travel Centre team can assist with ticketing and travel enquiries.<br></div><div class=\"ExternalClass0027CCC05D99414B9814E026A87F10D9\"><h4 class=\"specialHeading\">​Public holiday trading hours​​​​​<br></h4><p>​Visit our&#160;<a href=\"/Pages/PublicHolidayHours.aspx\" style=\"text-decoration-line&#58;underline;\">Travel Centre Holiday Trading Hours</a>​ page for details.​<br></p></div><h4 class=\"specialHeading\">​Alternate hours<br></h4><p></p><p>No altered hours currently.​<br></p></div>",
-    "pcode": "4000",
-    "st": "Queensland",
-    "sub": "Brisbane",
-    "ph": "1800 803 009",
-    "Title": "Brisbane Central Travel Centre",
-    "zn": "Central Railway Station Concourse",
-    "stdet": "<div class=\"ExternalClassB7A42CDEA22345768A2C9DFF02C7C0C0\"><h2></h2><h3>Station access and navigation<br></h3><p>Visit the Queensland Rail&#160;<a href=\"https&#58;//www.queenslandrail.com.au/Customers/Stations%20and%20Maps/Pages/AllStations.aspx#%23StationDetail\" target=\"_blank\" style=\"text-decoration-line&#58;underline;\">City network station list (opens in new tab)</a>.​​​​​<br></p></div>",
-    "hpdet": "",
-    "ahrnote": "",
-    "sginfor": "",
-    "audiofile": "",
-    "pdffile": "",
-    "socialmedia": "",
-    "stationmapthumb1": "",
-    "stationmapthumb2": "",
-    "stationmaporiginal1": "",
-    "stationmaporiginal2": "",
-    "stationthumbnailtitle1": "",
-    "stationthumbnailtitle2": "",
-    "texttranscriptstring": ""
-  },
   "Charleville Railway Station": {
     "al": "King Street",
     "adhours": "<div class=\"ExternalClass197DC6D2556443EF94289689FBF3232A\"><h2 class=\"ExternalClass6CCB0E07FADB42809E089E875FF0CFA8\"></h2></div><h3>Luggage​​ check-in<br></h3><div class=\"ExternalClass6CCB0E07FADB42809E089E875FF0CFA8\"></div><div class=\"ExternalClass6CCB0E07FADB42809E089E875FF0CFA8\"><p>Luggage check-in at the station platform&#58;​<br></p><ul><li>Opens 60 minutes before scheduled departure</li><li>Closes 30 minutes before departure​</li></ul><p>Luggage trolleys are available, no coins are needed.</p><p>If you are checking-in luggage, please be at the station ready to board 45-60 minutes before your train departure time (luggage check in closes 30 minutes before scheduled departure).</p><p>If you are not checking-in luggage, please be at the station ready to board 15 minutes before train departure time.​​<br></p></div>",
@@ -6933,5 +6841,99 @@
     "stationthumbnailtitle1": "",
     "stationthumbnailtitle2": "",
     "texttranscriptstring": "<p>​Duchess railway station is accessed via Duke Street and Station Street. It services passenger trains travelling between Townsville and Mount Isa. There is one platform, which is on the northern side of the track. There is no designated carparking. Access to the platform is via a ramp or steps. There is customer seating and shelter.&#160;<br></p><p>Please note that there is no level access to the train platform itself. If you require assistance boarding, please inform our staff at the time of booking, and we will be happy to assist you.<br></p>"
+  },
+  "Brisbane Central": {
+    "al": "305 Edward Street",
+    "adhours": "<div class=\"ExternalClass862E78500CDB4F3096CA6F5E83785546\"><h3>​​​​Luggage check-in<br></h3><p></p><p></p><p>No luggage check in at this location​.​<br></p><br></div>",
+    "cbay": "",
+    "stops": [
+      "place_censta"
+    ],
+    "facs": [
+      {
+        "nm": "Ramp access",
+        "exists": true
+      },
+      {
+        "nm": "Drop off zone",
+        "exists": true
+      },
+      {
+        "nm": "Short term parking",
+        "exists": false
+      },
+      {
+        "nm": "Help phone",
+        "exists": true
+      },
+      {
+        "nm": "Waiting area",
+        "exists": true
+      },
+      {
+        "nm": "Unisex Accessible toilet",
+        "exists": true
+      },
+      {
+        "nm": "Toilets",
+        "exists": true
+      },
+      {
+        "nm": "Tactile platform edges",
+        "exists": true
+      },
+      {
+        "nm": "Taxi phone/call button",
+        "exists": false
+      },
+      {
+        "nm": "Hearing loop",
+        "exists": true
+      },
+      {
+        "nm": "Train Timetable Information",
+        "exists": true
+      },
+      {
+        "nm": "Luggage trolleys",
+        "exists": false
+      },
+      {
+        "nm": "Vending machine",
+        "exists": true
+      },
+      {
+        "nm": "Closed Circuit TV",
+        "exists": true
+      },
+      {
+        "nm": "Luggage check-in",
+        "exists": false
+      }
+    ],
+    "lat": "-27.466287",
+    "lng": "153.025613",
+    "ln": [],
+    "ohours": "<div class=\"ExternalClass5B20829B35E8455AB32945940F704503\"><h4 class=\"specialHeading\">Travel Centre opening hours </h4><p>Monday to Friday - 8&#58;30am to 5&#58;00pm<br></p><h4 class=\"specialHeading\"></h4><div class=\"ExternalClass0027CCC05D99414B9814E026A87F10D9\">​The Travel Centre team can assist with ticketing and travel enquiries.<br></div><div class=\"ExternalClass0027CCC05D99414B9814E026A87F10D9\"><h4 class=\"specialHeading\">​Public holiday trading hours​​​​​<br></h4><p>​Visit our&#160;<a href=\"/Pages/PublicHolidayHours.aspx\" style=\"text-decoration-line&#58;underline;\">Travel Centre Holiday Trading Hours</a>​ page for details.​<br></p></div><h4 class=\"specialHeading\">​Alternate hours<br></h4><p></p><p>No altered hours currently.​<br></p></div>",
+    "pcode": "4000",
+    "st": "Queensland",
+    "sub": "Brisbane",
+    "ph": "1800 803 009",
+    "Title": "Brisbane Central",
+    "zn": "Central Railway Station Concourse",
+    "stdet": "<div class=\"ExternalClassB7A42CDEA22345768A2C9DFF02C7C0C0\"><h2></h2><h3>Station access and navigation<br></h3><p>Visit the Queensland Rail&#160;<a href=\"https&#58;//www.queenslandrail.com.au/Customers/Stations%20and%20Maps/Pages/AllStations.aspx#%23StationDetail\" target=\"_blank\" style=\"text-decoration-line&#58;underline;\">City network station list (opens in new tab)</a>.​​​​​<br></p></div>",
+    "hpdet": "",
+    "ahrnote": "",
+    "sginfor": "",
+    "audiofile": "",
+    "pdffile": "",
+    "socialmedia": "",
+    "stationmapthumb1": "",
+    "stationmapthumb2": "",
+    "stationmaporiginal1": "",
+    "stationmaporiginal2": "",
+    "stationthumbnailtitle1": "",
+    "stationthumbnailtitle2": "",
+    "texttranscriptstring": ""
   }
 }

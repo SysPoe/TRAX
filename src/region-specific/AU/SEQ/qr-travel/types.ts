@@ -2,6 +2,7 @@ export interface QRTTrainMovementDTO {
 	PlaceCode: string;
 	PlaceName: string;
 	gtfsStopId: string | null;
+	stationDetails?: QRTStationDetails;
 	KStation: string | boolean; // Whether the train stops on request only at this station
 	Status: string;
 	TrainPosition: "Passed" | "Departed" | "NotArrived" | string;
@@ -40,6 +41,7 @@ export interface QRTStationFacility {
 }
 
 export interface QRTStationDetails {
+	qrt_PlaceCode?: string;
 	al: string;
 	adhours: string;
 	cbay: string;
@@ -130,6 +132,7 @@ export interface QRTTravelStopTime {
 	placeCode: string;
 	placeName: string;
 	gtfsStopId: string | null;
+	stationDetails?: QRTStationDetails;
 	kStation: string | boolean;
 	status: string;
 	trainPosition: string;

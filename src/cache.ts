@@ -25,7 +25,7 @@ import type {
 	QRTTravelTrip,
 } from "./region-specific/AU/SEQ/qr-travel/types.js";
 import { getCurrentQRTravelTrains, getPlacesWithCache } from "./region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
-import { getQRTStationLookupKeys, getQRTStations } from "./region-specific/AU/SEQ/qr-travel/stations.js";
+import { buildQRTStationLookupMap, getQRTStations, normalizeQRTStationLookupKey } from "./region-specific/AU/SEQ/qr-travel/stations.js";
 import { globalTimer } from "./utils/timer.js";
 import type { Timer } from "./utils/timer.js";
 import { getRailwayStationFacilities } from "./region-specific/AU/SEQ/facilities.js";
@@ -765,6 +765,15 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 		ctx.augmented.timer.start("refreshStaticCache:loadQRTStations");
 		try {
 			newRawCache.regionSpecific.SEQ.qrtStations = await getQRTStations(config);
+			const stationLookup = buildQRTStationLookupMap(newRawCache.regionSpecific.SEQ.qrtStations);
+			for (const place of newRawCache.regionSpecific.SEQ.qrtPlaces ?? []) {
+				const station =
+					stationLookup.get(place.qrt_PlaceCode) ??
+					stationLookup.get(normalizeQRTStationLookupKey(place.Title));
+				if (station && !station.qrt_PlaceCode) {
+					station.qrt_PlaceCode = place.qrt_PlaceCode;
+				}
+			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			logger.error("Failed to load QRT stations: " + message, {
@@ -894,13 +903,8 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 			const key = p.Title.toLowerCase().replace("station", "").trim();
 			qrtPlacesByName.set(key, p);
 		}
-		for (const station of Object.values(newRawCache.regionSpecific.SEQ.qrtStations ?? {})) {
-			for (const key of station.stops ?? []) {
-				if (!qrtStationsByKey.has(key)) qrtStationsByKey.set(key, station);
-			}
-			for (const key of getQRTStationLookupKeys(station)) {
-				if (!qrtStationsByKey.has(key)) qrtStationsByKey.set(key, station);
-			}
+		for (const [key, station] of buildQRTStationLookupMap(newRawCache.regionSpecific.SEQ.qrtStations ?? {})) {
+			if (!qrtStationsByKey.has(key)) qrtStationsByKey.set(key, station);
 		}
 		const facilities = newRawCache.regionSpecific.SEQ.railwayStationFacilities ?? [];
 		for (const f of facilities) {

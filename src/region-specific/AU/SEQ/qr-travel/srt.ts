@@ -1,6 +1,6 @@
 export type SRTEntry = { from: string; to: string; travelTrain: number };
 
-import type { QRTTrainMovementDTO } from "./types.js";
+import type { QRTStationDetails, QRTTrainMovementDTO } from "./types.js";
 import { loadDataFile } from "../../../../utils/fs.js";
 import { parseTimeWithConfig, getLocalISOString } from "../../../../utils/time.js";
 import type { TraxConfig } from "../../../../config.js";
@@ -10,6 +10,7 @@ export interface QRTSRTStop {
 	placeName: string;
 	placeCode: string;
 	gtfsStopId: string | null;
+	stationDetails?: QRTStationDetails;
 	isStop: boolean;
 	plannedArrival: string;
 	plannedDeparture: string;
@@ -118,6 +119,7 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 		return stoppingMovements.map((m) => ({
 			placeCode: m.PlaceCode,
 			gtfsStopId: m.gtfsStopId ?? null,
+			stationDetails: m.stationDetails,
 			placeName: m.PlaceName,
 			isStop: true,
 			plannedArrival: m.PlannedArrival,
@@ -139,6 +141,7 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 				{
 					placeCode: from.PlaceCode,
 					gtfsStopId: from.gtfsStopId ?? null,
+					stationDetails: from.stationDetails,
 					placeName: from.PlaceName,
 					isStop: true,
 					plannedArrival: from.PlannedArrival,
@@ -172,6 +175,7 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 				{
 					placeCode: to.PlaceCode,
 					gtfsStopId: to.gtfsStopId ?? null,
+					stationDetails: to.stationDetails,
 					placeName: to.PlaceName,
 					isStop: true,
 					plannedArrival: to.PlannedArrival,
@@ -268,6 +272,7 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 						{
 							placeCode: orig?.PlaceCode ?? "",
 							gtfsStopId: orig?.gtfsStopId ?? null,
+							stationDetails: orig?.stationDetails,
 							placeName: stopName,
 							isStop: false,
 							plannedArrival: orig?.PlannedArrival ?? "",
@@ -295,6 +300,7 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 				{
 					placeCode: to.PlaceCode,
 					gtfsStopId: to.gtfsStopId ?? null,
+					stationDetails: to.stationDetails,
 					placeName: to.PlaceName,
 					isStop: true,
 					plannedArrival: to.PlannedArrival,
@@ -321,6 +327,7 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 			{
 				placeCode: to.PlaceCode ?? "",
 				gtfsStopId: to.gtfsStopId ?? null,
+				stationDetails: to.stationDetails,
 				placeName: to.PlaceName,
 				isStop: true,
 				plannedArrival: to.PlannedArrival ?? "",

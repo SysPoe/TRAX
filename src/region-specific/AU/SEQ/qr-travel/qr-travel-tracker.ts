@@ -22,6 +22,7 @@ import ensureQRTEnabled from "./enabled.js";
 import type { TraxConfig } from "../../../../config.js";
 import type { CacheContext } from "../../../../cache.js";
 import { cacheFileExists, loadCacheFile, writeCacheFile } from "../../../../utils/fs.js";
+import { buildQRTStationLookupMap, normalizeQRTStationLookupKey } from "./stations.js";
 
 export { getQRTStations } from "./stations.js";
 
@@ -272,6 +273,8 @@ function convertQRTServiceToTravelTrip(
 ): QRTTravelTrip {
 	const serviceMeta = serviceResponse;
 	const gtfsStops = getConsideredStations(ctx);
+	const qrtStationsByKey = buildQRTStationLookupMap(ctx.raw.regionSpecific.SEQ.qrtStations ?? {});
+	const qrtPlacesByCode = new Map((ctx.raw.regionSpecific.SEQ.qrtPlaces ?? []).map((place) => [place.qrt_PlaceCode, place]));
 	const stops: QRTTravelStopTime[] = (serviceResponse.TrainMovements as QRTTrainMovementDTO[]).map((movement) => {
 		let arrivalDelaySeconds: number | null = null;
 		let departureDelaySeconds: number | null = null;
@@ -341,11 +344,20 @@ function convertQRTServiceToTravelTrip(
 		);
 		if (findRes) gtfsStopId = findRes.stop_id;
 		if (movement.PlaceName.toLowerCase().includes("roma st")) gtfsStopId = "place_romsta";
+		const stationDetails =
+			qrtStationsByKey.get(movement.PlaceCode) ??
+			qrtStationsByKey.get(normalizeQRTStationLookupKey(movement.PlaceName)) ??
+			(() => {
+				const place = qrtPlacesByCode.get(movement.PlaceCode);
+				return place ? qrtStationsByKey.get(normalizeQRTStationLookupKey(place.Title)) : undefined;
+			})();
+		if (!gtfsStopId && stationDetails?.stops?.length) gtfsStopId = stationDetails.stops[0] ?? null;
 
 		let toRet: QRTTravelStopTime = {
 			placeCode: movement.PlaceCode,
 			placeName: movement.PlaceName,
 			gtfsStopId,
+			stationDetails,
 			kStation: movement.KStation,
 			status: movement.Status,
 			trainPosition: movement.TrainPosition,
@@ -365,6 +377,19 @@ function convertQRTServiceToTravelTrip(
 		};
 		return toRet;
 	});
+
+	const unresolvedStops = stops.filter((stop) => !stop.gtfsStopId && !stop.stationDetails);
+	if (unresolvedStops.length > 0) {
+		logger.warn(
+			`Unlinked QRT stops for service ${serviceMeta.ServiceId}: ${unresolvedStops
+				.map((stop) => `${stop.placeName} (${stop.placeCode})`)
+				.join(", ")}`,
+			{
+				module: "qtt",
+				function: "convertQRTServiceToTravelTrip",
+			},
+		);
+	}
 
 	const runChars: { [key: string]: string } = {
 		Gulflander: "5",
@@ -458,6 +483,7 @@ async function processService(
 						PlaceCode: s.placeCode,
 						PlaceName: s.placeName,
 						gtfsStopId,
+						stationDetails: s.stationDetails,
 						KStation: s.kStation,
 						Status: s.status,
 						TrainPosition: s.trainPosition,
