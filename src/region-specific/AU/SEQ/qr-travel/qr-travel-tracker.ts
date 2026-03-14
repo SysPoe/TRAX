@@ -458,7 +458,8 @@ async function processService(
 			const qrtService = services.find(
 				(s) =>
 					s.qrt_Direction == direction.DirectionName &&
-					s.qrt_ServiceLine.endsWith(serviceLine.ServiceLineName),
+					s.qrt_ServiceLine.endsWith(serviceLine.ServiceLineName) &&
+					(s.Title.split(" ")[0].length != 4 || s.Title.split(" ")[0].slice(1) === serviceResponse.ServiceId.slice(0, 3)),
 			);
 
 			if (qrtService) {
