@@ -12,3 +12,5 @@ build
 pnpm-lock.yaml
 .env
 *-ignore.*
+bun.lock
+
