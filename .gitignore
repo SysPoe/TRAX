@@ -12,3 +12,4 @@ build
 pnpm-lock.yaml
 .env
 *-ignore.*
+package-lock.json
