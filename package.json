@@ -20,7 +20,7 @@
     "crypto-js": "^4.2.0",
     "dotenv": "^17.2.3",
     "node-html-parser": "^7.0.2",
-    "qdf-gtfs": "github:SysPoe/QDF-GTFS",
+    "qdf-gtfs": "github:SysPoe/QDF-GTFS#master",
     "strip-ansi": "^7.1.2"
   },
   "scripts": {
