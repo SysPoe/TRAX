@@ -191,6 +191,17 @@ export class TRAX {
 		return timeUtils.getToday(this.config);
 	}
 
+	/** AU/SEQ inferred diagram (prev/next trip, synthetic block id). Null if not SEQ or cache not built. */
+	public getSeqDiagramSummary(): { tripEnds: number; withPrevLink: number; blockCount: number } | null {
+		const d = this.ctx.augmented.seqDiagram;
+		if (!d) return null;
+		return {
+			tripEnds: d.tripCount,
+			withPrevLink: d.linkedPrevCount,
+			blockCount: new Set(d.blockIdByTripId.values()).size,
+		};
+	}
+
 	public getAugmentedTrips = (trip_id?: string) => cache.getAugmentedTrips(this.ctx, trip_id);
 	public getAugmentedTripInstance = (instance_id: string) => cache.getAugmentedTripInstance(this.ctx, instance_id);
 	public getVehicleTripInstance = (vehicle: RealtimeVehiclePosition) =>
@@ -290,6 +301,14 @@ export * as cache from "./cache.js";
 export * as stations from "./utils/stations.js";
 export * as calendar from "./utils/calendar.js";
 export * as qrTravel from "./region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
+
+export {
+	buildSeqDiagramTopology,
+	buildAndApplySeqDiagram,
+	revalidateSeqDiagramRealtimeEdges,
+	SEQ_DIAGRAM_MIN_TURNAROUND_SEC,
+	type SeqDiagramTopology,
+} from "./region-specific/AU/SEQ/seq-diagram.js";
 
 export type { AugmentedTrip, AugmentedTripInstance } from "./utils/augmentedTrip.js";
 export type { AugmentedStopTime } from "./utils/augmentedStopTime.js";

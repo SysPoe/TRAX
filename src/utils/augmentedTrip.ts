@@ -29,6 +29,15 @@ export type AugmentedTripInstance = qdf.Trip & {
 	trip_number: string;
 
 	rt_start_date: string | null;
+
+	/** AU/SEQ diagram (same vehicle / line-of-route block), static + realtime validity */
+	seq_diagram_prev_trip_id: string | null;
+	seq_diagram_next_trip_id: string | null;
+	seq_diagram_block_id: number | null;
+	seq_diagram_prev_instance_id: string | null;
+	seq_diagram_next_instance_id: string | null;
+	seq_diagram_prev_link_broken: boolean;
+	seq_diagram_next_link_broken: boolean;
 };
 
 export type AugmentedTrip = qdf.Trip & {
@@ -179,6 +188,13 @@ export function augmentTrip(
 			scheduledTripDates,
 			actualTripDates,
 			rt_start_date: update?.trip.start_date ?? null,
+			seq_diagram_prev_trip_id: null,
+			seq_diagram_next_trip_id: null,
+			seq_diagram_block_id: null,
+			seq_diagram_prev_instance_id: null,
+			seq_diagram_next_instance_id: null,
+			seq_diagram_prev_link_broken: false,
+			seq_diagram_next_link_broken: false,
 		};
 
 		ctx.augmented.timer.start("createInstance:serviceCapacity");

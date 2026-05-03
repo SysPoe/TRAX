@@ -30,7 +30,8 @@
     "asbuild:debug": "asc assembly/index.ts --target debug --enable threads --initialMemory 100 --maximumMemory 1000 --sharedMemory",
     "asbuild:release": "asc assembly/index.ts --target release --enable threads --initialMemory 100 --maximumMemory 1000 --sharedMemory",
     "asbuild": "npm run asbuild:debug && npm run asbuild:release",
-    "test": "npm run build && node test/translink.js"
+    "test": "npm run build && node test/translink.js",
+    "test:seq-diagram": "npm run build && node test/seq-diagram-benchmark.js"
   },
   "files": [
     "dist",

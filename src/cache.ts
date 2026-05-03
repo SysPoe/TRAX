@@ -43,6 +43,8 @@ import { addWasmStop } from "../build/release.js";
 import type { ExpressInfo, PassingStop } from "./utils/SRT.js";
 import type { PlatformData } from "./utils/platformData.js";
 import { clearConsideredCaches } from "./utils/considered.js";
+import type { SeqDiagramTopology } from "./region-specific/AU/SEQ/seq-diagram.js";
+import { buildAndApplySeqDiagram, refreshSeqDiagramAfterRealtimeBatch } from "./region-specific/AU/SEQ/seq-diagram.js";
 
 class LRUCache<K, V> {
 	private cache = new Map<K, V>();
@@ -126,6 +128,8 @@ export type AugmentedCache = {
 	instancesRec: Map<string, AugmentedTripInstance>;
 	tripUpdatesCache: Map<string, qdf.RealtimeTripUpdate[]>;
 	timer: Timer;
+	/** AU/SEQ: inferred trip chains (prev/next) from static topology + realtime gate */
+	seqDiagram?: SeqDiagramTopology;
 };
 
 export type CacheContext = {
@@ -175,6 +179,7 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 		instancesRec: new Map(),
 		tripUpdatesCache: new Map(),
 		timer: globalTimer,
+		seqDiagram: undefined,
 	};
 }
 
@@ -1000,6 +1005,12 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	}
 	ctx.augmented.timer.stop("refreshStaticCache:buildPassingTrips");
 
+	if (isRegion(config.region, "AU/SEQ")) {
+		ctx.augmented.timer.start("refreshStaticCache:seqDiagram");
+		buildAndApplySeqDiagram(ctx, gtfs, trips);
+		ctx.augmented.timer.stop("refreshStaticCache:seqDiagram");
+	}
+
 	rawCache = newRawCache;
 	augmentedCache = newAugmentedCache;
 
@@ -1170,6 +1181,12 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 			}
 		}
 		for (const stop of augmentedCache.stops) augmentedCache.stopsRec.set(stop.stop_id, stop);
+
+		if (isRegion(config.region, "AU/SEQ")) {
+			ctx.augmented.timer.start("refreshRealtimeCache:seqDiagram");
+			refreshSeqDiagramAfterRealtimeBatch(ctx, updatedTripIds);
+			ctx.augmented.timer.stop("refreshRealtimeCache:seqDiagram");
+		}
 	}
 
 	if (isRegion(ctx.config.region, "CA/GTHA")) {
