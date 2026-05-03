@@ -44,7 +44,7 @@ import type { ExpressInfo, PassingStop } from "./utils/SRT.js";
 import type { PlatformData } from "./utils/platformData.js";
 import { clearConsideredCaches } from "./utils/considered.js";
 import type { SeqDiagramTopology } from "./region-specific/AU/SEQ/seq-diagram.js";
-import { buildAndApplySeqDiagram, refreshSeqDiagramAfterRealtimeBatch } from "./region-specific/AU/SEQ/seq-diagram.js";
+import { buildAndApplySeqDiagram, patchSeqDiagramOntoAugmentedTrip, refreshSeqDiagramAfterRealtimeBatch } from "./region-specific/AU/SEQ/seq-diagram.js";
 
 class LRUCache<K, V> {
 	private cache = new Map<K, V>();
@@ -447,6 +447,15 @@ export function getStopDeparturesCached(ctx: CacheContext, stopId: string, servi
 	return results;
 }
 
+/** {@link addSCI} + {@link addVehicleModel} — instance cache entries are registered without these passes (unlike {@link getAugmentedTrips} return values). */
+function enrichAugmentedTripInstance(
+	ctx: CacheContext,
+	config: TraxConfig,
+	inst: AugmentedTripInstance,
+): AugmentedTripInstance {
+	return addVehicleModel(addSCI(inst, ctx, config), ctx, config);
+}
+
 export function getAugmentedTrips(ctx: CacheContext, trip_id?: string): AugmentedTrip[] {
 	const context = ctx;
 	const { raw, augmented } = context;
@@ -458,6 +467,7 @@ export function getAugmentedTrips(ctx: CacheContext, trip_id?: string): Augmente
 			const augmentedTrip = augmentTrip(rawTrip, context);
 			registerAugmentedTrip(ctx, augmentedTrip);
 			augmented.tripsRec.set(trip_id, augmentedTrip);
+			patchSeqDiagramOntoAugmentedTrip(context, augmentedTrip);
 			return [addVehicleModelTrip(addSC(augmentedTrip, ctx, context.config), ctx, context.config)];
 		}
 		return [];
@@ -470,7 +480,7 @@ export function getAugmentedTrips(ctx: CacheContext, trip_id?: string): Augmente
 export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string): AugmentedTripInstance | null {
 	const context = ctx;
 	const cached = ctx.augmented.instancesRec.get(instance_id);
-	if (cached) return cached;
+	if (cached) return enrichAugmentedTripInstance(context, context.config, cached);
 
 	try {
 		const tripId = JSON.parse(atob(instance_id))[0];
@@ -479,13 +489,13 @@ export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string)
 			const inst = trip.instances.find((v) => v.instance_id === instance_id);
 			if (inst) {
 				ctx.augmented.instancesRec.set(instance_id, inst);
-				return inst;
+				return enrichAugmentedTripInstance(context, context.config, inst);
 			}
 		}
 
-		// Fallback to slow way if not in record
+		// Fallback to slow way if not in record (getAugmentedTrips already runs addSC + addVehicleModel per instance)
 		let res = getAugmentedTrips(ctx, tripId)[0]?.instances.find((v) => v.instance_id === instance_id);
-		return res ? addVehicleModel(addSCI(res, ctx, context.config), ctx, context.config) : null;
+		return res ?? null;
 	} catch {
 		return null;
 	}

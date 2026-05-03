@@ -1,9 +1,10 @@
 import type { GTFS, StopTime, Trip } from "qdf-gtfs";
 import type { CacheContext } from "../../../cache.js";
 import type { AugmentedStopTime } from "../../../utils/augmentedStopTime.js";
-import type { AugmentedTripInstance } from "../../../utils/augmentedTrip.js";
+import type { AugmentedTrip, AugmentedTripInstance } from "../../../utils/augmentedTrip.js";
 import { isRegion } from "../../../config.js";
 import { getServiceDayStart } from "../../../utils/time.js";
+import { getGtfs } from "../../../gtfsInterfaceLayer.js";
 
 /** Minimum time (seconds) between clearing the terminal on leg A and first departure of leg B for a feasible link. */
 export const SEQ_DIAGRAM_MIN_TURNAROUND_SEC = 90;
@@ -12,6 +13,12 @@ export const SEQ_DIAGRAM_MIN_TURNAROUND_SEC = 90;
 const SEQ_PARENT_MAX_PRECursors_SEC = 6 * 3600;
 
 const KEY_SEP = "\x1e";
+
+/** GTFS `block_id` is usually empty for SEQ rail; expose inferred diagram id through the same field when absent. */
+function effectiveBlockId(rawBlockId: string | null | undefined, syntheticDiagramBlockId: string | null): string | null {
+	if (rawBlockId != null && String(rawBlockId).trim() !== "") return String(rawBlockId);
+	return syntheticDiagramBlockId;
+}
 
 export type SeqDiagramTripEnd = {
 	trip_id: string;
@@ -28,7 +35,8 @@ export type SeqDiagramTripEnd = {
 export type SeqDiagramTopology = {
 	prevTripId: Map<string, string>;
 	nextTripId: Map<string, string>;
-	blockIdByTripId: Map<string, number>;
+	/** Inferred diagram block (string). Distinct from raw GTFS `Trip.block_id` (also string) when the feed supplies it. */
+	blockIdByTripId: Map<string, string>;
 	tripCount: number;
 	linkedPrevCount: number;
 };
@@ -261,7 +269,7 @@ export function buildSeqDiagramTopology(gtfs: GTFS, trips: Trip[]): SeqDiagramTo
 	const { prevTripId, nextTripId } = resolveSharedPredecessors(prevDraft);
 	const linkedPrev = prevTripId.size;
 
-	const blockIdByTripId = new Map<string, number>();
+	const blockIdByTripId = new Map<string, string>();
 	const root = new Map<string, string>();
 
 	function findRoot(t: string): string {
@@ -289,12 +297,12 @@ export function buildSeqDiagramTopology(gtfs: GTFS, trips: Trip[]): SeqDiagramTo
 	for (const [trip, pred] of prevTripId) union(trip, pred);
 
 	let nextBlock = 1;
-	const blockByRoot = new Map<string, number>();
+	const blockByRoot = new Map<string, string>();
 	for (const t of tripEnds.keys()) {
 		const r = findRoot(t);
 		let bid = blockByRoot.get(r);
 		if (bid === undefined) {
-			bid = nextBlock++;
+			bid = String(nextBlock++);
 			blockByRoot.set(r, bid);
 		}
 		blockIdByTripId.set(t, bid);
@@ -354,26 +362,52 @@ function endpointAbsUnix(
 	return base + off * 86400 + sec;
 }
 
-/**
- * Copy static topology onto instances and resolve instance_id links for the same service date.
- */
-export function applySeqDiagramToInstances(ctx: CacheContext, top: SeqDiagramTopology): void {
-	ctx.augmented.seqDiagram = top;
+/** Assign diagram + GTFS `block_id` coalesce for one augmented trip (shared trip / instances). */
+function applyDiagramFieldsToAugmentedTrip(
+	ctx: CacheContext,
+	top: SeqDiagramTopology,
+	trip: AugmentedTrip,
+	resetBrokenFlags: boolean,
+): void {
+	const bid = top.blockIdByTripId.get(trip.trip_id) ?? null;
+	const p = top.prevTripId.get(trip.trip_id) ?? null;
+	const n = top.nextTripId.get(trip.trip_id) ?? null;
 
-	for (const trip of ctx.augmented.tripsRec.values()) {
-		const bid = top.blockIdByTripId.get(trip.trip_id) ?? null;
-		const p = top.prevTripId.get(trip.trip_id) ?? null;
-		const n = top.nextTripId.get(trip.trip_id) ?? null;
+	const rawGtfsBlock = (ctx.gtfs ?? getGtfs()).getTrips({ trip_id: trip.trip_id })[0]?.block_id ?? null;
+	const blockForTrip = effectiveBlockId(rawGtfsBlock, bid);
+	trip.block_id = blockForTrip;
 
-		for (const inst of trip.instances) {
-			inst.seq_diagram_prev_trip_id = p;
-			inst.seq_diagram_next_trip_id = n;
-			inst.seq_diagram_block_id = bid;
-			inst.seq_diagram_prev_instance_id = p ? findInstanceIdForDate(ctx, p, inst.serviceDate) : null;
-			inst.seq_diagram_next_instance_id = n ? findInstanceIdForDate(ctx, n, inst.serviceDate) : null;
+	for (const inst of trip.instances) {
+		inst.seq_diagram_prev_trip_id = p;
+		inst.seq_diagram_next_trip_id = n;
+		inst.seq_diagram_block_id = bid;
+		inst.block_id = blockForTrip;
+		inst.seq_diagram_prev_instance_id = p ? findInstanceIdForDate(ctx, p, inst.serviceDate) : null;
+		inst.seq_diagram_next_instance_id = n ? findInstanceIdForDate(ctx, n, inst.serviceDate) : null;
+		if (resetBrokenFlags) {
 			inst.seq_diagram_prev_link_broken = false;
 			inst.seq_diagram_next_link_broken = false;
 		}
+	}
+}
+
+/**
+ * Apply seq diagram from cache onto a trip augmented after the full refresh (lazy `getAugmentedTrips`).
+ */
+export function patchSeqDiagramOntoAugmentedTrip(ctx: CacheContext, trip: AugmentedTrip): void {
+	const top = ctx.augmented.seqDiagram;
+	if (!top || !isRegion(ctx.config.region, "AU/SEQ")) return;
+	applyDiagramFieldsToAugmentedTrip(ctx, top, trip, true);
+	revalidateSeqDiagramRealtimeEdges(ctx, new Set([trip.trip_id]));
+}
+
+/**
+ * Copy static topology onto all augmented trips and instances (full refresh).
+ */
+export function applySeqDiagramToInstances(ctx: CacheContext, top: SeqDiagramTopology): void {
+	ctx.augmented.seqDiagram = top;
+	for (const trip of ctx.augmented.tripsRec.values()) {
+		applyDiagramFieldsToAugmentedTrip(ctx, top, trip, true);
 	}
 }
 
@@ -448,18 +482,7 @@ export function refreshSeqDiagramAfterRealtimeBatch(ctx: CacheContext, updatedTr
 	for (const tripId of neighborhood) {
 		const trip = ctx.augmented.tripsRec.get(tripId);
 		if (!trip) continue;
-
-		const bid = top.blockIdByTripId.get(tripId) ?? null;
-		const p = top.prevTripId.get(tripId) ?? null;
-		const n = top.nextTripId.get(tripId) ?? null;
-
-		for (const inst of trip.instances) {
-			inst.seq_diagram_prev_trip_id = p;
-			inst.seq_diagram_next_trip_id = n;
-			inst.seq_diagram_block_id = bid;
-			inst.seq_diagram_prev_instance_id = p ? findInstanceIdForDate(ctx, p, inst.serviceDate) : null;
-			inst.seq_diagram_next_instance_id = n ? findInstanceIdForDate(ctx, n, inst.serviceDate) : null;
-		}
+		applyDiagramFieldsToAugmentedTrip(ctx, top, trip, false);
 	}
 
 	revalidateSeqDiagramRealtimeEdges(ctx, neighborhood);

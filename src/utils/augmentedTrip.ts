@@ -33,7 +33,8 @@ export type AugmentedTripInstance = qdf.Trip & {
 	/** AU/SEQ diagram (same vehicle / line-of-route block), static + realtime validity */
 	seq_diagram_prev_trip_id: string | null;
 	seq_diagram_next_trip_id: string | null;
-	seq_diagram_block_id: number | null;
+	/** Inferred diagram block id (string; same type as GTFS `trips.block_id`). */
+	seq_diagram_block_id: string | null;
 	seq_diagram_prev_instance_id: string | null;
 	seq_diagram_next_instance_id: string | null;
 	seq_diagram_prev_link_broken: boolean;

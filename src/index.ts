@@ -305,6 +305,7 @@ export * as qrTravel from "./region-specific/AU/SEQ/qr-travel/qr-travel-tracker.
 export {
 	buildSeqDiagramTopology,
 	buildAndApplySeqDiagram,
+	patchSeqDiagramOntoAugmentedTrip,
 	revalidateSeqDiagramRealtimeEdges,
 	SEQ_DIAGRAM_MIN_TURNAROUND_SEC,
 	type SeqDiagramTopology,
