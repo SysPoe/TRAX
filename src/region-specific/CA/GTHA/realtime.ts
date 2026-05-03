@@ -7,107 +7,34 @@ import { isConsideredTripId } from "../../../utils/considered.js";
 import { getModelFromId } from "./vehicleModel.js";
 import { mergeVehicleInfo } from "../../../utils/vehicleModel.js";
 import { parse } from "node-html-parser";
-
-// --- Config & Settings ---
-const SOURCE_C_LOOKAHEAD_SECS = 7200;
-const SOURCE_D_LOOKAHEAD_SECS = 600;
-
-const SOURCE_E_REFERRER = "https://www.gotracker.ca/gotracker/web/";
-const SOURCE_E_EXCLUDED_STOPS = new Set(["PA", "UN"]);
-
-const SOURCE_C_IDS = ["UN", "PA", "BL", "MD", "WE"];
-
-const SOURCE_E_STOP_CONVERSION: Record<string, string[]> = {
-	UN: ["BR", "GT", "LE", "LW", "ST"],
-	DW: ["BR"],
-	RU: ["BR"],
-	MP: ["BR"],
-	KC: ["BR"],
-	AU: ["BR"],
-	NE: ["BR"],
-	EA: ["BR"],
-	BD: ["BR"],
-	BA: ["BR"],
-	AD: ["BR"],
-	BL: ["GT"],
-	MD: ["GT"],
-	WE: ["GT"],
-	MA: ["GT"],
-	BE: ["GT"],
-	BR: ["GT"],
-	MO: ["GT"],
-	GE: ["GT"],
-	AC: ["GT"],
-	GL: ["GT"],
-	KI: ["GT"],
-	DA: ["LE"],
-	SC: ["LE"],
-	EG: ["LE"],
-	GU: ["LE"],
-	RO: ["LE"],
-	PIN: ["LE"],
-	AJ: ["LE"],
-	WH: ["LE"],
-	OS: ["LE"],
-	EX: ["LW"],
-	MI: ["LW"],
-	LO: ["LW"],
-	PO: ["LW"],
-	CL: ["LW"],
-	OA: ["LW"],
-	BO: ["LW"],
-	AP: ["LW"],
-	BU: ["LW"],
-	AL: ["LW"],
-	WR: ["LW"],
-	CF: ["LW"],
-	SCTH: ["LW"],
-	NI: ["LW"],
-	KE: ["ST"],
-	AG: ["ST"],
-	MK: ["ST"],
-	UI: ["ST"],
-	CE: ["ST"],
-	MR: ["ST"],
-	MJ: ["ST"],
-	ST: ["ST"],
-	LI: ["ST"],
-};
-
-// --- URLs ---
-const SOURCE_A_URL = "https://www.gotracker.ca/gotracker/mobile/proxy/web/AVL/InService/Trip2/All";
-const SOURCE_B_URL = "https://www.gotracker.ca/gotracker/mobile/proxy/web/Schedule/Today/All";
-const SOURCE_C_URL_TEMPLATE = (stop_id: string) =>
-	`https://api.metrolinx.com/external/upe/tdp/up/departures/${stop_id}`;
-const SOURCE_D_URL_TEMPLATE = (stop_id: string) =>
-	`https://api.metrolinx.com/external/go/departures/stops/${stop_id}/departures?page=1&pageLimit=10`;
-const SOURCE_E_URL_TEMPLATE = (code: string, stop_id: string) =>
-	`https://www.gotracker.ca/gotracker/mobile/proxy/web/Messages/Signage/Rail/${code}/${stop_id}`;
-const SOURCE_F_URL = "https://www.transsee.ca/fleetfind?a=gotrain";
-
-// --- Throttles ---
-const MINUTES = 60 * 1000;
-const SOURCE_A_THROTTLE_MS = 1 * MINUTES;
-const SOURCE_B_THROTTLE_MS = 15 * MINUTES;
-const SOURCE_CD_THROTTLE_MS = 1 * MINUTES;
-const SOURCE_E_THROTTLE_MS = 2 * MINUTES;
-const SOURCE_F_THROTTLE_MS = 5 * MINUTES;
+import {
+	SOURCE_A_THROTTLE_MS,
+	SOURCE_A_URL,
+	SOURCE_B_THROTTLE_MS,
+	SOURCE_B_URL,
+	SOURCE_C_IDS,
+	SOURCE_C_LOOKAHEAD_SECS,
+	SOURCE_C_URL_TEMPLATE,
+	SOURCE_CD_THROTTLE_MS,
+	SOURCE_D_LOOKAHEAD_SECS,
+	SOURCE_D_URL_TEMPLATE,
+	SOURCE_E_EXCLUDED_STOPS,
+	SOURCE_E_REFERRER,
+	SOURCE_E_STOP_CONVERSION,
+	SOURCE_E_THROTTLE_MS,
+	SOURCE_E_URL_TEMPLATE,
+	SOURCE_F_THROTTLE_MS,
+	SOURCE_F_URL,
+	SOURCE_PRIORITIES,
+	ROUTE_GROUP_EAST,
+	ROUTE_GROUP_WEST,
+} from "./gtha-realtime-constants.js";
 
 // --- Module State ---
 let activeModels: Set<string> = new Set();
 let activeIds: Set<string> = new Set();
 let activeCars: Set<string> = new Set();
 let activePassengerCars: Set<number> = new Set();
-
-const SOURCE_PRIORITIES: Record<string, number> = {
-	"Source D": 4,
-	"Source E": 3,
-	"Source C": 2,
-	"Source A": 1,
-	"Source B": 0,
-	Propagation: 0,
-	prevs: 0,
-};
 
 let prevs: {
 	tripInstanceId: string;
@@ -243,9 +170,6 @@ function registerCarTrips(ctx: CacheContext, tripId: string, carId: string) {
 	}
 	set.add(tripId);
 }
-
-const ROUTE_GROUP_EAST = ["ST", "RH", "LE"];
-const ROUTE_GROUP_WEST = ["MI", "LW", "KI", "BR"];
 
 function getTripRouteGroup(ctx: CacheContext, tripId: string): string | null {
 	const augmentedTrip = ctx.augmented.tripsRec.get(tripId);
