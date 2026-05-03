@@ -1,7 +1,7 @@
 import * as qdf from "qdf-gtfs";
 import { getServiceDatesByTrip } from "./calendar.js";
 import { AugmentedStopTime, augmentStopTimes } from "./augmentedStopTime.js";
-import * as cache from "../cache.js";
+import * as cache from "../cache/index.js";
 import { getServiceCapacity, ServiceCapacity } from "./serviceCapacity.js";
 import { ExpressInfo, findExpress } from "./SRT.js";
 import { isRegion } from "../config.js";

@@ -1,5 +1,5 @@
 import { isRegion, TraxConfig } from "../config.js";
-import { CacheContext } from "../cache.js";
+import { CacheContext } from "../cache/index.js";
 import { AugmentedTrip, AugmentedTripInstance } from "./augmentedTrip.js";
 import { getVehicleInfo as getSEQVehicleInfo } from "../region-specific/AU/SEQ/vehicleModel.js";
 import { getVehicleInfo as getGTHAVehicleInfo } from "../region-specific/CA/GTHA/vehicleModel.js";

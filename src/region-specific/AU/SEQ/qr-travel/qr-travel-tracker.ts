@@ -20,7 +20,7 @@ import type {
 } from "./types.js";
 import ensureQRTEnabled from "./enabled.js";
 import type { TraxConfig } from "../../../../config.js";
-import type { CacheContext } from "../../../../cache.js";
+import type { CacheContext } from "../../../../cache/index.js";
 import { cacheFileExists, loadCacheFile, writeCacheFile } from "../../../../utils/fs.js";
 import { buildQRTStationLookupMap, normalizeQRTStationLookupKey } from "./stations.js";
 

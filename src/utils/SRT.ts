@@ -1,6 +1,6 @@
 import logger from "./logger.js";
 import { cacheFileExists, loadCacheFile, writeCacheFile } from "./fs.js";
-import * as cache from "../cache.js";
+import * as cache from "../cache/index.js";
 import * as qdf from "qdf-gtfs";
 import { isRegion } from "../config.js";
 import {

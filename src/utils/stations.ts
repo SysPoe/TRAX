@@ -1,4 +1,4 @@
-import { CacheContext, getAugmentedStops } from "../cache.js";
+import { CacheContext, getAugmentedStops } from "../cache/index.js";
 import { AugmentedStop } from "./augmentedStop.js";
 import * as qdf from "qdf-gtfs";
 import logger from "./logger.js";

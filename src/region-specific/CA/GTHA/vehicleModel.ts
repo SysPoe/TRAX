@@ -1,5 +1,5 @@
 import { RealtimeVehiclePosition } from "qdf-gtfs";
-import { CacheContext, getVehiclePositions, getTrips } from "../../../cache.js";
+import { CacheContext, getVehiclePositions, getTrips } from "../../../cache/index.js";
 import { AugmentedTripInstance } from "../../../utils/augmentedTrip.js";
 import type { VehicleInfo } from "../../../utils/vehicleModel.js";
 

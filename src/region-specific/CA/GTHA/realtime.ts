@@ -1,4 +1,4 @@
-import { CacheContext, getAugmentedTripInstance, getAugmentedTrips, getTripUpdates } from "../../../cache.js";
+import { CacheContext, getAugmentedTripInstance, getAugmentedTrips, getTripUpdates } from "../../../cache/index.js";
 import { GTFS } from "qdf-gtfs";
 import { GTHADeparturesResponse, UPEDeparturesResponse } from "./types.js";
 import logger from "../../../utils/logger.js";

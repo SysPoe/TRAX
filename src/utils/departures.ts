@@ -1,4 +1,4 @@
-import * as cache from "../cache.js";
+import * as cache from "../cache/index.js";
 import { findExpressString } from "./SRT.js";
 import { getServiceCapacity, ServiceCapacity } from "./serviceCapacity.js";
 import { AugmentedStop } from "./augmentedStop.js";

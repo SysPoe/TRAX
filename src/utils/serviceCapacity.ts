@@ -5,7 +5,7 @@ import {
 	getServiceCapacity as SEQServCap,
 	ensureServiceCapacityData as SEQEnsCapData,
 } from "../region-specific/AU/SEQ/serviceCapacity.js";
-import { CacheContext } from "../cache.js";
+import { CacheContext } from "../cache/index.js";
 
 export enum ServiceCapacity {
 	NOT_CALCULATED = -2,

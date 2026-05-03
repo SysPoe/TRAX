@@ -1,4 +1,4 @@
-import { getRawTrips, getCalendars, getCalendarDates, CacheContext } from "../cache.js";
+import { getRawTrips, getCalendars, getCalendarDates, CacheContext } from "../cache/index.js";
 import { getEpochDayFromServiceDate } from "./time.js";
 import {
 	clearStaticData,

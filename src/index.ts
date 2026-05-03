@@ -1,4 +1,4 @@
-import * as cache from "./cache.js";
+import * as cache from "./cache/index.js";
 import * as stations from "./utils/stations.js";
 import * as qrTravel from "./region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
 import * as timeUtils from "./utils/time.js";
@@ -297,7 +297,7 @@ export default TRAX;
 export { logger };
 
 export { PRESETS, resolveConfig, type TraxConfig, type TraxConfigOptions } from "./config.js";
-export * as cache from "./cache.js";
+export * as cache from "./cache/index.js";
 export * as stations from "./utils/stations.js";
 export * as calendar from "./utils/calendar.js";
 export * as qrTravel from "./region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";

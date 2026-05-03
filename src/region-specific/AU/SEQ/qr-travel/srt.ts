@@ -4,7 +4,7 @@ import type { QRTStationDetails, QRTTrainMovementDTO } from "./types.js";
 import { loadDataFile } from "../../../../utils/fs.js";
 import { parseTimeWithConfig, getLocalISOString } from "../../../../utils/time.js";
 import type { TraxConfig } from "../../../../config.js";
-import type { CacheContext } from "../../../../cache.js";
+import type { CacheContext } from "../../../../cache/index.js";
 
 export interface QRTSRTStop {
 	placeName: string;

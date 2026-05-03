@@ -1,5 +1,5 @@
 import type * as qdf from "qdf-gtfs";
-import * as cache from "../cache.js";
+import * as cache from "../cache/index.js";
 import { isRegion } from "../config.js";
 import { RailwayStationFacility } from "../region-specific/AU/SEQ/facilities-types.js";
 import { getQRTStationLookupKeys, normalizeQRTStationLookupKey } from "../region-specific/AU/SEQ/qr-travel/stations.js";

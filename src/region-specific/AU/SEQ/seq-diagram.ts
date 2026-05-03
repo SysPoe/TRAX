@@ -1,5 +1,5 @@
 import type { GTFS, StopTime, Trip } from "qdf-gtfs";
-import type { CacheContext } from "../../../cache.js";
+import type { CacheContext } from "../../../cache/index.js";
 import type { AugmentedStopTime } from "../../../utils/augmentedStopTime.js";
 import type { AugmentedTrip, AugmentedTripInstance } from "../../../utils/augmentedTrip.js";
 import { isRegion } from "../../../config.js";

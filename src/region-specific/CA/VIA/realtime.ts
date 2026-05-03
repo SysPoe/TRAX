@@ -1,4 +1,4 @@
-import { CacheContext } from "../../../cache.js";
+import { CacheContext } from "../../../cache/index.js";
 import { MergeAction } from "../../../config.js";
 import logger from "../../../utils/logger.js";
 import * as qdf from "qdf-gtfs";

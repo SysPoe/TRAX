@@ -3,7 +3,7 @@ import path from "path";
 import logger from "../../../utils/logger.js";
 import { AugmentedStopTime } from "../../../utils/augmentedStopTime.js";
 import { AugmentedTripInstance, AugmentedTrip } from "../../../utils/augmentedTrip.js";
-import { CacheContext, getAugmentedStops, getRawRoutes } from "../../../cache.js";
+import { CacheContext, getAugmentedStops, getRawRoutes } from "../../../cache/index.js";
 import zlib from "zlib";
 import { pipeline } from "stream";
 import { promisify } from "util";

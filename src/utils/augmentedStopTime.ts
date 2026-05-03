@@ -1,6 +1,6 @@
 import * as qdf from "qdf-gtfs";
 import { AugmentedStop } from "./augmentedStop.js";
-import * as cache from "../cache.js";
+import * as cache from "../cache/index.js";
 import { findPassingStopTimes } from "./SRT.js";
 import { getPlatformData as loadPlatformData } from "./platformData.js";
 import type { PlatformData, PlatformDefinition } from "./platformData.js";
