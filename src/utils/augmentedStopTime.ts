@@ -311,8 +311,14 @@ export function augmentStopTimes(
 		let dep = s?.departure_time ?? 0;
 
 		if (!s && r) {
-			if (r.arrival_time) arr = Math.floor(Number(r.arrival_time) - serviceDayStart + 86400) % 86400;
-			if (r.departure_time) dep = Math.floor(Number(r.departure_time) - serviceDayStart + 86400) % 86400;
+			if (r.arrival_time) {
+				arr = Math.floor(Number(r.arrival_time) - serviceDayStart + 86400) % 86400;
+				if (r.arrival_delay != null) arr -= r.arrival_delay;
+			}
+			if (r.departure_time) {
+				dep = Math.floor(Number(r.departure_time) - serviceDayStart + 86400) % 86400;
+				if (r.departure_delay != null) dep -= r.departure_delay;
+			}
 			if (arr === 0 && dep !== 0) arr = dep;
 			if (dep === 0 && arr !== 0) dep = arr;
 		}
