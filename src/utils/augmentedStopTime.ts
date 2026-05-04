@@ -2,6 +2,7 @@ import * as qdf from "qdf-gtfs";
 import { AugmentedStop } from "./augmentedStop.js";
 import * as cache from "../cache/index.js";
 import { findPassingStopTimes } from "./SRT.js";
+import { interpolateTimes as wasmInterpolateTimes } from "../../build/release.js";
 import { getPlatformData as loadPlatformData } from "./platformData.js";
 import type { PlatformData, PlatformDefinition } from "./platformData.js";
 import { ServiceCapacity } from "./serviceCapacity.js";
@@ -363,6 +364,11 @@ export function augmentStopTimes(
 	let lastDelay = 0;
 	const propagateOnTime = scheduleRelationship === qdf.TripScheduleRelationship.SCHEDULED && !!tripUpdate;
 
+	/** Raw GTFS timeline seconds (may exceed 86400); used to re-interpolate passing rows against actual segment anchors. */
+	let lastNonPassingActDepRaw: number | null = null;
+	let pendingPassingRows: AugmentedStopTime[] = [];
+	let pendingEmus: number[] | null = null;
+
 	let currentSequence = -1;
 
 	ctx.augmented.timer.start("augmentStopTimes:processStops");
@@ -514,6 +520,64 @@ export function augmentStopTimes(
 			}
 		}
 
+		if (
+			!isPassing &&
+			pendingPassingRows.length > 0 &&
+			pendingEmus &&
+			pendingEmus.length >= 2 &&
+			lastNonPassingActDepRaw !== null &&
+			actArr != null &&
+			actDep != null
+		) {
+			const startDep = lastNonPassingActDepRaw;
+			const endArr = actArr;
+			if (endArr > startDep) {
+				const wallTimes = wasmInterpolateTimes(startDep, endArr, pendingEmus);
+				const getOffsetPass = (secs: number) => Math.floor(secs / 86400);
+				const wallClock = (secs: number) => ((secs % 86400) + 86400) % 86400;
+				for (let pi = 0; pi < pendingPassingRows.length; pi++) {
+					const row = pendingPassingRows[pi];
+					const t = wallTimes[pi];
+					const offArr = getOffsetPass(t);
+					const offDep = offArr;
+					const wallArr = wallClock(t);
+					const wallDep = wallArr;
+					const rawSched =
+						(row.scheduled_arrival_time ?? 0) +
+						86400 * (dateOffsets.schedArr + row.scheduled_arrival_date_offset);
+					const delaySeg = Math.round(t - rawSched);
+					const { str: delayStr, cls: delayCls } = calculateDelayClass(delaySeg);
+					row.actual_arrival_time = wallArr;
+					row.actual_departure_time = wallDep;
+					row.actual_arrival_dates = getServiceDateArray(
+						addDaysToDateString(
+							serviceDate,
+							offArr - dateOffsets.actArr,
+						),
+					);
+					row.actual_departure_dates = getServiceDateArray(
+						addDaysToDateString(
+							serviceDate,
+							offDep - dateOffsets.actDep,
+						),
+					);
+					row.actual_arrival_date_offset = offArr - dateOffsets.actArr;
+					row.actual_departure_date_offset = offDep - dateOffsets.actDep;
+					if (row.realtime && row.realtime_info) {
+						row.realtime_info = {
+							...row.realtime_info,
+							delay_secs: delaySeg,
+							delay_string: delayStr,
+							delay_class: delayCls,
+							propagated: true,
+						};
+					}
+				}
+			}
+			pendingPassingRows = [];
+			pendingEmus = null;
+		}
+
 		let realtimeInfo = null;
 		const hasRealtime =
 			!!rtUpdate || propagated || (!!tripUpdate && scheduleRelationship === qdf.TripScheduleRelationship.ADDED);
@@ -622,6 +686,13 @@ export function augmentStopTimes(
 		});
 
 		finalStops.push(augmented);
+		if (isPassing) {
+			pendingPassingRows.push(augmented);
+			const segmentEmu = (stopTime as qdf.StopTime & { _segmentEmus?: number[] })._segmentEmus;
+			if (segmentEmu?.length && !pendingEmus) pendingEmus = segmentEmu;
+		} else {
+			lastNonPassingActDepRaw = actDep;
+		}
 	}
 	ctx.augmented.timer.stop("augmentStopTimes:processStops");
 
