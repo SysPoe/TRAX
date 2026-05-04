@@ -44,6 +44,13 @@ function getSRTData(ctx: CacheContext): SRTEntry[] {
 	return data;
 }
 
+function clampPassingBetweenEndpoints(estMs: number | undefined, a: number, b: number): number | undefined {
+	if (estMs === undefined || Number.isNaN(estMs)) return undefined;
+	const lo = Math.min(a, b);
+	const hi = Math.max(a, b);
+	return Math.min(hi, Math.max(lo, estMs));
+}
+
 function getDelay(delaySecs: number | null = null, departureTime: string | null, config: TraxConfig) {
 	if (delaySecs === null || departureTime === null) return { delayString: "scheduled", delayClass: "scheduled" };
 
@@ -167,8 +174,17 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 				(s.from === to.PlaceName && s.to === from.PlaceName),
 		);
 		if (seg) {
+			let toTimeMs: number | null = null;
+			if (to.ActualArrival && to.ActualArrival !== "0001-01-01T00:00:00") {
+				toTimeMs = parseTimeWithConfig(to.ActualArrival, config.timezone);
+			} else if (to.PlannedArrival && to.PlannedArrival !== "0001-01-01T00:00:00") {
+				toTimeMs = parseTimeWithConfig(to.PlannedArrival, config.timezone);
+			}
 			let estPass: number | undefined =
 				prevTime && seg.travelTrain ? prevTime + seg.travelTrain * 60000 : undefined;
+			if (estPass != null && prevTime != null && toTimeMs != null) {
+				estPass = clampPassingBetweenEndpoints(estPass, prevTime, toTimeMs);
+			}
 			let estPassDate = estPass ? new Date(estPass) : undefined;
 			pushSRT(
 				result,
@@ -262,6 +278,9 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 					if (fromTime) {
 						let scaledMinutes = cumulativeSRT * scaleFactor;
 						estPass = fromTime + scaledMinutes * 60000;
+					}
+					if (estPass != null && fromTime != null && toTime != null) {
+						estPass = clampPassingBetweenEndpoints(estPass, fromTime, toTime);
 					}
 
 					let estPassDate = estPass ? new Date(estPass) : undefined;
