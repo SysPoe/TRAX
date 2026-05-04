@@ -430,10 +430,16 @@ function getStopOrParentId(stopId: string, ctx: cache.CacheContext): string | un
 	return s ? (s.parent_station ?? s.stop_id) : undefined;
 }
 
+/** emu weights for wasmInterpolateTimes (length = passing legs + 1); only set on synthetic passing rows. */
+export type StopTimeWithPassingMeta = qdf.StopTime & {
+	_passing: boolean;
+	_segmentEmus?: number[];
+};
+
 export function findPassingStopTimes(
 	stopTimes: qdf.StopTime[],
 	ctx: cache.CacheContext,
-): (qdf.StopTime & { _passing: boolean })[] {
+): StopTimeWithPassingMeta[] {
 	if (stopTimes.length === 0) return [];
 
 	const sortedStopTimes = [...stopTimes].sort((a, b) => (a.stop_sequence ?? 0) - (b.stop_sequence ?? 0));
@@ -452,9 +458,7 @@ export function findPassingStopTimes(
 		return sortedStopTimes.map((v) => ({ ...v, _passing: false }));
 	}
 
-	type PassingResult = qdf.StopTime & { _passing: boolean };
-
-	let resultTimes: PassingResult[] = [{ ...idsToTimes[passingSRTs[0].from], _passing: false }];
+	let resultTimes: StopTimeWithPassingMeta[] = [{ ...idsToTimes[passingSRTs[0].from], _passing: false }];
 	let currentPassingRun: PassingStopSRT[] = [];
 
 	for (const srt of passingSRTs) {
@@ -493,6 +497,7 @@ export function findPassingStopTimes(
 
 			resultTimes.push({
 				_passing: true,
+				_segmentEmus: segmentEmus,
 				stop_id: run.to,
 				trip_id: stopTimes[0].trip_id,
 				stop_sequence:
