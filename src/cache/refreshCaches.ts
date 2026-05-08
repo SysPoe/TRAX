@@ -67,6 +67,8 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	ctx.augmented.timer.start("refreshStaticCache");
 	clearConsideredCaches();
 	clearAugmentedStopTimeCaches();
+	const { invalidateNetworkTopologyCache } = await import("../utils/SRT.js");
+	invalidateNetworkTopologyCache(config.cacheDir);
 
 	const serviceDateTripsMap = new Map<string, Set<string>>();
 	const passingTripsMap = new Map<string, Set<string>>();

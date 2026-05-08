@@ -93,6 +93,12 @@ export function writeCacheFile(filePath: string, data: string, cacheDir: string)
 	fs.writeFileSync(fullPath, data, "utf-8");
 }
 
+/** Removes a cache file if present (used to invalidate derived caches when static GTFS reloads). */
+export function deleteCacheFile(filePath: string, cacheDir: string): void {
+	const fullPath = getCacheFilePath(filePath, cacheDir);
+	if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+}
+
 export default {
 	loadDataFile,
 	getDataFilePath,
@@ -102,4 +108,5 @@ export default {
 	loadCacheFileAsync,
 	cacheFileExists,
 	writeCacheFile,
+	deleteCacheFile,
 };

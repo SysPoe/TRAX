@@ -661,8 +661,13 @@
 	},
 	{
 		"from": "Coomera",
+		"to": "Hope Island",
+		"travelTrain": 3
+	},
+	{
+		"from": "Hope Island",
 		"to": "Helensvale",
-		"travelTrain": 5
+		"travelTrain": 4
 	},
 	{
 		"from": "Helensvale",

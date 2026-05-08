@@ -1,5 +1,5 @@
 import logger from "./logger.js";
-import { cacheFileExists, loadCacheFile, writeCacheFile } from "./fs.js";
+import { cacheFileExists, deleteCacheFile, loadCacheFile, writeCacheFile } from "./fs.js";
 import * as cache from "../cache/index.js";
 import * as qdf from "qdf-gtfs";
 import { isRegion } from "../config.js";
@@ -530,3 +530,11 @@ export default {
 	getSRT,
 	findPassingStopTimes,
 };
+
+/** Clears in-memory rail topology and deletes the on-disk cache so the next load rebuilds from current GTFS. */
+export function invalidateNetworkTopologyCache(cacheDir: string): void {
+	_networkData = null;
+	bfsCache.clear();
+	loggedMissingSRT.clear();
+	deleteCacheFile(CACHE_FILE, cacheDir);
+}
