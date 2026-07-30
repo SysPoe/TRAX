@@ -29,6 +29,7 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 		stopTimes: {},
 		baseStopTimes: {},
 		rawStopTimesCache: new Map(),
+		rawTripsRec: new Map(),
 		tripsRec: new Map(),
 		stopsRec: new Map(),
 		serviceDateTrips: new Map(),
@@ -43,8 +44,10 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 		stopDeparturesCached: new Map(),
 		instancesRec: new Map(),
 		tripUpdatesCache: new Map(),
+		tripUpdateSignatures: new Map(),
 		timer: globalTimer,
 		seqDiagram: undefined,
+		qrtRefreshInFlight: undefined,
 	};
 }
 

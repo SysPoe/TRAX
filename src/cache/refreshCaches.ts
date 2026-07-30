@@ -6,7 +6,11 @@ import type { AugmentedStop } from "../utils/augmentedStop.js";
 import { augmentTrip } from "../utils/augmentedTrip.js";
 import { clearAugmentedStopTimeCaches } from "../utils/augmentedStopTime.js";
 import { getCurrentQRTravelTrains, getPlacesWithCache } from "../region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
-import { buildQRTStationLookupMap, getQRTStations, normalizeQRTStationLookupKey } from "../region-specific/AU/SEQ/qr-travel/stations.js";
+import {
+	buildQRTStationLookupMap,
+	getQRTStations,
+	normalizeQRTStationLookupKey,
+} from "../region-specific/AU/SEQ/qr-travel/stations.js";
 import { getRailwayStationFacilities } from "../region-specific/AU/SEQ/facilities.js";
 import type { QRTPlace, QRTStationDetails, QRTTravelTrip } from "../region-specific/AU/SEQ/qr-travel/types.js";
 import type { RailwayStationFacility } from "../region-specific/AU/SEQ/facilities-types.js";
@@ -20,7 +24,61 @@ import { buildAndApplySeqDiagram, refreshSeqDiagramAfterRealtimeBatch } from "..
 import type { CacheContext } from "./types.js";
 import { createEmptyRawCache, createAugmentedCacheWithConfig } from "./factories.js";
 import { registerAugmentedTrip, unregisterAugmentedTrip } from "./augmentedEntities.js";
-import { getTrips } from "./gtfsReads.js";
+import { clearPreviousVehicleInfo, prunePreviousVehicleInfo } from "../utils/vehicleModel.js";
+
+function refreshQRTTrainsInBackground(ctx: CacheContext): void {
+	if (ctx.augmented.qrtRefreshInFlight) return;
+
+	logger.debug("Refreshing qrtTrains cache in background...", {
+		module: "cache",
+		function: "refreshRealtimeCache",
+	});
+
+	const refreshPromise = getCurrentQRTravelTrains(ctx)
+		.then((trains: QRTTravelTrip[]) => {
+			// Replace the snapshot atomically. Readers continue using the prior
+			// successful value while this request is in flight.
+			ctx.raw.regionSpecific.SEQ.qrtTrains = trains;
+			logger.debug(`Loaded ${trains.length} QRT trains.`, {
+				module: "cache",
+				function: "refreshRealtimeCache",
+			});
+		})
+		.catch((error) => {
+			const message = error instanceof Error ? error.message : String(error);
+			logger.error("Failed to load QRT trains: " + message, {
+				module: "cache",
+				function: "refreshRealtimeCache",
+			});
+		})
+		.finally(() => {
+			if (ctx.augmented.qrtRefreshInFlight === refreshPromise) {
+				ctx.augmented.qrtRefreshInFlight = undefined;
+			}
+		});
+
+	// The promise owns its rejection handler above, so callers do not need to
+	// await QRT for core GTFS realtime readiness.
+	ctx.augmented.qrtRefreshInFlight = refreshPromise;
+}
+
+function tripUpdateSignature(updates: readonly unknown[]): string {
+	return JSON.stringify(updates);
+}
+
+function findChangedRealtimeTripIds(
+	previous: ReadonlyMap<string, string>,
+	next: ReadonlyMap<string, string>,
+	availableTripIds: ReadonlySet<string>,
+): Set<string> {
+	const changed = new Set<string>();
+	for (const tripId of new Set([...previous.keys(), ...next.keys()])) {
+		if (previous.get(tripId) !== next.get(tripId) && availableTripIds.has(tripId)) {
+			changed.add(tripId);
+		}
+	}
+	return changed;
+}
 
 function resetRealtimeCacheIncremental(updatedTripIds: Set<string>, ctx: CacheContext): void {
 	const { augmented: augmentedCache } = ctx;
@@ -53,13 +111,96 @@ function resetRealtimeCacheIncremental(updatedTripIds: Set<string>, ctx: CacheCo
 	}
 }
 
-export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promise<CacheContext> {
+async function loadSEQStaticMetadata(ctx: CacheContext): Promise<void> {
+	const { config } = ctx;
+	const seq = ctx.raw.regionSpecific.SEQ;
+
+	const loadPlaces = async () => {
+		ctx.augmented.timer.start("refreshStaticCache:loadQRTPlaces");
+		try {
+			return await getPlacesWithCache(config);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			logger.error("Failed to load QRT places: " + message, {
+				module: "cache",
+				function: "refreshStaticCache",
+			});
+			return [];
+		} finally {
+			ctx.augmented.timer.stop("refreshStaticCache:loadQRTPlaces");
+		}
+	};
+
+	const loadStations = async () => {
+		ctx.augmented.timer.start("refreshStaticCache:loadQRTStations");
+		try {
+			return await getQRTStations(config);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			logger.error("Failed to load QRT stations: " + message, {
+				module: "cache",
+				function: "refreshStaticCache",
+			});
+			return {};
+		} finally {
+			ctx.augmented.timer.stop("refreshStaticCache:loadQRTStations");
+		}
+	};
+
+	const loadFacilities = async () => {
+		ctx.augmented.timer.start("refreshStaticCache:loadRailwayFacilities");
+		try {
+			return await getRailwayStationFacilities(config);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			logger.error("Failed to load railway station facilities: " + message, {
+				module: "cache",
+				function: "refreshStaticCache",
+			});
+			return [];
+		} finally {
+			ctx.augmented.timer.stop("refreshStaticCache:loadRailwayFacilities");
+		}
+	};
+
+	const [places, stations, facilities] = await Promise.all([loadPlaces(), loadStations(), loadFacilities()]);
+	seq.qrtPlaces = places;
+	seq.qrtStations = stations;
+	seq.railwayStationFacilities = facilities;
+
+	const stationLookup = buildQRTStationLookupMap(stations);
+	for (const place of places) {
+		const station =
+			stationLookup.get(place.qrt_PlaceCode) ?? stationLookup.get(normalizeQRTStationLookupKey(place.Title));
+		if (station && !station.qrt_PlaceCode) station.qrt_PlaceCode = place.qrt_PlaceCode;
+	}
+
+	logger.debug(`Loaded ${places.length} QRT places.`, {
+		module: "cache",
+		function: "refreshStaticCache",
+	});
+	logger.debug(`Loaded ${Object.keys(stations).length} QRT stations.`, {
+		module: "cache",
+		function: "refreshStaticCache",
+	});
+	logger.debug(`Loaded ${facilities.length} railway station facilities.`, {
+		module: "cache",
+		function: "refreshStaticCache",
+	});
+}
+
+export async function refreshStaticCache(
+	gtfs: GTFS,
+	config: TraxConfig,
+	previousCtx?: CacheContext,
+): Promise<CacheContext> {
 	logger.debug("Refreshing static GTFS cache...", {
 		module: "cache",
 		function: "refreshStaticCache",
 	});
 
 	const newRawCache = createEmptyRawCache();
+	newRawCache.regionSpecific.SEQ.qrtTrains = previousCtx?.raw.regionSpecific.SEQ.qrtTrains ?? [];
 	const newAugmentedCache = createAugmentedCacheWithConfig(config);
 	const ctx: CacheContext = { raw: newRawCache, augmented: newAugmentedCache, config, gtfs };
 	const startTotal = Date.now();
@@ -67,11 +208,13 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	ctx.augmented.timer.start("refreshStaticCache");
 	clearConsideredCaches();
 	clearAugmentedStopTimeCaches();
-	const { invalidateNetworkTopologyCache } = await import("../utils/SRT.js");
-	invalidateNetworkTopologyCache(config.cacheDir);
+	clearPreviousVehicleInfo();
+	const { resetNetworkTopologyForStaticFeed } = await import("../utils/SRT.js");
+	resetNetworkTopologyForStaticFeed(config);
 
 	const serviceDateTripsMap = new Map<string, Set<string>>();
 	const passingTripsMap = new Map<string, Set<string>>();
+	const seqStaticMetadataPromise = isRegion(config.region, "AU/SEQ") ? loadSEQStaticMetadata(ctx) : Promise.resolve();
 
 	ctx.augmented.timer.start("refreshStaticCache:preloadTripUpdates");
 	const allUpdates = gtfs.getRealtimeTripUpdates();
@@ -87,70 +230,10 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 			ctx.augmented.tripUpdatesCache.set(tripId, [update]);
 		}
 	}
-	ctx.augmented.timer.stop("refreshStaticCache:preloadTripUpdates");
-
-	if (isRegion(config.region, "AU/SEQ")) {
-		ctx.augmented.timer.start("refreshStaticCache:loadQRTPlaces");
-		try {
-			newRawCache.regionSpecific.SEQ.qrtPlaces = await getPlacesWithCache(config);
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			logger.error("Failed to load QRT places: " + message, {
-				module: "cache",
-				function: "refreshStaticCache",
-			});
-			newRawCache.regionSpecific.SEQ.qrtPlaces = [];
-		}
-		ctx.augmented.timer.stop("refreshStaticCache:loadQRTPlaces");
-		logger.debug(`Loaded ${newRawCache.regionSpecific.SEQ.qrtPlaces.length} QRT places.`, {
-			module: "cache",
-			function: "refreshStaticCache",
-		});
-		ctx.augmented.timer.start("refreshStaticCache:loadQRTStations");
-		try {
-			newRawCache.regionSpecific.SEQ.qrtStations = await getQRTStations(config);
-			const stationLookup = buildQRTStationLookupMap(newRawCache.regionSpecific.SEQ.qrtStations);
-			for (const place of newRawCache.regionSpecific.SEQ.qrtPlaces ?? []) {
-				const station =
-					stationLookup.get(place.qrt_PlaceCode) ??
-					stationLookup.get(normalizeQRTStationLookupKey(place.Title));
-				if (station && !station.qrt_PlaceCode) {
-					station.qrt_PlaceCode = place.qrt_PlaceCode;
-				}
-			}
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			logger.error("Failed to load QRT stations: " + message, {
-				module: "cache",
-				function: "refreshStaticCache",
-			});
-			newRawCache.regionSpecific.SEQ.qrtStations = {};
-		}
-		ctx.augmented.timer.stop("refreshStaticCache:loadQRTStations");
-		logger.debug(`Loaded ${Object.keys(newRawCache.regionSpecific.SEQ.qrtStations).length} QRT stations.`, {
-			module: "cache",
-			function: "refreshStaticCache",
-		});
-		ctx.augmented.timer.start("refreshStaticCache:loadRailwayFacilities");
-		try {
-			newRawCache.regionSpecific.SEQ.railwayStationFacilities = await getRailwayStationFacilities(config);
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			logger.error("Failed to load railway station facilities: " + message, {
-				module: "cache",
-				function: "refreshStaticCache",
-			});
-			newRawCache.regionSpecific.SEQ.railwayStationFacilities = [];
-		}
-		ctx.augmented.timer.stop("refreshStaticCache:loadRailwayFacilities");
-		logger.debug(
-			`Loaded ${newRawCache.regionSpecific.SEQ.railwayStationFacilities.length} railway station facilities.`,
-			{
-				module: "cache",
-				function: "refreshStaticCache",
-			},
-		);
+	for (const [tripId, updates] of ctx.augmented.tripUpdatesCache) {
+		ctx.augmented.tripUpdateSignatures.set(tripId, tripUpdateSignature(updates));
 	}
+	ctx.augmented.timer.stop("refreshStaticCache:preloadTripUpdates");
 
 	ctx.augmented.timer.start("refreshStaticCache:loadStops");
 	const stops = gtfs.getStops();
@@ -194,6 +277,7 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	for (const t of allTrips) {
 		newRawCache.tripServiceIds!.set(t.trip_id, t.service_id);
 	}
+	for (const trip of trips) newAugmentedCache.rawTripsRec.set(trip.trip_id, trip);
 	ctx.augmented.timer.stop("refreshStaticCache:loadTrips");
 	logger.debug(`Loaded ${trips.length} considered trips out of ${allTrips.length} total.`, {
 		module: "cache",
@@ -220,7 +304,7 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 	ctx.augmented.timer.stop("refreshStaticCache:processShapes");
 
 	ctx.augmented.timer.start("refreshStaticCache:ensureServiceCapacity");
-	await ensureServiceCapacityData(config);
+	await Promise.all([ensureServiceCapacityData(config), seqStaticMetadataPromise]);
 	ctx.augmented.timer.stop("refreshStaticCache:ensureServiceCapacity");
 
 	ctx.augmented.timer.start("refreshStaticCache:prepAugmentStops");
@@ -350,7 +434,6 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 		ctx.augmented.timer.stop("refreshStaticCache:seqDiagram");
 	}
 
-
 	ctx.augmented.timer.stop("refreshStaticCache");
 	ctx.augmented.timer.log("Static Cache Refresh", true);
 
@@ -365,41 +448,15 @@ export async function refreshStaticCache(gtfs: GTFS, config: TraxConfig): Promis
 export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: CacheContext): Promise<void> {
 	const startTotal = Date.now();
 	ctx.augmented.timer.start("refreshRealtimeCache");
-	const { raw: rawCache, augmented: augmentedCache } = ctx;
+	const { augmented: augmentedCache } = ctx;
 
 	logger.debug("Refreshing realtime GTFS cache...", {
 		module: "cache",
 		function: "refreshRealtimeCache",
 	});
 
-	let additionalPromises: Promise<unknown>[] = [];
-
 	if (isRegion(config.region, "AU/SEQ")) {
-		logger.debug("Refreshing qrtTrains cache...", {
-			module: "cache",
-			function: "refreshRealtimeCache",
-		});
-		additionalPromises.push(
-			new Promise<void>((rs) => {
-				getCurrentQRTravelTrains(ctx)
-					.then((trains: QRTTravelTrip[]) => {
-						rawCache.regionSpecific.SEQ.qrtTrains = trains;
-						logger.debug(`Loaded ${rawCache.regionSpecific.SEQ.qrtTrains.length} QRT trains.`, {
-							module: "cache",
-							function: "refreshRealtimeCache",
-						});
-						rs();
-					})
-					.catch((error) => {
-						const message = error instanceof Error ? error.message : String(error);
-						logger.error("Failed to load QRT trains: " + message, {
-							module: "cache",
-							function: "refreshRealtimeCache",
-						});
-						rs();
-					});
-			}),
-		);
+		refreshQRTTrainsInBackground(ctx);
 	}
 
 	logger.debug("Loading realtime updates...", {
@@ -408,8 +465,19 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 	});
 
 	const tripUpdates = gtfs.getRealtimeTripUpdates();
-	const vehiclePositions = gtfs.getRealtimeVehiclePositions();
-	ctx.augmented.tripUpdatesCache.clear();
+	const allTripUpdates = tripUpdates.concat(ctx.raw.injectedTripUpdates ?? []);
+	const nextUpdatesByTrip = new Map<string, typeof allTripUpdates>();
+	for (const update of allTripUpdates) {
+		const tripId = update.trip.trip_id;
+		if (!tripId) continue;
+		const updates = nextUpdatesByTrip.get(tripId);
+		if (updates) updates.push(update);
+		else nextUpdatesByTrip.set(tripId, [update]);
+	}
+	const nextSignatures = new Map<string, string>();
+	for (const [tripId, updates] of nextUpdatesByTrip) {
+		nextSignatures.set(tripId, tripUpdateSignature(updates));
+	}
 
 	logger.debug(
 		`Loaded ${tripUpdates.length} trip updates with ${tripUpdates.flatMap((v) => v.stop_time_updates).length} stop time updates.`,
@@ -418,19 +486,25 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 			function: "refreshRealtimeCache",
 		},
 	);
-	logger.debug(`Loaded ${vehiclePositions.length} vehicle positions.`, {
-		module: "cache",
-		function: "refreshRealtimeCache",
-	});
-
-	const updatedTripIds = new Set(
-		tripUpdates
-			.concat(ctx.raw.injectedTripUpdates ?? [])
-			.map((u) => u.trip.trip_id)
-			.filter((id) => id !== undefined),
+	const availableTripIds = new Set<string>();
+	for (const tripId of augmentedCache.tripsRec.keys()) {
+		if (augmentedCache.rawTripsRec.has(tripId)) availableTripIds.add(tripId);
+	}
+	const updatedTripIds = findChangedRealtimeTripIds(
+		augmentedCache.tripUpdateSignatures,
+		nextSignatures,
+		availableTripIds,
 	);
+	augmentedCache.tripUpdatesCache.clear();
+	for (const [tripId, updates] of nextUpdatesByTrip) {
+		augmentedCache.tripUpdatesCache.set(tripId, updates);
+	}
+	augmentedCache.tripUpdateSignatures.clear();
+	for (const [tripId, signature] of nextSignatures) {
+		augmentedCache.tripUpdateSignatures.set(tripId, signature);
+	}
 
-	logger.debug(`Found ${updatedTripIds.size} trips with realtime updates.`, {
+	logger.debug(`Found ${updatedTripIds.size} augmented trips with changed realtime state.`, {
 		module: "cache",
 		function: "refreshRealtimeCache",
 	});
@@ -441,12 +515,10 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 			function: "refreshRealtimeCache",
 		});
 	} else {
-		for (const update of tripUpdates.concat(ctx.raw.injectedTripUpdates ?? [])) {
-			const tripId = update.trip.trip_id;
-			if (!tripId) continue;
-			const cached = ctx.augmented.tripUpdatesCache.get(tripId);
-			if (cached) cached.push(update);
-			else ctx.augmented.tripUpdatesCache.set(tripId, [update]);
+		const reusableTrips = new Map<string, ReturnType<typeof augmentTrip>>();
+		for (const tripId of updatedTripIds) {
+			const existing = augmentedCache.tripsRec.get(tripId);
+			if (existing) reusableTrips.set(tripId, existing);
 		}
 		resetRealtimeCacheIncremental(updatedTripIds, ctx);
 
@@ -455,10 +527,12 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 			function: "refreshRealtimeCache",
 		});
 
-		const tripsToUpdate = getTrips(ctx).filter((t) => updatedTripIds.has(t.trip_id));
+		const tripsToUpdate = Array.from(updatedTripIds, (tripId) => augmentedCache.rawTripsRec.get(tripId)).filter(
+			(t): t is Trip => t !== undefined,
+		);
 
 		const updatedAugmented = await processWithProgress(tripsToUpdate, "Re-augmenting updated trips", (t) =>
-			augmentTrip(t, ctx),
+			augmentTrip(t, ctx, ctx.augmented.tripUpdatesCache, reusableTrips.get(t.trip_id)),
 		);
 
 		for (const at of updatedAugmented) {
@@ -529,6 +603,7 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 	if (isRegion(ctx.config.region, "CA/GTHA")) {
 		await updateGTHAPlatforms(ctx, gtfs);
 	}
+	prunePreviousVehicleInfo(augmentedCache.instancesRec.keys());
 
 	ctx.augmented.timer.stop("refreshRealtimeCache");
 	ctx.augmented.timer.log("Realtime Cache Refresh", true);
@@ -537,7 +612,6 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		module: "cache",
 		function: "refreshRealtimeCache",
 	});
-	await Promise.all(additionalPromises);
 }
 
 async function processWithProgress<T, U>(
@@ -588,3 +662,8 @@ async function processWithProgress<T, U>(
 
 	return results;
 }
+
+export const _test = {
+	tripUpdateSignature,
+	findChangedRealtimeTripIds,
+};

@@ -17,8 +17,27 @@ export type PlatformData = {
 	[stopId: string]: PlatformDefinition[] | unknown | undefined;
 };
 
+/** True when `platforms.json` rows are loaded (not only e.g. `srtData` from QR Travel). */
+export function seqPlatformDefinitionsPresent(pd: PlatformData | undefined): boolean {
+	if (!pd) return false;
+	for (const k of Object.keys(pd)) {
+		if (k === "srtData") continue;
+		const v = pd[k as keyof PlatformData];
+		if (Array.isArray(v)) return true;
+	}
+	return false;
+}
+
+function platformsJsonPath(region: TraxConfig["region"]): string {
+	/* SEQ static data lives under region-specific/seq/, not au/seq/. */
+	if (region === "AU/SEQ" || region.startsWith("AU/SEQ/"))
+		return "region-specific/seq/platforms.json";
+	return `region-specific/${region.toLowerCase()}/platforms.json`;
+}
+
 export function getPlatformData(config: TraxConfig): PlatformData {
-	const DATA_PATH = `region-specific/${config.region.toLowerCase()}/platforms.json`;
-	if (!config.region || !hasDataFile(DATA_PATH)) return {};
+	if (!config.region || config.region === "none") return {};
+	const DATA_PATH = platformsJsonPath(config.region);
+	if (!hasDataFile(DATA_PATH)) return {};
 	return JSON.parse(loadDataFile(DATA_PATH)) as PlatformData;
 }

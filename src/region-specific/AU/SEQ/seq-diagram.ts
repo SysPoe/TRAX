@@ -4,7 +4,6 @@ import type { AugmentedStopTime } from "../../../utils/augmentedStopTime.js";
 import type { AugmentedTrip, AugmentedTripInstance } from "../../../utils/augmentedTrip.js";
 import { isRegion } from "../../../config.js";
 import { getServiceDayStart } from "../../../utils/time.js";
-import { getGtfs } from "../../../gtfsInterfaceLayer.js";
 
 /** Minimum time (seconds) between clearing the terminal on leg A and first departure of leg B for a feasible link. */
 export const SEQ_DIAGRAM_MIN_TURNAROUND_SEC = 90;
@@ -15,7 +14,10 @@ const SEQ_PARENT_MAX_PRECursors_SEC = 6 * 3600;
 const KEY_SEP = "\x1e";
 
 /** GTFS `block_id` is usually empty for SEQ rail; expose inferred diagram id through the same field when absent. */
-function effectiveBlockId(rawBlockId: string | null | undefined, syntheticDiagramBlockId: string | null): string | null {
+function effectiveBlockId(
+	rawBlockId: string | null | undefined,
+	syntheticDiagramBlockId: string | null,
+): string | null {
 	if (rawBlockId != null && String(rawBlockId).trim() !== "") return String(rawBlockId);
 	return syntheticDiagramBlockId;
 }
@@ -37,6 +39,8 @@ export type SeqDiagramTopology = {
 	nextTripId: Map<string, string>;
 	/** Inferred diagram block (string). Distinct from raw GTFS `Trip.block_id` (also string) when the feed supplies it. */
 	blockIdByTripId: Map<string, string>;
+	/** Raw GTFS block ids captured while building the topology, avoiding a native trip lookup per augmented trip. */
+	rawBlockIdByTripId?: Map<string, string | null>;
 	tripCount: number;
 	linkedPrevCount: number;
 };
@@ -89,8 +93,7 @@ function pickPredecessorForSuccessor(
 	let valid = (candidates ?? []).filter(
 		(c) => c.trip_id !== self_id && c.last_dep + SEQ_DIAGRAM_MIN_TURNAROUND_SEC < first_dep,
 	);
-	if (maxLayoverFromFirst != null)
-		valid = valid.filter((c) => first_dep - c.last_dep <= maxLayoverFromFirst);
+	if (maxLayoverFromFirst != null) valid = valid.filter((c) => first_dep - c.last_dep <= maxLayoverFromFirst);
 	if (!valid.length) return null;
 
 	let maxLast = valid[0]!.last_dep;
@@ -146,9 +149,10 @@ function tripIdNumericPrefix(trip_id: string): number {
  * Keep one successor per predecessor — prefer the smallest *forward* jump in the numeric trip_id prefix
  * (Translink encodes diagram order there, e.g. 37326341 → 37326342).
  */
-function resolveSharedPredecessors(
-	prevDraft: Map<string, string>,
-): { prevTripId: Map<string, string>; nextTripId: Map<string, string> } {
+function resolveSharedPredecessors(prevDraft: Map<string, string>): {
+	prevTripId: Map<string, string>;
+	nextTripId: Map<string, string>;
+} {
 	const byPred = new Map<string, string[]>();
 	for (const [trip, pred] of prevDraft.entries()) {
 		let arr = byPred.get(pred);
@@ -190,9 +194,17 @@ function resolveSharedPredecessors(
 
 /**
  * Build prev/next trip links for Translink SEQ from static GTFS only.
- * One full-table scan of stop_times; O(trips + stop_times) with hash maps.
+ *
+ * Static refresh passes its per-trip raw stop-time cache, which avoids materializing
+ * the entire native stop_times table after augmentation has already loaded every
+ * considered trip. The optional argument keeps the public standalone helper
+ * backwards compatible.
  */
-export function buildSeqDiagramTopology(gtfs: GTFS, trips: Trip[]): SeqDiagramTopology {
+export function buildSeqDiagramTopology(
+	gtfs: GTFS,
+	trips: Trip[],
+	stopTimesByTrip?: ReadonlyMap<string, StopTime[]>,
+): SeqDiagramTopology {
 	const stops = gtfs.getStops();
 	const parentByStop = new Map<string, string>();
 	for (const s of stops) {
@@ -200,20 +212,26 @@ export function buildSeqDiagramTopology(gtfs: GTFS, trips: Trip[]): SeqDiagramTo
 	}
 	const parentOfStop = (id: string) => parentByStop.get(id) ?? "";
 
-	const consideredIds = new Set<string>();
-	for (const t of trips) consideredIds.add(t.trip_id);
+	let byTrip: ReadonlyMap<string, StopTime[]>;
+	if (stopTimesByTrip) {
+		byTrip = stopTimesByTrip;
+	} else {
+		const consideredIds = new Set<string>();
+		for (const t of trips) consideredIds.add(t.trip_id);
 
-	const byTrip = new Map<string, StopTime[]>();
-	const allStopTimes = gtfs.getStopTimes();
-	for (let i = 0; i < allStopTimes.length; i++) {
-		const st = allStopTimes[i]!;
-		if (!consideredIds.has(st.trip_id)) continue;
-		let arr = byTrip.get(st.trip_id);
-		if (!arr) {
-			arr = [];
-			byTrip.set(st.trip_id, arr);
+		const materializedByTrip = new Map<string, StopTime[]>();
+		const allStopTimes = gtfs.getStopTimes();
+		for (let i = 0; i < allStopTimes.length; i++) {
+			const st = allStopTimes[i]!;
+			if (!consideredIds.has(st.trip_id)) continue;
+			let arr = materializedByTrip.get(st.trip_id);
+			if (!arr) {
+				arr = [];
+				materializedByTrip.set(st.trip_id, arr);
+			}
+			arr.push(st);
 		}
-		arr.push(st);
+		byTrip = materializedByTrip;
 	}
 
 	const tripEnds = new Map<string, SeqDiagramTripEnd>();
@@ -221,8 +239,13 @@ export function buildSeqDiagramTopology(gtfs: GTFS, trips: Trip[]): SeqDiagramTo
 		const sts = byTrip.get(t.trip_id);
 		if (!sts?.length) continue;
 		if (sts.length < 2) continue;
-		sts.sort((a, b) => a.stop_sequence - b.stop_sequence);
-		const end = extractTripEnds(t, sts, parentOfStop);
+		// Raw stop times are normally already ordered by augmentTrip. Avoid
+		// mutating caller-owned cache arrays when a standalone caller is not.
+		const sorted =
+			sts[0]!.stop_sequence <= sts[sts.length - 1]!.stop_sequence
+				? sts
+				: [...sts].sort((a, b) => a.stop_sequence - b.stop_sequence);
+		const end = extractTripEnds(t, sorted, parentOfStop);
 		if (end) tripEnds.set(t.trip_id, end);
 	}
 
@@ -270,6 +293,11 @@ export function buildSeqDiagramTopology(gtfs: GTFS, trips: Trip[]): SeqDiagramTo
 	const linkedPrev = prevTripId.size;
 
 	const blockIdByTripId = new Map<string, string>();
+	const rawBlockIdByTripId = new Map<string, string | null>();
+	for (const trip of trips) {
+		const blockId = trip.block_id;
+		rawBlockIdByTripId.set(trip.trip_id, blockId != null && String(blockId).trim() !== "" ? String(blockId) : null);
+	}
 	const root = new Map<string, string>();
 
 	function findRoot(t: string): string {
@@ -312,6 +340,7 @@ export function buildSeqDiagramTopology(gtfs: GTFS, trips: Trip[]): SeqDiagramTo
 		prevTripId,
 		nextTripId,
 		blockIdByTripId,
+		rawBlockIdByTripId,
 		tripCount: tripEnds.size,
 		linkedPrevCount: linkedPrev,
 	};
@@ -340,19 +369,12 @@ function findInstanceIdForDate(ctx: CacheContext, trip_id: string, serviceDate: 
 }
 
 /** Absolute epoch seconds for first departure or last departure of an instance (handles date offsets on stop times). type only used for first/last discrimination via stop index. */
-function endpointAbsUnix(
-	ctx: CacheContext,
-	inst: AugmentedTripInstance,
-	which: "first" | "last",
-): number | null {
+function endpointAbsUnix(ctx: CacheContext, inst: AugmentedTripInstance, which: "first" | "last"): number | null {
 	const sts = inst.stopTimes;
 	if (!sts.length) return null;
 	const st: AugmentedStopTime = which === "first" ? sts[0]! : sts[sts.length - 1]!;
 	const sec =
-		st.actual_departure_time ??
-		st.scheduled_departure_time ??
-		st.actual_arrival_time ??
-		st.scheduled_arrival_time;
+		st.actual_departure_time ?? st.scheduled_departure_time ?? st.actual_arrival_time ?? st.scheduled_arrival_time;
 	if (sec == null) return null;
 	const off =
 		which === "first"
@@ -373,7 +395,7 @@ function applyDiagramFieldsToAugmentedTrip(
 	const p = top.prevTripId.get(trip.trip_id) ?? null;
 	const n = top.nextTripId.get(trip.trip_id) ?? null;
 
-	const rawGtfsBlock = (ctx.gtfs ?? getGtfs()).getTrips({ trip_id: trip.trip_id })[0]?.block_id ?? null;
+	const rawGtfsBlock = top.rawBlockIdByTripId?.get(trip.trip_id) ?? null;
 	const blockForTrip = effectiveBlockId(rawGtfsBlock, bid);
 	trip.block_id = blockForTrip;
 
@@ -462,7 +484,7 @@ export function revalidateSeqDiagramRealtimeEdges(ctx: CacheContext, affectedTri
 
 /** Build topology and attach to ctx (static refresh, AU/SEQ). */
 export function buildAndApplySeqDiagram(ctx: CacheContext, gtfs: GTFS, trips: Trip[]): SeqDiagramTopology {
-	const top = buildSeqDiagramTopology(gtfs, trips);
+	const top = buildSeqDiagramTopology(gtfs, trips, ctx.augmented.rawStopTimesCache);
 	applySeqDiagramToInstances(ctx, top);
 	revalidateSeqDiagramRealtimeEdges(ctx, null);
 	return top;

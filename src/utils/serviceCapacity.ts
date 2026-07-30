@@ -45,6 +45,6 @@ export function addSCI(inst: AugmentedTripInstance, ctx: CacheContext, config: T
 }
 
 export function addSC(trip: AugmentedTrip, ctx: CacheContext, config: TraxConfig): AugmentedTrip {
-	trip.instances = trip.instances.map((v) => addSCI(v, ctx, config));
+	for (const instance of trip.instances) addSCI(instance, ctx, config);
 	return trip;
 }

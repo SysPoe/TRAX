@@ -19,10 +19,23 @@ function resolveVehicleInfo(inst: AugmentedTripInstance, ctx: CacheContext, conf
 	return { vehicle_model: null, vehicle_id: null };
 }
 
-const previousVehicleInfo: Record<string, VehicleInfo> = {};
+const previousVehicleInfo = new Map<string, VehicleInfo>();
+
+/** Static generations invalidate every instance id and all retained vehicle metadata. */
+export function clearPreviousVehicleInfo(): void {
+	previousVehicleInfo.clear();
+}
+
+/** Drop metadata for instances no longer present after an incremental refresh. */
+export function prunePreviousVehicleInfo(validInstanceIds: Iterable<string>): void {
+	const valid = new Set(validInstanceIds);
+	for (const instanceId of previousVehicleInfo.keys()) {
+		if (!valid.has(instanceId)) previousVehicleInfo.delete(instanceId);
+	}
+}
 
 export function mergeVehicleInfo(inst: AugmentedTripInstance, incoming: VehicleInfo): VehicleInfo {
-	const prev = previousVehicleInfo[inst.instance_id];
+	const prev = previousVehicleInfo.get(inst.instance_id);
 	const vehicle_id = incoming.vehicle_id ?? prev?.vehicle_id ?? inst.vehicle_id ?? null;
 	const vehicle_model = incoming.vehicle_model ?? prev?.vehicle_model ?? inst.vehicle_model ?? null;
 	const passenger_cars = incoming.passenger_cars ?? prev?.passenger_cars ?? inst.passenger_cars ?? null;
@@ -31,14 +44,14 @@ export function mergeVehicleInfo(inst: AugmentedTripInstance, incoming: VehicleI
 	const consist = incoming.consist ?? prev?.consist ?? inst.consist ?? null;
 	const details = incoming.details ?? prev?.details ?? inst.vehicle_details ?? null;
 
-	previousVehicleInfo[inst.instance_id] = {
+	previousVehicleInfo.set(inst.instance_id, {
 		vehicle_id,
 		vehicle_model,
 		passenger_cars,
 		scheduled_passenger_cars,
 		consist,
 		details,
-	};
+	});
 
 	return { vehicle_id, vehicle_model, passenger_cars, scheduled_passenger_cars, consist, details };
 }
@@ -72,6 +85,6 @@ export function addVehicleModel(
 }
 
 export function addVehicleModelTrip(trip: AugmentedTrip, ctx: CacheContext, config: TraxConfig): AugmentedTrip {
-	trip.instances = trip.instances.map((i) => addVehicleModel(i, ctx, config));
+	for (const instance of trip.instances) addVehicleModel(instance, ctx, config);
 	return trip;
 }

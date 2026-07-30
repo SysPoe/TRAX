@@ -5,6 +5,7 @@ import { loadDataFile } from "../../../../utils/fs.js";
 import { parseTimeWithConfig, getLocalISOString } from "../../../../utils/time.js";
 import type { TraxConfig } from "../../../../config.js";
 import type { CacheContext } from "../../../../cache/index.js";
+import { getPlatformData } from "../../../../utils/platformData.js";
 
 export interface QRTSRTStop {
 	placeName: string;
@@ -39,7 +40,9 @@ function getSRTData(ctx: CacheContext): SRTEntry[] {
 			travelTrain: v.travelTrain,
 		})),
 	);
-	if (!ctx.raw.regionSpecific.SEQ.platformData) ctx.raw.regionSpecific.SEQ.platformData = {};
+	if (!ctx.raw.regionSpecific.SEQ.platformData) {
+		ctx.raw.regionSpecific.SEQ.platformData = getPlatformData(ctx.config);
+	}
 	ctx.raw.regionSpecific.SEQ.platformData.srtData = data;
 	return data;
 }

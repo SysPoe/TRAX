@@ -9,11 +9,7 @@ import { addVehicleModel, addVehicleModelTrip } from "../utils/vehicleModel.js";
 import { getServiceDayStart } from "../utils/time.js";
 import { patchSeqDiagramOntoAugmentedTrip } from "../region-specific/AU/SEQ/seq-diagram.js";
 import ensureQRTEnabled from "../region-specific/AU/SEQ/qr-travel/enabled.js";
-import type {
-	QRTPlace,
-	QRTStations,
-	QRTTravelTrip,
-} from "../region-specific/AU/SEQ/qr-travel/types.js";
+import type { QRTPlace, QRTStations, QRTTravelTrip } from "../region-specific/AU/SEQ/qr-travel/types.js";
 import type { RailwayStationFacility } from "../region-specific/AU/SEQ/facilities-types.js";
 import { getGtfs } from "../gtfsInterfaceLayer.js";
 import type { CacheContext } from "./types.js";
@@ -193,9 +189,11 @@ export function getAugmentedTrips(ctx: CacheContext, trip_id?: string): Augmente
 		}
 		return [];
 	}
-	return Array.from(augmented.tripsRec.values()).map((v) =>
-		addVehicleModelTrip(addSC(v, ctx, context.config), ctx, context.config),
-	);
+	const trips = Array.from(augmented.tripsRec.values());
+	for (const trip of trips) {
+		addVehicleModelTrip(addSC(trip, ctx, context.config), ctx, context.config);
+	}
+	return trips;
 }
 
 export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string): AugmentedTripInstance | null {

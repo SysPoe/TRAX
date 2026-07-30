@@ -2,7 +2,10 @@ import logger from "./logger.js";
 import { cacheFileExists, deleteCacheFile, loadCacheFile, writeCacheFile } from "./fs.js";
 import * as cache from "../cache/index.js";
 import * as qdf from "qdf-gtfs";
-import { isRegion } from "../config.js";
+import { isRegion, type TraxConfig } from "../config.js";
+import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import {
 	findPath as wasmFindPath,
 	resetGraph,
@@ -37,9 +40,11 @@ interface NetworkData {
 	matrix: SRTMatrix;
 	adjacency: Record<string, string[]>;
 	lastUpdated: number;
+	staticFingerprint?: string;
 }
 
 let _networkData: NetworkData | null = null;
+let expectedStaticFingerprint: string | null = null;
 const CACHE_FILE = "network_topology.json";
 const MAX_CACHE_AGE_DAYS = 7;
 
@@ -51,10 +56,14 @@ function loadNetworkData(ctx: cache.CacheContext): NetworkData | null {
 		try {
 			const data = JSON.parse(loadCacheFile(CACHE_FILE, cacheDir));
 			const ageDays = (Date.now() - (data.lastUpdated ?? 0)) / (1000 * 60 * 60 * 24);
-			if (ageDays < MAX_CACHE_AGE_DAYS) {
+			if (
+				expectedStaticFingerprint !== null &&
+				data.staticFingerprint === expectedStaticFingerprint &&
+				ageDays < MAX_CACHE_AGE_DAYS
+			) {
 				return data;
 			}
-			logger.debug("Network topology cache expired, regenerating...");
+			logger.debug("Network topology cache is stale for the loaded static feed, regenerating...");
 		} catch (e) {
 			logger.error("Failed to parse network topology cache: " + (e as Error).message);
 		}
@@ -193,7 +202,12 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		if (!adjacency["SC"].includes("KE")) adjacency["SC"].push("KE");
 	}
 
-	const result = { matrix, adjacency, lastUpdated: Date.now() };
+	const result = {
+		matrix,
+		adjacency,
+		lastUpdated: Date.now(),
+		staticFingerprint: expectedStaticFingerprint ?? undefined,
+	};
 	writeCacheFile(CACHE_FILE, JSON.stringify(result), ctx.config.cacheDir);
 	timer.stop("SRT:generateNetworkData");
 	return result;
@@ -436,10 +450,7 @@ export type StopTimeWithPassingMeta = qdf.StopTime & {
 	_segmentEmus?: number[];
 };
 
-export function findPassingStopTimes(
-	stopTimes: qdf.StopTime[],
-	ctx: cache.CacheContext,
-): StopTimeWithPassingMeta[] {
+export function findPassingStopTimes(stopTimes: qdf.StopTime[], ctx: cache.CacheContext): StopTimeWithPassingMeta[] {
 	if (stopTimes.length === 0) return [];
 
 	const sortedStopTimes = [...stopTimes].sort((a, b) => (a.stop_sequence ?? 0) - (b.stop_sequence ?? 0));
@@ -531,10 +542,54 @@ export default {
 	findPassingStopTimes,
 };
 
-/** Clears in-memory rail topology and deletes the on-disk cache so the next load rebuilds from current GTFS. */
+/**
+ * Fingerprint the exact QDF static ZIP cache entries plus TRAX's static stop
+ * actions. QDF keys those files by md5(url|headers), so stat identity is cheap
+ * to obtain and changes whenever QDF replaces a cached feed.
+ */
+export function getStaticFeedFingerprint(config: TraxConfig): string | null {
+	const hash = crypto.createHash("sha256");
+	hash.update(config.region);
+	hash.update(JSON.stringify(config.mergeStops));
+	hash.update(JSON.stringify(config.updateStopActions));
+
+	for (const feed of config.urls) {
+		const feedConfig = typeof feed === "string" ? { url: feed } : feed;
+		const keySource = feedConfig.headers
+			? `${feedConfig.url}|${JSON.stringify(feedConfig.headers)}`
+			: feedConfig.url;
+		const cacheName = crypto.createHash("md5").update(keySource).digest("hex");
+		const cachePath = path.join(config.cacheDir, cacheName);
+		try {
+			const stat = fs.statSync(cachePath, { bigint: true });
+			hash.update(cacheName);
+			hash.update(String(stat.size));
+			hash.update(String(stat.mtimeNs));
+		} catch {
+			return null;
+		}
+	}
+
+	return hash.digest("hex");
+}
+
+/**
+ * Reset process-local graph state for a newly loaded static generation while
+ * preserving the disk cache only when it can be matched to that exact feed.
+ */
+export function resetNetworkTopologyForStaticFeed(config: TraxConfig): void {
+	_networkData = null;
+	bfsCache.clear();
+	loggedMissingSRT.clear();
+	expectedStaticFingerprint = getStaticFeedFingerprint(config);
+	if (expectedStaticFingerprint === null) deleteCacheFile(CACHE_FILE, config.cacheDir);
+}
+
+/** Clears in-memory rail topology and deletes the on-disk cache explicitly. */
 export function invalidateNetworkTopologyCache(cacheDir: string): void {
 	_networkData = null;
 	bfsCache.clear();
 	loggedMissingSRT.clear();
+	expectedStaticFingerprint = null;
 	deleteCacheFile(CACHE_FILE, cacheDir);
 }

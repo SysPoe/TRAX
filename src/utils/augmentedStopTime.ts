@@ -3,7 +3,7 @@ import { AugmentedStop } from "./augmentedStop.js";
 import * as cache from "../cache/index.js";
 import { findPassingStopTimes } from "./SRT.js";
 import { interpolateTimes as wasmInterpolateTimes } from "../../build/release.js";
-import { getPlatformData as loadPlatformData } from "./platformData.js";
+import { getPlatformData as loadPlatformData, seqPlatformDefinitionsPresent } from "./platformData.js";
 import type { PlatformData, PlatformDefinition } from "./platformData.js";
 import { ServiceCapacity } from "./serviceCapacity.js";
 import { getServiceDayStart } from "./time.js";
@@ -550,16 +550,10 @@ export function augmentStopTimes(
 					row.actual_arrival_time = wallArr;
 					row.actual_departure_time = wallDep;
 					row.actual_arrival_dates = getServiceDateArray(
-						addDaysToDateString(
-							serviceDate,
-							offArr - dateOffsets.actArr,
-						),
+						addDaysToDateString(serviceDate, offArr - dateOffsets.actArr),
 					);
 					row.actual_departure_dates = getServiceDateArray(
-						addDaysToDateString(
-							serviceDate,
-							offDep - dateOffsets.actDep,
-						),
+						addDaysToDateString(serviceDate, offDep - dateOffsets.actDep),
 					);
 					row.actual_arrival_date_offset = offArr - dateOffsets.actArr;
 					row.actual_departure_date_offset = offDep - dateOffsets.actDep;
@@ -696,14 +690,15 @@ export function augmentStopTimes(
 	}
 	ctx.augmented.timer.stop("augmentStopTimes:processStops");
 
-	let platformData: PlatformData = {};
-	if (ctx.raw.regionSpecific.SEQ.platformData === undefined) {
-		ctx.raw.regionSpecific.SEQ.platformData = loadPlatformData(ctx.config);
+	let pd = ctx.raw.regionSpecific.SEQ.platformData;
+	if (!seqPlatformDefinitionsPresent(pd)) {
+		const loadedPlatforms = loadPlatformData(ctx.config);
+		ctx.raw.regionSpecific.SEQ.platformData = { ...loadedPlatforms, ...(pd ?? {}) };
+		pd = ctx.raw.regionSpecific.SEQ.platformData;
 	}
-	platformData = ctx.raw.regionSpecific.SEQ.platformData;
 
 	ctx.augmented.timer.start("augmentStopTimes:assignPlatformSides");
-	const result = assignPlatformSides(finalStops, platformData);
+	const result = assignPlatformSides(finalStops, pd ?? {});
 	ctx.augmented.timer.stop("augmentStopTimes:assignPlatformSides");
 
 	ctx.augmented.timer.stop("augmentStopTimes");

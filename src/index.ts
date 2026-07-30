@@ -136,7 +136,7 @@ export class TRAX {
 		await loadStatic(gtfs, this.config);
 
 		globalTimer.start("refreshStatic:refreshCache");
-		this.ctx = await cache.refreshStaticCache(gtfs, this.config);
+		this.ctx = await cache.refreshStaticCache(gtfs, this.config, this.ctx);
 		globalTimer.stop("refreshStatic:refreshCache");
 		globalTimer.stop("refreshStatic");
 	}

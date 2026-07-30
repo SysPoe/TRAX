@@ -27,6 +27,7 @@ type CapacityIndex = Map<string, Map<string, Map<string, Map<string, Map<string,
 
 let capacityIndex: CapacityIndex = new Map();
 let loaded = false;
+let loadedFileIdentity: string | null = null;
 
 function getMap<K, V>(map: Map<K, V>, key: K, factory: () => V): V {
 	let val = map.get(key);
@@ -62,6 +63,12 @@ export async function ensureServiceCapacityData(config: TraxConfig): Promise<voi
 		}
 	}
 
+	if (fs.existsSync(FILE_PATH)) {
+		const stat = fs.statSync(FILE_PATH, { bigint: true });
+		const identity = `${FILE_PATH}:${stat.size}:${stat.mtimeNs}`;
+		if (loaded && loadedFileIdentity === identity) return;
+		loadedFileIdentity = identity;
+	}
 	loadServiceCapacityData(cacheDir);
 }
 
@@ -388,7 +395,7 @@ export function addSCI(inst: AugmentedTripInstance, ctx: CacheContext, config: T
 }
 
 export function addSC(trip: AugmentedTrip, ctx: CacheContext, config: TraxConfig): AugmentedTrip {
-	trip.instances = trip.instances.map((v) => addSCI(v, ctx, config));
+	for (const instance of trip.instances) addSCI(instance, ctx, config);
 	return trip;
 }
 

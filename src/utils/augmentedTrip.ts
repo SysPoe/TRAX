@@ -74,6 +74,7 @@ export function augmentTrip(
 	trip: qdf.Trip,
 	ctx: cache.CacheContext,
 	tripUpdatesCache?: Map<string, qdf.RealtimeTripUpdate[]>,
+	reuseInstancesFrom?: AugmentedTrip,
 ): AugmentedTrip {
 	ctx.augmented.timer.start("augmentTrip");
 	const todayEpoch = dateToEpochDays(getToday(ctx.config));
@@ -222,6 +223,15 @@ export function augmentTrip(
 	ctx.augmented.timer.start("augmentTrip:createInstances");
 	const instances: AugmentedTripInstance[] = [];
 	const coveredServiceDates = new Set<string>();
+	const reusableScheduledInstances = new Map<string, AugmentedTripInstance>();
+	for (const instance of reuseInstancesFrom?.instances ?? []) {
+		if (
+			instance.realtime_update === null &&
+			instance.schedule_relationship === qdf.TripScheduleRelationship.SCHEDULED
+		) {
+			reusableScheduledInstances.set(instance.serviceDate, instance);
+		}
+	}
 
 	for (const update of updates) {
 		const rel = update.trip.schedule_relationship;
@@ -245,7 +255,8 @@ export function augmentTrip(
 
 	for (const sDate of serviceDates) {
 		if (!coveredServiceDates.has(sDate)) {
-			instances.push(createInstance(sDate, null, qdf.TripScheduleRelationship.SCHEDULED));
+			const reusable = reusableScheduledInstances.get(sDate);
+			instances.push(reusable ?? createInstance(sDate, null, qdf.TripScheduleRelationship.SCHEDULED));
 		}
 	}
 	ctx.augmented.timer.stop("augmentTrip:createInstances");

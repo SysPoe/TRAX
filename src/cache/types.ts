@@ -51,6 +51,7 @@ export type AugmentedCache = {
 	stopTimes: { [trip_id: string]: AugmentedStopTime[] };
 	baseStopTimes: { [trip_id: string]: AugmentedStopTime[] };
 	rawStopTimesCache: Map<string, qdf.StopTime[]>;
+	rawTripsRec: Map<string, Trip>;
 	tripsRec: Map<string, AugmentedTrip>;
 	stopsRec: Map<string, AugmentedStop>;
 
@@ -69,9 +70,12 @@ export type AugmentedCache = {
 	stopDeparturesCached: Map<string, Map<string, AugmentedStopTime[]>>;
 	instancesRec: Map<string, AugmentedTripInstance>;
 	tripUpdatesCache: Map<string, qdf.RealtimeTripUpdate[]>;
+	tripUpdateSignatures: Map<string, string>;
 	timer: Timer;
 	/** AU/SEQ: inferred trip chains (prev/next) from static topology + realtime gate */
 	seqDiagram?: SeqDiagramTopology;
+	/** AU/SEQ QRT refresh currently in flight; used for stale-while-revalidate deduplication. */
+	qrtRefreshInFlight?: Promise<void>;
 };
 
 export type CacheContext = {
