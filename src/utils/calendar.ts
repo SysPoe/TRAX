@@ -1,80 +1,28 @@
-import { getRawTrips, getCalendars, getCalendarDates, CacheContext } from "../cache/index.js";
+import type { QualifiedEntityId } from "qdf-gtfs";
+import type { CacheContext } from "../cache/index.js";
 import { getEpochDayFromServiceDate } from "./time.js";
-import {
-	clearStaticData,
-	addWasmCalendar,
-	addWasmCalendarDate,
-	addWasmTripRecord,
-	getServiceDatesForServiceIdWasm,
-} from "../../build/release.js";
-
-/**
- * Caches filtered service-date arrays by (service_id, minEpochDay, maxEpochDay).
- * Many trips share the same service_id, so computing once per service_id per horizon
- * avoids redundant WASM calls and epoch-day filtering across the entire trip set.
- * Cleared by syncCalendarsToWasm at the start of each static refresh.
- */
-const serviceDateCache = new Map<string, string[]>();
+import { entityKey } from "../identity.js";
 
 export function getServiceDatesByTrip(
-	trip_id: string,
-	_ctx: CacheContext,
-	minEpochDay: number = -1,
-	maxEpochDay: number = -1,
+	trip: QualifiedEntityId,
+	ctx: CacheContext,
+	minEpochDay = -1,
+	maxEpochDay = -1,
 ): string[] {
-	const service_id = _ctx.raw.tripServiceIds?.get(trip_id);
-	if (!service_id) return [];
-
-	const cacheKey = `${service_id}|${minEpochDay}|${maxEpochDay}`;
-	const cached = serviceDateCache.get(cacheKey);
-	if (cached !== undefined) return cached;
-
-	const dates = getServiceDatesForServiceIdWasm(service_id);
-	const hasMin = minEpochDay >= 0;
-	const hasMax = maxEpochDay >= 0;
-
-	let result: string[];
-	if (!hasMin && !hasMax) {
-		result = dates;
-	} else {
-		result = dates.filter((date) => {
-			const epochDay = getEpochDayFromServiceDate(date);
-			if (!Number.isFinite(epochDay)) return false;
-			if (hasMin && epochDay < minEpochDay) return false;
-			if (hasMax && epochDay > maxEpochDay) return false;
-			return true;
-		});
-	}
-
-	serviceDateCache.set(cacheKey, result);
+	if (!ctx.gtfs) return [];
+	const cacheKey = `${entityKey(trip)}|${minEpochDay}|${maxEpochDay}`;
+	const cached = ctx.runtimeState.serviceDates.get(cacheKey);
+	if (cached) return cached;
+	const dates = ctx.gtfs.getServiceDatesByTrip(trip);
+	const result = dates.filter((date) => {
+		const epochDay = getEpochDayFromServiceDate(date);
+		return Number.isFinite(epochDay) && (minEpochDay < 0 || epochDay >= minEpochDay) && (maxEpochDay < 0 || epochDay <= maxEpochDay);
+	});
+	ctx.runtimeState.serviceDates.set(cacheKey, result);
 	return result;
 }
 
-export function syncCalendarsToWasm(ctx: CacheContext) {
-	// Invalidate per-service_id date cache so a fresh WASM state is reflected.
-	serviceDateCache.clear();
-	clearStaticData();
-	const calendars = getCalendars(ctx);
-	for (const c of calendars) {
-		addWasmCalendar(
-			c.service_id,
-			!!c.monday,
-			!!c.tuesday,
-			!!c.wednesday,
-			!!c.thursday,
-			!!c.friday,
-			!!c.saturday,
-			!!c.sunday,
-			String(c.start_date),
-			String(c.end_date),
-		);
-	}
-	const calendarDates = getCalendarDates(ctx);
-	for (const cd of calendarDates) {
-		addWasmCalendarDate(cd.service_id, String(cd.date), cd.exception_type ?? 0);
-	}
-	const trips = getRawTrips(ctx);
-	for (const t of trips) {
-		addWasmTripRecord(t.trip_id, t.service_id);
-	}
+/** QDF owns the feed-qualified calendar snapshot; only runtime memoization is reset here. */
+export function syncCalendarsToWasm(ctx: CacheContext): void {
+	ctx.runtimeState.serviceDates.clear();
 }

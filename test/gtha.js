@@ -1,4 +1,4 @@
-import TRAXClass, { logger, LogLevel, PRESETS } from "../dist/index.js";
+import TRAXClass, { createCaGthaNetwork, logger, LogLevel } from "../dist/index.js";
 import { config } from "dotenv";
 import { existsSync } from "node:fs";
 
@@ -9,7 +9,7 @@ if (existsSync(".env")) {
 async function main() {
 	console.log("Loading gtfs data...");
 
-	const TRAX = new TRAXClass(PRESETS["CA/GTHA"](process.env.METROLINX_KEY));
+	const TRAX = new TRAXClass(createCaGthaNetwork(process.env.METROLINX_KEY));
 	logger.setLevel(LogLevel.DEBUG);
 
 	let start_static = Date.now();
@@ -19,7 +19,7 @@ async function main() {
 	const loadTime = (end_static - start_static) / 1000;
 	console.log(`\nGTFS data loaded successfully in ${loadTime.toFixed(2)}s.\n`);
 
-	const stop = TRAX.getAugmentedStops("TRTO")[0];
+	const stop = TRAX.getAugmentedStops({ feedId: "via", localId: "TRTO" })[0];
 	if (!stop) {
 		console.error("Could not find stop TRTO");
 		process.exit(1);

@@ -24,14 +24,15 @@
     "strip-ansi": "^7.1.2"
   },
   "scripts": {
-    "build": "npm run asbuild && tsc",
-    "prepare": "npm run build",
+    "build": "nub run asbuild && tsc",
+    "prepare": "nub run build",
     "format": "prettier . --write --config .prettierrc",
     "asbuild:debug": "asc assembly/index.ts --target debug --enable threads --initialMemory 100 --maximumMemory 1000 --sharedMemory",
     "asbuild:release": "asc assembly/index.ts --target release --enable threads --initialMemory 100 --maximumMemory 1000 --sharedMemory",
-    "asbuild": "npm run asbuild:debug && npm run asbuild:release",
-    "test": "npm run build && node test/translink.js",
-    "test:seq-diagram": "npm run build && node test/seq-diagram-benchmark.js"
+    "asbuild": "nub run asbuild:debug && nub run asbuild:release",
+    "test": "nub run build && node test/architecture.js",
+    "test:performance-regressions": "nub run build && node test/performance-regressions.js",
+    "test:seq-diagram": "nub run build && node test/seq-diagram-benchmark.js"
   },
   "files": [
     "dist",
@@ -42,6 +43,13 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    }
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "nub",
+      "version": "^0.6.0",
+      "onFail": "warn"
     }
   }
 }

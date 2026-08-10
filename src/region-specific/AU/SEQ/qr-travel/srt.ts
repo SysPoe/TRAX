@@ -4,8 +4,10 @@ import type { QRTStationDetails, QRTTrainMovementDTO } from "./types.js";
 import { loadDataFile } from "../../../../utils/fs.js";
 import { parseTimeWithConfig, getLocalISOString } from "../../../../utils/time.js";
 import type { TraxConfig } from "../../../../config.js";
+import { getDefaultTimeZone } from "../../../../config.js";
 import type { CacheContext } from "../../../../cache/index.js";
 import { getPlatformData } from "../../../../utils/platformData.js";
+import { getSeqState } from "../../../../plugins/seq-state.js";
 
 export interface QRTSRTStop {
 	placeName: string;
@@ -28,7 +30,7 @@ export interface QRTSRTStop {
 }
 
 function getSRTData(ctx: CacheContext): SRTEntry[] {
-	const cached = ctx.raw.regionSpecific.SEQ.platformData?.srtData;
+	const cached = getSeqState(ctx).platformData?.srtData;
 	if (cached) {
 		return cached as SRTEntry[];
 	}
@@ -40,10 +42,11 @@ function getSRTData(ctx: CacheContext): SRTEntry[] {
 			travelTrain: v.travelTrain,
 		})),
 	);
-	if (!ctx.raw.regionSpecific.SEQ.platformData) {
-		ctx.raw.regionSpecific.SEQ.platformData = getPlatformData(ctx.config);
+	const seqState = getSeqState(ctx);
+	if (!seqState.platformData) {
+		seqState.platformData = getPlatformData(ctx.config);
 	}
-	ctx.raw.regionSpecific.SEQ.platformData.srtData = data;
+	seqState.platformData.srtData = data;
 	return data;
 }
 
@@ -57,7 +60,7 @@ function clampPassingBetweenEndpoints(estMs: number | undefined, a: number, b: n
 function getDelay(delaySecs: number | null = null, departureTime: string | null, config: TraxConfig) {
 	if (delaySecs === null || departureTime === null) return { delayString: "scheduled", delayClass: "scheduled" };
 
-	let departsInSecs = Math.round(parseTimeWithConfig(departureTime, config.timezone) - Date.now()) / 1000;
+	let departsInSecs = Math.round(parseTimeWithConfig(departureTime, getDefaultTimeZone(config)) - Date.now()) / 1000;
 	departsInSecs = Math.round(departsInSecs / 60) * 60;
 	const roundedDelay = delaySecs ? Math.round(delaySecs / 60) * 60 : null;
 	const delayString =
@@ -120,8 +123,8 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 	const config = ctx.config;
 	function calcDelay(actual?: string, planned?: string): number | null {
 		if (!actual || !planned || actual === "0001-01-01T00:00:00" || planned === "0001-01-01T00:00:00") return null;
-		const a = parseTimeWithConfig(actual, config.timezone);
-		const p = parseTimeWithConfig(planned, config.timezone);
+		const a = parseTimeWithConfig(actual, getDefaultTimeZone(config));
+		const p = parseTimeWithConfig(planned, getDefaultTimeZone(config));
 		if (isNaN(a) || isNaN(p)) return null;
 		return Math.round((a - p) / 1000);
 	}
@@ -164,9 +167,9 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 				config,
 			);
 			if (from.ActualDeparture && from.ActualDeparture !== "0001-01-01T00:00:00") {
-				prevTime = parseTimeWithConfig(from.ActualDeparture, config.timezone);
+				prevTime = parseTimeWithConfig(from.ActualDeparture, getDefaultTimeZone(config));
 			} else if (from.PlannedDeparture && from.PlannedDeparture !== "0001-01-01T00:00:00") {
-				prevTime = parseTimeWithConfig(from.PlannedDeparture, config.timezone);
+				prevTime = parseTimeWithConfig(from.PlannedDeparture, getDefaultTimeZone(config));
 			} else {
 				prevTime = null;
 			}
@@ -179,9 +182,9 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 		if (seg) {
 			let toTimeMs: number | null = null;
 			if (to.ActualArrival && to.ActualArrival !== "0001-01-01T00:00:00") {
-				toTimeMs = parseTimeWithConfig(to.ActualArrival, config.timezone);
+				toTimeMs = parseTimeWithConfig(to.ActualArrival, getDefaultTimeZone(config));
 			} else if (to.PlannedArrival && to.PlannedArrival !== "0001-01-01T00:00:00") {
-				toTimeMs = parseTimeWithConfig(to.PlannedArrival, config.timezone);
+				toTimeMs = parseTimeWithConfig(to.PlannedArrival, getDefaultTimeZone(config));
 			}
 			let estPass: number | undefined =
 				prevTime && seg.travelTrain ? prevTime + seg.travelTrain * 60000 : undefined;
@@ -202,7 +205,7 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 					actualArrival: to.ActualArrival,
 					actualDeparture: to.ActualDeparture,
 					srtMinutes: seg.travelTrain,
-					estimatedPassingTime: estPassDate ? getLocalISOString(estPassDate, config.timezone) : undefined,
+					estimatedPassingTime: estPassDate ? getLocalISOString(estPassDate, getDefaultTimeZone(config)) : undefined,
 					arrivalDelaySeconds: calcDelay(to.ActualArrival, to.PlannedArrival),
 					departureDelaySeconds: calcDelay(to.ActualDeparture, to.PlannedDeparture),
 				},
@@ -258,9 +261,9 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 			let fromTime = prevTime;
 			let toTime: number | null = null;
 			if (to.ActualArrival && to.ActualArrival !== "0001-01-01T00:00:00") {
-				toTime = parseTimeWithConfig(to.ActualArrival, config.timezone);
+				toTime = parseTimeWithConfig(to.ActualArrival, getDefaultTimeZone(config));
 			} else if (to.PlannedArrival && to.PlannedArrival !== "0001-01-01T00:00:00") {
-				toTime = parseTimeWithConfig(to.PlannedArrival, config.timezone);
+				toTime = parseTimeWithConfig(to.PlannedArrival, getDefaultTimeZone(config));
 			}
 
 			let scaleFactor = 1.0;
@@ -287,7 +290,7 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 					}
 
 					let estPassDate = estPass ? new Date(estPass) : undefined;
-					let estPassStr = estPassDate ? getLocalISOString(estPassDate, config.timezone) : undefined;
+					let estPassStr = estPassDate ? getLocalISOString(estPassDate, getDefaultTimeZone(config)) : undefined;
 
 					pushSRT(
 						result,
@@ -336,9 +339,9 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 				config,
 			);
 			if (to.ActualDeparture && to.ActualDeparture !== "0001-01-01T00:00:00") {
-				prevTime = parseTimeWithConfig(to.ActualDeparture, config.timezone);
+				prevTime = parseTimeWithConfig(to.ActualDeparture, getDefaultTimeZone(config));
 			} else if (to.PlannedDeparture && to.PlannedDeparture !== "0001-01-01T00:00:00") {
-				prevTime = parseTimeWithConfig(to.PlannedDeparture, config.timezone);
+				prevTime = parseTimeWithConfig(to.PlannedDeparture, getDefaultTimeZone(config));
 			} else {
 				prevTime = toTime;
 			}
@@ -362,9 +365,9 @@ export function expandWithSRTPassingStops(stoppingMovements: QRTTrainMovementDTO
 			config,
 		);
 		if (to.ActualDeparture && to.ActualDeparture !== "0001-01-01T00:00:00") {
-			prevTime = parseTimeWithConfig(to.ActualDeparture, config.timezone);
+			prevTime = parseTimeWithConfig(to.ActualDeparture, getDefaultTimeZone(config));
 		} else if (to.PlannedDeparture && to.PlannedDeparture !== "0001-01-01T00:00:00") {
-			prevTime = parseTimeWithConfig(to.PlannedDeparture, config.timezone);
+			prevTime = parseTimeWithConfig(to.PlannedDeparture, getDefaultTimeZone(config));
 		}
 	}
 	return result;

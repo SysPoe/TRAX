@@ -1,7 +1,8 @@
 import { CacheContext, getAugmentedTripInstance } from "../../../cache/index.js";
 import { loadDataFile } from "../../../utils/fs.js";
 import logger from "../../../utils/logger.js";
-import { fetchTrainData, getPrevTrainData } from "./realtime.js";
+import { entityKey } from "../../../identity.js";
+import { getPluginState } from "../../../plugins/types.js";
 
 // --- Configuration & Constants ---
 
@@ -105,26 +106,32 @@ export interface CarriageSegment {
 
 // --- State & Caching ---
 
-let cachedToken: { token: string; expiry: number } | null = null;
-let cachedBooking: { booking: any; timestamp: number } | null = null;
-const layoutCache = new Map<string, { data: CarriageLayoutRes; timestamp: number }>();
-const consistCache = new Map<string, { data: CarriageLayoutRes; timestamp: number }>();
+type ViaConsistState = {
+	cachedToken: { token: string; expiry: number } | null;
+	cachedBooking: { booking: any; timestamp: number } | null;
+	layoutCache: Map<string, { data: CarriageLayoutRes; timestamp: number }>;
+	consistCache: Map<string, { data: CarriageLayoutRes; timestamp: number }>;
+	tripsData: Record<string, { from: string; to: string; stations: { station: string; code: string }[] }> | null;
+};
 
-let tripsData: Record<string, { from: string; to: string; stations: { station: string; code: string }[] }> | null =
-	null;
+function getState(ctx: CacheContext): ViaConsistState {
+	return getPluginState(ctx, "ca-via:consist", () => ({
+		cachedToken: null, cachedBooking: null, layoutCache: new Map(), consistCache: new Map(), tripsData: null,
+	}));
+}
 
-function getTripsData() {
-	if (!tripsData) {
-		tripsData = JSON.parse(loadDataFile("viatrips.json"));
+function getTripsData(state: ViaConsistState) {
+	if (!state.tripsData) {
+		state.tripsData = JSON.parse(loadDataFile("viatrips.json"));
 	}
-	return tripsData!;
+	return state.tripsData!;
 }
 
 // --- API Functions ---
 
-async function getToken(): Promise<string> {
-	if (cachedToken && cachedToken.expiry > Date.now() + TOKEN_SAFETY_MS) {
-		return cachedToken.token;
+async function getToken(state: ViaConsistState): Promise<string> {
+	if (state.cachedToken && state.cachedToken.expiry > Date.now() + TOKEN_SAFETY_MS) {
+		return state.cachedToken.token;
 	}
 
 	logger.debug("Fetching new VIA Reservia token...", { module: "VIA", function: "getToken" });
@@ -140,7 +147,7 @@ async function getToken(): Promise<string> {
 
 	if (!res.ok) throw new Error(`Failed to get VIA token: ${res.statusText}`);
 	const data: TokenRes = await res.json();
-	cachedToken = {
+	state.cachedToken = {
 		token: data.access_token,
 		expiry: Date.now() + data.expires_in * 1000,
 	};
@@ -195,9 +202,9 @@ async function getDummySegment(token: string): Promise<any> {
 	};
 }
 
-async function getBooking(token: string): Promise<any> {
-	if (cachedBooking && cachedBooking.timestamp > Date.now() - BOOKING_CACHE_MS) {
-		return cachedBooking.booking;
+async function getBooking(token: string, state: ViaConsistState): Promise<any> {
+	if (state.cachedBooking && state.cachedBooking.timestamp > Date.now() - BOOKING_CACHE_MS) {
+		return state.cachedBooking.booking;
 	}
 
 	logger.debug("Creating dummy VIA booking for layout requests...", { module: "VIA", function: "getBooking" });
@@ -242,7 +249,7 @@ async function getBooking(token: string): Promise<any> {
 		})),
 	};
 
-	cachedBooking = { booking, timestamp: Date.now() };
+	state.cachedBooking = { booking, timestamp: Date.now() };
 	return booking;
 }
 
@@ -254,11 +261,13 @@ async function getBooking(token: string): Promise<any> {
  * @param toStation VIA station code (e.g. MTRL)
  */
 export async function getCarriageLayout(
+	ctx: CacheContext,
 	tripNumber: string | number,
 	date: string,
 	fromStation?: string,
 	toStation?: string,
 ): Promise<CarriageLayoutRes> {
+	const state = getState(ctx);
 	const tripNumStr = tripNumber.toString();
 	if (/^\d{8}$/.test(date)) {
 		date = `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`;
@@ -266,7 +275,7 @@ export async function getCarriageLayout(
 
 	// Try to find stations if not provided
 	if (!fromStation || !toStation) {
-		const data = getTripsData();
+		const data = getTripsData(state);
 		const tripEntry = data[tripNumStr];
 		if (!tripEntry) throw new Error(`Station codes for trip ${tripNumStr} not found and not provided.`);
 		fromStation = fromStation || tripEntry.stations[0].code;
@@ -274,13 +283,13 @@ export async function getCarriageLayout(
 	}
 
 	const cacheKey = `${tripNumStr}|${date}|${fromStation}|${toStation}`;
-	const cached = layoutCache.get(cacheKey);
+	const cached = state.layoutCache.get(cacheKey);
 	if (cached && cached.timestamp > Date.now() - LAYOUT_CACHE_MS) {
 		return cached.data;
 	}
 
-	const token = await getToken();
-	const booking = await getBooking(token);
+	const token = await getToken(state);
+	const booking = await getBooking(token, state);
 
 	logger.debug(`Fetching carriage layout for VIA ${tripNumStr} on ${date}...`, {
 		module: "VIA",
@@ -358,7 +367,7 @@ export async function getCarriageLayout(
 	}
 
 	const data: CarriageLayoutRes = await res.json();
-	layoutCache.set(cacheKey, { data, timestamp: Date.now() });
+	state.layoutCache.set(cacheKey, { data, timestamp: Date.now() });
 	return data;
 }
 
@@ -368,7 +377,8 @@ export async function getCarriageLayout(
  */
 export async function getViaConsist(instance_id: string, ctx: CacheContext): Promise<CarriageLayoutRes | null> {
 	try {
-		const cached = consistCache.get(instance_id);
+		const state = getState(ctx);
+		const cached = state.consistCache.get(instance_id);
 		if (cached && cached.timestamp > Date.now() - CONSIST_CACHE_MS) {
 			return cached.data;
 		}
@@ -405,7 +415,7 @@ export async function getViaConsist(instance_id: string, ctx: CacheContext): Pro
 		if (!firstStop || !lastStop) return null;
 
 		const getViaCode = (stopId: string): string | null => {
-			const stop = ctx.augmented.stopsRec.get(stopId);
+			const stop = ctx.augmented.stopsRec.get(entityKey({ feedId: instance.feed_id, localId: stopId }));
 			if (!stop) return null;
 			return stop.stop_code || null;
 		};
@@ -414,6 +424,7 @@ export async function getViaConsist(instance_id: string, ctx: CacheContext): Pro
 		const toStation = getViaCode(lastStop.scheduled_stop_id || "");
 
 		const layout = await getCarriageLayout(
+			ctx,
 			tripNumber,
 			serviceDate,
 			fromStation || undefined,
@@ -424,7 +435,7 @@ export async function getViaConsist(instance_id: string, ctx: CacheContext): Pro
 			return null;
 		}
 
-		consistCache.set(instance_id, { data: layout, timestamp: Date.now() });
+		state.consistCache.set(instance_id, { data: layout, timestamp: Date.now() });
 		return layout;
 	} catch (e) {
 		logger.error(`Error in getViaConsist for ${instance_id}: ${(e as any).message ?? e}`, {

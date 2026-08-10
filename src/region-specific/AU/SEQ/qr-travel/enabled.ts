@@ -1,6 +1,6 @@
-import { isRegion, TraxConfig } from "../../../../config.js";
+import { hasPlugin, type TraxConfig } from "../../../../config.js";
 
 export default function ensureQRTEnabled(config: TraxConfig) {
-	if (!isRegion(config.region, "AU/SEQ"))
+	if (!hasPlugin(config, "au-seq"))
 		throw new Error("QRT Travel functions are only available in the SEQ region configuration.");
 }

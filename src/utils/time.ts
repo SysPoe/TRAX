@@ -1,6 +1,16 @@
-import { TraxConfig } from "../config.js";
+export type ServiceDate = string & { readonly __serviceDate: unique symbol };
+export type GtfsTime = number & { readonly __gtfsTime: unique symbol };
+export type Instant = string & { readonly __instant: unique symbol };
 
-const serviceDayStartCache = new Map<string, number>();
+export function asServiceDate(value: string): ServiceDate {
+	if (!/^\d{8}$/.test(value)) throw new Error(`Invalid ServiceDate '${value}'`);
+	return value as ServiceDate;
+}
+
+export function asGtfsTime(value: number): GtfsTime {
+	if (!Number.isInteger(value) || value < 0) throw new Error(`Invalid GtfsTime '${value}'`);
+	return value as GtfsTime;
+}
 
 export function timeDiff(t1: string, t2: string): string {
 	const [h1, m1] = t1.split(":").map(Number);
@@ -80,9 +90,6 @@ export function getTimezoneOffsetSeconds(timezone: string, date: Date = new Date
 
 export function getServiceDayStart(serviceDate: string, timezone: string): number {
 	if (!serviceDate || serviceDate.length < 8) return 0;
-	const cacheKey = `${serviceDate}|${timezone}`;
-	const cached = serviceDayStartCache.get(cacheKey);
-	if (cached !== undefined) return cached;
 	const y = parseInt(serviceDate.slice(0, 4), 10);
 	const m = parseInt(serviceDate.slice(4, 6), 10) - 1;
 	const d = parseInt(serviceDate.slice(6, 8), 10);
@@ -97,12 +104,14 @@ export function getServiceDayStart(serviceDate: string, timezone: string): numbe
 	const offsetAtResult = getTimezoneOffsetSeconds(timezone, new Date(result * 1000));
 	if (offsetAtResult !== offsetAtUtcMidnight) {
 		const adjusted = (utcMidnight - offsetAtResult * 1000) / 1000;
-		serviceDayStartCache.set(cacheKey, adjusted);
 		return adjusted;
 	}
-
-	serviceDayStartCache.set(cacheKey, result);
 	return result;
+}
+
+export function serviceTimeToInstant(serviceDate: ServiceDate | string, serviceTime: GtfsTime | number, timezone: string): Instant {
+	const epochSeconds = getServiceDayStart(serviceDate, timezone) + serviceTime;
+	return new Date(epochSeconds * 1000).toISOString() as Instant;
 }
 
 function epochDaysToServiceDate(epochDays: number): string {
@@ -156,26 +165,16 @@ export function parseTimeWithConfig(dateStr: string, timezone: string): number {
 	if (dateStr.match(/(Z|[+-]\d{2}:?\d{2})$/)) {
 		return new Date(dateStr).getTime();
 	}
-	// Add offset from config
-	const now = new Date();
-	const offsetMs = getTimezoneOffsetSeconds(timezone, now) * 1000;
-	const dummyDate = new Date(dateStr + "Z"); // Treat as UTC first
-	// Shift back by offset to get actual UTC time
-	return dummyDate.getTime() - offsetMs;
+	const wallClockAsUtc = new Date(`${dateStr}Z`).getTime();
+	if (!Number.isFinite(wallClockAsUtc)) return 0;
+	let candidate = wallClockAsUtc - getTimezoneOffsetSeconds(timezone, new Date(wallClockAsUtc)) * 1000;
+	const resolvedOffset = getTimezoneOffsetSeconds(timezone, new Date(candidate));
+	candidate = wallClockAsUtc - resolvedOffset * 1000;
+	return candidate;
 }
 
-export function parseBrisbaneTime(dateStr: string, assume: string = "+10:00"): number {
-	if (!dateStr) return 0;
-	// Check if it has timezone (Z or +HH:MM or -HH:MM)
-	if (dateStr.match(/(Z|[+-]\d{2}:?\d{2})$/)) {
-		return new Date(dateStr).getTime();
-	}
-	return new Date(dateStr + assume).getTime();
-}
-
-export function getToday(config: TraxConfig): string {
-	const offsetMs = getTimezoneOffsetSeconds(config.timezone) * 1000;
-	return new Date(Date.now() + offsetMs).toISOString().slice(0, 10).replace(/-/g, "");
+export function getToday(timezone: string): string {
+	return getServiceDate(new Date(), timezone);
 }
 
 export default {
@@ -188,5 +187,5 @@ export default {
 	getServiceDate,
 	getLocalISOString,
 	parseTimeWithConfig,
-	parseBrisbaneTime,
+	serviceTimeToInstant,
 };

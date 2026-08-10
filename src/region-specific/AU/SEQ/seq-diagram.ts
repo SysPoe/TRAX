@@ -2,8 +2,9 @@ import type { GTFS, StopTime, Trip } from "qdf-gtfs";
 import type { CacheContext } from "../../../cache/index.js";
 import type { AugmentedStopTime } from "../../../utils/augmentedStopTime.js";
 import type { AugmentedTrip, AugmentedTripInstance } from "../../../utils/augmentedTrip.js";
-import { isRegion } from "../../../config.js";
+import { getFeedTimeZone, hasPlugin } from "../../../config.js";
 import { getServiceDayStart } from "../../../utils/time.js";
+import { entityKey, parseEntityKey } from "../../../identity.js";
 
 /** Minimum time (seconds) between clearing the terminal on leg A and first departure of leg B for a feasible link. */
 export const SEQ_DIAGRAM_MIN_TURNAROUND_SEC = 90;
@@ -359,7 +360,8 @@ function expandSeqDiagramNeighborhood(top: SeqDiagramTopology, seeds: Set<string
 }
 
 function findInstanceIdForDate(ctx: CacheContext, trip_id: string, serviceDate: string): string | null {
-	const t = ctx.augmented.tripsRec.get(trip_id);
+	const feedId = ctx.config.network.feeds[0].id;
+	const t = ctx.augmented.tripsRec.get(entityKey({ feedId, localId: trip_id }));
 	if (!t) return null;
 	for (const inst of t.instances) {
 		if (inst.serviceDate === serviceDate) return inst.instance_id;
@@ -380,7 +382,7 @@ function endpointAbsUnix(ctx: CacheContext, inst: AugmentedTripInstance, which: 
 		which === "first"
 			? (st.actual_departure_date_offset ?? st.scheduled_departure_date_offset ?? 0)
 			: (st.actual_departure_date_offset ?? st.scheduled_departure_date_offset ?? 0);
-	const base = getServiceDayStart(st.service_date, ctx.config.timezone);
+	const base = getServiceDayStart(st.service_date, getFeedTimeZone(ctx.config, st.feed_id));
 	return base + off * 86400 + sec;
 }
 
@@ -418,7 +420,7 @@ function applyDiagramFieldsToAugmentedTrip(
  */
 export function patchSeqDiagramOntoAugmentedTrip(ctx: CacheContext, trip: AugmentedTrip): void {
 	const top = ctx.augmented.seqDiagram;
-	if (!top || !isRegion(ctx.config.region, "AU/SEQ")) return;
+	if (!top || !hasPlugin(ctx.config, "au-seq")) return;
 	applyDiagramFieldsToAugmentedTrip(ctx, top, trip, true);
 	revalidateSeqDiagramRealtimeEdges(ctx, new Set([trip.trip_id]));
 }
@@ -438,18 +440,18 @@ export function applySeqDiagramToInstances(ctx: CacheContext, top: SeqDiagramTop
  * trip would need to depart before the current trip clears the terminal (+ minimum turnaround).
  */
 export function revalidateSeqDiagramRealtimeEdges(ctx: CacheContext, affectedTripIds: Set<string> | null): void {
-	if (!isRegion(ctx.config.region, "AU/SEQ")) return;
+	if (!hasPlugin(ctx.config, "au-seq")) return;
 	const top = ctx.augmented.seqDiagram;
 	if (!top) return;
 
 	const tripIds = affectedTripIds
 		? expandSeqDiagramNeighborhood(top, affectedTripIds)
-		: new Set(ctx.augmented.tripsRec.keys());
+		: new Set(Array.from(ctx.augmented.tripsRec.values(), (trip) => trip.trip_id));
 
 	const minGap = SEQ_DIAGRAM_MIN_TURNAROUND_SEC;
 
 	for (const tripId of tripIds) {
-		const trip = ctx.augmented.tripsRec.get(tripId);
+		const trip = ctx.augmented.tripsRec.get(entityKey({ feedId: ctx.config.network.feeds[0].id, localId: tripId }));
 		if (!trip) continue;
 
 		for (const inst of trip.instances) {
@@ -484,7 +486,13 @@ export function revalidateSeqDiagramRealtimeEdges(ctx: CacheContext, affectedTri
 
 /** Build topology and attach to ctx (static refresh, AU/SEQ). */
 export function buildAndApplySeqDiagram(ctx: CacheContext, gtfs: GTFS, trips: Trip[]): SeqDiagramTopology {
-	const top = buildSeqDiagramTopology(gtfs, trips, ctx.augmented.rawStopTimesCache);
+	const stopTimesByLocalTrip = new Map(
+		trips.map((trip) => [
+			trip.trip_id,
+			ctx.augmented.rawStopTimesCache.get(entityKey({ feedId: trip.feed_id, localId: trip.trip_id })) ?? [],
+		]),
+	);
+	const top = buildSeqDiagramTopology(gtfs, trips, stopTimesByLocalTrip);
 	applySeqDiagramToInstances(ctx, top);
 	revalidateSeqDiagramRealtimeEdges(ctx, null);
 	return top;
@@ -495,14 +503,15 @@ export function buildAndApplySeqDiagram(ctx: CacheContext, gtfs: GTFS, trips: Tr
  * then revalidate realtime feasibility.
  */
 export function refreshSeqDiagramAfterRealtimeBatch(ctx: CacheContext, updatedTripIds: Set<string>): void {
-	if (!isRegion(ctx.config.region, "AU/SEQ")) return;
+	if (!hasPlugin(ctx.config, "au-seq")) return;
 	const top = ctx.augmented.seqDiagram;
 	if (!top || updatedTripIds.size === 0) return;
 
-	const neighborhood = expandSeqDiagramNeighborhood(top, updatedTripIds);
+	const localTripIds = new Set(Array.from(updatedTripIds, (key) => parseEntityKey(key).localId));
+	const neighborhood = expandSeqDiagramNeighborhood(top, localTripIds);
 
 	for (const tripId of neighborhood) {
-		const trip = ctx.augmented.tripsRec.get(tripId);
+		const trip = ctx.augmented.tripsRec.get(entityKey({ feedId: ctx.config.network.feeds[0].id, localId: tripId }));
 		if (!trip) continue;
 		applyDiagramFieldsToAugmentedTrip(ctx, top, trip, false);
 	}

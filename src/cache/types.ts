@@ -13,31 +13,14 @@ import type {
 import type { AugmentedStop } from "../utils/augmentedStop.js";
 import type { AugmentedTrip, AugmentedTripInstance, RunSeries } from "../utils/augmentedTrip.js";
 import type { AugmentedStopTime } from "../utils/augmentedStopTime.js";
-import type {
-	QRTPlace,
-	QRTStationDetails,
-	QRTStations,
-	QRTTravelTrip,
-} from "../region-specific/AU/SEQ/qr-travel/types.js";
 import type { Timer } from "../utils/timer.js";
-import type { RailwayStationFacility } from "../region-specific/AU/SEQ/facilities-types.js";
 import type { ExpressInfo, PassingStop } from "../utils/SRT.js";
-import type { PlatformData } from "../utils/platformData.js";
 import type { SeqDiagramTopology } from "../region-specific/AU/SEQ/seq-diagram.js";
 import type { TraxConfig } from "../config.js";
 import { LRUCache } from "./lruCache.js";
 import * as qdf from "qdf-gtfs";
 
 export type RawCache = {
-	regionSpecific: {
-		SEQ: {
-			qrtPlaces: QRTPlace[];
-			qrtStations: QRTStations;
-			qrtTrains: QRTTravelTrip[];
-			platformData?: PlatformData;
-			railwayStationFacilities: RailwayStationFacility[];
-		};
-	};
 	tripServiceIds?: Map<string, string>;
 	injectedTripUpdates?: RealtimeTripUpdate[];
 	injectedVehiclePositions?: RealtimeVehiclePosition[];
@@ -59,7 +42,7 @@ export type AugmentedCache = {
 	serviceDateTripsSet: Map<string, Set<string>>;
 	passingTrips: Map<string, string[]>;
 
-	shapes: { shape_id: string; route_id: string }[];
+	shapes: { feed_id: string; shape_id: string; route_id: string }[];
 
 	expressInfoCache: LRUCache<string, ExpressInfo[]>;
 	passingStopsCache: LRUCache<string, PassingStop[]>;
@@ -83,4 +66,19 @@ export type CacheContext = {
 	augmented: AugmentedCache;
 	config: TraxConfig;
 	gtfs?: GTFS;
+	/** Every mutable cache owned by plugins is scoped to this runtime. */
+	pluginState: Map<string, unknown>;
+	runtimeState: {
+		consideredRoutes: Map<string, boolean>;
+		consideredStops: Map<string, boolean>;
+		consideredTrips: Map<string, boolean>;
+		serviceDates: Map<string, string[]>;
+		dateOffsets: Map<string, string>;
+		serviceDateArrays: Map<string, string[]>;
+		previousVehicleInfo: Map<string, unknown>;
+		srtNetworkData: unknown | null;
+		srtExpectedStaticFingerprint: string | null;
+		srtBfs: Map<string, string[] | null>;
+		loggedMissingSrt: Set<string>;
+	};
 };

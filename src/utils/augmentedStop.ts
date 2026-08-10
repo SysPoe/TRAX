@@ -1,9 +1,9 @@
 import type * as qdf from "qdf-gtfs";
 import * as cache from "../cache/index.js";
-import { isRegion } from "../config.js";
 import { RailwayStationFacility } from "../region-specific/AU/SEQ/facilities-types.js";
 import { getQRTStationLookupKeys, normalizeQRTStationLookupKey } from "../region-specific/AU/SEQ/qr-travel/stations.js";
 import type { QRTPlace, QRTStationDetails } from "../region-specific/AU/SEQ/qr-travel/types.js";
+import { entityKey } from "../identity.js";
 
 export type AugmentedStop = qdf.Stop & {
 	regionSpecific?: {
@@ -32,9 +32,9 @@ export function augmentStop(stop: qdf.Stop, ctx: cache.CacheContext, augCtx?: Au
 
 	let childIds: string[] = [];
 	if (augCtx?.childrenByParent) {
-		childIds = augCtx.childrenByParent.get(stop.stop_id)?.map((s) => s.stop_id) ?? [];
+		childIds = augCtx.childrenByParent.get(entityKey({ feedId: stop.feed_id, localId: stop.stop_id }))?.map((s) => s.stop_id) ?? [];
 	} else {
-		const childStops = cache.getRawStops(ctx).filter((s) => s.parent_station === stop.stop_id);
+		const childStops = cache.getRawStops(ctx).filter((s) => s.feed_id === stop.feed_id && s.parent_station === stop.stop_id);
 		childIds = childStops.map((s) => s.stop_id);
 	}
 
@@ -45,8 +45,15 @@ export function augmentStop(stop: qdf.Stop, ctx: cache.CacheContext, augCtx?: Au
 		parent: null,
 		children: [],
 	};
+	for (const plugin of ctx.config.network.plugins) plugin.enrichStop?.(augmented, ctx, augCtx);
 
-	if (isRegion(ctx.config.region, "AU/SEQ")) {
+	// We'll populate parent/children later in cache.ts to avoid recursion and getters
+	return augmented;
+}
+
+export function enrichSeqStop(augmented: AugmentedStop, ctx: cache.CacheContext, augCtx?: AugmentationContext): AugmentedStop {
+	const stop = augmented;
+	{
 		let myPlace = null;
 		const trimmedStopName = stop.stop_name?.toLowerCase().replace("station", "").trim();
 		const normalizedStopName = stop.stop_name ? normalizeQRTStationLookupKey(stop.stop_name) : "";
@@ -102,6 +109,5 @@ export function augmentStop(stop: qdf.Stop, ctx: cache.CacheContext, augCtx?: Au
 		};
 	}
 
-	// We'll populate parent/children later in cache.ts to avoid recursion and getters
 	return augmented;
 }

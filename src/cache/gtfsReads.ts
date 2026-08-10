@@ -8,66 +8,70 @@ import type {
 	Stop,
 	StopTime,
 	Trip,
+	QualifiedEntityId,
 } from "qdf-gtfs";
 import { isConsideredTrip } from "../utils/considered.js";
-import { getGtfs } from "../gtfsInterfaceLayer.js";
 import type { CacheContext } from "./types.js";
 import * as qdf from "qdf-gtfs";
+import { entityKey } from "../identity.js";
 
 export function getCalendars(ctx: CacheContext, filter?: Partial<Calendar>): Calendar[] {
-	return (ctx.gtfs ?? getGtfs()).getCalendars(filter);
+	return requireGtfs(ctx).getCalendars(filter);
+}
+
+function requireGtfs(ctx: CacheContext) {
+	if (!ctx.gtfs) throw new Error("GTFS is not initialized for this network runtime");
+	return ctx.gtfs;
 }
 
 export function getCalendarDates(ctx: CacheContext, filter?: Partial<CalendarDate>): CalendarDate[] {
-	return (ctx.gtfs ?? getGtfs()).getCalendarDates(filter);
+	return requireGtfs(ctx).getCalendarDates(filter);
 }
 
-export function getTrips(ctx: CacheContext, filter?: Partial<Trip> | string): Trip[] {
-	const gtfs = ctx.gtfs ?? getGtfs();
-	const query = typeof filter === "string" ? { trip_id: filter } : filter;
-	return gtfs.getTrips(query).filter((v: Trip) => isConsideredTrip(v, gtfs));
+export function getTrips(ctx: CacheContext, filter?: Partial<Trip>): Trip[] {
+	const gtfs = requireGtfs(ctx);
+	return gtfs.getTrips(filter).filter((v: Trip) => isConsideredTrip(v, ctx));
 }
 
-export function getStops(ctx: CacheContext, filter?: Partial<Stop> | string): Stop[] {
-	const query = typeof filter === "string" ? { stop_id: filter } : filter;
-	return (ctx.gtfs ?? getGtfs()).getStops(query);
+export function getStops(ctx: CacheContext, filter?: Partial<Stop>): Stop[] {
+	return requireGtfs(ctx).getStops(filter);
 }
 
-export function getRoutes(ctx: CacheContext, filter?: Partial<Route> | string): Route[] {
-	const query = typeof filter === "string" ? { route_id: filter } : filter;
-	return (ctx.gtfs ?? getGtfs()).getRoutes(query);
+export function getRoutes(ctx: CacheContext, filter?: Partial<Route>): Route[] {
+	return requireGtfs(ctx).getRoutes(filter);
 }
 
-export function getTripUpdates(ctx: CacheContext, trip_id?: string): RealtimeTripUpdate[] {
-	if (trip_id) {
-		const cached = ctx.augmented.tripUpdatesCache.get(trip_id);
+export function getTripUpdates(ctx: CacheContext, trip?: QualifiedEntityId): RealtimeTripUpdate[] {
+	if (trip) {
+		const key = entityKey(trip);
+		const cached = ctx.augmented.tripUpdatesCache.get(key);
 		if (cached) return cached;
 	}
 
-	const gtfs = ctx.gtfs ?? getGtfs();
+	const gtfs = requireGtfs(ctx);
 	const updates = gtfs.getRealtimeTripUpdates();
 	const injected = ctx.raw.injectedTripUpdates ?? [];
 	const allUpdates = updates.concat(injected);
 
-	if (trip_id) {
-		const result = allUpdates.filter((v: RealtimeTripUpdate) => v.trip.trip_id == trip_id);
-		ctx.augmented.tripUpdatesCache.set(trip_id, result);
+	if (trip) {
+		const result = allUpdates.filter((v: RealtimeTripUpdate) => v.feed_id === trip.feedId && v.trip.trip_id === trip.localId);
+		ctx.augmented.tripUpdatesCache.set(entityKey(trip), result);
 		return result;
 	}
 	return allUpdates;
 }
 
-export function getVehiclePositions(ctx: CacheContext, trip_id?: string): RealtimeVehiclePosition[] {
-	const gtfs = ctx.gtfs ?? getGtfs();
+export function getVehiclePositions(ctx: CacheContext, trip?: QualifiedEntityId): RealtimeVehiclePosition[] {
+	const gtfs = requireGtfs(ctx);
 	const positions = gtfs.getRealtimeVehiclePositions();
 	const injected = ctx.raw.injectedVehiclePositions ?? [];
 	const allPositions = positions.concat(injected);
-	if (trip_id) return allPositions.filter((v: RealtimeVehiclePosition) => v.trip.trip_id == trip_id);
+	if (trip) return allPositions.filter((v: RealtimeVehiclePosition) => v.feed_id === trip.feedId && v.trip.trip_id === trip.localId);
 	return allPositions;
 }
 
-export function getStopTimeUpdates(ctx: CacheContext, trip_id: string): RealtimeStopTimeUpdate[] {
-	const updates = getTripUpdates(ctx, trip_id);
+export function getStopTimeUpdates(ctx: CacheContext, trip: QualifiedEntityId): RealtimeStopTimeUpdate[] {
+	const updates = getTripUpdates(ctx, trip);
 	if (!updates.length) return [];
 
 	const updateStopTimes = new Map<number, RealtimeStopTimeUpdate>();
@@ -104,19 +108,19 @@ export function getStopTimeUpdates(ctx: CacheContext, trip_id: string): Realtime
 }
 
 export function getStopTimes(ctx: CacheContext, query: qdf.StopTimeQuery): StopTime[] {
-	return (ctx.gtfs ?? getGtfs()).getStopTimes(query);
+	return requireGtfs(ctx).getStopTimes(query);
 }
 
-export function getRawStopTimes(ctx: CacheContext, trip_id: string): StopTime[] {
-	const cached = ctx.augmented.rawStopTimesCache.get(trip_id);
+export function getRawStopTimes(ctx: CacheContext, trip: QualifiedEntityId): StopTime[] {
+	const key = entityKey(trip);
+	const cached = ctx.augmented.rawStopTimesCache.get(key);
 	if (cached) return cached;
 
-	const result = getStopTimes(ctx, { trip_id });
-	ctx.augmented.rawStopTimesCache.set(trip_id, result);
+	const result = getStopTimes(ctx, { feed_id: trip.feedId, trip_id: trip.localId });
+	ctx.augmented.rawStopTimesCache.set(key, result);
 	return result;
 }
 
-// Aliases for backward compatibility
 export const getRawTrips = getTrips;
 export const getRawStops = getStops;
 export const getRawRoutes = getRoutes;

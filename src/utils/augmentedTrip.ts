@@ -4,8 +4,9 @@ import { AugmentedStopTime, augmentStopTimes } from "./augmentedStopTime.js";
 import * as cache from "../cache/index.js";
 import { getServiceCapacity, ServiceCapacity } from "./serviceCapacity.js";
 import { ExpressInfo, findExpress } from "./SRT.js";
-import { isRegion } from "../config.js";
+import { getFeedTimeZone } from "../config.js";
 import { getToday } from "./time.js";
+import { encodeTripInstanceId, entityKey } from "../identity.js";
 
 export type AugmentedTripInstance = qdf.Trip & {
 	instance_id: string;
@@ -77,19 +78,22 @@ export function augmentTrip(
 	reuseInstancesFrom?: AugmentedTrip,
 ): AugmentedTrip {
 	ctx.augmented.timer.start("augmentTrip");
-	const todayEpoch = dateToEpochDays(getToday(ctx.config));
-	const serviceDates = getServiceDatesByTrip(trip.trip_id, ctx, todayEpoch - 15, todayEpoch + 60);
+	const todayEpoch = dateToEpochDays(getToday(getFeedTimeZone(ctx.config, trip.feed_id)));
+	const serviceDates = getServiceDatesByTrip({ feedId: trip.feed_id, localId: trip.trip_id }, ctx, todayEpoch - 15, todayEpoch + 60);
 
 	ctx.augmented.timer.start("augmentTrip:getRawStopTimes");
-	const rawStopTimes = cache.getRawStopTimes(ctx, trip.trip_id).sort((a, b) => a.stop_sequence - b.stop_sequence);
+	const tripRef = { feedId: trip.feed_id, localId: trip.trip_id };
+	const tripKey = entityKey(tripRef);
+	const rawStopTimes = cache.getRawStopTimes(ctx, tripRef).sort((a, b) => a.stop_sequence - b.stop_sequence);
 	ctx.augmented.timer.stop("augmentTrip:getRawStopTimes");
 
 	ctx.augmented.timer.start("augmentTrip:getParentStops");
 	const parentStops = new Array<string>(rawStopTimes.length);
 	const stopsRec = ctx.augmented.stopsRec;
 	for (let i = 0; i < rawStopTimes.length; i++) {
-		const cached = stopsRec.get(rawStopTimes[i].stop_id);
-		parentStops[i] = cached?.parent_stop_id ?? "";
+		const cached = stopsRec.get(entityKey({ feedId: rawStopTimes[i].feed_id, localId: rawStopTimes[i].stop_id }));
+		const localStopId = cached?.parent_stop_id ?? rawStopTimes[i].stop_id;
+		parentStops[i] = entityKey({ feedId: rawStopTimes[i].feed_id, localId: localStopId });
 	}
 	ctx.augmented.timer.stop("augmentTrip:getParentStops");
 
@@ -107,8 +111,8 @@ export function augmentTrip(
 
 	ctx.augmented.timer.start("augmentTrip:getTripUpdates");
 	const updates = tripUpdatesCache
-		? (tripUpdatesCache.get(trip.trip_id) ?? [])
-		: cache.getTripUpdates(ctx, trip.trip_id);
+		? (tripUpdatesCache.get(tripKey) ?? [])
+		: cache.getTripUpdates(ctx, tripRef);
 	ctx.augmented.timer.stop("augmentTrip:getTripUpdates");
 
 	const createInstance = (
@@ -120,7 +124,14 @@ export function augmentTrip(
 		const startDate = update?.trip.start_date ?? serviceDate;
 		const startTime = update?.trip.start_time ?? "";
 
-		const instance_id = btoa(JSON.stringify([trip.trip_id, startDate, startTime]));
+		const instance_id = encodeTripInstanceId({
+			networkId: ctx.config.network.id,
+			feedId: trip.feed_id,
+			kind: "trip",
+			localId: trip.trip_id,
+			serviceDate: startDate,
+			realtimeStartTime: startTime,
+		});
 
 		ctx.augmented.timer.start("createInstance:augmentStopTimes");
 		const stopTimes = augmentStopTimes(
@@ -166,12 +177,8 @@ export function augmentTrip(
 
 		let trip_number = "";
 
-		if (isRegion(ctx.config.region, "CA")) {
-			trip_number = trip.trip_id.slice(-4);
-			if (trip.trip_short_name && /^\d{1,3}$/.test(trip.trip_short_name)) trip_number = trip.trip_short_name; // VIA rail
-		} else {
-			trip_number = trip.trip_id.slice(-4);
-		}
+		trip_number = trip.trip_id.slice(-4);
+		if (trip.trip_short_name && /^\d{1,3}$/.test(trip.trip_short_name)) trip_number = trip.trip_short_name;
 
 		const instance: AugmentedTripInstance = {
 			...trip,
@@ -274,17 +281,18 @@ export function augmentTrip(
 export function calculateRunSeries(instance: AugmentedTripInstance, ctx: cache.CacheContext): RunSeries {
 	const seriesRaw = instance.trip_number || instance.trip_id.slice(-4);
 	const series = seriesRaw.toUpperCase();
+	const tripKey = entityKey({ feedId: instance.feed_id, localId: instance.trip_id });
 	const vehicle_sightings: { vehicle_id: string; trip_id: string }[] = [];
-	if (instance.vehicle_id) vehicle_sightings.push({ vehicle_id: instance.vehicle_id, trip_id: instance.trip_id });
+	if (instance.vehicle_id) vehicle_sightings.push({ vehicle_id: instance.vehicle_id, trip_id: tripKey });
 	if (instance.consist) {
 		for (const carId of instance.consist) {
-			vehicle_sightings.push({ vehicle_id: carId, trip_id: instance.trip_id });
+			vehicle_sightings.push({ vehicle_id: carId, trip_id: tripKey });
 		}
 	}
 	const runSeries: RunSeries = {
 		series,
 		date: instance.serviceDate,
-		trips: [instance.trip_id],
+		trips: [tripKey],
 		vehicle_sightings,
 	};
 	cache.setRunSeries(instance.serviceDate, series, runSeries, ctx);

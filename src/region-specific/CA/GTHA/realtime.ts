@@ -3,6 +3,9 @@ import { GTFS } from "qdf-gtfs";
 import { GTHADeparturesResponse, UPEDeparturesResponse } from "./types.js";
 import logger from "../../../utils/logger.js";
 import { getServiceDayStart, getServiceDate } from "../../../utils/time.js";
+import { getDefaultTimeZone } from "../../../config.js";
+import { entityKey } from "../../../identity.js";
+import { getPluginState } from "../../../plugins/types.js";
 import { isConsideredTripId } from "../../../utils/considered.js";
 import { getModelFromId } from "./vehicleModel.js";
 import { mergeVehicleInfo } from "../../../utils/vehicleModel.js";
@@ -30,39 +33,47 @@ import {
 	ROUTE_GROUP_WEST,
 } from "./gtha-realtime-constants.js";
 
-// --- Module State ---
-let activeModels: Set<string> = new Set();
-let activeIds: Set<string> = new Set();
-let activeCars: Set<string> = new Set();
-let activePassengerCars: Set<number> = new Set();
-
-let prevs: {
+type GthaRealtimeState = {
+	activeModels: Set<string>;
+	activeIds: Set<string>;
+	activeCars: Set<string>;
+	activePassengerCars: Set<number>;
+	prevs: {
 	tripInstanceId: string;
 	stopId: string;
 	actualPlatform: string | null;
 	scheduledPlatform: string | null;
 	priority: number;
-}[] = [];
-let lastSourceEFetchMs: Record<string, number> = {};
-let lastSourceBFetchMs = 0;
-let lastSourceFFetchMs = 0;
-let lastSourceAFetchMs = 0;
-let lastSourceCFetchMs: Record<string, number> = {};
-let lastSourceDFetchMs: Record<string, number> = {};
-let vehiclePassengerCars: Record<string, number> = {};
-let vehicleConsists: Record<string, string[]> = {};
+}[];
+	lastSourceEFetchMs: Record<string, number>;
+	lastSourceBFetchMs: number;
+	lastSourceFFetchMs: number;
+	lastSourceAFetchMs: number;
+	lastSourceCFetchMs: Record<string, number>;
+	lastSourceDFetchMs: Record<string, number>;
+	vehiclePassengerCars: Record<string, number>;
+	vehicleConsists: Record<string, string[]>;
+};
 
-export function getActiveVehicleModels(): Set<string> {
-	return activeModels;
+function getState(ctx: CacheContext): GthaRealtimeState {
+	return getPluginState(ctx, "ca-gtha:realtime", () => ({
+		activeModels: new Set(), activeIds: new Set(), activeCars: new Set(), activePassengerCars: new Set(), prevs: [],
+		lastSourceEFetchMs: {}, lastSourceBFetchMs: 0, lastSourceFFetchMs: 0, lastSourceAFetchMs: 0,
+		lastSourceCFetchMs: {}, lastSourceDFetchMs: {}, vehiclePassengerCars: {}, vehicleConsists: {},
+	}));
 }
-export function getActiveVehicleIds(): Set<string> {
-	return activeIds;
+
+export function getActiveVehicleModels(ctx: CacheContext): Set<string> {
+	return getState(ctx).activeModels;
 }
-export function getActiveCars(): Set<string> {
-	return activeCars;
+export function getActiveVehicleIds(ctx: CacheContext): Set<string> {
+	return getState(ctx).activeIds;
 }
-export function getActivePassengerCars(): Set<number> {
-	return activePassengerCars;
+export function getActiveCars(ctx: CacheContext): Set<string> {
+	return getState(ctx).activeCars;
+}
+export function getActivePassengerCars(ctx: CacheContext): Set<number> {
+	return getState(ctx).activePassengerCars;
 }
 
 function unmergeId(ctx: CacheContext, stopId: string): string {
@@ -91,6 +102,7 @@ function applyPlatformUpdate(
 	source: string,
 	blockMap?: Map<string, any[]>,
 ) {
+	const state = getState(ctx);
 	const priority = SOURCE_PRIORITIES[source] ?? -1;
 	const currentPriority = (stopTime as any).platformPriority ?? -1;
 
@@ -99,8 +111,8 @@ function applyPlatformUpdate(
 
 	if (currentPriority > priority) return;
 
-	prevs = prevs.filter((v) => !(v.tripInstanceId === stopTime.instance_id && v.stopId === stopId));
-	prevs.push({
+	state.prevs = state.prevs.filter((v) => !(v.tripInstanceId === stopTime.instance_id && v.stopId === stopId));
+	state.prevs.push({
 		tripInstanceId: stopTime.instance_id,
 		stopId,
 		actualPlatform: newActual,
@@ -175,7 +187,7 @@ function getTripRouteGroup(ctx: CacheContext, tripId: string): string | null {
 	const augmentedTrip = ctx.augmented.tripsRec.get(tripId);
 	if (!augmentedTrip || !ctx.gtfs) return null;
 	const routeId = augmentedTrip.route_id;
-	const route = ctx.gtfs.getRoutes({ route_id: routeId })[0];
+	const route = ctx.gtfs.getRoutes({ feed_id: augmentedTrip.feed_id, route_id: routeId })[0];
 	if (!route) return null;
 	const rsn = route.route_short_name;
 	if (rsn && ROUTE_GROUP_EAST.includes(rsn)) return "EAST";
@@ -226,22 +238,22 @@ function propagateVehicleInfoToBlock(
 			inst.passenger_cars === (passengerCars ?? null) &&
 			JSON.stringify(inst.consist) === JSON.stringify(currentConsist)
 		) {
-			if (inst.vehicle_id) registerCarTrips(ctx, inst.trip_id, inst.vehicle_id);
+			if (inst.vehicle_id) registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), inst.vehicle_id);
 			if (inst.consist) {
-				for (const carId of inst.consist) registerCarTrips(ctx, inst.trip_id, carId);
+				for (const carId of inst.consist) registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), carId);
 			}
 			return;
 		}
 
-		const merged = mergeVehicleInfo(inst, info);
+		const merged = mergeVehicleInfo(ctx, inst, info);
 		inst.vehicle_id = merged.vehicle_id;
 		inst.vehicle_model = merged.vehicle_model;
 		inst.passenger_cars = merged.passenger_cars ?? null;
 		if (currentConsist) inst.consist = currentConsist;
 
-		if (inst.vehicle_id) registerCarTrips(ctx, inst.trip_id, inst.vehicle_id);
+		if (inst.vehicle_id) registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), inst.vehicle_id);
 		if (inst.consist) {
-			for (const carId of inst.consist) registerCarTrips(ctx, inst.trip_id, carId);
+			for (const carId of inst.consist) registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), carId);
 		}
 	};
 
@@ -260,8 +272,8 @@ function propagateVehicleInfoToBlock(
 	for (let i = sourceIndex + 1; i < blockTrips.length; i++) {
 		const prev = blockTrips[i - 1];
 		const curr = blockTrips[i];
-		const groupPrev = getTripRouteGroup(ctx, prev.trip_id);
-		const groupCurr = getTripRouteGroup(ctx, curr.trip_id);
+		const groupPrev = getTripRouteGroup(ctx, entityKey({ feedId: prev.feed_id, localId: prev.trip_id }));
+		const groupCurr = getTripRouteGroup(ctx, entityKey({ feedId: curr.feed_id, localId: curr.trip_id }));
 		if (groupPrev && groupCurr && groupPrev === groupCurr && forwardConsist) {
 			forwardConsist = [...forwardConsist].reverse();
 		}
@@ -273,8 +285,8 @@ function propagateVehicleInfoToBlock(
 	for (let i = sourceIndex - 1; i >= 0; i--) {
 		const next = blockTrips[i + 1];
 		const curr = blockTrips[i];
-		const groupNext = getTripRouteGroup(ctx, next.trip_id);
-		const groupCurr = getTripRouteGroup(ctx, curr.trip_id);
+		const groupNext = getTripRouteGroup(ctx, entityKey({ feedId: next.feed_id, localId: next.trip_id }));
+		const groupCurr = getTripRouteGroup(ctx, entityKey({ feedId: curr.feed_id, localId: curr.trip_id }));
 		if (groupNext && groupCurr && groupNext === groupCurr && backwardConsist) {
 			backwardConsist = [...backwardConsist].reverse();
 		}
@@ -304,13 +316,19 @@ function getUniqueStopTimesForRange(
 	lookaheadSecs: number,
 	stopId?: string,
 ) {
+	const serviceDayStart = getServiceDayStart(serviceDateStr, getDefaultTimeZone(ctx.config));
+	const inWindow = (timestamp: number | null | undefined) => {
+		if (timestamp == null) return false;
+		const serviceSeconds = timestamp > 1_000_000_000 ? timestamp - serviceDayStart : timestamp;
+		return serviceSeconds >= nowSecs && serviceSeconds <= nowSecs + lookaheadSecs;
+	};
 	const stopTimes = gtfs
 		.getStopTimes({
 			...{ date: serviceDateStr, start_time: nowSecs, end_time: nowSecs + lookaheadSecs },
 			...(stopId ? { stop_id: mergeId(ctx, stopId) } : {}),
 		})
-		.filter((v) => isConsideredTripId(v.trip_id, gtfs))
-		.map((v) => ({ stop_id: v.stop_id, trip_id: v.trip_id }))
+		.filter((v) => isConsideredTripId({ feedId: v.feed_id, localId: v.trip_id }, ctx))
+		.map((v) => ({ feed_id: v.feed_id, stop_id: v.stop_id, trip_id: v.trip_id }))
 		.concat(
 			getTripUpdates(ctx).flatMap(
 				(update) =>
@@ -318,38 +336,37 @@ function getUniqueStopTimesForRange(
 						?.filter(
 							(stu) =>
 								(!stopId || stu.stop_id === stopId) &&
-								(stu.departure_time ?? stu.arrival_time) &&
-								((stu.departure_time ?? stu.arrival_time ?? 0) - nowSecs + 86400) % 86400 <=
-									lookaheadSecs,
+								inWindow(stu.departure_time ?? stu.arrival_time),
 						)
-						.map((stu) => ({ stop_id: stu.stop_id, trip_id: update.trip.trip_id })) ?? [],
+						.map((stu) => ({ feed_id: update.feed_id, stop_id: stu.stop_id, trip_id: update.trip.trip_id })) ?? [],
 			),
 		)
 		.filter((v) => v);
 
-	const map = new Map<string, { stop_id: string; trip_id: string }>();
+	const map = new Map<string, { feed_id: string; stop_id: string; trip_id: string }>();
 	stopTimes.forEach((st) => {
-		const key = `${st.stop_id}-${st.trip_id}`;
+		const key = `${st.feed_id}:${st.stop_id}-${st.trip_id}`;
 		if (!map.has(key)) map.set(key, st);
 	});
 	return Array.from(map.values());
 }
 
 export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
+	const state = getState(ctx);
 	const timer = ctx.augmented.timer;
 	timer.start("updateAllSources");
 
-	activeIds.clear();
-	activeModels.clear();
-	activeCars.clear();
-	activePassengerCars.clear();
+	state.activeIds.clear();
+	state.activeModels.clear();
+	state.activeCars.clear();
+	state.activePassengerCars.clear();
 	ctx.augmented.carTrips.clear();
 
 	const now = new Date();
-	const serviceDateStr = getServiceDate(now, ctx.config.timezone);
+	const serviceDateStr = getServiceDate(now, getDefaultTimeZone(ctx.config));
 
 	// Re-apply previous state (prevents UI flicker if context was reset but module state remains)
-	prevs.forEach((v) => {
+	state.prevs.forEach((v) => {
 		const ti = getAugmentedTripInstance(ctx, v.tripInstanceId);
 		const st = ti?.stopTimes.find((st) => (st.actual_stop_id ?? st.scheduled_stop_id) === v.stopId);
 		if (st) {
@@ -368,13 +385,13 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 		if (!at) continue;
 		const inst = at.instances.find((i) => i.serviceDate === serviceDateStr);
 		if (inst) {
-			if (inst.vehicle_id) registerCarTrips(ctx, inst.trip_id, inst.vehicle_id);
+			if (inst.vehicle_id) registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), inst.vehicle_id);
 			if (inst.consist) {
-				for (const carId of inst.consist) registerCarTrips(ctx, inst.trip_id, carId);
+				for (const carId of inst.consist) registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), carId);
 			}
 		}
 	}
-	const serviceDayStart = getServiceDayStart(serviceDateStr, ctx.config.timezone);
+	const serviceDayStart = getServiceDayStart(serviceDateStr, getDefaultTimeZone(ctx.config));
 	const nowSecs = Math.floor(now.getTime() / 1000 - serviceDayStart);
 	const nowMs = Date.now();
 
@@ -399,8 +416,8 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 
 	// Source A
 	let sourceAPromise: Promise<any> | null = null;
-	if (nowMs - lastSourceAFetchMs >= SOURCE_A_THROTTLE_MS) {
-		lastSourceAFetchMs = nowMs;
+	if (nowMs - state.lastSourceAFetchMs >= SOURCE_A_THROTTLE_MS) {
+		state.lastSourceAFetchMs = nowMs;
 		sourceAPromise = fetch(SOURCE_A_URL, { headers: { Referer: SOURCE_E_REFERRER } })
 			.then((r) => (r.ok ? r.json() : null))
 			.catch(() => null);
@@ -408,8 +425,8 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 
 	// Source B
 	let sourceBPromise: Promise<any> | null = null;
-	if (nowMs - lastSourceBFetchMs >= SOURCE_B_THROTTLE_MS) {
-		lastSourceBFetchMs = nowMs;
+	if (nowMs - state.lastSourceBFetchMs >= SOURCE_B_THROTTLE_MS) {
+		state.lastSourceBFetchMs = nowMs;
 		sourceBPromise = fetch(SOURCE_B_URL, { headers: { Referer: SOURCE_E_REFERRER } })
 			.then((r) => (r.ok ? r.json() : null))
 			.catch(() => null);
@@ -417,8 +434,8 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 
 	// Source C
 	const sourceCFetches = SOURCE_C_IDS.filter((stop_id) => {
-		if (nowMs - (lastSourceCFetchMs[stop_id] ?? 0) < SOURCE_CD_THROTTLE_MS) return false;
-		lastSourceCFetchMs[stop_id] = nowMs;
+		if (nowMs - (state.lastSourceCFetchMs[stop_id] ?? 0) < SOURCE_CD_THROTTLE_MS) return false;
+		state.lastSourceCFetchMs[stop_id] = nowMs;
 		return true;
 	}).map((stop_id) => ({
 		stop_id,
@@ -446,8 +463,8 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	const sourceDStopIds = Array.from(new Set(uniqueStopTimesSourceD.map((v) => unmergeId(ctx, v.stop_id))));
 	const sourceDFetches = sourceDStopIds
 		.filter((stop_id) => {
-			if (nowMs - (lastSourceDFetchMs[stop_id] ?? 0) < SOURCE_CD_THROTTLE_MS) return false;
-			lastSourceDFetchMs[stop_id] = nowMs;
+			if (nowMs - (state.lastSourceDFetchMs[stop_id] ?? 0) < SOURCE_CD_THROTTLE_MS) return false;
+			state.lastSourceDFetchMs[stop_id] = nowMs;
 			return true;
 		})
 		.map((stop_id) => ({
@@ -485,8 +502,8 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	);
 	const sourceEFetches = sourceEStopIds
 		.filter((stop_id) => {
-			if (nowMs - (lastSourceEFetchMs[stop_id] ?? 0) < SOURCE_E_THROTTLE_MS) return false;
-			lastSourceEFetchMs[stop_id] = nowMs;
+			if (nowMs - (state.lastSourceEFetchMs[stop_id] ?? 0) < SOURCE_E_THROTTLE_MS) return false;
+			state.lastSourceEFetchMs[stop_id] = nowMs;
 			return true;
 		})
 		.map((stop_id) => {
@@ -531,7 +548,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 
 			for (const st of uniqueStopTimesSourceD) {
 				if (!st.trip_id.endsWith(tripNumber)) continue;
-				const instance = getAugmentedTrips(ctx, st.trip_id)[0]?.instances.find((v) => {
+				const instance = getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances.find((v) => {
 					if (v.serviceDate === departure.scheduledDateTime.slice(0, 10).replace(/-/g, "")) return true;
 					const offset = v.stopTimes.find(
 						(fst) => fst.actual_stop_id === item.stop_id,
@@ -573,8 +590,8 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 			for (const st of uniqueStopTimesSourceC) {
 				if (!st.trip_id.endsWith(departure.tripNumber)) continue;
 				const instance =
-					getAugmentedTrips(ctx, st.trip_id)[0]?.instances.find((v) => v.serviceDate === dateStr) ??
-					getAugmentedTrips(ctx, st.trip_id)[0]?.instances[0];
+					getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances.find((v) => v.serviceDate === dateStr) ??
+					getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances[0];
 
 				const ast = instance?.stopTimes.find((ast) => ast.actual_stop_id === mergeId(ctx, item.stop_id));
 				if (ast)
@@ -602,13 +619,15 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	// --- 3. Process Source A & Source B ---
 
 	const tripNumberToIds = new Map<string, string[]>();
-	for (const tid of uniqueStopTimesSourceE.map((v) => v.trip_id)) {
+	for (const item of uniqueStopTimesSourceE) {
+		const tid = item.trip_id;
 		const match = tid.match(/\d+$/);
 		if (match) {
 			const num = match[0];
 			if (!tripNumberToIds.has(num)) tripNumberToIds.set(num, []);
 			const list = tripNumberToIds.get(num)!;
-			if (!list.includes(tid)) list.push(tid);
+			const key = entityKey({ feedId: item.feed_id, localId: tid });
+			if (!list.includes(key)) list.push(key);
 		}
 	}
 
@@ -634,6 +653,7 @@ export async function updateSourceB(
 	blockMap?: Map<string, any[]>,
 	data?: any,
 ) {
+	const state = getState(ctx);
 	const timer = ctx.augmented.timer;
 	timer.start("updateSourceB");
 	try {
@@ -701,16 +721,16 @@ export async function updateSourceB(
 						}
 
 						if (gtStop.engineId && gtStop.engineId !== "-" && gtStop.engineId.trim() !== "") {
-							activeIds.add(gtStop.engineId);
-							activeCars.add(gtStop.engineId);
+							state.activeIds.add(gtStop.engineId);
+							state.activeCars.add(gtStop.engineId);
 							const vehicle_model = getModelFromId(gtStop.engineId);
-							if (vehicle_model) activeModels.add(vehicle_model);
+							if (vehicle_model) state.activeModels.add(vehicle_model);
 
-							const vehicleInfo = mergeVehicleInfo(instance, {
+							const vehicleInfo = mergeVehicleInfo(ctx, instance, {
 								vehicle_id: gtStop.engineId,
 								vehicle_model,
-								passenger_cars: vehiclePassengerCars[gtStop.engineId] ?? null,
-								consist: vehicleConsists[gtStop.engineId] ?? null,
+								passenger_cars: state.vehiclePassengerCars[gtStop.engineId] ?? null,
+								consist: state.vehicleConsists[gtStop.engineId] ?? null,
 							});
 							instance.vehicle_id = vehicleInfo.vehicle_id;
 							instance.vehicle_model = vehicleInfo.vehicle_model;
@@ -754,6 +774,7 @@ export async function updateSourceA(
 	blockMap?: Map<string, any[]>,
 	data?: any,
 ) {
+	const state = getState(ctx);
 	const timer = ctx.augmented.timer;
 	timer.start("updateSourceA");
 	try {
@@ -781,8 +802,8 @@ export async function updateSourceA(
 			if (vehicleType.startsWith("L")) {
 				const num = Number.parseInt(vehicleType.slice(1), 10);
 				if (!Number.isNaN(num)) {
-					activePassengerCars.add(num);
-					vehiclePassengerCars[vehicleId] = num;
+					state.activePassengerCars.add(num);
+					state.vehiclePassengerCars[vehicleId] = num;
 				}
 			}
 		}
@@ -801,15 +822,15 @@ export async function updateSourceA(
 			}
 
 			// If missing car count but we have a vehicle ID, try the cache
-			if (passengerCars === null && vehicleId && vehiclePassengerCars[vehicleId]) {
-				passengerCars = vehiclePassengerCars[vehicleId];
+			if (passengerCars === null && vehicleId && state.vehiclePassengerCars[vehicleId]) {
+				passengerCars = state.vehiclePassengerCars[vehicleId];
 			}
 
 			if (vehicleId) {
-				activeIds.add(vehicleId);
-				activeCars.add(vehicleId);
+				state.activeIds.add(vehicleId);
+				state.activeCars.add(vehicleId);
 				const vehicle_model = getModelFromId(vehicleId);
-				if (vehicle_model) activeModels.add(vehicle_model);
+				if (vehicle_model) state.activeModels.add(vehicle_model);
 			}
 
 			const tripIds = tripNumberToIds.get(tripNumber) || [];
@@ -821,11 +842,11 @@ export async function updateSourceA(
 				if (!instance) continue;
 
 				if (vehicleId) {
-					const vehicleInfo = mergeVehicleInfo(instance, {
+					const vehicleInfo = mergeVehicleInfo(ctx, instance, {
 						vehicle_id: vehicleId,
 						vehicle_model: getModelFromId(vehicleId),
 						passenger_cars: passengerCars,
-						consist: vehicleConsists[vehicleId] ?? null,
+						consist: state.vehicleConsists[vehicleId] ?? null,
 					});
 					instance.vehicle_id = vehicleInfo.vehicle_id;
 					instance.vehicle_model = vehicleInfo.vehicle_model;
@@ -843,7 +864,7 @@ export async function updateSourceA(
 						instance.trip_id,
 					);
 				} else if (passengerCars !== null) {
-					const vehicleInfo = mergeVehicleInfo(instance, {
+					const vehicleInfo = mergeVehicleInfo(ctx, instance, {
 						vehicle_id: null,
 						vehicle_model: null,
 						passenger_cars: passengerCars,
@@ -882,10 +903,11 @@ export async function updateSourceA(
 function processSourceEUpdates(
 	stop_id: string,
 	dataList: any[],
-	stopTimes: { stop_id: string; trip_id: string }[],
+	stopTimes: { feed_id: string; stop_id: string; trip_id: string }[],
 	ctx: CacheContext,
 	serviceDateStr: string,
 ) {
+	const state = getState(ctx);
 	let tripMessages: any[] = [];
 
 	for (const data of dataList) {
@@ -909,7 +931,7 @@ function processSourceEUpdates(
 		const relevantSts = stopTimes.filter((st) => st.trip_id.endsWith(trip.tripName));
 
 		for (const st of relevantSts) {
-			const instance = getAugmentedTrips(ctx, st.trip_id)[0]?.instances.find(
+			const instance = getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances.find(
 				(v) => v.serviceDate === targetServiceDate,
 			);
 
@@ -920,9 +942,9 @@ function processSourceEUpdates(
 
 			if (trip.coachCount !== undefined) {
 				instance.passenger_cars = trip.coachCount;
-				if (instance.vehicle_id) vehiclePassengerCars[instance.vehicle_id] = trip.coachCount;
-			} else if (instance.vehicle_id && vehiclePassengerCars[instance.vehicle_id]) {
-				instance.passenger_cars = vehiclePassengerCars[instance.vehicle_id];
+				if (instance.vehicle_id) state.vehiclePassengerCars[instance.vehicle_id] = trip.coachCount;
+			} else if (instance.vehicle_id && state.vehiclePassengerCars[instance.vehicle_id]) {
+				instance.passenger_cars = state.vehiclePassengerCars[instance.vehicle_id];
 			}
 
 			propagateVehicleInfoToBlock(
@@ -941,9 +963,10 @@ function processSourceEUpdates(
 }
 
 export async function updateSourceF(ctx: CacheContext, serviceDateStr: string, blockMap?: Map<string, any[]>) {
+	const state = getState(ctx);
 	const now = Date.now();
-	if (now - lastSourceFFetchMs < SOURCE_F_THROTTLE_MS) return;
-	lastSourceFFetchMs = now;
+	if (now - state.lastSourceFFetchMs < SOURCE_F_THROTTLE_MS) return;
+	state.lastSourceFFetchMs = now;
 
 	try {
 		const response = await fetch(SOURCE_F_URL);
@@ -1003,8 +1026,8 @@ export async function updateSourceF(ctx: CacheContext, serviceDateStr: string, b
 				}
 			}
 
-			vehicleConsists[vehicleNumber] = consist;
-			consist.forEach((car) => activeCars.add(car));
+			state.vehicleConsists[vehicleNumber] = consist;
+			consist.forEach((car) => state.activeCars.add(car));
 
 			const tripsForDate = ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [];
 			for (const tripId of tripsForDate) {

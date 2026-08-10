@@ -7,11 +7,14 @@ import { getPlatformData as loadPlatformData, seqPlatformDefinitionsPresent } fr
 import type { PlatformData, PlatformDefinition } from "./platformData.js";
 import { ServiceCapacity } from "./serviceCapacity.js";
 import { getServiceDayStart } from "./time.js";
+import { getFeedTimeZone } from "../config.js";
 import { Timer } from "./timer.js";
 import { addDaysToDateString as wasmAddDaysToDateString, calculateDelayClassWasm } from "../../build/release.js";
+import { getSeqState } from "../plugins/seq-state.js";
 
 export type AugmentedStopTime = {
 	_stopTime: qdf.StopTime | null;
+	feed_id: string;
 	trip_id: string;
 	passing: boolean;
 
@@ -95,30 +98,28 @@ function calculateDelayClass(delaySecs: number) {
 	return { str: info.str, cls: info.cls as "on-time" | "late" | "very-late" | "early" };
 }
 
-const dateOffsetCache = new Map<string, string>();
-function addDaysToDateString(dateStr: string, daysToAdd: number): string {
+function addDaysToDateString(dateStr: string, daysToAdd: number, ctx: cache.CacheContext): string {
 	if (daysToAdd === 0) return dateStr;
 	const key = `${dateStr}|${daysToAdd}`;
-	let cached = dateOffsetCache.get(key);
+	let cached = ctx.runtimeState.dateOffsets.get(key);
 	if (cached !== undefined) return cached;
 	const result = wasmAddDaysToDateString(dateStr, daysToAdd);
-	dateOffsetCache.set(key, result);
+	ctx.runtimeState.dateOffsets.set(key, result);
 	return result;
 }
 
-export const serviceDateArrayCache = new Map<string, string[]>();
-export function getServiceDateArray(date: string): string[] {
-	let cached = serviceDateArrayCache.get(date);
+export function getServiceDateArray(date: string, ctx: cache.CacheContext): string[] {
+	let cached = ctx.runtimeState.serviceDateArrays.get(date);
 	if (!cached) {
 		cached = [date];
-		serviceDateArrayCache.set(date, cached);
+		ctx.runtimeState.serviceDateArrays.set(date, cached);
 	}
 	return cached;
 }
 
-export function clearAugmentedStopTimeCaches(): void {
-	dateOffsetCache.clear();
-	serviceDateArrayCache.clear();
+export function clearAugmentedStopTimeCaches(ctx: cache.CacheContext): void {
+	ctx.runtimeState.dateOffsets.clear();
+	ctx.runtimeState.serviceDateArrays.clear();
 }
 
 function resolveExitSide(
@@ -253,6 +254,8 @@ export function augmentStopTimes(
 	ctx.augmented.timer.start("augmentStopTimes");
 	const { serviceDate, tripUpdate, scheduleRelationship } = instanceContext;
 	const tripId = tripUpdate?.trip.trip_id ?? staticStopTimes?.[0]?.trip_id ?? "";
+	const feedId = tripUpdate?.feed_id ?? staticStopTimes?.[0]?.feed_id;
+	if (!feedId) throw new Error(`Cannot augment stop times for trip '${tripId}' without feed identity`);
 
 	const stopTimeUpdates = tripUpdate?.stop_time_updates ?? [];
 
@@ -297,7 +300,7 @@ export function augmentStopTimes(
 
 	const mergedList: MergedStop[] = [];
 
-	const serviceDayStart = getServiceDayStart(serviceDate, ctx.config.timezone);
+	const serviceDayStart = getServiceDayStart(serviceDate, getFeedTimeZone(ctx.config, feedId));
 
 	ctx.augmented.timer.start("augmentStopTimes:buildMergedList");
 	for (const seq of sortedSequences) {
@@ -313,11 +316,11 @@ export function augmentStopTimes(
 
 		if (!s && r) {
 			if (r.arrival_time) {
-				arr = Math.floor(Number(r.arrival_time) - serviceDayStart + 86400) % 86400;
+				arr = Math.floor(Number(r.arrival_time) - serviceDayStart);
 				if (r.arrival_delay != null) arr -= r.arrival_delay;
 			}
 			if (r.departure_time) {
-				dep = Math.floor(Number(r.departure_time) - serviceDayStart + 86400) % 86400;
+				dep = Math.floor(Number(r.departure_time) - serviceDayStart);
 				if (r.departure_delay != null) dep -= r.departure_delay;
 			}
 			if (arr === 0 && dep !== 0) arr = dep;
@@ -325,6 +328,7 @@ export function augmentStopTimes(
 		}
 
 		mergedList.push({
+			feed_id: feedId,
 			trip_id: tripId,
 			stop_sequence: seq,
 			stop_id: stopId,
@@ -337,7 +341,6 @@ export function augmentStopTimes(
 			timepoint: s?.timepoint ?? 1,
 			continuous_pickup: 0,
 			continuous_drop_off: 0,
-			feed_id: s?.feed_id ?? (r as qdf.StopTime | undefined)?.feed_id ?? "",
 			_rtUpdate: r,
 			_isSkipped: isSkipped,
 		});
@@ -384,12 +387,13 @@ export function augmentStopTimes(
 			if (missed && missed.rt?.schedule_relationship === qdf.StopTimeScheduleRelationship.SKIPPED) {
 				const originalMergeItem = mergedList.find((m) => m.stop_sequence === s);
 				if (originalMergeItem) {
-					const scheduledStop = cache.getAugmentedStops(ctx, originalMergeItem.stop_id)[0];
+					const scheduledStop = cache.getAugmentedStops(ctx, { feedId, localId: originalMergeItem.stop_id })[0];
 					const scheduledParent = scheduledStop?.parent_stop_id
-						? cache.getAugmentedStops(ctx, scheduledStop.parent_stop_id)[0]
+						? cache.getAugmentedStops(ctx, { feedId, localId: scheduledStop.parent_stop_id })[0]
 						: null;
 					const skipped: AugmentedStopTime = {
 						_stopTime: originalMergeItem,
+						feed_id: feedId,
 						trip_id: tripId,
 						passing: false,
 						instance_id: "",
@@ -446,9 +450,9 @@ export function augmentStopTimes(
 		const stopId = stopTime.stop_id;
 		const rtUpdate = isPassing ? undefined : (rtBySeq.get(seq) ?? rtByStopId.get(stopId));
 
-		const scheduledStop = cache.getAugmentedStops(ctx, stopId)[0];
+		const scheduledStop = cache.getAugmentedStops(ctx, { feedId, localId: stopId })[0];
 		const scheduledParentId = scheduledStop?.parent_stop_id ?? scheduledStop?.parent_station ?? null;
-		const scheduledParent = scheduledParentId ? cache.getAugmentedStops(ctx, scheduledParentId)[0] : null;
+		const scheduledParent = scheduledParentId ? cache.getAugmentedStops(ctx, { feedId, localId: scheduledParentId })[0] : null;
 
 		const schedArr = stopTime.arrival_time;
 		const schedDep = stopTime.departure_time;
@@ -472,7 +476,7 @@ export function augmentStopTimes(
 				lastDelay = delaySecs;
 				rtFlags.dep = true;
 			} else if (rtUpdate.departure_time) {
-				const depAbs = Math.floor((Number(rtUpdate.departure_time) - serviceDayStart + 86400) % 86400);
+				const depAbs = Math.floor(Number(rtUpdate.departure_time) - serviceDayStart);
 				delaySecs = depAbs - (schedDep ?? 0);
 				actDep = depAbs;
 				lastDelay = delaySecs;
@@ -487,7 +491,7 @@ export function augmentStopTimes(
 				delaySecs = rtUpdate.arrival_delay;
 				rtFlags.arr = true;
 			} else if (rtUpdate.arrival_time) {
-				const arrAbs = Math.floor(Number(rtUpdate.arrival_time) - serviceDayStart + 86400) % 86400;
+				const arrAbs = Math.floor(Number(rtUpdate.arrival_time) - serviceDayStart);
 				actArr = arrAbs;
 				rtFlags.arr = true;
 			} else if (lastDelay) {
@@ -495,16 +499,16 @@ export function augmentStopTimes(
 				propagated = true;
 			}
 
-			const rtRawStop = cache.getRawStops(ctx, rtUpdate.stop_id)[0];
+			const rtRawStop = cache.getRawStops(ctx, { feed_id: feedId, stop_id: rtUpdate.stop_id })[0];
 			if (rtRawStop?.platform_code) {
 				platformCode = rtRawStop.platform_code;
 				rtFlags.platform = true;
 			}
 
 			if (rtUpdate.stop_id && rtUpdate.stop_id !== stopId) {
-				actualStop = cache.getAugmentedStops(ctx, rtUpdate.stop_id)[0];
+				actualStop = cache.getAugmentedStops(ctx, { feedId, localId: rtUpdate.stop_id })[0];
 				actualParent = actualStop?.parent_station
-					? cache.getAugmentedStops(ctx, actualStop.parent_station)[0]
+					? cache.getAugmentedStops(ctx, { feedId, localId: actualStop.parent_station })[0]
 					: null;
 				rtFlags.stop = true;
 				rtFlags.parent = true;
@@ -534,14 +538,13 @@ export function augmentStopTimes(
 			if (endArr > startDep) {
 				const wallTimes = wasmInterpolateTimes(startDep, endArr, pendingEmus);
 				const getOffsetPass = (secs: number) => Math.floor(secs / 86400);
-				const wallClock = (secs: number) => ((secs % 86400) + 86400) % 86400;
 				for (let pi = 0; pi < pendingPassingRows.length; pi++) {
 					const row = pendingPassingRows[pi];
 					const t = wallTimes[pi];
 					const offArr = getOffsetPass(t);
 					const offDep = offArr;
-					const wallArr = wallClock(t);
-					const wallDep = wallArr;
+					const wallArr = t;
+					const wallDep = t;
 					const rawSched =
 						(row.scheduled_arrival_time ?? 0) +
 						86400 * (dateOffsets.schedArr + row.scheduled_arrival_date_offset);
@@ -550,10 +553,12 @@ export function augmentStopTimes(
 					row.actual_arrival_time = wallArr;
 					row.actual_departure_time = wallDep;
 					row.actual_arrival_dates = getServiceDateArray(
-						addDaysToDateString(serviceDate, offArr - dateOffsets.actArr),
+						addDaysToDateString(serviceDate, offArr - dateOffsets.actArr, ctx),
+						ctx,
 					);
 					row.actual_departure_dates = getServiceDateArray(
-						addDaysToDateString(serviceDate, offDep - dateOffsets.actDep),
+						addDaysToDateString(serviceDate, offDep - dateOffsets.actDep, ctx),
+						ctx,
 					);
 					row.actual_arrival_date_offset = offArr - dateOffsets.actArr;
 					row.actual_departure_date_offset = offDep - dateOffsets.actDep;
@@ -604,6 +609,7 @@ export function augmentStopTimes(
 
 		const augmented: AugmentedStopTime = {
 			_stopTime: isPassing ? null : stopTime,
+			feed_id: feedId,
 			trip_id: tripId,
 			passing: isPassing,
 			instance_id: "",
@@ -613,8 +619,8 @@ export function augmentStopTimes(
 			actual_exit_side: null,
 			scheduled_exit_side: null,
 
-			actual_arrival_time: actArr ? actArr % 86400 : null,
-			actual_departure_time: actDep ? actDep % 86400 : null,
+			actual_arrival_time: actArr ?? null,
+			actual_departure_time: actDep ?? null,
 			actual_stop_id: actualStop?.stop_id ?? stopId ?? null,
 			actual_parent_station_id:
 				actualParent?.stop_id ??
@@ -630,8 +636,8 @@ export function augmentStopTimes(
 			rt_arrival_updated: rtFlags.arr,
 			rt_departure_updated: rtFlags.dep,
 
-			scheduled_arrival_time: schedArr ? schedArr % 86400 : null,
-			scheduled_departure_time: schedDep ? schedDep % 86400 : null,
+			scheduled_arrival_time: schedArr ?? null,
+			scheduled_departure_time: schedDep ?? null,
 			scheduled_stop_id: scheduledStop?.stop_id ?? null,
 			scheduled_parent_station_id: scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null,
 			scheduled_platform_code: isPassing ? null : (scheduledStop?.platform_code ?? null),
@@ -642,13 +648,17 @@ export function augmentStopTimes(
 				addDaysToDateString(
 					datesServiceDate,
 					(currentOffsets.schedArr ?? currentOffsets.schedDep ?? dateOffsets.schedArr) - dateOffsets.schedArr,
+					ctx,
 				),
+				ctx,
 			),
 			actual_arrival_dates: getServiceDateArray(
 				addDaysToDateString(
 					datesServiceDate,
 					(currentOffsets.actArr ?? currentOffsets.actDep ?? dateOffsets.actArr) - dateOffsets.actArr,
+					ctx,
 				),
+				ctx,
 			),
 			scheduled_arrival_date_offset:
 				(currentOffsets.schedArr ?? currentOffsets.schedDep ?? dateOffsets.schedArr) - dateOffsets.schedArr,
@@ -658,13 +668,17 @@ export function augmentStopTimes(
 				addDaysToDateString(
 					datesServiceDate,
 					(currentOffsets.schedDep ?? currentOffsets.schedArr ?? dateOffsets.schedDep) - dateOffsets.schedDep,
+					ctx,
 				),
+				ctx,
 			),
 			actual_departure_dates: getServiceDateArray(
 				addDaysToDateString(
 					datesServiceDate,
 					(currentOffsets.actDep ?? currentOffsets.actArr ?? dateOffsets.actDep) - dateOffsets.actDep,
+					ctx,
 				),
+				ctx,
 			),
 			scheduled_departure_date_offset:
 				(currentOffsets.schedDep ?? currentOffsets.schedArr ?? dateOffsets.schedDep) - dateOffsets.schedDep,
@@ -690,11 +704,12 @@ export function augmentStopTimes(
 	}
 	ctx.augmented.timer.stop("augmentStopTimes:processStops");
 
-	let pd = ctx.raw.regionSpecific.SEQ.platformData;
+	const seqState = getSeqState(ctx);
+	let pd = seqState.platformData;
 	if (!seqPlatformDefinitionsPresent(pd)) {
 		const loadedPlatforms = loadPlatformData(ctx.config);
-		ctx.raw.regionSpecific.SEQ.platformData = { ...loadedPlatforms, ...(pd ?? {}) };
-		pd = ctx.raw.regionSpecific.SEQ.platformData;
+		seqState.platformData = { ...loadedPlatforms, ...(pd ?? {}) };
+		pd = seqState.platformData;
 	}
 
 	ctx.augmented.timer.start("augmentStopTimes:assignPlatformSides");

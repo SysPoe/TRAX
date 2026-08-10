@@ -1,8 +1,6 @@
-import { isRegion, TraxConfig } from "../config.js";
+import { type TraxConfig } from "../config.js";
 import { CacheContext } from "../cache/index.js";
 import { AugmentedTrip, AugmentedTripInstance } from "./augmentedTrip.js";
-import { getVehicleInfo as getSEQVehicleInfo } from "../region-specific/AU/SEQ/vehicleModel.js";
-import { getVehicleInfo as getGTHAVehicleInfo } from "../region-specific/CA/GTHA/vehicleModel.js";
 
 export type VehicleInfo = {
 	vehicle_model: string | null;
@@ -14,27 +12,29 @@ export type VehicleInfo = {
 };
 
 function resolveVehicleInfo(inst: AugmentedTripInstance, ctx: CacheContext, config: TraxConfig): VehicleInfo {
-	if (isRegion(config.region, "AU/SEQ")) return getSEQVehicleInfo(inst);
-	if (isRegion(config.region, "CA/GTHA")) return getGTHAVehicleInfo(inst, ctx);
+	for (const plugin of config.network.plugins) {
+		const value = plugin.vehicleInfoForTrip?.(inst, ctx);
+		if (value) return value;
+	}
 	return { vehicle_model: null, vehicle_id: null };
 }
 
-const previousVehicleInfo = new Map<string, VehicleInfo>();
-
 /** Static generations invalidate every instance id and all retained vehicle metadata. */
-export function clearPreviousVehicleInfo(): void {
-	previousVehicleInfo.clear();
+export function clearPreviousVehicleInfo(ctx: CacheContext): void {
+	ctx.runtimeState.previousVehicleInfo.clear();
 }
 
 /** Drop metadata for instances no longer present after an incremental refresh. */
-export function prunePreviousVehicleInfo(validInstanceIds: Iterable<string>): void {
+export function prunePreviousVehicleInfo(ctx: CacheContext, validInstanceIds: Iterable<string>): void {
+	const previousVehicleInfo = ctx.runtimeState.previousVehicleInfo as Map<string, VehicleInfo>;
 	const valid = new Set(validInstanceIds);
 	for (const instanceId of previousVehicleInfo.keys()) {
 		if (!valid.has(instanceId)) previousVehicleInfo.delete(instanceId);
 	}
 }
 
-export function mergeVehicleInfo(inst: AugmentedTripInstance, incoming: VehicleInfo): VehicleInfo {
+export function mergeVehicleInfo(ctx: CacheContext, inst: AugmentedTripInstance, incoming: VehicleInfo): VehicleInfo {
+	const previousVehicleInfo = ctx.runtimeState.previousVehicleInfo as Map<string, VehicleInfo>;
 	const prev = previousVehicleInfo.get(inst.instance_id);
 	const vehicle_id = incoming.vehicle_id ?? prev?.vehicle_id ?? inst.vehicle_id ?? null;
 	const vehicle_model = incoming.vehicle_model ?? prev?.vehicle_model ?? inst.vehicle_model ?? null;
@@ -68,7 +68,7 @@ export function addVehicleModel(
 	const needsConsist = inst.consist == null;
 
 	if (needsModel || needsId || needsPassengerCars || needsScheduledPassengerCars || needsConsist) {
-		const info = mergeVehicleInfo(inst, resolveVehicleInfo(inst, ctx, config));
+		const info = mergeVehicleInfo(ctx, inst, resolveVehicleInfo(inst, ctx, config));
 		if (needsModel) inst.vehicle_model = info.vehicle_model;
 		if (needsId) inst.vehicle_id = info.vehicle_id;
 		if (needsPassengerCars) inst.passenger_cars = info.passenger_cars ?? null;

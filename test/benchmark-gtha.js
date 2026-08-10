@@ -1,4 +1,4 @@
-import TRAXClass, { logger, LogLevel, PRESETS } from "../dist/index.js";
+import TRAXClass, { createCaGthaNetwork, logger, LogLevel } from "../dist/index.js";
 import { config } from "dotenv";
 import { existsSync } from "node:fs";
 
@@ -19,10 +19,7 @@ async function main() {
 	for (const testConfig of testConfigs) {
 		console.log(`\nRunning: ${testConfig.label}...`);
 
-		const TRAX = new TRAXClass({
-			...PRESETS["CA/GTHA"](process.env.METROLINX_KEY),
-			disableTimers: testConfig.disableTimers,
-		});
+		const TRAX = new TRAXClass(createCaGthaNetwork(process.env.METROLINX_KEY), { disableTimers: testConfig.disableTimers });
 		logger.setLevel(LogLevel.INFO);
 
 		const start = Date.now();

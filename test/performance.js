@@ -1,9 +1,9 @@
-import TRAXClass, { logger, LogLevel } from "../dist/index.js";
+import TRAXClass, { AU_SEQ_NETWORK, logger, LogLevel } from "../dist/index.js";
 
 async function main() {
 	console.log("Loading gtfs data with timers disabled...");
 
-	const TRAX = new TRAXClass({ disableTimers: true });
+	const TRAX = new TRAXClass(AU_SEQ_NETWORK, { disableTimers: true });
 	logger.setLevel(LogLevel.INFO);
 
 	let start_static = Date.now();
@@ -14,7 +14,7 @@ async function main() {
 	console.log(`\nGTFS static data loaded in ${staticTime.toFixed(2)}s (with disableTimers: true)`);
 
 	console.log("\nNow testing with timers enabled (default)...");
-	const TRAX2 = new TRAXClass({ disableTimers: false });
+	const TRAX2 = new TRAXClass(AU_SEQ_NETWORK, { disableTimers: false });
 
 	let start_static2 = Date.now();
 	await TRAX2.loadGTFS(false, false);

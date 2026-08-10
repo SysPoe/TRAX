@@ -1,9 +1,9 @@
-import TRAXClass, { logger, LogLevel } from "../dist/index.js";
+import TRAXClass, { AU_SEQ_NETWORK, logger, LogLevel } from "../dist/index.js";
 
 async function main() {
 	console.log("Loading gtfs data...");
 
-	const TRAX = new TRAXClass();
+	const TRAX = new TRAXClass(AU_SEQ_NETWORK);
 	logger.setLevel(LogLevel.DEBUG);
 
 	let start_static = Date.now();
@@ -18,7 +18,7 @@ async function main() {
 	// await TRAX.updateRealtime();
 	// let end_realtime = Date.now();
 
-	const stop = TRAX.getAugmentedStops("place_romsta")[0];
+	const stop = TRAX.getAugmentedStops({ feedId: "translink-seq", localId: "place_romsta" })[0];
 	const date = TRAX.utils.time.addDaysToServiceDate(TRAX.today(), 1);
 	console.log(TRAX.getAvailableServiceDates().slice(0, 50));
 	const gtfs = TRAX.utils.getGtfs();

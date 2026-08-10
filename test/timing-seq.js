@@ -1,9 +1,9 @@
-import TRAXClass, { logger, LogLevel } from "../dist/index.js";
+import TRAXClass, { AU_SEQ_NETWORK, logger, LogLevel } from "../dist/index.js";
 
 async function main() {
 	console.log("Loading gtfs data with timers ENABLED to get detailed timing...");
 
-	const TRAX = new TRAXClass({ disableTimers: false });
+	const TRAX = new TRAXClass(AU_SEQ_NETWORK, { disableTimers: false });
 	logger.setLevel(LogLevel.TIMING);
 
 	let start = Date.now();

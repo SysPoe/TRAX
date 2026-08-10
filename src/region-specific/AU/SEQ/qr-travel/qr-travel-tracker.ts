@@ -20,9 +20,11 @@ import type {
 } from "./types.js";
 import ensureQRTEnabled from "./enabled.js";
 import type { TraxConfig } from "../../../../config.js";
+import { getDefaultTimeZone } from "../../../../config.js";
 import type { CacheContext } from "../../../../cache/index.js";
 import { cacheFileExists, loadCacheFile, writeCacheFile } from "../../../../utils/fs.js";
 import { buildQRTStationLookupMap, normalizeQRTStationLookupKey } from "./stations.js";
+import { getSeqState } from "../../../../plugins/seq-state.js";
 
 export { getQRTStations } from "./stations.js";
 
@@ -201,15 +203,15 @@ export async function getServiceUpdates(
 	startOfMonth.setDate(1);
 	startOfMonth.setHours(0, 0, 0, 0);
 
-	const defaultStart = getServiceDate(startOfMonth, config.timezone).slice(0, 8); // This gives YYYYMMDD
+	const defaultStart = getServiceDate(startOfMonth, getDefaultTimeZone(config)).slice(0, 8); // This gives YYYYMMDD
 	// But it seems it wants YYYY-MM-DD for start/end variables in this context
-	const start = startDate ?? getLocalISOString(startOfMonth, config.timezone).slice(0, 10);
+	const start = startDate ?? getLocalISOString(startOfMonth, getDefaultTimeZone(config)).slice(0, 10);
 
 	const endOfNextYear = new Date(startOfMonth);
 	endOfNextYear.setFullYear(endOfNextYear.getFullYear() + 1);
-	const end = endDate ?? getLocalISOString(endOfNextYear, config.timezone).slice(0, 10);
+	const end = endDate ?? getLocalISOString(endOfNextYear, getDefaultTimeZone(config)).slice(0, 10);
 
-	const offsetSecs = getTimezoneOffsetSeconds(config.timezone, now);
+	const offsetSecs = getTimezoneOffsetSeconds(getDefaultTimeZone(config), now);
 	const isoOffset =
 		(offsetSecs >= 0 ? "+" : "-") +
 		Math.floor(Math.abs(offsetSecs) / 3600)
@@ -273,8 +275,9 @@ function convertQRTServiceToTravelTrip(
 ): QRTTravelTrip {
 	const serviceMeta = serviceResponse;
 	const gtfsStops = getConsideredStations(ctx);
-	const qrtStationsByKey = buildQRTStationLookupMap(ctx.raw.regionSpecific.SEQ.qrtStations ?? {});
-	const qrtPlacesByCode = new Map((ctx.raw.regionSpecific.SEQ.qrtPlaces ?? []).map((place) => [place.qrt_PlaceCode, place]));
+	const seqState = getSeqState(ctx);
+	const qrtStationsByKey = buildQRTStationLookupMap(seqState.qrtStations);
+	const qrtPlacesByCode = new Map(seqState.qrtPlaces.map((place) => [place.qrt_PlaceCode, place]));
 	const stops: QRTTravelStopTime[] = (serviceResponse.TrainMovements as QRTTrainMovementDTO[]).map((movement) => {
 		let arrivalDelaySeconds: number | null = null;
 		let departureDelaySeconds: number | null = null;
@@ -287,8 +290,8 @@ function convertQRTServiceToTravelTrip(
 			movement.PlannedArrival !== "0001-01-01T00:00:00" &&
 			movement.ActualArrival !== "0001-01-01T00:00:00"
 		) {
-			const plannedArr = parseTimeWithConfig(movement.PlannedArrival, ctx.config.timezone);
-			const actualArr = parseTimeWithConfig(movement.ActualArrival, ctx.config.timezone);
+			const plannedArr = parseTimeWithConfig(movement.PlannedArrival, getDefaultTimeZone(ctx.config));
+			const actualArr = parseTimeWithConfig(movement.ActualArrival, getDefaultTimeZone(ctx.config));
 			arrivalDelaySeconds = Math.round((actualArr - plannedArr) / 1000);
 		}
 		if (
@@ -297,8 +300,8 @@ function convertQRTServiceToTravelTrip(
 			movement.PlannedDeparture !== "0001-01-01T00:00:00" &&
 			movement.ActualDeparture !== "0001-01-01T00:00:00"
 		) {
-			const plannedDep = parseTimeWithConfig(movement.PlannedDeparture, ctx.config.timezone);
-			const actualDep = parseTimeWithConfig(movement.ActualDeparture, ctx.config.timezone);
+			const plannedDep = parseTimeWithConfig(movement.PlannedDeparture, getDefaultTimeZone(ctx.config));
+			const actualDep = parseTimeWithConfig(movement.ActualDeparture, getDefaultTimeZone(ctx.config));
 			departureDelaySeconds = Math.round((actualDep - plannedDep) / 1000);
 			const delaySecs = departureDelaySeconds;
 			if (delaySecs !== null) {
@@ -417,7 +420,7 @@ function convertQRTServiceToTravelTrip(
 function getDelay(delaySecs: number | null = null, departureTime: string | null, config: TraxConfig) {
 	if (delaySecs === null || departureTime === null) return { delayString: "scheduled", delayClass: "scheduled" };
 
-	let departsInSecs = Math.round(parseTimeWithConfig(departureTime, config.timezone) - Date.now()) / 1000;
+	let departsInSecs = Math.round(parseTimeWithConfig(departureTime, getDefaultTimeZone(config)) - Date.now()) / 1000;
 	departsInSecs = Math.round(departsInSecs / 60) * 60;
 	const roundedDelay = delaySecs ? Math.round(delaySecs / 60) * 60 : null;
 	const delayString =

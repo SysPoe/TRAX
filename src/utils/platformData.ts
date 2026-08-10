@@ -28,16 +28,17 @@ export function seqPlatformDefinitionsPresent(pd: PlatformData | undefined): boo
 	return false;
 }
 
-function platformsJsonPath(region: TraxConfig["region"]): string {
+function platformsJsonPath(pluginId: string): string {
 	/* SEQ static data lives under region-specific/seq/, not au/seq/. */
-	if (region === "AU/SEQ" || region.startsWith("AU/SEQ/"))
+	if (pluginId === "au-seq")
 		return "region-specific/seq/platforms.json";
-	return `region-specific/${region.toLowerCase()}/platforms.json`;
+	return `region-specific/${pluginId}/platforms.json`;
 }
 
 export function getPlatformData(config: TraxConfig): PlatformData {
-	if (!config.region || config.region === "none") return {};
-	const DATA_PATH = platformsJsonPath(config.region);
+	const pluginId = config.network.plugins[0]?.id;
+	if (!pluginId) return {};
+	const DATA_PATH = platformsJsonPath(pluginId);
 	if (!hasDataFile(DATA_PATH)) return {};
 	return JSON.parse(loadDataFile(DATA_PATH)) as PlatformData;
 }

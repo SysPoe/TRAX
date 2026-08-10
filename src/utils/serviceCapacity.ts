@@ -1,10 +1,6 @@
-import { isRegion, TraxConfig } from "../config.js";
+import { type TraxConfig } from "../config.js";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { AugmentedTrip, AugmentedTripInstance } from "./augmentedTrip.js";
-import {
-	getServiceCapacity as SEQServCap,
-	ensureServiceCapacityData as SEQEnsCapData,
-} from "../region-specific/AU/SEQ/serviceCapacity.js";
 import { CacheContext } from "../cache/index.js";
 
 export enum ServiceCapacity {
@@ -25,12 +21,11 @@ export function getServiceCapacity(
 	ctx: CacheContext,
 	config: TraxConfig,
 ): ServiceCapacity {
-	if (isRegion(config.region, "AU/SEQ")) return SEQServCap(inst, stopTime, dateStr, _dirOverride, ctx);
+	for (const plugin of config.network.plugins) {
+		const value = plugin.serviceCapacity?.(inst, stopTime, dateStr, _dirOverride, ctx);
+		if (value !== undefined) return value;
+	}
 	return ServiceCapacity.UNKNOWN;
-}
-
-export async function ensureServiceCapacityData(config: TraxConfig) {
-	if (isRegion(config.region, "AU/SEQ")) return SEQEnsCapData(config);
 }
 
 export function addSCI(inst: AugmentedTripInstance, ctx: CacheContext, config: TraxConfig): AugmentedTripInstance {

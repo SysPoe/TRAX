@@ -2,18 +2,13 @@ import logger from "./logger.js";
 import { cacheFileExists, deleteCacheFile, loadCacheFile, writeCacheFile } from "./fs.js";
 import * as cache from "../cache/index.js";
 import * as qdf from "qdf-gtfs";
-import { isRegion, type TraxConfig } from "../config.js";
+import { type TraxConfig } from "../config.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import {
-	findPath as wasmFindPath,
-	resetGraph,
-	addAdjacency,
-	addSRT,
-	getSRT as getWasmSRT,
-	interpolateTimes as wasmInterpolateTimes,
-} from "../../build/release.js";
+import { entityKey, parseEntityKey } from "../identity.js";
+import type { QualifiedEntityId } from "qdf-gtfs";
+import { interpolateTimes as wasmInterpolateTimes } from "../../build/release.js";
 
 export type SRTMatrix = {
 	[from: string]: {
@@ -43,12 +38,8 @@ interface NetworkData {
 	staticFingerprint?: string;
 }
 
-let _networkData: NetworkData | null = null;
-let expectedStaticFingerprint: string | null = null;
 const CACHE_FILE = "network_topology.json";
 const MAX_CACHE_AGE_DAYS = 7;
-
-const bfsCache = new Map<string, string[] | null>();
 
 function loadNetworkData(ctx: cache.CacheContext): NetworkData | null {
 	const cacheDir = ctx.config.cacheDir;
@@ -57,8 +48,8 @@ function loadNetworkData(ctx: cache.CacheContext): NetworkData | null {
 			const data = JSON.parse(loadCacheFile(CACHE_FILE, cacheDir));
 			const ageDays = (Date.now() - (data.lastUpdated ?? 0)) / (1000 * 60 * 60 * 24);
 			if (
-				expectedStaticFingerprint !== null &&
-				data.staticFingerprint === expectedStaticFingerprint &&
+				ctx.runtimeState.srtExpectedStaticFingerprint !== null &&
+				data.staticFingerprint === ctx.runtimeState.srtExpectedStaticFingerprint &&
 				ageDays < MAX_CACHE_AGE_DAYS
 			) {
 				return data;
@@ -81,7 +72,7 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 	const timer = ctx.augmented.timer;
 	timer.start("SRT:generateNetworkData");
 	const trips = gtfs.getTrips();
-	const railTrips = trips.filter((t) => gtfs.getRoutes({ route_id: t.route_id })[0]?.route_type === 2);
+	const railTrips = trips.filter((t) => gtfs.getRoutes({ feed_id: t.feed_id, route_id: t.route_id })[0]?.route_type === 2);
 
 	const uniquePatterns: { id: string; timeFromPrev: number }[][] = [];
 	const seenSignatures = new Set<string>();
@@ -91,15 +82,15 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 	});
 
 	railTrips.forEach((trip) => {
-		const stopTimes = gtfs.getStopTimes({ trip_id: trip.trip_id });
+		const stopTimes = gtfs.getStopTimes({ feed_id: trip.feed_id, trip_id: trip.trip_id });
 		const signature = getPatternSignature(stopTimes);
 
 		if (seenSignatures.has(signature)) return;
 		seenSignatures.add(signature);
 
 		const stops = stopTimes.map((st: qdf.StopTime, i: number) => {
-			const stop = gtfs.getStops({ stop_id: st.stop_id })[0];
-			const id = stop ? (stop.parent_station ?? stop.stop_id) : st.stop_id;
+			const stop = gtfs.getStops({ feed_id: st.feed_id, stop_id: st.stop_id })[0];
+			const id = entityKey({ feedId: st.feed_id, localId: stop ? (stop.parent_station ?? stop.stop_id) : st.stop_id });
 
 			let timeFromPrev = 0;
 			if (i > 0) {
@@ -139,10 +130,7 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		}
 	});
 
-	if (isRegion(ctx.config.region, "CA/GTHA")) {
-		validEdges.delete("UN|KE");
-		validEdges.delete("KE|UN");
-	}
+	for (const plugin of ctx.config.network.plugins) plugin.filterTrackEdges?.(validEdges);
 
 	logger.debug(`Reduced to ${validEdges.size} physical edges. Building graph and matrix...`, {
 		module: "topology",
@@ -190,23 +178,13 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		if (!matrix[to][from]) matrix[to][from] = parseFloat(avg.toFixed(2));
 	}
 
-	if (isRegion(ctx.config.region, "CA/GTHA")) {
-		if (!matrix["KE"]) matrix["KE"] = {};
-		matrix["KE"]["SC"] = 2;
-		if (!matrix["SC"]) matrix["SC"] = {};
-		matrix["SC"]["KE"] = 2;
-
-		if (!adjacency["KE"]) adjacency["KE"] = [];
-		if (!adjacency["KE"].includes("SC")) adjacency["KE"].push("SC");
-		if (!adjacency["SC"]) adjacency["SC"] = [];
-		if (!adjacency["SC"].includes("KE")) adjacency["SC"].push("KE");
-	}
+	for (const plugin of ctx.config.network.plugins) plugin.enrichTrackGraph?.(matrix, adjacency);
 
 	const result = {
 		matrix,
 		adjacency,
 		lastUpdated: Date.now(),
-		staticFingerprint: expectedStaticFingerprint ?? undefined,
+		staticFingerprint: ctx.runtimeState.srtExpectedStaticFingerprint ?? undefined,
 	};
 	writeCacheFile(CACHE_FILE, JSON.stringify(result), ctx.config.cacheDir);
 	timer.stop("SRT:generateNetworkData");
@@ -214,28 +192,13 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 }
 
 function ensureDataLoaded(ctx: cache.CacheContext) {
-	if (!_networkData) {
-		_networkData = loadNetworkData(ctx);
-		if (!_networkData) {
-			_networkData = generateNetworkData(ctx);
+	let networkData = ctx.runtimeState.srtNetworkData as NetworkData | null;
+	if (!networkData) {
+		networkData = loadNetworkData(ctx);
+		if (!networkData) {
+			networkData = generateNetworkData(ctx);
 		}
-		syncToWasm(_networkData);
-	}
-}
-
-function syncToWasm(data: NetworkData) {
-	resetGraph();
-	const adjacency = data.adjacency;
-	for (const from in adjacency) {
-		for (const to of adjacency[from]) {
-			addAdjacency(from, to);
-		}
-	}
-	const matrix = data.matrix;
-	for (const from in matrix) {
-		for (const to in matrix[from]) {
-			addSRT(from, to, matrix[from][to]);
-		}
+		ctx.runtimeState.srtNetworkData = networkData;
 	}
 }
 
@@ -243,23 +206,39 @@ export function getSRT(from: string, to: string, ctx: cache.CacheContext): numbe
 	ensureDataLoaded(ctx);
 	if ((from == "place_exhsta" && to == "place_bowsta") || (from == "place_bowsta" && to == "place_exhsta")) return 3;
 
-	return _networkData!.matrix[from]?.[to] ?? _networkData!.matrix[to]?.[from];
+	const networkData = ctx.runtimeState.srtNetworkData as NetworkData;
+	return networkData.matrix[from]?.[to] ?? networkData.matrix[to]?.[from];
 }
 
 function getGraph(ctx: cache.CacheContext): Record<string, string[]> {
 	ensureDataLoaded(ctx);
-	return _networkData!.adjacency;
+	return (ctx.runtimeState.srtNetworkData as NetworkData).adjacency;
 }
 
 function findPathBFS(start: string, end: string, ctx: cache.CacheContext): string[] | null {
 	const cacheKey = `${start}|${end}`;
-	if (bfsCache.has(cacheKey)) {
-		return bfsCache.get(cacheKey)!;
+	if (ctx.runtimeState.srtBfs.has(cacheKey)) {
+		return ctx.runtimeState.srtBfs.get(cacheKey)!;
 	}
 
-	ensureDataLoaded(ctx);
-	const path = wasmFindPath(start, end);
-	bfsCache.set(cacheKey, path);
+	const graph = getGraph(ctx);
+	const queue: string[][] = [[start]];
+	const visited = new Set([start]);
+	let path: string[] | null = null;
+	while (queue.length > 0) {
+		const candidate = queue.shift()!;
+		const node = candidate[candidate.length - 1];
+		if (node === end) {
+			path = candidate;
+			break;
+		}
+		for (const neighbor of graph[node] ?? []) {
+			if (visited.has(neighbor)) continue;
+			visited.add(neighbor);
+			queue.push([...candidate, neighbor]);
+		}
+	}
+	ctx.runtimeState.srtBfs.set(cacheKey, path);
 	return path;
 }
 
@@ -306,8 +285,9 @@ export function findExpress(givenStops: string[], ctx: cache.CacheContext): Expr
 export function findExpressString(
 	expressData: ExpressInfo[],
 	ctx: cache.CacheContext,
-	stop_id: string | null = null,
+	stop: QualifiedEntityId | null = null,
 ): string {
+	const stop_id = stop ? entityKey(stop) : null;
 	if (stop_id != null)
 		expressData = expressData.slice(
 			expressData.findIndex((v) => v.from === stop_id || v.skipping?.includes(stop_id) || v.to === stop_id),
@@ -338,17 +318,20 @@ export function findExpressString(
 		"Running express " +
 		segments
 			.map((run) => {
+				const startRef = parseEntityKey(run.from);
+				const endRef = parseEntityKey(run.to);
 				const startName = (
-					ctx.augmented.stopsRec.get(run.from)?.stop_name ?? cache.getRawStops(ctx, run.from)[0]?.stop_name
+					ctx.augmented.stopsRec.get(run.from)?.stop_name ?? cache.getRawStops(ctx, { feed_id: startRef.feedId, stop_id: startRef.localId })[0]?.stop_name
 				)?.replace(" station", "");
 				const endName = (
-					ctx.augmented.stopsRec.get(run.to)?.stop_name ?? cache.getRawStops(ctx, run.to)[0]?.stop_name
+					ctx.augmented.stopsRec.get(run.to)?.stop_name ?? cache.getRawStops(ctx, { feed_id: endRef.feedId, stop_id: endRef.localId })[0]?.stop_name
 				)?.replace(" station", "");
-				const stoppingAtNames = run.stoppingAt.map((stopId) =>
-					(
-						ctx.augmented.stopsRec.get(stopId)?.stop_name ?? cache.getRawStops(ctx, stopId)[0]?.stop_name
-					)?.replace(" station", ""),
-				);
+				const stoppingAtNames = run.stoppingAt.map((stopId) => {
+					const ref = parseEntityKey(stopId);
+					return (
+						ctx.augmented.stopsRec.get(stopId)?.stop_name ?? cache.getRawStops(ctx, { feed_id: ref.feedId, stop_id: ref.localId })[0]?.stop_name
+					)?.replace(" station", "");
+				});
 				const formattedStoppingAtNames =
 					stoppingAtNames.length <= 1
 						? stoppingAtNames[0]
@@ -357,7 +340,7 @@ export function findExpressString(
 							: `${stoppingAtNames.slice(0, -1).join(", ")}, and ${stoppingAtNames[stoppingAtNames.length - 1]}`;
 
 				return stop_id !== null &&
-					(run.from == cache.getRawStops(ctx, stop_id)[0]?.parent_station || run.from == stop_id)
+					(run.from === entityKey({ feedId: stop!.feedId, localId: cache.getRawStops(ctx, { feed_id: stop!.feedId, stop_id: stop!.localId })[0]?.parent_station ?? stop!.localId }) || run.from == stop_id)
 					? run.stoppingAt.length > 0
 						? `to ${endName}, stopping only at ${formattedStoppingAtNames}`
 						: `to ${endName}`
@@ -368,8 +351,6 @@ export function findExpressString(
 			.join("; ")
 	);
 }
-
-const loggedMissingSRT = new Set<string>();
 
 export type PassingStop = { stop_id: string; passing: boolean };
 
@@ -424,12 +405,12 @@ function findPassingStopSRTs(stops: string[], ctx: cache.CacheContext): PassingS
 
 		if (srt === undefined) {
 			const key = `${from}|${to}`;
-			if (!loggedMissingSRT.has(key)) {
+			if (!ctx.runtimeState.loggedMissingSrt.has(key)) {
 				logger.warn(`No SRT found between ${from} and ${to}`, {
 					module: "augmentedStopTime",
 					function: "findPassingStopSRTs",
 				});
-				loggedMissingSRT.add(key);
+				ctx.runtimeState.loggedMissingSrt.add(key);
 			}
 			results.push({ from, to, emu: 1, passing: allStops[i + 1].passing });
 		} else {
@@ -439,9 +420,9 @@ function findPassingStopSRTs(stops: string[], ctx: cache.CacheContext): PassingS
 	return results;
 }
 
-function getStopOrParentId(stopId: string, ctx: cache.CacheContext): string | undefined {
-	const s = cache.getRawStops(ctx, stopId)?.[0];
-	return s ? (s.parent_station ?? s.stop_id) : undefined;
+function getStopOrParentId(stopTime: qdf.StopTime, ctx: cache.CacheContext): string | undefined {
+	const s = cache.getRawStops(ctx, { feed_id: stopTime.feed_id, stop_id: stopTime.stop_id })?.[0];
+	return s ? entityKey({ feedId: s.feed_id, localId: s.parent_station ?? s.stop_id }) : undefined;
 }
 
 /** emu weights for wasmInterpolateTimes (length = passing legs + 1); only set on synthetic passing rows. */
@@ -455,12 +436,12 @@ export function findPassingStopTimes(stopTimes: qdf.StopTime[], ctx: cache.Cache
 
 	const sortedStopTimes = [...stopTimes].sort((a, b) => (a.stop_sequence ?? 0) - (b.stop_sequence ?? 0));
 	const stops = sortedStopTimes
-		.map((st) => getStopOrParentId(st.stop_id, ctx))
+		.map((st) => getStopOrParentId(st, ctx))
 		.filter((v): v is string => v !== undefined);
 
 	const idsToTimes: Record<string, qdf.StopTime> = {};
 	for (const st of stopTimes) {
-		const parent = getStopOrParentId(st.stop_id, ctx);
+		const parent = getStopOrParentId(st, ctx);
 		if (parent) idsToTimes[parent] = st;
 	}
 
@@ -506,10 +487,11 @@ export function findPassingStopTimes(stopTimes: qdf.StopTime[], ctx: cache.Cache
 			const run = currentPassingRun[i];
 			const interpolatedTime = interpolatedTimes[i];
 
+			const passingStop = parseEntityKey(run.to);
 			resultTimes.push({
 				_passing: true,
 				_segmentEmus: segmentEmus,
-				stop_id: run.to,
+				stop_id: passingStop.localId,
 				trip_id: stopTimes[0].trip_id,
 				stop_sequence:
 					(startTime.stop_sequence ?? 0) +
@@ -524,7 +506,7 @@ export function findPassingStopTimes(stopTimes: qdf.StopTime[], ctx: cache.Cache
 				shape_dist_traveled: -1,
 				stop_headsign: "",
 				timepoint: 0,
-				feed_id: startTime.feed_id,
+				feed_id: passingStop.feedId,
 			});
 		}
 
@@ -549,12 +531,12 @@ export default {
  */
 export function getStaticFeedFingerprint(config: TraxConfig): string | null {
 	const hash = crypto.createHash("sha256");
-	hash.update(config.region);
+	hash.update(config.network.id);
 	hash.update(JSON.stringify(config.mergeStops));
 	hash.update(JSON.stringify(config.updateStopActions));
 
-	for (const feed of config.urls) {
-		const feedConfig = typeof feed === "string" ? { url: feed } : feed;
+	for (const feed of config.network.feeds) {
+		const feedConfig = feed.staticSource;
 		const keySource = feedConfig.headers
 			? `${feedConfig.url}|${JSON.stringify(feedConfig.headers)}`
 			: feedConfig.url;
@@ -577,19 +559,19 @@ export function getStaticFeedFingerprint(config: TraxConfig): string | null {
  * Reset process-local graph state for a newly loaded static generation while
  * preserving the disk cache only when it can be matched to that exact feed.
  */
-export function resetNetworkTopologyForStaticFeed(config: TraxConfig): void {
-	_networkData = null;
-	bfsCache.clear();
-	loggedMissingSRT.clear();
-	expectedStaticFingerprint = getStaticFeedFingerprint(config);
-	if (expectedStaticFingerprint === null) deleteCacheFile(CACHE_FILE, config.cacheDir);
+export function resetNetworkTopologyForStaticFeed(ctx: cache.CacheContext): void {
+	ctx.runtimeState.srtNetworkData = null;
+	ctx.runtimeState.srtBfs.clear();
+	ctx.runtimeState.loggedMissingSrt.clear();
+	ctx.runtimeState.srtExpectedStaticFingerprint = getStaticFeedFingerprint(ctx.config);
+	if (ctx.runtimeState.srtExpectedStaticFingerprint === null) deleteCacheFile(CACHE_FILE, ctx.config.cacheDir);
 }
 
 /** Clears in-memory rail topology and deletes the on-disk cache explicitly. */
-export function invalidateNetworkTopologyCache(cacheDir: string): void {
-	_networkData = null;
-	bfsCache.clear();
-	loggedMissingSRT.clear();
-	expectedStaticFingerprint = null;
-	deleteCacheFile(CACHE_FILE, cacheDir);
+export function invalidateNetworkTopologyCache(ctx: cache.CacheContext): void {
+	ctx.runtimeState.srtNetworkData = null;
+	ctx.runtimeState.srtBfs.clear();
+	ctx.runtimeState.loggedMissingSrt.clear();
+	ctx.runtimeState.srtExpectedStaticFingerprint = null;
+	deleteCacheFile(CACHE_FILE, ctx.config.cacheDir);
 }

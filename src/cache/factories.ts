@@ -1,20 +1,11 @@
-import { globalTimer } from "../utils/timer.js";
+import { Timer } from "../utils/timer.js";
 import type { TraxConfig } from "../config.js";
-import type { AugmentedCache, RawCache } from "./types.js";
+import type { AugmentedCache, CacheContext, RawCache } from "./types.js";
 import { LRUCache } from "./lruCache.js";
 import type { ExpressInfo, PassingStop } from "../utils/SRT.js";
 
 export function createEmptyRawCache(): RawCache {
 	return {
-		regionSpecific: {
-			SEQ: {
-				qrtPlaces: [],
-				qrtStations: {},
-				qrtTrains: [],
-				platformData: undefined,
-				railwayStationFacilities: [],
-			},
-		},
 		tripServiceIds: new Map(),
 		injectedTripUpdates: [],
 		injectedVehiclePositions: [],
@@ -45,7 +36,7 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 		instancesRec: new Map(),
 		tripUpdatesCache: new Map(),
 		tripUpdateSignatures: new Map(),
-		timer: globalTimer,
+		timer: new Timer(),
 		seqDiagram: undefined,
 		qrtRefreshInFlight: undefined,
 	};
@@ -55,4 +46,20 @@ export function createAugmentedCacheWithConfig(config: TraxConfig): AugmentedCac
 	const cache = createEmptyAugmentedCache();
 	cache.timer.disabled = config.disableTimers;
 	return cache;
+}
+
+export function createRuntimeState(): CacheContext["runtimeState"] {
+	return {
+		consideredRoutes: new Map(),
+		consideredStops: new Map(),
+		consideredTrips: new Map(),
+		serviceDates: new Map(),
+		dateOffsets: new Map(),
+		serviceDateArrays: new Map(),
+		previousVehicleInfo: new Map(),
+		srtNetworkData: null,
+		srtExpectedStaticFingerprint: null,
+		srtBfs: new Map(),
+		loggedMissingSrt: new Set(),
+	};
 }

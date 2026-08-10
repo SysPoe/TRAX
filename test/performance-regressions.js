@@ -62,9 +62,14 @@ function testStaticFingerprintTracksQDFCacheFile() {
 		fs.writeFileSync(cachePath, "feed-v1");
 
 		const config = {
-			urls: [url],
+			network: {
+				id: "fingerprint-test",
+				name: "Fingerprint test",
+				feeds: [{ id: "test", staticSource: { url }, realtimeSources: [] }],
+				modes: ["rail"],
+				plugins: [],
+			},
 			cacheDir,
-			region: "AU/SEQ",
 			mergeStops: [],
 			updateStopActions: [],
 		};

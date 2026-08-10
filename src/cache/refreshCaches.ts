@@ -14,19 +14,17 @@ import {
 import { getRailwayStationFacilities } from "../region-specific/AU/SEQ/facilities.js";
 import type { QRTPlace, QRTStationDetails, QRTTravelTrip } from "../region-specific/AU/SEQ/qr-travel/types.js";
 import type { RailwayStationFacility } from "../region-specific/AU/SEQ/facilities-types.js";
-import { updateAllSources as updateGTHAPlatforms } from "../region-specific/CA/GTHA/realtime.js";
 import logger from "../utils/logger.js";
-import { ensureServiceCapacityData } from "../utils/serviceCapacity.js";
-import { isRegion, type TraxConfig } from "../config.js";
-import { addWasmStop } from "../../build/release.js";
+import { type TraxConfig } from "../config.js";
 import { clearConsideredCaches } from "../utils/considered.js";
-import { buildAndApplySeqDiagram, refreshSeqDiagramAfterRealtimeBatch } from "../region-specific/AU/SEQ/seq-diagram.js";
 import type { CacheContext } from "./types.js";
-import { createEmptyRawCache, createAugmentedCacheWithConfig } from "./factories.js";
+import { createEmptyRawCache, createAugmentedCacheWithConfig, createRuntimeState } from "./factories.js";
 import { registerAugmentedTrip, unregisterAugmentedTrip } from "./augmentedEntities.js";
 import { clearPreviousVehicleInfo, prunePreviousVehicleInfo } from "../utils/vehicleModel.js";
+import { entityKey } from "../identity.js";
+import { getSeqState } from "../plugins/seq-state.js";
 
-function refreshQRTTrainsInBackground(ctx: CacheContext): void {
+export function refreshQRTTrainsInBackground(ctx: CacheContext): void {
 	if (ctx.augmented.qrtRefreshInFlight) return;
 
 	logger.debug("Refreshing qrtTrains cache in background...", {
@@ -38,7 +36,7 @@ function refreshQRTTrainsInBackground(ctx: CacheContext): void {
 		.then((trains: QRTTravelTrip[]) => {
 			// Replace the snapshot atomically. Readers continue using the prior
 			// successful value while this request is in flight.
-			ctx.raw.regionSpecific.SEQ.qrtTrains = trains;
+			getSeqState(ctx).qrtTrains = trains;
 			logger.debug(`Loaded ${trains.length} QRT trains.`, {
 				module: "cache",
 				function: "refreshRealtimeCache",
@@ -111,9 +109,9 @@ function resetRealtimeCacheIncremental(updatedTripIds: Set<string>, ctx: CacheCo
 	}
 }
 
-async function loadSEQStaticMetadata(ctx: CacheContext): Promise<void> {
+export async function loadSEQStaticMetadata(ctx: CacheContext): Promise<void> {
 	const { config } = ctx;
-	const seq = ctx.raw.regionSpecific.SEQ;
+	const seq = getSeqState(ctx);
 
 	const loadPlaces = async () => {
 		ctx.augmented.timer.start("refreshStaticCache:loadQRTPlaces");
@@ -200,34 +198,42 @@ export async function refreshStaticCache(
 	});
 
 	const newRawCache = createEmptyRawCache();
-	newRawCache.regionSpecific.SEQ.qrtTrains = previousCtx?.raw.regionSpecific.SEQ.qrtTrains ?? [];
 	const newAugmentedCache = createAugmentedCacheWithConfig(config);
-	const ctx: CacheContext = { raw: newRawCache, augmented: newAugmentedCache, config, gtfs };
+	const ctx: CacheContext = {
+		raw: newRawCache,
+		augmented: newAugmentedCache,
+		config,
+		gtfs,
+		pluginState: new Map(),
+		runtimeState: createRuntimeState(),
+	};
+	if (previousCtx) getSeqState(ctx).qrtTrains = getSeqState(previousCtx).qrtTrains;
 	const startTotal = Date.now();
 	ctx.augmented.timer.clear();
 	ctx.augmented.timer.start("refreshStaticCache");
-	clearConsideredCaches();
-	clearAugmentedStopTimeCaches();
-	clearPreviousVehicleInfo();
+	clearConsideredCaches(ctx);
+	clearAugmentedStopTimeCaches(ctx);
+	clearPreviousVehicleInfo(ctx);
 	const { resetNetworkTopologyForStaticFeed } = await import("../utils/SRT.js");
-	resetNetworkTopologyForStaticFeed(config);
+	resetNetworkTopologyForStaticFeed(ctx);
+	for (const plugin of config.network.plugins) await plugin.afterStaticLoad?.(ctx);
 
 	const serviceDateTripsMap = new Map<string, Set<string>>();
 	const passingTripsMap = new Map<string, Set<string>>();
-	const seqStaticMetadataPromise = isRegion(config.region, "AU/SEQ") ? loadSEQStaticMetadata(ctx) : Promise.resolve();
 
 	ctx.augmented.timer.start("refreshStaticCache:preloadTripUpdates");
 	const allUpdates = gtfs.getRealtimeTripUpdates();
 	const injected = ctx.raw.injectedTripUpdates ?? [];
 	for (const update of allUpdates.concat(injected)) {
 		const tripId = update.trip.trip_id;
-		if (!tripId) continue;
+		if (!tripId || !update.feed_id) continue;
+		const key = entityKey({ feedId: update.feed_id, localId: tripId });
 
-		const existing = ctx.augmented.tripUpdatesCache.get(tripId);
+		const existing = ctx.augmented.tripUpdatesCache.get(key);
 		if (existing) {
 			existing.push(update);
 		} else {
-			ctx.augmented.tripUpdatesCache.set(tripId, [update]);
+			ctx.augmented.tripUpdatesCache.set(key, [update]);
 		}
 	}
 	for (const [tripId, updates] of ctx.augmented.tripUpdatesCache) {
@@ -273,11 +279,14 @@ export async function refreshStaticCache(
 
 	ctx.augmented.timer.start("refreshStaticCache:loadTrips");
 	const allTrips = gtfs.getTrips();
-	const trips = allTrips.filter((v: Trip) => isConsideredTrip(v, gtfs));
+	const trips = allTrips.filter((v: Trip) => isConsideredTrip(v, ctx));
 	for (const t of allTrips) {
-		newRawCache.tripServiceIds!.set(t.trip_id, t.service_id);
+		newRawCache.tripServiceIds!.set(
+			entityKey({ feedId: t.feed_id, localId: t.trip_id }),
+			entityKey({ feedId: t.feed_id, localId: t.service_id }),
+		);
 	}
-	for (const trip of trips) newAugmentedCache.rawTripsRec.set(trip.trip_id, trip);
+	for (const trip of trips) newAugmentedCache.rawTripsRec.set(entityKey({ feedId: trip.feed_id, localId: trip.trip_id }), trip);
 	ctx.augmented.timer.stop("refreshStaticCache:loadTrips");
 	logger.debug(`Loaded ${trips.length} considered trips out of ${allTrips.length} total.`, {
 		module: "cache",
@@ -287,8 +296,9 @@ export async function refreshStaticCache(
 	if (config.preloadStopTimes) {
 		ctx.augmented.timer.start("refreshStaticCache:preloadStopTimes");
 		for (const trip of trips) {
-			const stopTimes = gtfs.getStopTimes({ trip_id: trip.trip_id });
-			ctx.augmented.rawStopTimesCache.set(trip.trip_id, stopTimes);
+			const key = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
+			const stopTimes = gtfs.getStopTimes({ feed_id: trip.feed_id, trip_id: trip.trip_id });
+			ctx.augmented.rawStopTimesCache.set(key, stopTimes);
 		}
 		ctx.augmented.timer.stop("refreshStaticCache:preloadStopTimes");
 	}
@@ -296,45 +306,39 @@ export async function refreshStaticCache(
 	ctx.augmented.timer.start("refreshStaticCache:processShapes");
 	const shapeSet = new Set<string>();
 	for (const trip of trips) {
-		if (trip.shape_id && !shapeSet.has(trip.shape_id)) {
-			shapeSet.add(trip.shape_id);
-			newAugmentedCache.shapes.push({ shape_id: trip.shape_id, route_id: trip.route_id });
+		const shapeKey = trip.shape_id ? entityKey({ feedId: trip.feed_id, localId: trip.shape_id }) : null;
+		if (trip.shape_id && shapeKey && !shapeSet.has(shapeKey)) {
+			shapeSet.add(shapeKey);
+			newAugmentedCache.shapes.push({ feed_id: trip.feed_id, shape_id: trip.shape_id, route_id: trip.route_id });
 		}
 	}
 	ctx.augmented.timer.stop("refreshStaticCache:processShapes");
 
-	ctx.augmented.timer.start("refreshStaticCache:ensureServiceCapacity");
-	await Promise.all([ensureServiceCapacityData(config), seqStaticMetadataPromise]);
-	ctx.augmented.timer.stop("refreshStaticCache:ensureServiceCapacity");
 
 	ctx.augmented.timer.start("refreshStaticCache:prepAugmentStops");
-	// Sync stops into WASM for downstream augmentation (passing stop detection, parent lookup)
-	for (let i = 0; i < stops.length; i++) {
-		const s = stops[i];
-		addWasmStop(s.stop_id, s.parent_station ?? "", s.platform_code ?? "");
-	}
-
 	const childrenByParent = new Map<string, Stop[]>();
 	for (const s of stops) {
 		if (!s.parent_station) continue;
-		const list = childrenByParent.get(s.parent_station) ?? [];
+		const parentKey = entityKey({ feedId: s.feed_id, localId: s.parent_station });
+		const list = childrenByParent.get(parentKey) ?? [];
 		list.push(s);
-		childrenByParent.set(s.parent_station, list);
+		childrenByParent.set(parentKey, list);
 	}
 
 	const qrtPlacesByName = new Map<string, QRTPlace>();
 	const qrtStationsByKey = new Map<string, QRTStationDetails>();
 	const facilitiesByStopId = new Map<string, RailwayStationFacility>();
-	if (isRegion(config.region, "AU/SEQ")) {
-		for (const p of newRawCache.regionSpecific.SEQ.qrtPlaces ?? []) {
+	const seqState = getSeqState(ctx);
+	if (seqState.qrtPlaces.length || Object.keys(seqState.qrtStations).length) {
+		for (const p of seqState.qrtPlaces) {
 			if (!p?.Title) continue;
 			const key = p.Title.toLowerCase().replace("station", "").trim();
 			qrtPlacesByName.set(key, p);
 		}
-		for (const [key, station] of buildQRTStationLookupMap(newRawCache.regionSpecific.SEQ.qrtStations ?? {})) {
+		for (const [key, station] of buildQRTStationLookupMap(seqState.qrtStations)) {
 			if (!qrtStationsByKey.has(key)) qrtStationsByKey.set(key, station);
 		}
-		const facilities = newRawCache.regionSpecific.SEQ.railwayStationFacilities ?? [];
+		const facilities = seqState.railwayStationFacilities;
 		for (const f of facilities) {
 			if (!f?.stops) continue;
 			for (const sId of f.stops) {
@@ -361,16 +365,18 @@ export async function refreshStaticCache(
 
 	// Prime stop lookup map
 	ctx.augmented.timer.start("refreshStaticCache:primeStopMap");
-	for (const stop of newAugmentedCache.stops) newAugmentedCache.stopsRec.set(stop.stop_id, stop);
+	for (const stop of newAugmentedCache.stops) {
+		newAugmentedCache.stopsRec.set(entityKey({ feedId: stop.feed_id, localId: stop.stop_id }), stop);
+	}
 
 	// Link parents and children
 	for (const stop of newAugmentedCache.stops) {
 		if (stop.parent_stop_id) {
-			stop.parent = newAugmentedCache.stopsRec.get(stop.parent_stop_id) ?? null;
+			stop.parent = newAugmentedCache.stopsRec.get(entityKey({ feedId: stop.feed_id, localId: stop.parent_stop_id })) ?? null;
 		}
 		if (stop.child_stop_ids) {
 			stop.children = stop.child_stop_ids
-				.map((id) => newAugmentedCache.stopsRec.get(id))
+				.map((id) => newAugmentedCache.stopsRec.get(entityKey({ feedId: stop.feed_id, localId: id })))
 				.filter((s): s is AugmentedStop => !!s);
 		}
 	}
@@ -381,12 +387,13 @@ export async function refreshStaticCache(
 	newAugmentedCache.trips = await processWithProgress(trips, "Augmenting trips", (trip) => {
 		const augmentedTrip = augmentTrip(trip, ctx, tripUpdatesCache);
 
-		newAugmentedCache.tripsRec.set(augmentedTrip.trip_id, augmentedTrip);
+		const tripKey = entityKey({ feedId: augmentedTrip.feed_id, localId: augmentedTrip.trip_id });
+		newAugmentedCache.tripsRec.set(tripKey, augmentedTrip);
 		registerAugmentedTrip(ctx, augmentedTrip);
 
 		const allStopTimes = augmentedTrip.instances.flatMap((i) => i.stopTimes);
-		newAugmentedCache.stopTimes[augmentedTrip.trip_id] = allStopTimes;
-		newAugmentedCache.baseStopTimes[augmentedTrip.trip_id] = [...allStopTimes];
+		newAugmentedCache.stopTimes[tripKey] = allStopTimes;
+		newAugmentedCache.baseStopTimes[tripKey] = [...allStopTimes];
 
 		for (const instance of augmentedTrip.instances) {
 			for (const date of instance.actualTripDates) {
@@ -395,18 +402,18 @@ export async function refreshStaticCache(
 					tripIdSet = new Set();
 					serviceDateTripsMap.set(date, tripIdSet);
 				}
-				tripIdSet.add(augmentedTrip.trip_id);
+				tripIdSet.add(tripKey);
 			}
 
 			for (const st of instance.stopTimes) {
 				if (st.passing && st.actual_stop_id) {
-					const stopId = st.actual_stop_id;
+					const stopId = entityKey({ feedId: st.feed_id, localId: st.actual_stop_id });
 					let tripIdSet = passingTripsMap.get(stopId);
 					if (!tripIdSet) {
 						tripIdSet = new Set();
 						passingTripsMap.set(stopId, tripIdSet);
 					}
-					tripIdSet.add(augmentedTrip.trip_id);
+					tripIdSet.add(tripKey);
 				}
 			}
 		}
@@ -428,11 +435,7 @@ export async function refreshStaticCache(
 	}
 	ctx.augmented.timer.stop("refreshStaticCache:buildPassingTrips");
 
-	if (isRegion(config.region, "AU/SEQ")) {
-		ctx.augmented.timer.start("refreshStaticCache:seqDiagram");
-		buildAndApplySeqDiagram(ctx, gtfs, trips);
-		ctx.augmented.timer.stop("refreshStaticCache:seqDiagram");
-	}
+	for (const plugin of config.network.plugins) await plugin.afterSnapshotBuilt?.(ctx);
 
 	ctx.augmented.timer.stop("refreshStaticCache");
 	ctx.augmented.timer.log("Static Cache Refresh", true);
@@ -455,10 +458,6 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		function: "refreshRealtimeCache",
 	});
 
-	if (isRegion(config.region, "AU/SEQ")) {
-		refreshQRTTrainsInBackground(ctx);
-	}
-
 	logger.debug("Loading realtime updates...", {
 		module: "cache",
 		function: "refreshRealtimeCache",
@@ -469,10 +468,11 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 	const nextUpdatesByTrip = new Map<string, typeof allTripUpdates>();
 	for (const update of allTripUpdates) {
 		const tripId = update.trip.trip_id;
-		if (!tripId) continue;
-		const updates = nextUpdatesByTrip.get(tripId);
+		if (!tripId || !update.feed_id) continue;
+		const tripKey = entityKey({ feedId: update.feed_id, localId: tripId });
+		const updates = nextUpdatesByTrip.get(tripKey);
 		if (updates) updates.push(update);
-		else nextUpdatesByTrip.set(tripId, [update]);
+		else nextUpdatesByTrip.set(tripKey, [update]);
 	}
 	const nextSignatures = new Map<string, string>();
 	for (const [tripId, updates] of nextUpdatesByTrip) {
@@ -532,11 +532,16 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		);
 
 		const updatedAugmented = await processWithProgress(tripsToUpdate, "Re-augmenting updated trips", (t) =>
-			augmentTrip(t, ctx, ctx.augmented.tripUpdatesCache, reusableTrips.get(t.trip_id)),
+			augmentTrip(
+				t,
+				ctx,
+				ctx.augmented.tripUpdatesCache,
+				reusableTrips.get(entityKey({ feedId: t.feed_id, localId: t.trip_id })),
+			),
 		);
 
 		for (const at of updatedAugmented) {
-			augmentedCache.tripsRec.set(at.trip_id, at);
+			augmentedCache.tripsRec.set(entityKey({ feedId: at.feed_id, localId: at.trip_id }), at);
 			registerAugmentedTrip(ctx, at);
 		}
 
@@ -558,8 +563,8 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 
 			const allStopTimes = trip.instances.flatMap((i) => i.stopTimes);
 
-			augmentedCache.stopTimes[trip.trip_id] = allStopTimes;
-			augmentedCache.baseStopTimes[trip.trip_id] = [...allStopTimes];
+			augmentedCache.stopTimes[tripId] = allStopTimes;
+			augmentedCache.baseStopTimes[tripId] = [...allStopTimes];
 
 			for (const instance of trip.instances) {
 				for (const date of instance.actualTripDates) {
@@ -568,42 +573,37 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 						tripIds = [];
 						augmentedCache.serviceDateTrips.set(date, tripIds);
 					}
-					if (!tripIds.includes(trip.trip_id)) tripIds.push(trip.trip_id);
+					if (!tripIds.includes(tripId)) tripIds.push(tripId);
 
 					let tripSet = augmentedCache.serviceDateTripsSet.get(date);
 					if (!tripSet) {
 						tripSet = new Set(tripIds);
 						augmentedCache.serviceDateTripsSet.set(date, tripSet);
 					}
-					tripSet.add(trip.trip_id);
+					tripSet.add(tripId);
 				}
 
 				for (const st of instance.stopTimes) {
 					if (st.passing && st.actual_stop_id) {
-						const stopId = st.actual_stop_id;
+						const stopId = entityKey({ feedId: st.feed_id, localId: st.actual_stop_id });
 						let tripIds = augmentedCache.passingTrips.get(stopId);
 						if (!tripIds) {
 							tripIds = [];
 							augmentedCache.passingTrips.set(stopId, tripIds);
 						}
-						if (!tripIds.includes(trip.trip_id)) tripIds.push(trip.trip_id);
+						if (!tripIds.includes(tripId)) tripIds.push(tripId);
 					}
 				}
 			}
 		}
-		for (const stop of augmentedCache.stops) augmentedCache.stopsRec.set(stop.stop_id, stop);
-
-		if (isRegion(config.region, "AU/SEQ")) {
-			ctx.augmented.timer.start("refreshRealtimeCache:seqDiagram");
-			refreshSeqDiagramAfterRealtimeBatch(ctx, updatedTripIds);
-			ctx.augmented.timer.stop("refreshRealtimeCache:seqDiagram");
+		for (const stop of augmentedCache.stops) {
+			augmentedCache.stopsRec.set(entityKey({ feedId: stop.feed_id, localId: stop.stop_id }), stop);
 		}
+
 	}
 
-	if (isRegion(ctx.config.region, "CA/GTHA")) {
-		await updateGTHAPlatforms(ctx, gtfs);
-	}
-	prunePreviousVehicleInfo(augmentedCache.instancesRec.keys());
+	for (const plugin of config.network.plugins) await plugin.afterRealtime?.(ctx, updatedTripIds);
+	prunePreviousVehicleInfo(ctx, augmentedCache.instancesRec.keys());
 
 	ctx.augmented.timer.stop("refreshRealtimeCache");
 	ctx.augmented.timer.log("Realtime Cache Refresh", true);

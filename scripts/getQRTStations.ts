@@ -1,6 +1,7 @@
 import fs from "fs";
 import type { GTFS, Stop } from "qdf-gtfs";
-import { PRESETS, resolveConfig } from "../src/config.js";
+import { resolveConfig } from "../src/config.js";
+import { AU_SEQ_NETWORK } from "../src/networks.js";
 import { createGtfs } from "../src/gtfsInterfaceLayer.js";
 import {
 	getQRTStationLookupKeys,
@@ -22,21 +23,21 @@ function getConsideredRailStations(gtfs: GTFS): Stop[] {
 	const seenPatterns = new Set<string>();
 
 	for (const trip of gtfs.getTrips()) {
-		if (gtfs.getRoutes({ route_id: trip.route_id })[0]?.route_type !== 2) continue;
+		if (gtfs.getRoutes({ feed_id: trip.feed_id, route_id: trip.route_id })[0]?.route_type !== 2) continue;
 
-		const stopTimes = gtfs.getStopTimes({ trip_id: trip.trip_id });
+		const stopTimes = gtfs.getStopTimes({ feed_id: trip.feed_id, trip_id: trip.trip_id });
 		const pattern = stopTimes.map((stopTime) => stopTime.stop_id).join("|");
 		if (seenPatterns.has(pattern)) continue;
 		seenPatterns.add(pattern);
 
 		for (const stopTime of stopTimes) {
-			const stop = gtfs.getStops({ stop_id: stopTime.stop_id })[0];
+			const stop = gtfs.getStops({ feed_id: stopTime.feed_id, stop_id: stopTime.stop_id })[0];
 			if (!stop) continue;
 			const stationId = stop.parent_station ?? stop.stop_id;
 			if (stationIds.has(stationId)) continue;
 			stationIds.add(stationId);
 
-			const station = gtfs.getStops({ stop_id: stationId })[0];
+			const station = gtfs.getStops({ feed_id: stop.feed_id, stop_id: stationId })[0];
 			if (station) stations.push(station);
 		}
 	}
@@ -92,11 +93,7 @@ function matchStationStopIds(
 }
 
 async function loadSEQGTFS(): Promise<GTFS> {
-	const config = resolveConfig({
-		...PRESETS["AU/SEQ"](),
-		realtime: null,
-		disableTimers: true,
-	});
+	const config = resolveConfig(AU_SEQ_NETWORK, { disableTimers: true });
 	return createGtfs(config, false);
 }
 

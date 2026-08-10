@@ -10,6 +10,7 @@ import { promisify } from "util";
 import { getCacheFilePath, getDataFilePath } from "../../../utils/fs.js";
 import { TraxConfig } from "../../../config.js";
 import { ServiceCapacity } from "../../../utils/serviceCapacity.js";
+import { getPluginState } from "../../../plugins/types.js";
 
 const pipe = promisify(pipeline);
 
@@ -25,9 +26,18 @@ export type ServiceCapacityData = {
 
 type CapacityIndex = Map<string, Map<string, Map<string, Map<string, Map<string, string>>>>>;
 
-let capacityIndex: CapacityIndex = new Map();
-let loaded = false;
-let loadedFileIdentity: string | null = null;
+type SeqCapacityState = {
+	capacityIndex: CapacityIndex;
+	loaded: boolean;
+	loadedFileIdentity: string | null;
+	dayTypeCache: Map<string, string>;
+};
+
+function getState(ctx: CacheContext): SeqCapacityState {
+	return getPluginState(ctx, "au-seq:capacity", () => ({
+		capacityIndex: new Map(), loaded: false, loadedFileIdentity: null, dayTypeCache: new Map(),
+	}));
+}
 
 function getMap<K, V>(map: Map<K, V>, key: K, factory: () => V): V {
 	let val = map.get(key);
@@ -38,7 +48,9 @@ function getMap<K, V>(map: Map<K, V>, key: K, factory: () => V): V {
 	return val;
 }
 
-export async function ensureServiceCapacityData(config: TraxConfig): Promise<void> {
+export async function ensureServiceCapacityData(ctx: CacheContext): Promise<void> {
+	const config = ctx.config;
+	const state = getState(ctx);
 	const cacheDir = config.cacheDir;
 	const FILE_PATH = getCacheFilePath("region-specific/seq/service_capacity.csv", cacheDir);
 	const fileDir = path.dirname(FILE_PATH);
@@ -66,13 +78,13 @@ export async function ensureServiceCapacityData(config: TraxConfig): Promise<voi
 	if (fs.existsSync(FILE_PATH)) {
 		const stat = fs.statSync(FILE_PATH, { bigint: true });
 		const identity = `${FILE_PATH}:${stat.size}:${stat.mtimeNs}`;
-		if (loaded && loadedFileIdentity === identity) return;
-		loadedFileIdentity = identity;
+		if (state.loaded && state.loadedFileIdentity === identity) return;
+		state.loadedFileIdentity = identity;
 	}
-	loadServiceCapacityData(cacheDir);
+	loadServiceCapacityData(cacheDir, state);
 }
 
-function loadServiceCapacityData(cacheDir: string) {
+function loadServiceCapacityData(cacheDir: string, state: SeqCapacityState) {
 	const FILE_PATH = getCacheFilePath("region-specific/seq/service_capacity.csv", cacheDir);
 
 	if (!fs.existsSync(FILE_PATH)) {
@@ -85,7 +97,7 @@ function loadServiceCapacityData(cacheDir: string) {
 	const headers = lines[0].split(",").map((h) => h.trim().toLowerCase().replace(/"/g, ""));
 	const hasId = headers[0] === "_id";
 
-	capacityIndex = new Map();
+	state.capacityIndex = new Map();
 	let count = 0;
 
 	for (let i = 1; i < lines.length; i++) {
@@ -107,7 +119,7 @@ function loadServiceCapacityData(cacheDir: string) {
 
 		if (isFerryOrTram(row.route)) continue;
 
-		const routeMap = getMap(capacityIndex, row.route, () => new Map());
+		const routeMap = getMap(state.capacityIndex, row.route, () => new Map());
 		const dirMap = getMap(routeMap, row.direction, () => new Map());
 		const dayMap = getMap(dirMap, row.day_type, () => new Map());
 
@@ -117,7 +129,7 @@ function loadServiceCapacityData(cacheDir: string) {
 		stopMap.set(row.stop_quarter_hour, row.availability);
 		count++;
 	}
-	loaded = true;
+	state.loaded = true;
 	logger.debug(`Loaded ${count} service capacity entries.`, { module: "serviceCapacity" });
 }
 
@@ -163,10 +175,8 @@ const CITY_STATIONS = [
 	"place_sbasta", // South Bank
 ];
 
-const dayTypeCache = new Map<string, string>();
-
-function getDayType(dateStr: string): string {
-	if (dayTypeCache.has(dateStr)) return dayTypeCache.get(dateStr)!;
+function getDayType(dateStr: string, state: SeqCapacityState): string {
+	if (state.dayTypeCache.has(dateStr)) return state.dayTypeCache.get(dateStr)!;
 
 	const y = parseInt(dateStr.slice(0, 4));
 	const m = parseInt(dateStr.slice(4, 6)) - 1;
@@ -182,7 +192,7 @@ function getDayType(dateStr: string): string {
 		res = days[day];
 	}
 
-	dayTypeCache.set(dateStr, res);
+	state.dayTypeCache.set(dateStr, res);
 	return res;
 }
 
@@ -303,9 +313,10 @@ export function getServiceCapacity(
 	_dirOverride: string | undefined,
 	ctx: CacheContext,
 ): ServiceCapacity {
-	if (!loaded || stopTime.passing) return ServiceCapacity.UNKNOWN;
+	const state = getState(ctx);
+	if (!state.loaded || stopTime.passing) return ServiceCapacity.UNKNOWN;
 
-	const route = getRawRoutes(ctx, inst.route_id)[0];
+	const route = getRawRoutes(ctx, { feed_id: inst.feed_id, route_id: inst.route_id })[0];
 	const routeName = route?.route_long_name;
 	if (!routeName) return ServiceCapacity.UNKNOWN;
 
@@ -313,10 +324,10 @@ export function getServiceCapacity(
 	const direction = _dirOverride ?? getTripDirection(inst, seq);
 	if (!direction) return ServiceCapacity.UNKNOWN;
 
-	const dayType = getDayType(dateStr);
+	const dayType = getDayType(dateStr, state);
 
 	const stopLookupId = stopTime.scheduled_parent_station_id ?? stopTime.scheduled_stop_id;
-	let stopName = stopLookupId ? getAugmentedStops(ctx, stopLookupId)[0]?.stop_name : undefined;
+	let stopName = stopLookupId ? getAugmentedStops(ctx, { feedId: stopTime.feed_id, localId: stopLookupId })[0]?.stop_name : undefined;
 	if (!stopName) return ServiceCapacity.UNKNOWN;
 	if (stopName.trim().toLowerCase().startsWith("boggo")) stopName = "Park Road";
 	if (stopName.trim().toLowerCase().startsWith("international")) stopName = "International Terminal";
@@ -345,7 +356,7 @@ export function getServiceCapacity(
 	if (candidateLines.size === 0) return ServiceCapacity.UNKNOWN;
 
 	for (const lineName of candidateLines) {
-		const rMap = capacityIndex.get(lineName);
+		const rMap = state.capacityIndex.get(lineName);
 		if (!rMap) continue;
 
 		const dMap = rMap.get(direction);
@@ -404,5 +415,4 @@ export const _test = {
 	formatTimeBucket,
 	getTripDirection,
 	loadServiceCapacityData,
-	capacityIndex,
 };

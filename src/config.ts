@@ -1,220 +1,103 @@
-import { ProgressInfo, GTFSFeedConfig, Stop } from "qdf-gtfs";
+import type { ProgressInfo, Stop } from "qdf-gtfs";
 import logger from "./utils/logger.js";
-import { VIA_MERGE_STOPS, VIA_UPDATE_STOPS } from "./region-specific/CA/VIA/realtime.js";
+import type { TransitPlugin } from "./plugins/types.js";
 
-export type TRAXRegion = "AU/SEQ" | "CA" | "CA/GTHA";
+export interface FeedSource {
+	url: string;
+	headers?: Record<string, string>;
+}
 
-export type MergeAction = {
-	to: string;
-	from: string[];
-};
+export interface RealtimeSource {
+	id: string;
+	targetFeedId: string;
+	kind: "trip-updates" | "vehicles" | "alerts";
+	source: FeedSource;
+}
+
+export interface FeedDefinition {
+	id: string;
+	staticSource: FeedSource;
+	realtimeSources: RealtimeSource[];
+	/** Only use this when a feed's agency_timezone is defective. */
+	timeZone?: string;
+}
+
+export type TransitMode = "rail" | "subway" | "tram" | "bus" | "ferry";
+
+export interface NetworkDefinition {
+	id: string;
+	name: string;
+	feeds: FeedDefinition[];
+	modes: TransitMode[];
+	plugins: TransitPlugin[];
+}
+
+export type MergeAction = { to: string; from: string[]; feedId: string };
+
+export interface RuntimeOptions {
+	verbose?: boolean;
+	cacheDir?: string;
+	logFunction?: (message: string) => void;
+	progressLog?: (info: ProgressInfo) => void;
+	disableTimers?: boolean;
+	preloadStopTimes?: boolean;
+	mergeStops?: MergeAction[];
+	updateStopActions?: { feedId: string; stop_id: string; new: Partial<Stop> }[];
+}
 
 export interface TraxConfig {
-	urls: (string | GTFSFeedConfig)[];
+	network: NetworkDefinition;
 	verbose: boolean;
 	cacheDir: string;
 	logFunction: (message: string) => void;
 	progressLog: (info: ProgressInfo) => void;
-	region: TRAXRegion | "none";
-	timezone: string;
 	disableTimers: boolean;
 	preloadStopTimes: boolean;
-	realtime: {
-		realtimeAlerts: (string | GTFSFeedConfig)[] | null;
-		realtimeTripUpdates: (string | GTFSFeedConfig)[] | null;
-		realtimeVehiclePositions: (string | GTFSFeedConfig)[] | null;
-	} | null;
 	mergeStops: MergeAction[];
-	updateStopActions: {
-		stop_id: string;
-		new: Partial<Stop>;
-	}[];
+	updateStopActions: { feedId: string; stop_id: string; new: Partial<Stop> }[];
+	/** Populated and validated from agency_timezone after the static feed loads. */
+	feedTimeZones: Map<string, string>;
 }
 
-export function isRegion(region: TraxConfig["region"] | null | undefined, target: string): boolean {
-	if (!region) return false;
-	return region === target || region.startsWith(`${target}/`);
-}
-
-export type TraxConfigOptions = Partial<Omit<TraxConfig, "realtime">> & {
-	url?: string;
-	headers?: { [key: string]: string } | null;
-	timezone?: string;
-	disableTimers?: boolean;
-	preloadStopTimes?: boolean;
-	realtime?: {
-		realtimeAlerts?: (string | GTFSFeedConfig)[] | string | GTFSFeedConfig | null;
-		realtimeTripUpdates?: (string | GTFSFeedConfig)[] | string | GTFSFeedConfig | null;
-		realtimeVehiclePositions?: (string | GTFSFeedConfig)[] | string | GTFSFeedConfig | null;
-	} | null;
-	mergeStops?: MergeAction[] | null;
-	updateStopActions?: {
-		stop_id: string;
-		new: Partial<Stop>;
-	}[];
-};
-
-export const PRESETS: Record<TRAXRegion, (apiKey?: string | undefined) => TraxConfigOptions> = {
-	"AU/SEQ": () =>
-		({
-			urls: [
-				{
-					url: "https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip",
-					feed_id: "SEQ",
-				},
-			],
-			region: "AU/SEQ",
-			timezone: "Australia/Brisbane",
-			preloadStopTimes: false,
-			realtime: {
-				realtimeAlerts: [
-					{
-						url: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts",
-						feed_id: "SEQ-RTA",
-					},
-				],
-				realtimeTripUpdates: [
-					{
-						url: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates",
-						feed_id: "SEQ-RTTU",
-					},
-				],
-				realtimeVehiclePositions: [
-					{
-						url: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions",
-						feed_id: "SEQ-RTVP",
-					},
-				],
-			},
-		}) as TraxConfigOptions,
-	CA: () =>
-		({
-			urls: [
-				{
-					url: "https://www.viarail.ca/sites/all/files/gtfs/viarail.zip",
-					feed_id: "VIA",
-				},
-			],
-			region: "CA",
-			timezone: "America/Toronto",
-			preloadStopTimes: false,
-			realtime: null,
-			mergeStops: VIA_MERGE_STOPS,
-			updateStopActions: VIA_UPDATE_STOPS,
-		}) as TraxConfigOptions,
-	"CA/GTHA": (apiKey) =>
-		({
-			urls: [
-				{
-					url: "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/UP-GTFS.zip",
-					feed_id: "UP",
-				},
-				{
-					url: "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/GO-GTFS.zip",
-					feed_id: "GO",
-				},
-				{
-					url: "https://www.viarail.ca/sites/all/files/gtfs/viarail.zip",
-					feed_id: "VIA",
-				},
-			],
-			region: "CA/GTHA",
-			timezone: "America/Toronto",
-			preloadStopTimes: false,
-			realtime: {
-				realtimeAlerts: [
-					{
-						url: "https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/Alerts?key=" + apiKey,
-						feed_id: "UP-RTA",
-					},
-					{
-						url: "https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/Alerts?key=" + apiKey,
-						feed_id: "GO-RTA",
-					},
-				],
-				realtimeTripUpdates: [
-					{
-						url:
-							"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/TripUpdates?key=" +
-							apiKey,
-						feed_id: "UP-RTTU",
-					},
-					{
-						url:
-							"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/TripUpdates?key=" +
-							apiKey,
-						feed_id: "GO-RTTU",
-					},
-				],
-				realtimeVehiclePositions: [
-					{
-						url:
-							"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/VehiclePosition?key=" +
-							apiKey,
-						feed_id: "UP-RTVP",
-					},
-					{
-						url:
-							"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/VehiclePosition?key=" +
-							apiKey,
-						feed_id: "GO-RTVP",
-					},
-				],
-			},
-			mergeStops: VIA_MERGE_STOPS,
-			updateStopActions: VIA_UPDATE_STOPS,
-		}) as TraxConfigOptions,
-};
-
-export function resolveConfig(options: TraxConfigOptions = {}): TraxConfig {
-	const normalizeFeeds = (
-		feeds: (string | GTFSFeedConfig)[] | string | GTFSFeedConfig | null | undefined,
-	): (string | GTFSFeedConfig)[] | null => {
-		if (feeds === null || feeds === undefined) return null;
-		if (Array.isArray(feeds)) return feeds;
-		return [feeds];
-	};
-
-	const staticUrls: (string | GTFSFeedConfig)[] =
-		options.urls ??
-		(options.url
-			? [{ url: options.url, headers: options.headers ?? undefined }]
-			: ["https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip"]);
-
-	const defaults: TraxConfig = {
-		urls: ["https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip"],
-		verbose: true,
-		cacheDir: ".TRAXCACHE",
-		logFunction: (message: string) => logger.debug(message, { module: "gtfs" }),
-		progressLog: (info: ProgressInfo) => logger.progress(info),
-		region: "AU/SEQ",
-		timezone: "Australia/Brisbane",
-		disableTimers: true,
-		preloadStopTimes: false,
-		realtime: {
-			realtimeAlerts: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts"],
-			realtimeTripUpdates: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates"],
-			realtimeVehiclePositions: ["https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions"],
-		},
-		mergeStops: [],
-		updateStopActions: [],
-	};
-
-	const resolvedRealtime = options.realtime
-		? {
-				realtimeAlerts: normalizeFeeds(options.realtime.realtimeAlerts),
-				realtimeTripUpdates: normalizeFeeds(options.realtime.realtimeTripUpdates),
-				realtimeVehiclePositions: normalizeFeeds(options.realtime.realtimeVehiclePositions),
+export function resolveConfig(network: NetworkDefinition, options: RuntimeOptions = {}): TraxConfig {
+	if (!network.id || !network.name) throw new Error("NetworkDefinition requires id and name");
+	if (network.feeds.length === 0) throw new Error(`Network '${network.id}' has no feeds`);
+	const feedIds = new Set<string>();
+	for (const feed of network.feeds) {
+		if (!feed.id) throw new Error(`Network '${network.id}' contains a feed without id`);
+		if (feedIds.has(feed.id)) throw new Error(`Network '${network.id}' contains duplicate feed '${feed.id}'`);
+		feedIds.add(feed.id);
+		for (const source of feed.realtimeSources) {
+			if (source.targetFeedId !== feed.id) {
+				throw new Error(`Realtime source '${source.id}' must target its containing feed '${feed.id}'`);
 			}
-		: options.url || options.urls
-			? null
-			: defaults.realtime;
+		}
+	}
 
 	return {
-		...defaults,
-		...options,
-		urls: staticUrls,
-		realtime: resolvedRealtime as TraxConfig["realtime"],
-		mergeStops: options.mergeStops ?? defaults.mergeStops,
+		network,
+		verbose: options.verbose ?? true,
+		cacheDir: options.cacheDir ?? `.TRAXCACHE/${network.id}`,
+		logFunction: options.logFunction ?? ((message) => logger.debug(message, { module: "gtfs" })),
+		progressLog: options.progressLog ?? ((info) => logger.progress(info)),
+		disableTimers: options.disableTimers ?? true,
+		preloadStopTimes: options.preloadStopTimes ?? false,
+		mergeStops: options.mergeStops ?? [],
+		updateStopActions: options.updateStopActions ?? [],
+		feedTimeZones: new Map(),
 	};
+}
+
+export function hasPlugin(config: TraxConfig, pluginId: string): boolean {
+	return config.network.plugins.some((plugin) => plugin.id === pluginId);
+}
+
+export function getFeedTimeZone(config: TraxConfig, feedId: string): string {
+	const timeZone = config.feedTimeZones.get(feedId);
+	if (!timeZone) throw new Error(`No validated timezone for feed '${feedId}' in network '${config.network.id}'`);
+	return timeZone;
+}
+
+export function getDefaultTimeZone(config: TraxConfig): string {
+	return getFeedTimeZone(config, config.network.feeds[0].id);
 }

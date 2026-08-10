@@ -2,8 +2,10 @@ import { CacheContext } from "../../../cache/index.js";
 import { MergeAction } from "../../../config.js";
 import logger from "../../../utils/logger.js";
 import * as qdf from "qdf-gtfs";
+import { getPluginState } from "../../../plugins/types.js";
 
-const VIA_INJECTED_FEED_ID = "VIA-INJECTED";
+const VIA_STATIC_FEED_ID = "via";
+const VIA_INJECTED_SOURCE_ID = "via-supplemental";
 
 // Root type for the JSON structure
 export type AllTrainData = Record<string, TrainData>;
@@ -69,7 +71,15 @@ export interface ArrivalDepartureInfo {
 	scheduled: string; // ISO 8601 Date String
 }
 
-let codeIdMap: Map<string, string> | null = null;
+type ViaRealtimeState = {
+	codeIdMap: Map<string, string> | null;
+	prevTrainData: AllTrainData | null;
+	lastUpdateMs: number;
+};
+
+function getState(ctx: CacheContext): ViaRealtimeState {
+	return getPluginState(ctx, "ca-via:realtime", () => ({ codeIdMap: null, prevTrainData: null, lastUpdateMs: 0 }));
+}
 
 // Converts from VIA GTFS stop_code to VIA GTFS stop_id
 const VIA_CODE_SWAP: Record<string, string> = {
@@ -98,17 +108,17 @@ const VIA_CODE_SWAP: Record<string, string> = {
 };
 
 export const VIA_MERGE_STOPS: MergeAction[] = [
-	{ to: VIA_CODE_SWAP["TRTO"], from: ["UN"] },
-	{ to: VIA_CODE_SWAP["OSHA"], from: ["OS"] },
-	{ to: VIA_CODE_SWAP["KITC"], from: ["KI"] },
-	{ to: VIA_CODE_SWAP["ALDR"], from: ["AL"] },
-	{ to: VIA_CODE_SWAP["OAKV"], from: ["OA"] },
-	{ to: VIA_CODE_SWAP["GUIL"], from: ["GU"] },
-	{ to: VIA_CODE_SWAP["BRMP"], from: ["BR"] },
-	{ to: VIA_CODE_SWAP["GEOR"], from: ["GE"] },
-	{ to: VIA_CODE_SWAP["MALT"], from: ["MA"] },
-	{ to: VIA_CODE_SWAP["NIAG"], from: ["NI"] },
-	{ to: VIA_CODE_SWAP["SCAT"], from: ["SCTH"] },
+	{ to: VIA_CODE_SWAP["TRTO"], from: ["UN"], feedId: VIA_STATIC_FEED_ID },
+	{ to: VIA_CODE_SWAP["OSHA"], from: ["OS"], feedId: VIA_STATIC_FEED_ID },
+	{ to: VIA_CODE_SWAP["KITC"], from: ["KI"], feedId: VIA_STATIC_FEED_ID },
+	{ to: VIA_CODE_SWAP["ALDR"], from: ["AL"], feedId: VIA_STATIC_FEED_ID },
+	{ to: VIA_CODE_SWAP["OAKV"], from: ["OA"], feedId: VIA_STATIC_FEED_ID },
+	{ to: VIA_CODE_SWAP["GUIL"], from: ["GU"], feedId: VIA_STATIC_FEED_ID },
+	{ to: VIA_CODE_SWAP["BRMP"], from: ["BR"], feedId: VIA_STATIC_FEED_ID },
+	{ to: VIA_CODE_SWAP["GEOR"], from: ["GE"], feedId: VIA_STATIC_FEED_ID },
+	{ to: VIA_CODE_SWAP["MALT"], from: ["MA"], feedId: VIA_STATIC_FEED_ID },
+	{ to: VIA_CODE_SWAP["NIAG"], from: ["NI"], feedId: VIA_STATIC_FEED_ID },
+	{ to: VIA_CODE_SWAP["SCAT"], from: ["SCTH"], feedId: VIA_STATIC_FEED_ID },
 ];
 
 export const VIA_UPDATE_STOPS: {
@@ -123,22 +133,20 @@ export const VIA_UPDATE_STOPS: {
 	},
 ];
 
-let prevTrainData: AllTrainData | null = null;
-export function getPrevTrainData(): AllTrainData | null {
-	return prevTrainData;
+export function getPrevTrainData(ctx: CacheContext): AllTrainData | null {
+	return getState(ctx).prevTrainData;
 }
 
-let lastUpdateMs = 0;
 const UPDATE_THROTTLE_MS = 2 * 60 * 1000;
 
-export async function fetchTrainData() {
+export async function fetchTrainData(ctx: CacheContext) {
 	logger.debug("Fetching VIA Rail realtime data...", {
 		module: "VIA",
 		function: "fetchTrainData",
 	});
 	let res = await fetch("https://tsimobile.viarail.ca/data/allData.json");
 	const data: AllTrainData = await res.json();
-	prevTrainData = data;
+	getState(ctx).prevTrainData = data;
 	logger.debug("Done!", {
 		module: "VIA",
 		function: "fetchTrainData",
@@ -147,8 +155,9 @@ export async function fetchTrainData() {
 }
 
 export async function updateRealtime(ctx: CacheContext) {
+	const state = getState(ctx);
 	const now = Date.now();
-	if (now - lastUpdateMs < UPDATE_THROTTLE_MS) return;
+	if (now - state.lastUpdateMs < UPDATE_THROTTLE_MS) return;
 
 	if (!ctx.gtfs) {
 		logger.error("Attempted to update VIA realtime before GTFS initialization!!", {
@@ -158,10 +167,10 @@ export async function updateRealtime(ctx: CacheContext) {
 		return;
 	}
 
-	lastUpdateMs = now;
+	state.lastUpdateMs = now;
 
-	if (!codeIdMap) {
-		codeIdMap = new Map();
+	if (!state.codeIdMap) {
+		state.codeIdMap = new Map();
 		const stops = ctx.gtfs.getStops();
 		const codeToId = new Map<string, string>();
 		for (const stop of stops) {
@@ -175,13 +184,13 @@ export async function updateRealtime(ctx: CacheContext) {
 			const mergeTarget = ctx.config.mergeStops.find((m) => m.from.includes(gtfsCodeOrId))?.to;
 			const finalId = mergeTarget || codeToId.get(gtfsCodeOrId) || gtfsCodeOrId;
 
-			codeIdMap.set(viaCode, finalId);
+			state.codeIdMap.set(viaCode, finalId);
 		}
 
 		// Fill in any missing stop_codes from the GTFS directly
 		for (const [code, id] of codeToId.entries()) {
 			const mergeTarget = ctx.config.mergeStops.find((m) => m.from.includes(id))?.to;
-			if (!codeIdMap.has(code)) codeIdMap.set(code, mergeTarget || id);
+			if (!state.codeIdMap.has(code)) state.codeIdMap.set(code, mergeTarget || id);
 		}
 	}
 
@@ -193,7 +202,7 @@ export async function updateRealtime(ctx: CacheContext) {
 		let res = await fetch("https://tsimobile.viarail.ca/data/allData.json");
 		const data: AllTrainData = await res.json();
 
-		prevTrainData = data;
+		state.prevTrainData = data;
 
 		const tripUpdates: qdf.RealtimeTripUpdate[] = [];
 		const vehiclePositions: qdf.RealtimeVehiclePosition[] = [];
@@ -202,7 +211,7 @@ export async function updateRealtime(ctx: CacheContext) {
 			// Find matching trip_id in GTFS. Check trip_id and trip_short_name.
 			const matchingTrips = ctx.gtfs.getTrips({
 				trip_short_name: tripNumber,
-				feed_id: "VIA",
+				feed_id: VIA_STATIC_FEED_ID,
 			});
 			if (matchingTrips.length === 0) continue;
 
@@ -214,7 +223,7 @@ export async function updateRealtime(ctx: CacheContext) {
 			const stopTimeUpdates: qdf.RealtimeStopTimeUpdate[] = [];
 
 			for (const time of train.times) {
-				const stopId = codeIdMap.get(time.code) || time.code;
+				const stopId = state.codeIdMap.get(time.code) || time.code;
 				if (!stopId) continue;
 
 				const arrivalTime = time.arrival?.estimated ? new Date(time.arrival.estimated).getTime() / 1000 : null;
@@ -235,7 +244,8 @@ export async function updateRealtime(ctx: CacheContext) {
 					departure_time: departureTime,
 					departure_uncertainty: null,
 					schedule_relationship: qdf.StopTimeScheduleRelationship.SCHEDULED,
-					feed_id: VIA_INJECTED_FEED_ID,
+					feed_id: VIA_STATIC_FEED_ID,
+					source_id: VIA_INJECTED_SOURCE_ID,
 				};
 				stopTimeUpdates.push(stu);
 			}
@@ -247,7 +257,7 @@ export async function updateRealtime(ctx: CacheContext) {
 				start_time: "", // We don't have this easily but it's not strictly necessary if trip_id is fixed
 				start_date: startDate,
 				schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED,
-				feed_id: VIA_INJECTED_FEED_ID,
+				feed_id: VIA_STATIC_FEED_ID,
 			};
 
 			tripUpdates.push({
@@ -262,7 +272,8 @@ export async function updateRealtime(ctx: CacheContext) {
 				stop_time_updates: stopTimeUpdates,
 				timestamp: Math.floor(now / 1000),
 				delay: train.times[0]?.diffMin !== undefined ? train.times[0].diffMin * 60 : null,
-				feed_id: VIA_INJECTED_FEED_ID,
+				feed_id: VIA_STATIC_FEED_ID,
+				source_id: VIA_INJECTED_SOURCE_ID,
 			});
 
 			if (train.lat !== undefined && train.lng !== undefined) {
@@ -289,6 +300,8 @@ export async function updateRealtime(ctx: CacheContext) {
 					congestion_level: null,
 					occupancy_status: null,
 					occupancy_percentage: null,
+					feed_id: VIA_STATIC_FEED_ID,
+					source_id: VIA_INJECTED_SOURCE_ID,
 				});
 			}
 		}

@@ -1,4 +1,4 @@
-import TRAXClass, { logger, LogLevel } from "../dist/index.js";
+import TRAXClass, { AU_SEQ_NETWORK, logger, LogLevel } from "../dist/index.js";
 
 async function main() {
 	console.log("\n=== TRAX Performance Benchmark (SEQ) ===\n");
@@ -14,7 +14,7 @@ async function main() {
 
 	for (const config of testConfigs) {
 		console.log(`\nRunning: ${config.label}...`);
-		const TRAX = new TRAXClass({ disableTimers: config.disableTimers });
+		const TRAX = new TRAXClass(AU_SEQ_NETWORK, { disableTimers: config.disableTimers });
 
 		const start = Date.now();
 		await TRAX.loadGTFS(false, false);

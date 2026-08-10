@@ -1,59 +1,49 @@
-import { GTFS } from "qdf-gtfs";
-import { TraxConfig } from "./config.js";
+import { GTFS, type GTFSFeedConfig, type GTFSRealtimeFeedConfig } from "qdf-gtfs";
+import type { TraxConfig } from "./config.js";
 import logger from "./utils/logger.js";
 
-let currentGtfs: GTFS | null = null;
-
-export function getGtfs(): GTFS {
-	if (!currentGtfs) throw new Error("GTFS has not been initialized yet.");
-	return currentGtfs;
-}
-
 export async function loadStatic(gtfs: GTFS, config: TraxConfig): Promise<void> {
-	logger.info("Loading GTFS data...");
-	await gtfs.loadStatic(config.urls);
-	logger.info("Merging stops...");
-	for (const st of config.mergeStops) gtfs.actions.mergeStops(st.to, st.from);
-	logger.info("Updating stops...");
-	for (const st of config.updateStopActions) gtfs.actions.updateStop(st.stop_id, st.new);
-	logger.info("Static GTFS data loaded.");
+	logger.info(`Loading static GTFS data for ${config.network.id}...`);
+	const feeds: GTFSFeedConfig[] = config.network.feeds.map((feed) => ({
+		id: feed.id,
+		...feed.staticSource,
+	}));
+	await gtfs.loadStatic(feeds);
+	for (const action of config.mergeStops) gtfs.actions.mergeStops(action.to, action.from, action.feedId);
+	for (const action of config.updateStopActions) {
+		gtfs.actions.updateStop(action.stop_id, action.new, action.feedId);
+	}
+	logger.info(`Static GTFS data loaded for ${config.network.id}.`);
 }
 
 export async function loadRealtime(gtfs: GTFS, config: TraxConfig): Promise<void> {
-	if (!config.realtime) return;
-	const rt = config.realtime;
-	logger.info("Loading realtime data...");
-
-	await gtfs.updateRealtimeFromUrl(rt.realtimeAlerts, rt.realtimeTripUpdates, rt.realtimeVehiclePositions);
-	logger.info("Realtime data loaded.");
+	const sources: GTFSRealtimeFeedConfig[] = config.network.feeds.flatMap((feed) =>
+		feed.realtimeSources.map((realtime) => ({
+			id: realtime.id,
+			targetFeedId: realtime.targetFeedId,
+			kind: realtime.kind,
+			...realtime.source,
+		})),
+	);
+	if (sources.length === 0) return;
+	logger.info(`Loading realtime data for ${config.network.id}...`);
+	await gtfs.updateRealtimeFromUrl(sources);
+	logger.info(`Realtime data loaded for ${config.network.id}.`);
 }
 
-export async function createGtfs(config: TraxConfig, doRealtime: boolean = true): Promise<GTFS> {
-	let gtfs = new GTFS({
+export async function createGtfs(config: TraxConfig, doRealtime = true): Promise<GTFS> {
+	const gtfs = new GTFS({
 		ansi: false,
 		logger: config.logFunction,
 		progress: config.progressLog,
 		cache: true,
 		cacheDir: config.cacheDir,
 	});
-	await loadStatic(gtfs, config).catch((e) => {
-		const message = e instanceof Error ? e.message : String(e);
-		logger.error("Error loading static gtfs!!! " + message, {
-			module: "GTFS",
-			function: "createGTFS",
-		});
-		return Promise.reject(e);
-	});
-
+	await loadStatic(gtfs, config);
 	if (doRealtime) {
-		await loadRealtime(gtfs, config).catch((e) => {
-			const message = e instanceof Error ? e.message : String(e);
-			logger.error("Error loading realtime gtfs!!! " + message, {
-				module: "GTFS",
-				function: "createGTFS",
-			});
+		await loadRealtime(gtfs, config).catch((error) => {
+			logger.error(`Initial realtime load failed for ${config.network.id}: ${error instanceof Error ? error.message : String(error)}`);
 		});
 	}
-	currentGtfs = gtfs;
 	return gtfs;
 }

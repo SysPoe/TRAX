@@ -34,11 +34,11 @@ function findRelevantVehicle(inst: AugmentedTripInstance, ctx: CacheContext): Re
 
 	if (inst.block_id) {
 		const serviceDateTrips = ctx.augmented.serviceDateTrips.get(startDate) ?? [];
-		for (const tripId of serviceDateTrips) {
-			if (candidateTripIds.has(tripId)) continue;
-			const rawTrip = getTrips(ctx, tripId)[0];
+		for (const tripKey of serviceDateTrips) {
+			const rawTrip = ctx.augmented.rawTripsRec.get(tripKey);
+			if (!rawTrip || candidateTripIds.has(rawTrip.trip_id)) continue;
 			if (rawTrip?.block_id && rawTrip.block_id === inst.block_id) {
-				candidateTripIds.add(tripId);
+				candidateTripIds.add(rawTrip.trip_id);
 			}
 		}
 	}

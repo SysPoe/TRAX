@@ -5,6 +5,7 @@ import { AugmentedStop } from "./augmentedStop.js";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { AugmentedTripInstance } from "./augmentedTrip.js";
 import { addDaysToServiceDate, getServiceDayStart } from "./time.js";
+import { getFeedTimeZone } from "../config.js";
 import { filterAndSortDepartures } from "../../build/release.js";
 
 function timeSeconds(time: string): number {
@@ -28,7 +29,7 @@ export function getDeparturesForStop(
 	const childIds = stop.child_stop_ids;
 	const validStops = new Set<string>([stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]);
 	const instanceCache = new Map<string, AugmentedTripInstance>();
-	const baseDayStart = getServiceDayStart(date, ctx.config.timezone);
+	const baseDayStart = getServiceDayStart(date, getFeedTimeZone(ctx.config, stop.feed_id));
 	const windowStartAbs = baseDayStart + startSec;
 	const windowEndAbs = baseDayStart + endSec;
 
@@ -48,10 +49,10 @@ export function getDeparturesForStop(
 
 	for (let df = daysForwardStart; df <= daysForwardEnd; df++) {
 		const serviceDateStr = addDaysToServiceDate(date, df);
-		const dayStart = getServiceDayStart(serviceDateStr, ctx.config.timezone);
+		const dayStart = getServiceDayStart(serviceDateStr, getFeedTimeZone(ctx.config, stop.feed_id));
 
 		for (const stopId of validStops) {
-			const stopDepartures = cache.getStopDeparturesCached(ctx, stopId, serviceDateStr);
+			const stopDepartures = cache.getStopDeparturesCached(ctx, { feedId: stop.feed_id, localId: stopId }, serviceDateStr);
 			for (const st of stopDepartures) {
 				const timeSecs = st.actual_departure_time ?? st.actual_arrival_time ?? st.scheduled_departure_time ?? 0;
 				const absTs = dayStart + timeSecs;
@@ -87,7 +88,9 @@ export function getDeparturesForStop(
 		const expressString = findExpressString(
 			inst.expressInfo,
 			ctx,
-			st.actual_parent_station_id ?? st.actual_stop_id ?? "",
+			st.actual_parent_station_id || st.actual_stop_id
+				? { feedId: st.feed_id, localId: st.actual_parent_station_id ?? st.actual_stop_id! }
+				: null,
 		);
 		return {
 			...st,
@@ -124,7 +127,7 @@ export function getServiceDateDeparturesForStop(
 	const childIds = stop.child_stop_ids;
 	const validStops = new Set<string>([stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]);
 	const instanceCache = new Map<string, AugmentedTripInstance>();
-	const dayStart = getServiceDayStart(serviceDate, ctx.config.timezone);
+	const dayStart = getServiceDayStart(serviceDate, getFeedTimeZone(ctx.config, stop.feed_id));
 	const windowStartAbs = dayStart + start_time_secs;
 	const windowEndAbs = dayStart + end_time_secs;
 	const results: { st: AugmentedStopTime; inst: AugmentedTripInstance }[] = [];
@@ -141,7 +144,7 @@ export function getServiceDateDeparturesForStop(
 	const allStopsAndInsts: { st: AugmentedStopTime; inst: AugmentedTripInstance | null }[] = [];
 
 	for (const stopId of validStops) {
-		const stopDepartures = cache.getStopDeparturesCached(ctx, stopId, serviceDate);
+			const stopDepartures = cache.getStopDeparturesCached(ctx, { feedId: stop.feed_id, localId: stopId }, serviceDate);
 		for (const st of stopDepartures) {
 			const timeSecs = st.actual_departure_time ?? st.actual_arrival_time ?? st.scheduled_departure_time ?? 0;
 			const absTs = dayStart + timeSecs;
@@ -176,7 +179,9 @@ export function getServiceDateDeparturesForStop(
 		const expressString = findExpressString(
 			inst.expressInfo,
 			ctx,
-			st.actual_parent_station_id ?? st.actual_stop_id ?? "",
+			st.actual_parent_station_id || st.actual_stop_id
+				? { feedId: st.feed_id, localId: st.actual_parent_station_id ?? st.actual_stop_id! }
+				: null,
 		);
 		return {
 			...st,
