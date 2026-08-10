@@ -1,6 +1,6 @@
 import type { QualifiedEntityId } from "qdf-gtfs";
 
-export type EntityKind = "station" | "stop" | "route" | "trip" | "shape" | "service" | "vehicle";
+export type EntityKind = "agency" | "place" | "station" | "stop" | "route" | "trip" | "shape" | "service" | "vehicle";
 
 export interface PublicEntityIdentity extends QualifiedEntityId {
 	networkId: string;

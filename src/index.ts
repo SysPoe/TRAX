@@ -7,7 +7,7 @@ import { GTFS, RealtimeVehiclePosition, Route, Stop, Trip } from "qdf-gtfs";
 import type { QualifiedEntityId } from "qdf-gtfs";
 import logger from "./utils/logger.js";
 import { findExpressString } from "./utils/SRT.js";
-import { attachDeparturesHelpers, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
+import { attachDeparturesHelpers, getDeparturesForInstantWindow, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
 import {
 	isConsideredRoute,
 	isConsideredStop,
@@ -17,7 +17,7 @@ import {
 } from "./utils/considered.js";
 import { AugmentedStop } from "./utils/augmentedStop.js";
 import { getFeedTimeZone, type NetworkDefinition, type RuntimeOptions, type TraxConfig, resolveConfig } from "./config.js";
-import { createGtfs, loadRealtime, loadStatic } from "./gtfsInterfaceLayer.js";
+import { createGtfs, loadRealtime, type SourceReport } from "./gtfsInterfaceLayer.js";
 import { entityKey } from "./identity.js";
 
 export interface TRAXEvent {
@@ -25,6 +25,17 @@ export interface TRAXEvent {
 	"realtime-update-end": [];
 	"static-update-start": [];
 	"static-update-end": [];
+}
+
+export interface SourceHealth {
+	id: string;
+	feedId: string;
+	kind: SourceReport["kind"] | "supplemental";
+	state: "idle" | SourceReport["state"];
+	lastAttemptAt: string | null;
+	lastSuccessAt: string | null;
+	error: string | null;
+	transport: SourceReport["transport"] | null;
 }
 
 export class TRAX {
@@ -37,6 +48,12 @@ export class TRAX {
 	private staticInterval: NodeJS.Timeout | null = null;
 	private staticRefreshInFlight: Promise<void> | null = null;
 	private realtimeRefreshInFlight: Promise<void> | null = null;
+	private sourceHealth = new Map<string, SourceHealth>();
+
+	private hasRealtimeSources(): boolean {
+		return this.config.network.feeds.some((feed) => feed.realtimeSources.length > 0) ||
+			this.config.network.plugins.some((plugin) => plugin.beforeRealtime !== undefined);
+	}
 
 	constructor(network: NetworkDefinition, options: RuntimeOptions = {}) {
 		this.config = resolveConfig(network, options);
@@ -49,6 +66,39 @@ export class TRAX {
 			pluginState: new Map(),
 			runtimeState: cache.createRuntimeState(),
 		};
+		for (const feed of network.feeds) {
+			this.sourceHealth.set(`${feed.id}:static`, { id: `${feed.id}:static`, feedId: feed.id, kind: "static", state: "idle", lastAttemptAt: null, lastSuccessAt: null, error: null, transport: null });
+			for (const source of feed.realtimeSources) this.sourceHealth.set(source.id, { id: source.id, feedId: feed.id, kind: source.kind, state: "idle", lastAttemptAt: null, lastSuccessAt: null, error: null, transport: null });
+		}
+		for (const plugin of network.plugins) {
+			if (!plugin.beforeRealtime) continue;
+			const id = `${plugin.id}:supplemental`;
+			this.sourceHealth.set(id, { id, feedId: plugin.feedIds[0], kind: "supplemental", state: "idle", lastAttemptAt: null, lastSuccessAt: null, error: null, transport: null });
+		}
+	}
+
+	private reportSource = (report: SourceReport): void => {
+		const previous = this.sourceHealth.get(report.id);
+		const now = new Date().toISOString();
+		this.sourceHealth.set(report.id, {
+			id: report.id, feedId: report.feedId, kind: report.kind, state: report.state,
+			lastAttemptAt: report.state === "loading" ? now : previous?.lastAttemptAt ?? now,
+			lastSuccessAt: report.state === "healthy" || report.state === "stale" ? now : previous?.lastSuccessAt ?? null,
+			error: report.error ?? null,
+			transport: report.transport ?? previous?.transport ?? null,
+		});
+	};
+
+	private reportSupplemental(pluginId: string, feedId: string, state: "loading" | "healthy" | "error", error?: string): void {
+		const id = `${pluginId}:supplemental`;
+		const previous = this.sourceHealth.get(id);
+		const now = new Date().toISOString();
+		this.sourceHealth.set(id, {
+			id, feedId, kind: "supplemental", state,
+			lastAttemptAt: state === "loading" ? now : previous?.lastAttemptAt ?? now,
+			lastSuccessAt: state === "healthy" ? now : previous?.lastSuccessAt ?? null,
+			error: error ?? null, transport: null,
+		});
 	}
 
 	public async loadGTFS(
@@ -58,16 +108,26 @@ export class TRAX {
 		staticIntervalMs: number = 24 * 60 * 60 * 1000,
 	): Promise<void> {
 		if (!this.gtfs) {
-			await this.ensureGtfs(loadRealtime);
+			await this.ensureGtfs();
+			if (loadRealtime) await this.refreshRealtime();
 		} else {
 			await this.refreshStatic();
 			if (loadRealtime) await this.refreshRealtime();
 		}
 
 		if (!autoRefresh) return;
+		this.startAutoRefresh(loadRealtime, realtimeIntervalMs, staticIntervalMs);
+	}
 
+	public startAutoRefresh(
+		refreshRealtime: boolean = true,
+		realtimeIntervalMs: number = 60 * 1000,
+		staticIntervalMs: number = 24 * 60 * 60 * 1000,
+	): void {
 		const scheduleNextRealtime = () => {
+			if (this.realtimeInterval) return;
 			this.realtimeInterval = setTimeout(async () => {
+				this.realtimeInterval = null;
 				this.events.emit("realtime-update-start");
 				try {
 					await this.updateRealtime();
@@ -84,7 +144,9 @@ export class TRAX {
 		};
 
 		const scheduleNextStatic = () => {
+			if (this.staticInterval) return;
 			this.staticInterval = setTimeout(async () => {
+				this.staticInterval = null;
 				this.events.emit("static-update-start");
 				try {
 					await this.refreshStatic();
@@ -101,7 +163,7 @@ export class TRAX {
 			}, staticIntervalMs);
 		};
 
-		if (this.config.network.feeds.some((feed) => feed.realtimeSources.length > 0) && loadRealtime) scheduleNextRealtime();
+		if (this.hasRealtimeSources() && refreshRealtime) scheduleNextRealtime();
 		scheduleNextStatic();
 	}
 
@@ -109,14 +171,13 @@ export class TRAX {
 	 * Ensures GTFS is initialized and initial caches are built.
 	 * If GTFS is already initialized, this does nothing.
 	 */
-	private async ensureGtfs(loadRealtime: boolean = true): Promise<GTFS> {
+	private async ensureGtfs(): Promise<GTFS> {
 		if (this.gtfs) return this.gtfs;
 
-		const gtfs = await createGtfs(this.config, loadRealtime);
+		const gtfs = await createGtfs(this.config, false, this.reportSource);
 		this.validateFeedTimeZones(gtfs);
 		this.ctx.augmented.timer.start("TRAX:initialCacheRefresh");
 		const nextCtx = await cache.refreshStaticCache(gtfs, this.config);
-		if (loadRealtime) await cache.refreshRealtimeCache(gtfs, this.config, nextCtx);
 		nextCtx.augmented.timer.stop("TRAX:initialCacheRefresh");
 		this.gtfs = gtfs;
 		this.ctx = nextCtx;
@@ -131,7 +192,7 @@ export class TRAX {
 		if (this.staticRefreshInFlight) return this.staticRefreshInFlight;
 		this.staticRefreshInFlight = (async () => {
 			await this.ensureGtfs();
-			const nextGtfs = await createGtfs(this.config, false);
+			const nextGtfs = await createGtfs(this.config, false, this.reportSource);
 			this.validateFeedTimeZones(nextGtfs);
 			const nextCtx = await cache.refreshStaticCache(nextGtfs, this.config, this.ctx);
 			// Readers use the prior immutable snapshot until both objects are ready.
@@ -150,10 +211,22 @@ export class TRAX {
 		if (this.realtimeRefreshInFlight) return this.realtimeRefreshInFlight;
 		this.realtimeRefreshInFlight = (async () => {
 			const gtfs = await this.ensureGtfs();
-			if (!this.config.network.feeds.some((feed) => feed.realtimeSources.length > 0)) return;
 			this.ctx.augmented.timer.start("refreshRealtime");
-			await loadRealtime(gtfs, this.config);
-			for (const plugin of this.config.network.plugins) await plugin.beforeRealtime?.(this.ctx);
+			if (this.config.network.feeds.some((feed) => feed.realtimeSources.length > 0)) {
+				await loadRealtime(gtfs, this.config, this.reportSource);
+			}
+			for (const plugin of this.config.network.plugins) {
+				if (!plugin.beforeRealtime) continue;
+				this.reportSupplemental(plugin.id, plugin.feedIds[0], "loading");
+				try {
+					await plugin.beforeRealtime(this.ctx);
+					this.reportSupplemental(plugin.id, plugin.feedIds[0], "healthy");
+				} catch (error) {
+					const message = error instanceof Error ? error.message : String(error);
+					this.reportSupplemental(plugin.id, plugin.feedIds[0], "error", message);
+					throw error;
+				}
+			}
 			await cache.refreshRealtimeCache(gtfs, this.config, this.ctx);
 			this.ctx.augmented.timer.stop("refreshRealtime");
 		})().finally(() => {
@@ -163,7 +236,7 @@ export class TRAX {
 	}
 
 	public async updateRealtime(): Promise<void> {
-		if (!this.config.network.feeds.some((feed) => feed.realtimeSources.length > 0)) return;
+		if (!this.hasRealtimeSources()) return;
 		try {
 			await this.refreshRealtime();
 		} catch (error: any) {
@@ -216,14 +289,28 @@ export class TRAX {
 	}
 
 	public get metadata() {
+		const feedCapabilities = (feedId: string) => Array.from(new Set(
+			this.config.network.plugins.filter((plugin) => plugin.feedIds.includes(feedId)).flatMap((plugin) => plugin.capabilities),
+		));
 		return {
 			id: this.config.network.id,
 			name: this.config.network.name,
 			modes: this.config.network.modes,
-			feeds: this.config.network.feeds.map((feed) => ({ id: feed.id, timeZone: this.config.feedTimeZones.get(feed.id) ?? null })),
+			feeds: this.config.network.feeds.map((feed) => ({ id: feed.id, timeZone: this.config.feedTimeZones.get(feed.id) ?? null, capabilities: feedCapabilities(feed.id) })),
 			capabilities: Array.from(new Set(this.config.network.plugins.flatMap((plugin) => plugin.capabilities))),
+			places: (this.config.network.places ?? []).map((place) => ({ ...place, members: place.members.map((member) => ({ ...member })) })),
 		};
 	}
+
+	public getPlaces = () => (this.config.network.places ?? []).map((place) => ({ ...place, members: place.members.map((member) => ({ ...member })) }));
+	public getAgencies = () => this.gtfs?.getAgencies() ?? [];
+	public getSourceHealth = (): SourceHealth[] => Array.from(this.sourceHealth.values(), (source) => ({ ...source }));
+	public getConsistDetails = async (instanceId: string): Promise<unknown | null> => {
+		const trip = this.getAugmentedTripInstance(instanceId);
+		if (!trip) return null;
+		const plugin = this.config.network.plugins.find((candidate) => candidate.feedIds.includes(trip.feed_id) && candidate.consistDetails);
+		return plugin?.consistDetails ? await plugin.consistDetails(trip, this.ctx) : null;
+	};
 
 	public getPluginApi<T>(pluginId: string): T | null {
 		const plugin = this.config.network.plugins.find((candidate) => candidate.id === pluginId);
@@ -297,6 +384,8 @@ export class TRAX {
 					getDeparturesForStop(stop, date, st, et, this.ctx),
 				getServiceDateDeparturesForStop: (stop: any, date: string, st: number, et: number) =>
 					getServiceDateDeparturesForStop(stop, date, st, et, this.ctx),
+				getDeparturesForInstantWindow: (stop: any, startEpochSeconds: number, endEpochSeconds: number) =>
+					getDeparturesForInstantWindow(stop, startEpochSeconds, endEpochSeconds, this.ctx),
 			},
 		};
 	}
@@ -314,7 +403,7 @@ export default TRAX;
 
 export { logger };
 
-export { resolveConfig, type FeedDefinition, type FeedSource, type NetworkDefinition, type RealtimeSource, type RuntimeOptions, type TraxConfig } from "./config.js";
+export { resolveConfig, type FeedDefinition, type FeedSource, type NetworkDefinition, type PlaceDefinition, type RealtimeSource, type RuntimeOptions, type TraxConfig } from "./config.js";
 export { NetworkRuntimeRegistry } from "./registry.js";
 export { AU_SEQ_NETWORK, CA_VIA_NETWORK, createCaGthaNetwork } from "./networks.js";
 export * from "./identity.js";
@@ -335,7 +424,7 @@ export {
 export type { AugmentedTrip, AugmentedTripInstance } from "./utils/augmentedTrip.js";
 export type { AugmentedStopTime } from "./utils/augmentedStopTime.js";
 export type { AugmentedStop } from "./utils/augmentedStop.js";
-export { attachDeparturesHelpers, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
+export { attachDeparturesHelpers, getDeparturesForInstantWindow, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
 
 export type {
 	QRTTrainMovementDTO,

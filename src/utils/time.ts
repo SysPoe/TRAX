@@ -89,24 +89,13 @@ export function getTimezoneOffsetSeconds(timezone: string, date: Date = new Date
 }
 
 export function getServiceDayStart(serviceDate: string, timezone: string): number {
-	if (!serviceDate || serviceDate.length < 8) return 0;
-	const y = parseInt(serviceDate.slice(0, 4), 10);
-	const m = parseInt(serviceDate.slice(4, 6), 10) - 1;
-	const d = parseInt(serviceDate.slice(6, 8), 10);
-	if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) return 0;
-
-	const utcMidnight = Date.UTC(y, m, d);
-	if (Number.isNaN(utcMidnight)) return 0;
-
-	const offsetAtUtcMidnight = getTimezoneOffsetSeconds(timezone, new Date(utcMidnight));
-	const result = (utcMidnight - offsetAtUtcMidnight * 1000) / 1000;
-
-	const offsetAtResult = getTimezoneOffsetSeconds(timezone, new Date(result * 1000));
-	if (offsetAtResult !== offsetAtUtcMidnight) {
-		const adjusted = (utcMidnight - offsetAtResult * 1000) / 1000;
-		return adjusted;
-	}
-	return result;
+	if (!/^\d{8}$/.test(serviceDate)) return 0;
+	const localNoon = `${serviceDate.slice(0, 4)}-${serviceDate.slice(4, 6)}-${serviceDate.slice(6, 8)}T12:00:00`;
+	const noonMs = parseTimeWithConfig(localNoon, timezone);
+	if (!Number.isFinite(noonMs) || noonMs === 0) return 0;
+	// GTFS defines a service day relative to local noon minus 12 elapsed hours.
+	// This deliberately differs from civil midnight on DST transition dates.
+	return noonMs / 1000 - 12 * 60 * 60;
 }
 
 export function serviceTimeToInstant(serviceDate: ServiceDate | string, serviceTime: GtfsTime | number, timezone: string): Instant {

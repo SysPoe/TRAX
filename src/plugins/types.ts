@@ -16,6 +16,8 @@ export type TransitCapability =
 
 export interface TransitPlugin {
 	id: string;
+	/** Static feeds whose entities this plugin may enrich. */
+	feedIds: readonly string[];
 	capabilities: readonly TransitCapability[];
 	afterStaticLoad?(ctx: CacheContext): Promise<void> | void;
 	afterSnapshotBuilt?(ctx: CacheContext): Promise<void> | void;
@@ -28,10 +30,15 @@ export interface TransitPlugin {
 	vehicleInfo?(vehicle: RealtimeVehiclePosition, ctx: CacheContext): unknown;
 	vehicleInfoForTrip?(trip: AugmentedTripInstance, ctx: CacheContext): VehicleInfo | null;
 	serviceCapacity?(trip: AugmentedTripInstance, stopTime: AugmentedStopTime, serviceDate: string, direction: string | undefined, ctx: CacheContext): ServiceCapacity;
+	consistDetails?(trip: AugmentedTripInstance, ctx: CacheContext): Promise<unknown> | unknown;
 	filterTrackEdges?(edges: Set<string>): void;
 	enrichTrackGraph?(matrix: Record<string, Record<string, number>>, adjacency: Record<string, string[]>): void;
 	/** Optional region service surface, available only when this plugin is installed. */
 	api?(ctx: CacheContext): unknown;
+}
+
+export function pluginSupportsFeed(plugin: TransitPlugin, feedId: string): boolean {
+	return plugin.feedIds.includes(feedId);
 }
 
 export function getPluginState<T>(ctx: CacheContext, pluginId: string, create: () => T): T {

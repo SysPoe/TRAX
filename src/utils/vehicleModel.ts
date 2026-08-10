@@ -1,6 +1,7 @@
 import { type TraxConfig } from "../config.js";
 import { CacheContext } from "../cache/index.js";
 import { AugmentedTrip, AugmentedTripInstance } from "./augmentedTrip.js";
+import { pluginSupportsFeed } from "../plugins/types.js";
 
 export type VehicleInfo = {
 	vehicle_model: string | null;
@@ -13,6 +14,7 @@ export type VehicleInfo = {
 
 function resolveVehicleInfo(inst: AugmentedTripInstance, ctx: CacheContext, config: TraxConfig): VehicleInfo {
 	for (const plugin of config.network.plugins) {
+		if (!pluginSupportsFeed(plugin, inst.feed_id)) continue;
 		const value = plugin.vehicleInfoForTrip?.(inst, ctx);
 		if (value) return value;
 	}

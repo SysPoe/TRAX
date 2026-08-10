@@ -63,7 +63,7 @@ function loadNetworkData(ctx: cache.CacheContext): NetworkData | null {
 }
 
 function getPatternSignature(stopTimes: qdf.StopTime[]): string {
-	return stopTimes.map((st) => st.stop_id).join("|");
+	return stopTimes.map((st) => entityKey({ feedId: st.feed_id, localId: st.stop_id })).join("|");
 }
 
 function generateNetworkData(ctx: cache.CacheContext): NetworkData {

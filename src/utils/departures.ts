@@ -4,7 +4,7 @@ import { getServiceCapacity, ServiceCapacity } from "./serviceCapacity.js";
 import { AugmentedStop } from "./augmentedStop.js";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { AugmentedTripInstance } from "./augmentedTrip.js";
-import { addDaysToServiceDate, getServiceDayStart } from "./time.js";
+import { addDaysToServiceDate, getEpochDayFromServiceDate, getServiceDate, getServiceDayStart } from "./time.js";
 import { getFeedTimeZone } from "../config.js";
 import { filterAndSortDepartures } from "../../build/release.js";
 
@@ -14,6 +14,71 @@ function timeSeconds(time: string): number {
 }
 
 type DepartureResult = AugmentedStopTime & { express_string: string; instance_id: string };
+
+function mapDepartureResults(
+	stopTimes: AugmentedStopTime[],
+	ctx: cache.CacheContext,
+): DepartureResult[] {
+	const instanceCache = new Map<string, AugmentedTripInstance>();
+	const seenInstanceIds = new Set<string>();
+	const results: DepartureResult[] = [];
+	for (const st of stopTimes) {
+		if (seenInstanceIds.has(st.instance_id)) continue;
+		const inst = instanceCache.get(st.instance_id) ?? ctx.augmented.instancesRec.get(st.instance_id) ?? cache.getAugmentedTripInstance(ctx, st.instance_id);
+		if (!inst) continue;
+		instanceCache.set(st.instance_id, inst);
+		seenInstanceIds.add(st.instance_id);
+		results.push({
+			...st,
+			express_string: findExpressString(
+				inst.expressInfo,
+				ctx,
+				st.actual_parent_station_id || st.actual_stop_id
+					? { feedId: st.feed_id, localId: st.actual_parent_station_id ?? st.actual_stop_id! }
+					: null,
+			),
+			instance_id: inst.instance_id,
+			service_capacity:
+				st.service_capacity === ServiceCapacity.NOT_CALCULATED
+					? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx, ctx.config)
+					: st.service_capacity,
+		});
+	}
+	return results;
+}
+
+/** Query an absolute time window while still evaluating GTFS times against each service day's DST-safe origin. */
+export function getDeparturesForInstantWindow(
+	stop: AugmentedStop,
+	windowStartEpochSeconds: number,
+	windowEndEpochSeconds: number,
+	ctx: cache.CacheContext,
+): DepartureResult[] {
+	if (!Number.isFinite(windowStartEpochSeconds) || !Number.isFinite(windowEndEpochSeconds) || windowEndEpochSeconds < windowStartEpochSeconds) {
+		throw new Error("Invalid departure instant window");
+	}
+	const timeZone = getFeedTimeZone(ctx.config, stop.feed_id);
+	const firstLocalDate = getServiceDate(new Date(windowStartEpochSeconds * 1000), timeZone);
+	const lastLocalDate = getServiceDate(new Date(windowEndEpochSeconds * 1000), timeZone);
+	const dayCount = Math.max(0, getEpochDayFromServiceDate(lastLocalDate) - getEpochDayFromServiceDate(firstLocalDate));
+	const validStops = new Set<string>([stop.stop_id, stop.parent_stop_id, ...stop.child_stop_ids].filter(Boolean) as string[]);
+	const candidates: { stopTime: AugmentedStopTime; at: number }[] = [];
+
+	// The previous service date owns ordinary after-midnight GTFS times such as 25:30.
+	for (let offset = -1; offset <= dayCount + 1; offset++) {
+		const serviceDate = addDaysToServiceDate(firstLocalDate, offset);
+		const dayStart = getServiceDayStart(serviceDate, timeZone);
+		for (const stopId of validStops) {
+			for (const stopTime of cache.getStopDeparturesCached(ctx, { feedId: stop.feed_id, localId: stopId }, serviceDate)) {
+				const seconds = stopTime.actual_departure_time ?? stopTime.actual_arrival_time ?? stopTime.scheduled_departure_time ?? 0;
+				const at = dayStart + seconds;
+				if (at >= windowStartEpochSeconds && at <= windowEndEpochSeconds) candidates.push({ stopTime, at });
+			}
+		}
+	}
+	candidates.sort((a, b) => a.at - b.at);
+	return mapDepartureResults(candidates.map(({ stopTime }) => stopTime), ctx);
+}
 
 export function getDeparturesForStop(
 	stop: AugmentedStop,
@@ -216,6 +281,11 @@ export function attachDeparturesHelpers(stop: AugmentedStop, ctx: cache.CacheCon
 		_getSDDepartures: {
 			value: (serviceDate: string, start_time_secs: number, end_time_secs: number) =>
 				getServiceDateDeparturesForStop(stop, serviceDate, start_time_secs, end_time_secs, ctx),
+			enumerable: false,
+		},
+		_getInstantDepartures: {
+			value: (startEpochSeconds: number, endEpochSeconds: number) =>
+				getDeparturesForInstantWindow(stop, startEpochSeconds, endEpochSeconds, ctx),
 			enumerable: false,
 		},
 	});

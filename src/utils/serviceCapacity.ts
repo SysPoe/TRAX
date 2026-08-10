@@ -2,6 +2,7 @@ import { type TraxConfig } from "../config.js";
 import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { AugmentedTrip, AugmentedTripInstance } from "./augmentedTrip.js";
 import { CacheContext } from "../cache/index.js";
+import { pluginSupportsFeed } from "../plugins/types.js";
 
 export enum ServiceCapacity {
 	NOT_CALCULATED = -2,
@@ -22,6 +23,7 @@ export function getServiceCapacity(
 	config: TraxConfig,
 ): ServiceCapacity {
 	for (const plugin of config.network.plugins) {
+		if (!pluginSupportsFeed(plugin, inst.feed_id)) continue;
 		const value = plugin.serviceCapacity?.(inst, stopTime, dateStr, _dirOverride, ctx);
 		if (value !== undefined) return value;
 	}

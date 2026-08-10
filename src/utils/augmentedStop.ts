@@ -4,6 +4,7 @@ import { RailwayStationFacility } from "../region-specific/AU/SEQ/facilities-typ
 import { getQRTStationLookupKeys, normalizeQRTStationLookupKey } from "../region-specific/AU/SEQ/qr-travel/stations.js";
 import type { QRTPlace, QRTStationDetails } from "../region-specific/AU/SEQ/qr-travel/types.js";
 import { entityKey } from "../identity.js";
+import { pluginSupportsFeed } from "../plugins/types.js";
 
 export type AugmentedStop = qdf.Stop & {
 	regionSpecific?: {
@@ -45,7 +46,9 @@ export function augmentStop(stop: qdf.Stop, ctx: cache.CacheContext, augCtx?: Au
 		parent: null,
 		children: [],
 	};
-	for (const plugin of ctx.config.network.plugins) plugin.enrichStop?.(augmented, ctx, augCtx);
+	for (const plugin of ctx.config.network.plugins) {
+		if (pluginSupportsFeed(plugin, stop.feed_id)) plugin.enrichStop?.(augmented, ctx, augCtx);
+	}
 
 	// We'll populate parent/children later in cache.ts to avoid recursion and getters
 	return augmented;

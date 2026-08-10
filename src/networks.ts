@@ -21,6 +21,14 @@ export const AU_SEQ_NETWORK: NetworkDefinition = {
 
 export function createCaGthaNetwork(apiKey: string): NetworkDefinition {
 	const source = (id: string, targetFeedId: string, kind: "alerts" | "trip-updates" | "vehicles", url: string) => ({ id, targetFeedId, kind, source: { url: `${url}?key=${apiKey}` } });
+	const interchange = (id: string, name: string, goId: string, viaId: string, includeUp = false) => ({
+		id, name,
+		members: [
+			{ feedId: "go", localId: goId },
+			...(includeUp ? [{ feedId: "up", localId: goId }] : []),
+			{ feedId: "via", localId: viaId },
+		],
+	});
 	return {
 		id: "ca-gtha",
 		name: "Greater Toronto and Hamilton Area",
@@ -39,6 +47,19 @@ export function createCaGthaNetwork(apiKey: string): NetworkDefinition {
 		],
 		modes: ["rail"],
 		plugins: [gthaPlugin, viaPlugin],
+		places: [
+			interchange("toronto-union", "Toronto Union Station", "UN", "119", true),
+			interchange("oshawa", "Oshawa", "OS", "367"),
+			interchange("kitchener", "Kitchener", "KI", "114"),
+			interchange("aldershot", "Aldershot", "AL", "600"),
+			interchange("oakville", "Oakville", "OA", "436"),
+			interchange("guelph", "Guelph Central", "GU", "450"),
+			interchange("brampton", "Brampton", "BR", "322"),
+			interchange("georgetown", "Georgetown", "GE", "6"),
+			interchange("malton", "Malton", "MA", "34"),
+			interchange("niagara-falls", "Niagara Falls", "NI", "346"),
+			interchange("st-catharines", "St. Catharines", "SCTH", "185"),
+		],
 	};
 }
 

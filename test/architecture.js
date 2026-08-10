@@ -61,17 +61,25 @@ const origin = `http://127.0.0.1:${server.address().port}`;
 
 try {
 	const definition = {
-		id: "synthetic", name: "Synthetic multi-feed", modes: ["rail"], plugins: [],
+		id: "synthetic", name: "Synthetic multi-feed", modes: ["rail"],
+		plugins: [{ id: "alpha-only", feedIds: ["alpha"], capabilities: ["facilities"], enrichStop(stop) { stop.testPluginApplied = true; } }],
 		feeds: [
 			{ id: "alpha", staticSource: { url: `${origin}/a.zip` }, realtimeSources: [] },
 			{ id: "beta", staticSource: { url: `${origin}/b.zip` }, realtimeSources: [] },
 		],
+		places: [{ id: "shared-place", name: "Shared Place", members: [{ feedId: "alpha", localId: "shared" }, { feedId: "beta", localId: "shared" }] }],
 	};
 	const runtime = new TRAX(definition, { cacheDir: ".TRAXCACHE/test-synthetic" });
 	await runtime.loadGTFS(false, false);
 	assert.equal(runtime.getRawTrips({ trip_id: "shared" }).length, 2);
 	assert.equal(runtime.getAugmentedStops({ feedId: "alpha", localId: "shared" })[0].stop_name, "Alpha Station");
 	assert.equal(runtime.getAugmentedStops({ feedId: "beta", localId: "shared" })[0].stop_name, "Beta Station");
+	assert.equal(runtime.getAugmentedStops({ feedId: "alpha", localId: "shared" })[0].testPluginApplied, true);
+	assert.equal(runtime.getAugmentedStops({ feedId: "beta", localId: "shared" })[0].testPluginApplied, undefined);
+	assert.deepEqual(runtime.metadata.feeds.find((value) => value.id === "alpha").capabilities, ["facilities"]);
+	assert.deepEqual(runtime.metadata.feeds.find((value) => value.id === "beta").capabilities, []);
+	assert.deepEqual(runtime.getPlaces()[0].members, [{ feedId: "alpha", localId: "shared" }, { feedId: "beta", localId: "shared" }]);
+	assert.ok(runtime.getSourceHealth().every((source) => source.kind !== "static" || ["healthy", "stale"].includes(source.state)));
 	const alphaTrip = runtime.getAugmentedTrips({ feedId: "alpha", localId: "shared" })[0];
 	const betaTrip = runtime.getAugmentedTrips({ feedId: "beta", localId: "shared" })[0];
 	assert.ok(alphaTrip && betaTrip);
@@ -84,7 +92,7 @@ try {
 	assert.deepEqual(decodePublicEntityId(publicId), { networkId: "synthetic", feedId: "alpha", kind: "station", localId: "shared" });
 
 	const registry = new NetworkRuntimeRegistry();
-	const other = registry.register({ ...definition, id: "other", feeds: [definition.feeds[0]] }, { cacheDir: ".TRAXCACHE/test-other" });
+	const other = registry.register({ ...definition, id: "other", feeds: [definition.feeds[0]], places: [] }, { cacheDir: ".TRAXCACHE/test-other" });
 	await other.loadGTFS(false, false);
 	assert.equal(other.getRawTrips().length, 1);
 	assert.equal(runtime.getRawTrips().length, 2);
@@ -94,6 +102,19 @@ try {
 	const summer = runtime.utils.time.parseTimeWithConfig("2026-07-15T12:00:00", "America/Toronto");
 	assert.equal(new Date(winter).toISOString(), "2026-01-15T17:00:00.000Z");
 	assert.equal(new Date(summer).toISOString(), "2026-07-15T16:00:00.000Z");
+	const serviceOriginCases = [
+		["20260308", "America/Toronto", "2026-03-08T04:00:00.000Z"],
+		["20261101", "America/Toronto", "2026-11-01T05:00:00.000Z"],
+		["20260329", "Europe/London", "2026-03-28T23:00:00.000Z"],
+		["20261025", "Europe/London", "2026-10-25T00:00:00.000Z"],
+		["20260405", "Australia/Sydney", "2026-04-04T14:00:00.000Z"],
+		["20261004", "Australia/Sydney", "2026-10-03T13:00:00.000Z"],
+		["20260115", "Australia/Brisbane", "2026-01-14T14:00:00.000Z"],
+		["20260715", "Australia/Brisbane", "2026-07-14T14:00:00.000Z"],
+	];
+	for (const [date, zone, expected] of serviceOriginCases) {
+		assert.equal(new Date(runtime.utils.time.getServiceDayStart(date, zone) * 1000).toISOString(), expected);
+	}
 	assert.equal(runtime.utils.time.serviceTimeToInstant("20260805", 91_800, "Australia/Brisbane"), "2026-08-05T15:30:00.000Z");
 	runtime.clearIntervals(); other.clearIntervals();
 	console.log("Architecture tests passed.");

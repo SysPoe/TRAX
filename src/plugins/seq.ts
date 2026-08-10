@@ -9,6 +9,7 @@ import { getServiceCapacity } from "../region-specific/AU/SEQ/serviceCapacity.js
 
 export const seqPlugin: TransitPlugin = {
 	id: "au-seq",
+	feedIds: ["translink-seq"],
 	capabilities: ["vehicles", "occupancy", "platform-changes", "facilities", "supplemental-realtime"],
 	async afterStaticLoad(ctx) {
 		await Promise.all([loadSEQStaticMetadata(ctx), ensureServiceCapacityData(ctx)]);
