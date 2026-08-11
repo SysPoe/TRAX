@@ -7,7 +7,12 @@ import { GTFS, RealtimeVehiclePosition, Route, Stop, Trip } from "qdf-gtfs";
 import type { QualifiedEntityId } from "qdf-gtfs";
 import logger from "./utils/logger.js";
 import { findExpressString } from "./utils/SRT.js";
-import { attachDeparturesHelpers, getDeparturesForInstantWindow, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
+import {
+	attachDeparturesHelpers,
+	getDeparturesForInstantWindow,
+	getDeparturesForStop,
+	getServiceDateDeparturesForStop,
+} from "./utils/departures.js";
 import {
 	isConsideredRoute,
 	isConsideredStop,
@@ -16,7 +21,13 @@ import {
 	isConsideredTripId,
 } from "./utils/considered.js";
 import { AugmentedStop } from "./utils/augmentedStop.js";
-import { getFeedTimeZone, type NetworkDefinition, type RuntimeOptions, type TraxConfig, resolveConfig } from "./config.js";
+import {
+	getFeedTimeZone,
+	type NetworkDefinition,
+	type RuntimeOptions,
+	type TraxConfig,
+	resolveConfig,
+} from "./config.js";
 import { createGtfs, loadRealtime, type SourceReport } from "./gtfsInterfaceLayer.js";
 import { entityKey } from "./identity.js";
 
@@ -51,8 +62,10 @@ export class TRAX {
 	private sourceHealth = new Map<string, SourceHealth>();
 
 	private hasRealtimeSources(): boolean {
-		return this.config.network.feeds.some((feed) => feed.realtimeSources.length > 0) ||
-			this.config.network.plugins.some((plugin) => plugin.beforeRealtime !== undefined);
+		return (
+			this.config.network.feeds.some((feed) => feed.realtimeSources.length > 0) ||
+			this.config.network.plugins.some((plugin) => plugin.beforeRealtime !== undefined)
+		);
 	}
 
 	constructor(network: NetworkDefinition, options: RuntimeOptions = {}) {
@@ -67,13 +80,41 @@ export class TRAX {
 			runtimeState: cache.createRuntimeState(),
 		};
 		for (const feed of network.feeds) {
-			this.sourceHealth.set(`${feed.id}:static`, { id: `${feed.id}:static`, feedId: feed.id, kind: "static", state: "idle", lastAttemptAt: null, lastSuccessAt: null, error: null, transport: null });
-			for (const source of feed.realtimeSources) this.sourceHealth.set(source.id, { id: source.id, feedId: feed.id, kind: source.kind, state: "idle", lastAttemptAt: null, lastSuccessAt: null, error: null, transport: null });
+			this.sourceHealth.set(`${feed.id}:static`, {
+				id: `${feed.id}:static`,
+				feedId: feed.id,
+				kind: "static",
+				state: "idle",
+				lastAttemptAt: null,
+				lastSuccessAt: null,
+				error: null,
+				transport: null,
+			});
+			for (const source of feed.realtimeSources)
+				this.sourceHealth.set(source.id, {
+					id: source.id,
+					feedId: feed.id,
+					kind: source.kind,
+					state: "idle",
+					lastAttemptAt: null,
+					lastSuccessAt: null,
+					error: null,
+					transport: null,
+				});
 		}
 		for (const plugin of network.plugins) {
 			if (!plugin.beforeRealtime) continue;
 			const id = `${plugin.id}:supplemental`;
-			this.sourceHealth.set(id, { id, feedId: plugin.feedIds[0], kind: "supplemental", state: "idle", lastAttemptAt: null, lastSuccessAt: null, error: null, transport: null });
+			this.sourceHealth.set(id, {
+				id,
+				feedId: plugin.feedIds[0],
+				kind: "supplemental",
+				state: "idle",
+				lastAttemptAt: null,
+				lastSuccessAt: null,
+				error: null,
+				transport: null,
+			});
 		}
 	}
 
@@ -81,23 +122,36 @@ export class TRAX {
 		const previous = this.sourceHealth.get(report.id);
 		const now = new Date().toISOString();
 		this.sourceHealth.set(report.id, {
-			id: report.id, feedId: report.feedId, kind: report.kind, state: report.state,
-			lastAttemptAt: report.state === "loading" ? now : previous?.lastAttemptAt ?? now,
-			lastSuccessAt: report.state === "healthy" || report.state === "stale" ? now : previous?.lastSuccessAt ?? null,
+			id: report.id,
+			feedId: report.feedId,
+			kind: report.kind,
+			state: report.state,
+			lastAttemptAt: report.state === "loading" ? now : (previous?.lastAttemptAt ?? now),
+			lastSuccessAt:
+				report.state === "healthy" || report.state === "stale" ? now : (previous?.lastSuccessAt ?? null),
 			error: report.error ?? null,
 			transport: report.transport ?? previous?.transport ?? null,
 		});
 	};
 
-	private reportSupplemental(pluginId: string, feedId: string, state: "loading" | "healthy" | "error", error?: string): void {
+	private reportSupplemental(
+		pluginId: string,
+		feedId: string,
+		state: "loading" | "healthy" | "error",
+		error?: string,
+	): void {
 		const id = `${pluginId}:supplemental`;
 		const previous = this.sourceHealth.get(id);
 		const now = new Date().toISOString();
 		this.sourceHealth.set(id, {
-			id, feedId, kind: "supplemental", state,
-			lastAttemptAt: state === "loading" ? now : previous?.lastAttemptAt ?? now,
-			lastSuccessAt: state === "healthy" ? now : previous?.lastSuccessAt ?? null,
-			error: error ?? null, transport: null,
+			id,
+			feedId,
+			kind: "supplemental",
+			state,
+			lastAttemptAt: state === "loading" ? now : (previous?.lastAttemptAt ?? now),
+			lastSuccessAt: state === "healthy" ? now : (previous?.lastSuccessAt ?? null),
+			error: error ?? null,
+			transport: null,
 		});
 	}
 
@@ -274,14 +328,19 @@ export class TRAX {
 		const next = new Map<string, string>();
 		for (const feed of this.config.network.feeds) {
 			const agencyZones = new Set(
-				gtfs.getAgencies({ feed_id: feed.id }).map((agency) => agency.agency_timezone).filter(Boolean),
+				gtfs
+					.getAgencies({ feed_id: feed.id })
+					.map((agency) => agency.agency_timezone)
+					.filter(Boolean),
 			);
 			if (feed.timeZone) {
 				next.set(feed.id, feed.timeZone);
 				continue;
 			}
 			if (agencyZones.size !== 1) {
-				throw new Error(`Feed '${feed.id}' must declare exactly one agency_timezone; found ${Array.from(agencyZones).join(", ") || "none"}`);
+				throw new Error(
+					`Feed '${feed.id}' must declare exactly one agency_timezone; found ${Array.from(agencyZones).join(", ") || "none"}`,
+				);
 			}
 			next.set(feed.id, Array.from(agencyZones)[0]);
 		}
@@ -289,26 +348,44 @@ export class TRAX {
 	}
 
 	public get metadata() {
-		const feedCapabilities = (feedId: string) => Array.from(new Set(
-			this.config.network.plugins.filter((plugin) => plugin.feedIds.includes(feedId)).flatMap((plugin) => plugin.capabilities),
-		));
+		const feedCapabilities = (feedId: string) =>
+			Array.from(
+				new Set(
+					this.config.network.plugins
+						.filter((plugin) => plugin.feedIds.includes(feedId))
+						.flatMap((plugin) => plugin.capabilities),
+				),
+			);
 		return {
 			id: this.config.network.id,
 			name: this.config.network.name,
 			modes: this.config.network.modes,
-			feeds: this.config.network.feeds.map((feed) => ({ id: feed.id, timeZone: this.config.feedTimeZones.get(feed.id) ?? null, capabilities: feedCapabilities(feed.id) })),
+			feeds: this.config.network.feeds.map((feed) => ({
+				id: feed.id,
+				timeZone: this.config.feedTimeZones.get(feed.id) ?? null,
+				capabilities: feedCapabilities(feed.id),
+			})),
 			capabilities: Array.from(new Set(this.config.network.plugins.flatMap((plugin) => plugin.capabilities))),
-			places: (this.config.network.places ?? []).map((place) => ({ ...place, members: place.members.map((member) => ({ ...member })) })),
+			places: (this.config.network.places ?? []).map((place) => ({
+				...place,
+				members: place.members.map((member) => ({ ...member })),
+			})),
 		};
 	}
 
-	public getPlaces = () => (this.config.network.places ?? []).map((place) => ({ ...place, members: place.members.map((member) => ({ ...member })) }));
+	public getPlaces = () =>
+		(this.config.network.places ?? []).map((place) => ({
+			...place,
+			members: place.members.map((member) => ({ ...member })),
+		}));
 	public getAgencies = () => this.gtfs?.getAgencies() ?? [];
 	public getSourceHealth = (): SourceHealth[] => Array.from(this.sourceHealth.values(), (source) => ({ ...source }));
 	public getConsistDetails = async (instanceId: string): Promise<unknown | null> => {
 		const trip = this.getAugmentedTripInstance(instanceId);
 		if (!trip) return null;
-		const plugin = this.config.network.plugins.find((candidate) => candidate.feedIds.includes(trip.feed_id) && candidate.consistDetails);
+		const plugin = this.config.network.plugins.find(
+			(candidate) => candidate.feedIds.includes(trip.feed_id) && candidate.consistDetails,
+		);
 		return plugin?.consistDetails ? await plugin.consistDetails(trip, this.ctx) : null;
 	};
 
@@ -345,10 +422,11 @@ export class TRAX {
 	public getTripUpdates = (trip?: QualifiedEntityId) => cache.getTripUpdates(this.ctx, trip);
 	public getVehiclePositions = (trip?: QualifiedEntityId) => cache.getVehiclePositions(this.ctx, trip);
 	public getShapes = () => cache.getShapes(this.ctx);
-	public getTripIdsByServiceDate = (date: string) => this.ctx.augmented.serviceDateTrips.get(date) ?? [];
-	public getTripIdsByStop = (stop: QualifiedEntityId) => this.ctx.augmented.tripsStoppingAt.get(entityKey(stop)) ?? new Set<string>();
+	public getTripIdsByServiceDate = (date: string) => cache.getTripIdsByServiceDate(this.ctx, date);
+	public getTripIdsByStop = (stop: QualifiedEntityId) =>
+		this.ctx.augmented.tripsStoppingAt.get(entityKey(stop)) ?? new Set<string>();
 	public getTripIdsByCar = (car_id: string) => this.ctx.augmented.carTrips.get(car_id) ?? new Set<string>();
-	public getAvailableServiceDates = () => Array.from(this.ctx.augmented.serviceDateTrips.keys());
+	public getAvailableServiceDates = () => cache.getAvailableServiceDates(this.ctx);
 
 	public logTimings = (label: string = "TRAX Operation", clear: boolean = true) =>
 		this.ctx.augmented.timer.log(label, clear);
@@ -396,14 +474,22 @@ export class TRAX {
 				findExpressString(expressData, this.ctx, stop),
 		};
 	}
-
 }
 
 export default TRAX;
 
 export { logger };
 
-export { resolveConfig, type FeedDefinition, type FeedSource, type NetworkDefinition, type PlaceDefinition, type RealtimeSource, type RuntimeOptions, type TraxConfig } from "./config.js";
+export {
+	resolveConfig,
+	type FeedDefinition,
+	type FeedSource,
+	type NetworkDefinition,
+	type PlaceDefinition,
+	type RealtimeSource,
+	type RuntimeOptions,
+	type TraxConfig,
+} from "./config.js";
 export { NetworkRuntimeRegistry } from "./registry.js";
 export { AU_SEQ_NETWORK, CA_VIA_NETWORK, createCaGthaNetwork } from "./networks.js";
 export * from "./identity.js";
@@ -422,9 +508,14 @@ export {
 } from "./region-specific/AU/SEQ/seq-diagram.js";
 
 export type { AugmentedTrip, AugmentedTripInstance } from "./utils/augmentedTrip.js";
-export type { AugmentedStopTime } from "./utils/augmentedStopTime.js";
+export type { AugmentedStopTime, BoardingLocation, BoardingLocationKind } from "./utils/augmentedStopTime.js";
 export type { AugmentedStop } from "./utils/augmentedStop.js";
-export { attachDeparturesHelpers, getDeparturesForInstantWindow, getDeparturesForStop, getServiceDateDeparturesForStop } from "./utils/departures.js";
+export {
+	attachDeparturesHelpers,
+	getDeparturesForInstantWindow,
+	getDeparturesForStop,
+	getServiceDateDeparturesForStop,
+} from "./utils/departures.js";
 
 export type {
 	QRTTrainMovementDTO,

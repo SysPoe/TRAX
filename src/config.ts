@@ -4,6 +4,8 @@ import type { TransitPlugin } from "./plugins/types.js";
 
 export interface FeedSource {
 	url: string;
+	/** Ordered alternatives used when the primary endpoint fails. */
+	fallbackUrls?: readonly string[];
 	headers?: Record<string, string>;
 }
 
@@ -93,11 +95,13 @@ export function resolveConfig(network: NetworkDefinition, options: RuntimeOption
 	}
 	const placeIds = new Set<string>();
 	for (const place of network.places ?? []) {
-		if (!place.id || !place.name || place.members.length === 0) throw new Error(`Network '${network.id}' contains an invalid place`);
+		if (!place.id || !place.name || place.members.length === 0)
+			throw new Error(`Network '${network.id}' contains an invalid place`);
 		if (placeIds.has(place.id)) throw new Error(`Network '${network.id}' contains duplicate place '${place.id}'`);
 		placeIds.add(place.id);
 		for (const member of place.members) {
-			if (!feedIds.has(member.feedId) || !member.localId) throw new Error(`Place '${place.id}' contains invalid member '${member.feedId}:${member.localId}'`);
+			if (!feedIds.has(member.feedId) || !member.localId)
+				throw new Error(`Place '${place.id}' contains invalid member '${member.feedId}:${member.localId}'`);
 		}
 	}
 
@@ -118,7 +122,9 @@ export function resolveConfig(network: NetworkDefinition, options: RuntimeOption
 }
 
 export function hasPlugin(config: TraxConfig, pluginId: string, feedId?: string): boolean {
-	return config.network.plugins.some((plugin) => plugin.id === pluginId && (!feedId || plugin.feedIds.includes(feedId)));
+	return config.network.plugins.some(
+		(plugin) => plugin.id === pluginId && (!feedId || plugin.feedIds.includes(feedId)),
+	);
 }
 
 export function getFeedTimeZone(config: TraxConfig, feedId: string): string {

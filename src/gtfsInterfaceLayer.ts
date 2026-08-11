@@ -16,18 +16,25 @@ export async function loadStatic(gtfs: GTFS, config: TraxConfig, report?: Source
 	logger.info(`Loading static GTFS data for ${config.network.id}...`);
 	const feeds: GTFSFeedConfig[] = config.network.feeds.map((feed) => ({
 		id: feed.id,
-		...feed.staticSource,
+		url: feed.staticSource.url,
+		headers: feed.staticSource.headers,
 	}));
-	for (const feed of config.network.feeds) report?.({ id: `${feed.id}:static`, feedId: feed.id, kind: "static", state: "loading" });
+	for (const feed of config.network.feeds)
+		report?.({ id: `${feed.id}:static`, feedId: feed.id, kind: "static", state: "loading" });
 	try {
 		const results = await gtfs.loadStatic(feeds);
-		for (const result of results) report?.({
-			id: `${result.id}:static`, feedId: result.id, kind: "static",
-			state: result.source === "stale-cache" ? "stale" : "healthy", transport: result.source,
-		});
+		for (const result of results)
+			report?.({
+				id: `${result.id}:static`,
+				feedId: result.id,
+				kind: "static",
+				state: result.source === "stale-cache" ? "stale" : "healthy",
+				transport: result.source,
+			});
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
-		for (const feed of config.network.feeds) report?.({ id: `${feed.id}:static`, feedId: feed.id, kind: "static", state: "error", error: message });
+		for (const feed of config.network.feeds)
+			report?.({ id: `${feed.id}:static`, feedId: feed.id, kind: "static", state: "error", error: message });
 		throw error;
 	}
 	for (const action of config.mergeStops) gtfs.actions.mergeStops(action.to, action.from, action.feedId);
@@ -38,23 +45,35 @@ export async function loadStatic(gtfs: GTFS, config: TraxConfig, report?: Source
 }
 
 export async function loadRealtime(gtfs: GTFS, config: TraxConfig, report?: SourceReporter): Promise<void> {
-	const sources: GTFSRealtimeFeedConfig[] = config.network.feeds.flatMap((feed) =>
-		feed.realtimeSources.map((realtime) => ({
-			id: realtime.id,
-			targetFeedId: realtime.targetFeedId,
-			kind: realtime.kind,
-			...realtime.source,
-		})),
-	);
+	const definitions = config.network.feeds.flatMap((feed) => feed.realtimeSources);
+	const sources: GTFSRealtimeFeedConfig[] = definitions.map((realtime) => ({
+		id: realtime.id,
+		targetFeedId: realtime.targetFeedId,
+		kind: realtime.kind,
+		url: realtime.source.url,
+		headers: realtime.source.headers,
+	}));
 	if (sources.length === 0) return;
 	logger.info(`Loading realtime data for ${config.network.id}...`);
-	for (const source of sources) report?.({ id: source.id, feedId: source.targetFeedId, kind: source.kind, state: "loading" });
+	for (const source of sources)
+		report?.({ id: source.id, feedId: source.targetFeedId, kind: source.kind, state: "loading" });
 	const results = await gtfs.updateRealtimeFromUrl(sources);
-	for (const result of results) {
+	for (let result of results) {
 		const source = sources.find((candidate) => candidate.id === result.id)!;
+		const definition = definitions.find((candidate) => candidate.id === result.id)!;
+		if (!result.ok) {
+			for (const fallbackUrl of definition.source.fallbackUrls ?? []) {
+				const [fallbackResult] = await gtfs.updateRealtimeFromUrl([{ ...source, url: fallbackUrl }]);
+				result = fallbackResult;
+				if (result.ok) break;
+			}
+		}
 		report?.({
-			id: result.id, feedId: source.targetFeedId, kind: source.kind,
-			state: result.ok ? "healthy" : "error", error: result.error,
+			id: result.id,
+			feedId: source.targetFeedId,
+			kind: source.kind,
+			state: result.ok ? "healthy" : "error",
+			error: result.error,
 		});
 	}
 	logger.info(`Realtime data loaded for ${config.network.id}.`);
@@ -73,7 +92,9 @@ export async function createGtfs(config: TraxConfig, doRealtime = true, report?:
 	await loadStatic(gtfs, config, report);
 	if (doRealtime) {
 		await loadRealtime(gtfs, config, report).catch((error) => {
-			logger.error(`Initial realtime load failed for ${config.network.id}: ${error instanceof Error ? error.message : String(error)}`);
+			logger.error(
+				`Initial realtime load failed for ${config.network.id}: ${error instanceof Error ? error.message : String(error)}`,
+			);
 		});
 	}
 	return gtfs;

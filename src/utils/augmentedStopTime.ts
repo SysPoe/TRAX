@@ -12,6 +12,16 @@ import { Timer } from "./timer.js";
 import { addDaysToDateString as wasmAddDaysToDateString, calculateDelayClassWasm } from "../../build/release.js";
 import { getSeqState } from "../plugins/seq-state.js";
 
+export type BoardingLocationKind = "track" | "platform" | "gate" | "door" | "letter";
+
+/** A provider-supplied boarding location whose meaning is more specific than a generic platform code. */
+export type BoardingLocation = {
+	kind: BoardingLocationKind;
+	value: string;
+	source: string;
+	observed_at: string;
+};
+
 export type AugmentedStopTime = {
 	_stopTime: qdf.StopTime | null;
 	feed_id: string;
@@ -31,6 +41,8 @@ export type AugmentedStopTime = {
 	actual_stop_id: string | null;
 	actual_parent_station_id: string | null;
 	actual_platform_code: string | null;
+	actual_arrival_boarding_locations: BoardingLocation[];
+	actual_departure_boarding_locations: BoardingLocation[];
 
 	rt_stop_updated: boolean;
 	rt_parent_station_updated: boolean;
@@ -300,7 +312,13 @@ export function augmentStopTimes(
 
 	const mergedList: MergedStop[] = [];
 
-	const serviceDayStart = getServiceDayStart(serviceDate, getFeedTimeZone(ctx.config, feedId));
+	const timezone = getFeedTimeZone(ctx.config, feedId);
+	const serviceDayStartKey = `${timezone}\0${serviceDate}`;
+	let serviceDayStart = ctx.runtimeState.serviceDayStarts.get(serviceDayStartKey);
+	if (serviceDayStart === undefined) {
+		serviceDayStart = getServiceDayStart(serviceDate, timezone);
+		ctx.runtimeState.serviceDayStarts.set(serviceDayStartKey, serviceDayStart);
+	}
 
 	ctx.augmented.timer.start("augmentStopTimes:buildMergedList");
 	for (const seq of sortedSequences) {
@@ -387,7 +405,10 @@ export function augmentStopTimes(
 			if (missed && missed.rt?.schedule_relationship === qdf.StopTimeScheduleRelationship.SKIPPED) {
 				const originalMergeItem = mergedList.find((m) => m.stop_sequence === s);
 				if (originalMergeItem) {
-					const scheduledStop = cache.getAugmentedStops(ctx, { feedId, localId: originalMergeItem.stop_id })[0];
+					const scheduledStop = cache.getAugmentedStops(ctx, {
+						feedId,
+						localId: originalMergeItem.stop_id,
+					})[0];
 					const scheduledParent = scheduledStop?.parent_stop_id
 						? cache.getAugmentedStops(ctx, { feedId, localId: scheduledStop.parent_stop_id })[0]
 						: null;
@@ -407,6 +428,8 @@ export function augmentStopTimes(
 						actual_stop_id: scheduledStop?.stop_id ?? null,
 						actual_parent_station_id: scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null,
 						actual_platform_code: null,
+						actual_arrival_boarding_locations: [],
+						actual_departure_boarding_locations: [],
 						rt_stop_updated: true,
 						rt_parent_station_updated: false,
 						rt_platform_code_updated: false,
@@ -452,7 +475,9 @@ export function augmentStopTimes(
 
 		const scheduledStop = cache.getAugmentedStops(ctx, { feedId, localId: stopId })[0];
 		const scheduledParentId = scheduledStop?.parent_stop_id ?? scheduledStop?.parent_station ?? null;
-		const scheduledParent = scheduledParentId ? cache.getAugmentedStops(ctx, { feedId, localId: scheduledParentId })[0] : null;
+		const scheduledParent = scheduledParentId
+			? cache.getAugmentedStops(ctx, { feedId, localId: scheduledParentId })[0]
+			: null;
 
 		const schedArr = stopTime.arrival_time;
 		const schedDep = stopTime.departure_time;
@@ -629,6 +654,8 @@ export function augmentStopTimes(
 				scheduledStop?.parent_stop_id ??
 				null,
 			actual_platform_code: isPassing ? null : (platformCode ?? scheduledStop?.platform_code ?? null),
+			actual_arrival_boarding_locations: [],
+			actual_departure_boarding_locations: [],
 
 			rt_stop_updated: rtFlags.stop,
 			rt_parent_station_updated: rtFlags.parent,

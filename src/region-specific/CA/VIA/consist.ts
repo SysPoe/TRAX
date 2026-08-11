@@ -389,7 +389,7 @@ export async function getViaConsist(instance_id: string, ctx: CacheContext): Pro
 			return null;
 		}
 
-		if (instance.feed_id !== "VIA") {
+		if (instance.feed_id !== "via") {
 			logger.warn(`Instance ${instance_id} is not from VIA (feed_id: ${instance.feed_id}).`, {
 				module: "VIA",
 				function: "getViaConsist",

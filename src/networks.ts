@@ -6,23 +6,52 @@ import { viaPlugin } from "./plugins/via.js";
 export const AU_SEQ_NETWORK: NetworkDefinition = {
 	id: "au-seq",
 	name: "South East Queensland",
-	feeds: [{
-		id: "translink-seq",
-		staticSource: { url: "https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip" },
-		realtimeSources: [
-			{ id: "translink-seq-alerts", targetFeedId: "translink-seq", kind: "alerts", source: { url: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts" } },
-			{ id: "translink-seq-trip-updates", targetFeedId: "translink-seq", kind: "trip-updates", source: { url: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates" } },
-			{ id: "translink-seq-vehicles", targetFeedId: "translink-seq", kind: "vehicles", source: { url: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions" } },
-		],
-	}],
+	feeds: [
+		{
+			id: "translink-seq",
+			staticSource: { url: "https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip" },
+			realtimeSources: [
+				{
+					id: "translink-seq-alerts",
+					targetFeedId: "translink-seq",
+					kind: "alerts",
+					source: { url: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/alerts" },
+				},
+				{
+					id: "translink-seq-trip-updates",
+					targetFeedId: "translink-seq",
+					kind: "trip-updates",
+					source: { url: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/TripUpdates" },
+				},
+				{
+					id: "translink-seq-vehicles",
+					targetFeedId: "translink-seq",
+					kind: "vehicles",
+					source: { url: "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions" },
+				},
+			],
+		},
+	],
 	modes: ["rail"],
 	plugins: [seqPlugin],
 };
 
-export function createCaGthaNetwork(apiKey: string): NetworkDefinition {
-	const source = (id: string, targetFeedId: string, kind: "alerts" | "trip-updates" | "vehicles", url: string) => ({ id, targetFeedId, kind, source: { url: `${url}?key=${apiKey}` } });
+export function createCaGthaNetwork(apiKeys: string | readonly string[]): NetworkDefinition {
+	const rawKeys = typeof apiKeys === "string" ? [apiKeys] : [...apiKeys];
+	const keys = [...new Set(rawKeys.map((key) => key.trim()).filter(Boolean))];
+	if (keys.length === 0) throw new Error("At least one Metrolinx API key is required");
+	const source = (id: string, targetFeedId: string, kind: "alerts" | "trip-updates" | "vehicles", url: string) => ({
+		id,
+		targetFeedId,
+		kind,
+		source: {
+			url: `${url}?key=${keys[0]}`,
+			fallbackUrls: keys.slice(1).map((key) => `${url}?key=${key}`),
+		},
+	});
 	const interchange = (id: string, name: string, goId: string, viaId: string, includeUp = false) => ({
-		id, name,
+		id,
+		name,
 		members: [
 			{ feedId: "go", localId: goId },
 			...(includeUp ? [{ feedId: "up", localId: goId }] : []),
@@ -33,17 +62,63 @@ export function createCaGthaNetwork(apiKey: string): NetworkDefinition {
 		id: "ca-gtha",
 		name: "Greater Toronto and Hamilton Area",
 		feeds: [
-			{ id: "up", staticSource: { url: "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/UP-GTFS.zip" }, realtimeSources: [
-				source("up-alerts", "up", "alerts", "https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/Alerts"),
-				source("up-trip-updates", "up", "trip-updates", "https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/TripUpdates"),
-				source("up-vehicles", "up", "vehicles", "https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/VehiclePosition"),
-			] },
-			{ id: "go", staticSource: { url: "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/GO-GTFS.zip" }, realtimeSources: [
-				source("go-alerts", "go", "alerts", "https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/Alerts"),
-				source("go-trip-updates", "go", "trip-updates", "https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/TripUpdates"),
-				source("go-vehicles", "go", "vehicles", "https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/VehiclePosition"),
-			] },
-			{ id: "via", staticSource: { url: "https://www.viarail.ca/sites/all/files/gtfs/viarail.zip" }, realtimeSources: [] },
+			{
+				id: "up",
+				staticSource: {
+					url: "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/UP-GTFS.zip",
+				},
+				realtimeSources: [
+					source(
+						"up-alerts",
+						"up",
+						"alerts",
+						"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/Alerts",
+					),
+					source(
+						"up-trip-updates",
+						"up",
+						"trip-updates",
+						"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/TripUpdates",
+					),
+					source(
+						"up-vehicles",
+						"up",
+						"vehicles",
+						"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/VehiclePosition",
+					),
+				],
+			},
+			{
+				id: "go",
+				staticSource: {
+					url: "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/GO-GTFS.zip",
+				},
+				realtimeSources: [
+					source(
+						"go-alerts",
+						"go",
+						"alerts",
+						"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/Alerts",
+					),
+					source(
+						"go-trip-updates",
+						"go",
+						"trip-updates",
+						"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/TripUpdates",
+					),
+					source(
+						"go-vehicles",
+						"go",
+						"vehicles",
+						"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/VehiclePosition",
+					),
+				],
+			},
+			{
+				id: "via",
+				staticSource: { url: "https://www.viarail.ca/sites/all/files/gtfs/viarail.zip" },
+				realtimeSources: [],
+			},
 		],
 		modes: ["rail"],
 		plugins: [gthaPlugin, viaPlugin],
@@ -53,7 +128,7 @@ export function createCaGthaNetwork(apiKey: string): NetworkDefinition {
 			interchange("kitchener", "Kitchener", "KI", "114"),
 			interchange("aldershot", "Aldershot", "AL", "600"),
 			interchange("oakville", "Oakville", "OA", "436"),
-			interchange("guelph", "Guelph Central", "GU", "450"),
+			interchange("guelph", "Guelph Central", "GL", "70"),
 			interchange("brampton", "Brampton", "BR", "322"),
 			interchange("georgetown", "Georgetown", "GE", "6"),
 			interchange("malton", "Malton", "MA", "34"),
@@ -66,7 +141,13 @@ export function createCaGthaNetwork(apiKey: string): NetworkDefinition {
 export const CA_VIA_NETWORK: NetworkDefinition = {
 	id: "ca-via",
 	name: "VIA Rail Canada",
-	feeds: [{ id: "via", staticSource: { url: "https://www.viarail.ca/sites/all/files/gtfs/viarail.zip" }, realtimeSources: [] }],
+	feeds: [
+		{
+			id: "via",
+			staticSource: { url: "https://www.viarail.ca/sites/all/files/gtfs/viarail.zip" },
+			realtimeSources: [],
+		},
+	],
 	modes: ["rail"],
 	plugins: [viaPlugin],
 };

@@ -54,6 +54,16 @@ export type RunSeries = {
 	vehicle_sightings: { vehicle_id: string; trip_id: string }[];
 };
 
+export const EAGER_SERVICE_DATE_PAST_DAYS = 1;
+export const EAGER_SERVICE_DATE_FUTURE_DAYS = 7;
+
+export type AugmentTripOptions = {
+	/** Restrict construction to explicit start service dates for lazy materialization. */
+	serviceDates?: readonly string[];
+	/** Restrict realtime updates independently from scheduled calendar dates. */
+	realtimeDates?: readonly string[];
+};
+
 function dateToEpochDays(ymd: number | string): number {
 	const ymdStr = ymd.toString();
 	let y = Number.parseInt(ymdStr.slice(0, 4));
@@ -76,10 +86,45 @@ export function augmentTrip(
 	ctx: cache.CacheContext,
 	tripUpdatesCache?: Map<string, qdf.RealtimeTripUpdate[]>,
 	reuseInstancesFrom?: AugmentedTrip,
+	options: AugmentTripOptions = {},
 ): AugmentedTrip {
 	ctx.augmented.timer.start("augmentTrip");
 	const todayEpoch = dateToEpochDays(getToday(getFeedTimeZone(ctx.config, trip.feed_id)));
-	const serviceDates = getServiceDatesByTrip({ feedId: trip.feed_id, localId: trip.trip_id }, ctx, todayEpoch - 15, todayEpoch + 60);
+	const requestedServiceDates =
+		options.serviceDates ??
+		getServiceDatesByTrip(
+			{ feedId: trip.feed_id, localId: trip.trip_id },
+			ctx,
+			todayEpoch - EAGER_SERVICE_DATE_PAST_DAYS,
+			todayEpoch + EAGER_SERVICE_DATE_FUTURE_DAYS,
+		);
+	const serviceDateSet = new Set(requestedServiceDates);
+	// Realtime refreshes must preserve lazily materialized scheduled dates which
+	// are still resident. Explicit lazy calls intentionally build only their date.
+	if (!options.serviceDates) {
+		for (const instance of reuseInstancesFrom?.instances ?? []) {
+			if (
+				instance.realtime_update === null &&
+				instance.schedule_relationship === qdf.TripScheduleRelationship.SCHEDULED
+			) {
+				serviceDateSet.add(instance.serviceDate);
+			}
+		}
+		for (const retainedDate of ctx.runtimeState.lazyServiceDates.keys()) {
+			const epochDay = dateToEpochDays(retainedDate);
+			if (
+				getServiceDatesByTrip(
+					{ feedId: trip.feed_id, localId: trip.trip_id },
+					ctx,
+					epochDay,
+					epochDay,
+				).includes(retainedDate)
+			) {
+				serviceDateSet.add(retainedDate);
+			}
+		}
+	}
+	const serviceDates = Array.from(serviceDateSet).sort();
 
 	ctx.augmented.timer.start("augmentTrip:getRawStopTimes");
 	const tripRef = { feedId: trip.feed_id, localId: trip.trip_id };
@@ -110,9 +155,20 @@ export function augmentTrip(
 	ctx.augmented.timer.stop("augmentTrip:findExpress");
 
 	ctx.augmented.timer.start("augmentTrip:getTripUpdates");
-	const updates = tripUpdatesCache
+	const allUpdates = tripUpdatesCache
 		? (tripUpdatesCache.get(tripKey) ?? [])
 		: cache.getTripUpdates(ctx, tripRef);
+	const realtimeDateSet = options.realtimeDates
+		? new Set(options.realtimeDates)
+		: options.serviceDates
+			? serviceDateSet
+			: null;
+	const updates = realtimeDateSet
+		? allUpdates.filter((update) => {
+				const startDate = update.trip.start_date;
+				return startDate != null && realtimeDateSet.has(startDate);
+			})
+		: allUpdates;
 	ctx.augmented.timer.stop("augmentTrip:getTripUpdates");
 
 	const createInstance = (

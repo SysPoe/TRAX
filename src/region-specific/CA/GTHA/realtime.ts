@@ -76,6 +76,11 @@ export function getActivePassengerCars(ctx: CacheContext): Set<number> {
 	return getState(ctx).activePassengerCars;
 }
 
+/** Return the latest scraped fleet allocation even before it has propagated to every trip in the block. */
+export function getVehicleConsist(ctx: CacheContext, vehicleId: string): string[] | null {
+	return getState(ctx).vehicleConsists[vehicleId] ?? null;
+}
+
 function unmergeId(ctx: CacheContext, stopId: string): string {
 	const merge = ctx.config.mergeStops.find((m) => m.to === stopId);
 	return merge ? merge.from[0] : stopId;
@@ -1008,7 +1013,6 @@ export async function updateSourceF(ctx: CacheContext, serviceDateStr: string, b
 				.map((td) => td.text.trim());
 			const infoRow = rows[1]
 				.querySelectorAll("td")
-				.slice(1)
 				.map((td) => td.text.trim());
 
 			let locoIdx = infoRow.findIndex((s) => s.toLowerCase().includes("locomotive"));

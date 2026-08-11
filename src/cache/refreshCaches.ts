@@ -3,7 +3,11 @@ import { isConsideredTrip } from "../utils/considered.js";
 import { syncCalendarsToWasm } from "../utils/calendar.js";
 import { augmentStop } from "../utils/augmentedStop.js";
 import type { AugmentedStop } from "../utils/augmentedStop.js";
-import { augmentTrip } from "../utils/augmentedTrip.js";
+import {
+	augmentTrip,
+	EAGER_SERVICE_DATE_FUTURE_DAYS,
+	EAGER_SERVICE_DATE_PAST_DAYS,
+} from "../utils/augmentedTrip.js";
 import { clearAugmentedStopTimeCaches } from "../utils/augmentedStopTime.js";
 import { getCurrentQRTravelTrains, getPlacesWithCache } from "../region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
 import {
@@ -23,6 +27,7 @@ import { registerAugmentedTrip, unregisterAugmentedTrip } from "./augmentedEntit
 import { clearPreviousVehicleInfo, prunePreviousVehicleInfo } from "../utils/vehicleModel.js";
 import { entityKey } from "../identity.js";
 import { getSeqState } from "../plugins/seq-state.js";
+import { addDaysToServiceDate, getToday } from "../utils/time.js";
 
 export function refreshQRTTrainsInBackground(ctx: CacheContext): void {
 	if (ctx.augmented.qrtRefreshInFlight) return;
@@ -207,6 +212,14 @@ export async function refreshStaticCache(
 		pluginState: new Map(),
 		runtimeState: createRuntimeState(),
 	};
+	for (const feed of config.network.feeds) {
+		const timezone = config.feedTimeZones.get(feed.id);
+		if (!timezone) continue;
+		const today = getToday(timezone);
+		for (let offset = -EAGER_SERVICE_DATE_PAST_DAYS; offset <= EAGER_SERVICE_DATE_FUTURE_DAYS; offset++) {
+			ctx.runtimeState.operationalServiceDates.add(addDaysToServiceDate(today, offset));
+		}
+	}
 	if (previousCtx) getSeqState(ctx).qrtTrains = getSeqState(previousCtx).qrtTrains;
 	const startTotal = Date.now();
 	ctx.augmented.timer.clear();

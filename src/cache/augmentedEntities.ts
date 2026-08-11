@@ -6,8 +6,12 @@ import type { AugmentedTrip, AugmentedTripInstance, RunSeries } from "../utils/a
 import type { AugmentedStopTime } from "../utils/augmentedStopTime.js";
 import { addSC, addSCI } from "../utils/serviceCapacity.js";
 import { addVehicleModel, addVehicleModelTrip } from "../utils/vehicleModel.js";
-import { getServiceDayStart } from "../utils/time.js";
-import { patchSeqDiagramOntoAugmentedTrip } from "../region-specific/AU/SEQ/seq-diagram.js";
+import { addDaysToServiceDate, getEpochDayFromServiceDate, getServiceDayStart } from "../utils/time.js";
+import {
+	applySeqDiagramToInstances,
+	patchSeqDiagramOntoAugmentedTrip,
+	revalidateSeqDiagramRealtimeEdges,
+} from "../region-specific/AU/SEQ/seq-diagram.js";
 import ensureQRTEnabled from "../region-specific/AU/SEQ/qr-travel/enabled.js";
 import type { QRTPlace, QRTStations, QRTTravelTrip } from "../region-specific/AU/SEQ/qr-travel/types.js";
 import type { RailwayStationFacility } from "../region-specific/AU/SEQ/facilities-types.js";
@@ -18,6 +22,9 @@ import type { ExpressInfo, PassingStop } from "../utils/SRT.js";
 import { getStops, getTrips } from "./gtfsReads.js";
 import { decodeTripInstanceId, entityKey } from "../identity.js";
 import { getSeqState } from "../plugins/seq-state.js";
+import { getServiceDatesByTrip } from "../utils/calendar.js";
+
+const MAX_LAZY_SERVICE_DATES = 8;
 
 export function unregisterAugmentedTrip(ctx: CacheContext, tripId: string): void {
 	const { augmented } = ctx;
@@ -80,7 +87,201 @@ export function registerAugmentedTrip(ctx: CacheContext, trip: AugmentedTrip): v
 	}
 }
 
+function indexInstances(ctx: CacheContext, tripKey: string, instances: readonly AugmentedTripInstance[]): void {
+	const { augmented } = ctx;
+	for (const instance of instances) {
+		augmented.instancesRec.set(instance.instance_id, instance);
+		for (const date of instance.actualTripDates) {
+			let tripIds = augmented.serviceDateTrips.get(date);
+			if (!tripIds) {
+				tripIds = [];
+				augmented.serviceDateTrips.set(date, tripIds);
+			}
+			if (!tripIds.includes(tripKey)) tripIds.push(tripKey);
+			let tripSet = augmented.serviceDateTripsSet.get(date);
+			if (!tripSet) {
+				tripSet = new Set(tripIds);
+				augmented.serviceDateTripsSet.set(date, tripSet);
+			}
+			tripSet.add(tripKey);
+		}
+		for (const stopTime of instance.stopTimes) {
+			if (!stopTime.passing || !stopTime.actual_stop_id) continue;
+			const stopKey = entityKey({ feedId: stopTime.feed_id, localId: stopTime.actual_stop_id });
+			let tripIds = augmented.passingTrips.get(stopKey);
+			if (!tripIds) {
+				tripIds = [];
+				augmented.passingTrips.set(stopKey, tripIds);
+			}
+			if (!tripIds.includes(tripKey)) tripIds.push(tripKey);
+		}
+	}
+}
+
+function refreshTripStopTimeRecords(ctx: CacheContext, tripKey: string, trip: AugmentedTrip): void {
+	const stopTimes = trip.instances.flatMap((instance) => instance.stopTimes);
+	ctx.augmented.stopTimes[tripKey] = stopTimes;
+	ctx.augmented.baseStopTimes[tripKey] = [...stopTimes];
+}
+
+function refreshDiagramAfterInstanceChange(ctx: CacheContext, affectedTripIds: Set<string>): void {
+	const topology = ctx.augmented.seqDiagram;
+	if (!topology) return;
+	applySeqDiagramToInstances(ctx, topology);
+	revalidateSeqDiagramRealtimeEdges(ctx, affectedTripIds);
+}
+
+function rebuildDateIndexes(ctx: CacheContext, dates: ReadonlySet<string>): void {
+	for (const date of dates) {
+		const tripIds = new Set<string>();
+		for (const [tripKey, trip] of ctx.augmented.tripsRec) {
+			if (trip.instances.some((instance) => instance.actualTripDates.includes(date))) tripIds.add(tripKey);
+		}
+		if (tripIds.size === 0) {
+			ctx.augmented.serviceDateTrips.delete(date);
+			ctx.augmented.serviceDateTripsSet.delete(date);
+		} else {
+			ctx.augmented.serviceDateTrips.set(date, Array.from(tripIds));
+			ctx.augmented.serviceDateTripsSet.set(date, tripIds);
+		}
+	}
+}
+
+function evictStartServiceDate(ctx: CacheContext, serviceDate: string): void {
+	if (ctx.runtimeState.operationalServiceDates.has(serviceDate)) return;
+	const affectedDates = new Set<string>([serviceDate]);
+	const affectedPassingStops = new Set<string>();
+	const affectedTripIds = new Set<string>();
+
+	for (const [tripKey, trip] of ctx.augmented.tripsRec) {
+		const removed = trip.instances.filter((instance) => instance.serviceDate === serviceDate);
+		if (removed.length === 0) continue;
+		for (const instance of removed) {
+			ctx.augmented.instancesRec.delete(instance.instance_id);
+			for (const date of instance.actualTripDates) affectedDates.add(date);
+			for (const stopTime of instance.stopTimes) {
+				if (stopTime.passing && stopTime.actual_stop_id) {
+					affectedPassingStops.add(entityKey({ feedId: stopTime.feed_id, localId: stopTime.actual_stop_id }));
+				}
+			}
+		}
+		trip.instances = trip.instances.filter((instance) => instance.serviceDate !== serviceDate);
+		trip.scheduledStartServiceDates = trip.scheduledStartServiceDates.filter((date) => date !== serviceDate);
+		refreshTripStopTimeRecords(ctx, tripKey, trip);
+		affectedTripIds.add(trip.trip_id);
+	}
+
+	rebuildDateIndexes(ctx, affectedDates);
+	for (const stopKey of affectedPassingStops) {
+		const tripIds: string[] = [];
+		for (const [tripKey, trip] of ctx.augmented.tripsRec) {
+			if (
+				trip.instances.some((instance) =>
+					instance.stopTimes.some(
+						(stopTime) =>
+							stopTime.passing &&
+							stopTime.actual_stop_id !== null &&
+							entityKey({ feedId: stopTime.feed_id, localId: stopTime.actual_stop_id }) === stopKey,
+					),
+				)
+			) {
+				tripIds.push(tripKey);
+			}
+		}
+		if (tripIds.length === 0) ctx.augmented.passingTrips.delete(stopKey);
+		else ctx.augmented.passingTrips.set(stopKey, tripIds);
+	}
+	ctx.augmented.stopDeparturesCached.clear();
+	for (const date of affectedDates) ctx.augmented.runSeriesCache.delete(date);
+	refreshDiagramAfterInstanceChange(ctx, affectedTripIds);
+}
+
+function touchLazyServiceDate(ctx: CacheContext, serviceDate: string): void {
+	const lru = ctx.runtimeState.lazyServiceDates;
+	lru.delete(serviceDate);
+	lru.set(serviceDate, true);
+	while (lru.size > MAX_LAZY_SERVICE_DATES) {
+		const oldest = lru.keys().next().value as string | undefined;
+		if (oldest === undefined) break;
+		lru.delete(oldest);
+		evictStartServiceDate(ctx, oldest);
+	}
+}
+
+/** Materialize one calendar start date into the authoritative augmented indexes. */
+export function ensureStartServiceDateMaterialized(ctx: CacheContext, serviceDate: string): void {
+	if (!/^\d{8}$/.test(serviceDate) || !Number.isFinite(getEpochDayFromServiceDate(serviceDate))) return;
+	if (ctx.runtimeState.operationalServiceDates.has(serviceDate)) return;
+	if (ctx.runtimeState.lazyServiceDates.has(serviceDate)) {
+		touchLazyServiceDate(ctx, serviceDate);
+		return;
+	}
+
+	const epochDay = getEpochDayFromServiceDate(serviceDate);
+	const affectedTripIds = new Set<string>();
+	for (const [tripKey, rawTrip] of ctx.augmented.rawTripsRec) {
+		const tripRef = { feedId: rawTrip.feed_id, localId: rawTrip.trip_id };
+		const scheduled = getServiceDatesByTrip(tripRef, ctx, epochDay, epochDay).includes(serviceDate);
+		const hasRealtime = (ctx.augmented.tripUpdatesCache.get(tripKey) ?? []).some(
+			(update) => update.trip.start_date === serviceDate,
+		);
+		if (!scheduled && !hasRealtime) continue;
+
+		const existing = ctx.augmented.tripsRec.get(tripKey);
+		if (!existing) continue;
+		const dateTrip = augmentTrip(rawTrip, ctx, ctx.augmented.tripUpdatesCache, existing, {
+			serviceDates: scheduled ? [serviceDate] : [],
+			realtimeDates: [serviceDate],
+		});
+		const nextInstances = dateTrip.instances.filter((instance) => instance.serviceDate === serviceDate);
+		if (nextInstances.length === 0) continue;
+
+		for (const instance of existing.instances) {
+			if (instance.serviceDate === serviceDate) ctx.augmented.instancesRec.delete(instance.instance_id);
+		}
+		existing.instances = existing.instances
+			.filter((instance) => instance.serviceDate !== serviceDate)
+			.concat(nextInstances)
+			.sort((a, b) => a.serviceDate.localeCompare(b.serviceDate) || a.instance_id.localeCompare(b.instance_id));
+		if (scheduled && !existing.scheduledStartServiceDates.includes(serviceDate)) {
+			existing.scheduledStartServiceDates.push(serviceDate);
+			existing.scheduledStartServiceDates.sort();
+		}
+		registerAugmentedTrip(ctx, existing);
+		indexInstances(ctx, tripKey, nextInstances);
+		refreshTripStopTimeRecords(ctx, tripKey, existing);
+		affectedTripIds.add(existing.trip_id);
+	}
+
+	touchLazyServiceDate(ctx, serviceDate);
+	refreshDiagramAfterInstanceChange(ctx, affectedTripIds);
+}
+
+/** Date-filter index. The previous start date is included for GTFS times beyond 24:00. */
+export function getTripIdsByServiceDate(ctx: CacheContext, serviceDate: string): string[] {
+	ensureStartServiceDateMaterialized(ctx, addDaysToServiceDate(serviceDate, -1));
+	ensureStartServiceDateMaterialized(ctx, serviceDate);
+	return ctx.augmented.serviceDateTrips.get(serviceDate) ?? [];
+}
+
+/** Calendar availability without eagerly constructing trip instances. */
+export function getAvailableServiceDates(ctx: CacheContext): string[] {
+	if (ctx.runtimeState.availableServiceDates) return ctx.runtimeState.availableServiceDates;
+	const representativeByService = new Map<string, qdf.Trip>();
+	for (const [tripKey, trip] of ctx.augmented.rawTripsRec) {
+		const serviceKey = ctx.raw.tripServiceIds?.get(tripKey);
+		if (serviceKey && !representativeByService.has(serviceKey)) representativeByService.set(serviceKey, trip);
+	}
+	const dates = new Set<string>();
+	for (const trip of representativeByService.values()) {
+		for (const date of getServiceDatesByTrip({ feedId: trip.feed_id, localId: trip.trip_id }, ctx)) dates.add(date);
+	}
+	ctx.runtimeState.availableServiceDates = Array.from(dates).sort();
+	return ctx.runtimeState.availableServiceDates;
+}
+
 export function getStopDeparturesCached(ctx: CacheContext, stop: QualifiedEntityId, serviceDate: string): AugmentedStopTime[] {
+	ensureStartServiceDateMaterialized(ctx, serviceDate);
 	const stopId = entityKey(stop);
 	const timer = ctx.augmented.timer;
 	timer.start("getStopDeparturesCached");
@@ -209,6 +410,7 @@ export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string)
 	try {
 		const identity = decodeTripInstanceId(instance_id);
 		if (identity.networkId !== ctx.config.network.id) return null;
+		ensureStartServiceDateMaterialized(ctx, identity.serviceDate);
 		const tripRef = { feedId: identity.feedId, localId: identity.localId };
 		const trip = ctx.augmented.tripsRec.get(entityKey(tripRef));
 		if (trip) {
@@ -240,6 +442,7 @@ export function getVehicleTripInstance(
 
 	const startDate = vehicle.trip.start_date;
 	if (startDate) {
+		ensureStartServiceDateMaterialized(ctx, startDate);
 		return augmentedTrip.instances.find((i) => i.serviceDate === startDate) || null;
 	}
 
@@ -359,6 +562,7 @@ export function getRunSeries(
 	runSeries: string,
 	calcIfNotFound: boolean = true,
 ): RunSeries {
+	ensureStartServiceDateMaterialized(ctx, date);
 	const context = ctx;
 	const { augmented } = context;
 

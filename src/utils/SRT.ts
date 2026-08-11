@@ -421,7 +421,10 @@ function findPassingStopSRTs(stops: string[], ctx: cache.CacheContext): PassingS
 }
 
 function getStopOrParentId(stopTime: qdf.StopTime, ctx: cache.CacheContext): string | undefined {
-	const s = cache.getRawStops(ctx, { feed_id: stopTime.feed_id, stop_id: stopTime.stop_id })?.[0];
+	const key = entityKey({ feedId: stopTime.feed_id, localId: stopTime.stop_id });
+	const s =
+		ctx.augmented.stopsRec.get(key) ??
+		cache.getRawStops(ctx, { feed_id: stopTime.feed_id, stop_id: stopTime.stop_id })?.[0];
 	return s ? entityKey({ feedId: s.feed_id, localId: s.parent_station ?? s.stop_id }) : undefined;
 }
 

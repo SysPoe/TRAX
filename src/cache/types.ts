@@ -73,6 +73,10 @@ export type CacheContext = {
 		consideredStops: Map<string, boolean>;
 		consideredTrips: Map<string, boolean>;
 		serviceDates: Map<string, string[]>;
+		serviceDayStarts: Map<string, number>;
+		availableServiceDates: string[] | null;
+		operationalServiceDates: Set<string>;
+		lazyServiceDates: Map<string, true>;
 		dateOffsets: Map<string, string>;
 		serviceDateArrays: Map<string, string[]>;
 		previousVehicleInfo: Map<string, unknown>;

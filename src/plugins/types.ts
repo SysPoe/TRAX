@@ -11,6 +11,7 @@ export type TransitCapability =
 	| "occupancy"
 	| "consist"
 	| "platform-changes"
+	| "boarding-locations"
 	| "facilities"
 	| "supplemental-realtime";
 
@@ -29,7 +30,13 @@ export interface TransitPlugin {
 	enrichTrip?(trip: AugmentedTripInstance, ctx: CacheContext): AugmentedTripInstance | void;
 	vehicleInfo?(vehicle: RealtimeVehiclePosition, ctx: CacheContext): unknown;
 	vehicleInfoForTrip?(trip: AugmentedTripInstance, ctx: CacheContext): VehicleInfo | null;
-	serviceCapacity?(trip: AugmentedTripInstance, stopTime: AugmentedStopTime, serviceDate: string, direction: string | undefined, ctx: CacheContext): ServiceCapacity;
+	serviceCapacity?(
+		trip: AugmentedTripInstance,
+		stopTime: AugmentedStopTime,
+		serviceDate: string,
+		direction: string | undefined,
+		ctx: CacheContext,
+	): ServiceCapacity;
 	consistDetails?(trip: AugmentedTripInstance, ctx: CacheContext): Promise<unknown> | unknown;
 	filterTrackEdges?(edges: Set<string>): void;
 	enrichTrackGraph?(matrix: Record<string, Record<string, number>>, adjacency: Record<string, string[]>): void;

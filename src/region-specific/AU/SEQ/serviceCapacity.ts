@@ -11,6 +11,7 @@ import { getCacheFilePath, getDataFilePath } from "../../../utils/fs.js";
 import { TraxConfig } from "../../../config.js";
 import { ServiceCapacity } from "../../../utils/serviceCapacity.js";
 import { getPluginState } from "../../../plugins/types.js";
+import { entityKey } from "../../../identity.js";
 
 const pipe = promisify(pipeline);
 
@@ -31,11 +32,16 @@ type SeqCapacityState = {
 	loaded: boolean;
 	loadedFileIdentity: string | null;
 	dayTypeCache: Map<string, string>;
+	routeNameCache: Map<string, string | null>;
 };
 
 function getState(ctx: CacheContext): SeqCapacityState {
 	return getPluginState(ctx, "au-seq:capacity", () => ({
-		capacityIndex: new Map(), loaded: false, loadedFileIdentity: null, dayTypeCache: new Map(),
+		capacityIndex: new Map(),
+		loaded: false,
+		loadedFileIdentity: null,
+		dayTypeCache: new Map(),
+		routeNameCache: new Map(),
 	}));
 }
 
@@ -316,8 +322,12 @@ export function getServiceCapacity(
 	const state = getState(ctx);
 	if (!state.loaded || stopTime.passing) return ServiceCapacity.UNKNOWN;
 
-	const route = getRawRoutes(ctx, { feed_id: inst.feed_id, route_id: inst.route_id })[0];
-	const routeName = route?.route_long_name;
+	const routeKey = entityKey({ feedId: inst.feed_id, localId: inst.route_id });
+	let routeName = state.routeNameCache.get(routeKey);
+	if (routeName === undefined) {
+		routeName = getRawRoutes(ctx, { feed_id: inst.feed_id, route_id: inst.route_id })[0]?.route_long_name ?? null;
+		state.routeNameCache.set(routeKey, routeName);
+	}
 	if (!routeName) return ServiceCapacity.UNKNOWN;
 
 	const seq = stopTime._stopTime?.stop_sequence ?? 0;
