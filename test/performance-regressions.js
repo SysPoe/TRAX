@@ -6,7 +6,7 @@ import path from "node:path";
 
 import { buildSeqDiagramTopology } from "../dist/index.js";
 import { _test as refreshCacheTest } from "../dist/cache/refreshCaches.js";
-import { getStaticFeedFingerprint } from "../dist/utils/SRT.js";
+import { _test as srtTest, getStaticFeedFingerprint } from "../dist/utils/SRT.js";
 
 function testSeqDiagramUsesProvidedStopTimes() {
 	const trips = [
@@ -57,7 +57,7 @@ function testStaticFingerprintTracksQDFCacheFile() {
 	const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "trax-fingerprint-"));
 	try {
 		const url = "https://example.test/static.zip";
-		const cacheName = crypto.createHash("md5").update(url).digest("hex");
+		const cacheName = crypto.createHash("md5").update(`${url}|{}|`).digest("hex");
 		const cachePath = path.join(cacheDir, cacheName);
 		fs.writeFileSync(cachePath, "feed-v1");
 
@@ -85,7 +85,27 @@ function testStaticFingerprintTracksQDFCacheFile() {
 	}
 }
 
+function testUntimedPassingPointsUseShapeDistance() {
+	const stopTimes = [
+		{
+			arrival_time: 10 * 3600,
+			departure_time: 10 * 3600,
+			shape_dist_traveled: 0,
+		},
+		{ arrival_time: null, departure_time: null, shape_dist_traveled: 10_000 },
+		{ arrival_time: null, departure_time: null, shape_dist_traveled: 30_000 },
+		{
+			arrival_time: 11 * 3600,
+			departure_time: 11 * 3600,
+			shape_dist_traveled: 60_000,
+		},
+	];
+
+	assert.deepEqual(srtTest.getPatternEdgeTimes(stopTimes), [0, 10, 20, 30]);
+}
+
 testSeqDiagramUsesProvidedStopTimes();
 testDisappearingRealtimeUpdateIsChanged();
 testStaticFingerprintTracksQDFCacheFile();
+testUntimedPassingPointsUseShapeDistance();
 console.log("Performance regression tests passed.");

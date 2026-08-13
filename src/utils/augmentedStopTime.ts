@@ -20,6 +20,8 @@ export type BoardingLocation = {
 	value: string;
 	source: string;
 	observed_at: string;
+	confidence?: "confirmed" | "reported" | "inferred";
+	expires_at?: string;
 };
 
 export type AugmentedStopTime = {

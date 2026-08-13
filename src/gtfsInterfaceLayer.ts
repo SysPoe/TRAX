@@ -18,6 +18,7 @@ export async function loadStatic(gtfs: GTFS, config: TraxConfig, report?: Source
 		id: feed.id,
 		url: feed.staticSource.url,
 		headers: feed.staticSource.headers,
+		archiveEntry: feed.staticSource.archiveEntry,
 	}));
 	for (const feed of config.network.feeds)
 		report?.({ id: `${feed.id}:static`, feedId: feed.id, kind: "static", state: "loading" });

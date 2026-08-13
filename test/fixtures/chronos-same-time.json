@@ -1,0 +1,30 @@
+{
+  "departures": [
+    { "stop_id": 1181, "route_id": 1728, "run_id": 9520, "run_ref": "9520", "direction_id": 4, "scheduled_departure_utc": "2026-08-12T04:50:00Z", "estimated_departure_utc": null, "at_platform": false, "platform_number": null, "departure_sequence": 0 },
+    { "stop_id": 1181, "route_id": 1745, "run_id": 24497, "run_ref": "24497", "direction_id": 10, "scheduled_departure_utc": "2026-08-12T04:50:00Z", "estimated_departure_utc": null, "at_platform": false, "platform_number": null, "departure_sequence": 0 },
+    { "stop_id": 1181, "route_id": 1749, "run_id": 78314, "run_ref": "78314", "direction_id": 0, "scheduled_departure_utc": "2026-08-12T04:50:00Z", "estimated_departure_utc": null, "at_platform": false, "platform_number": null, "departure_sequence": 0 },
+    { "stop_id": 1181, "route_id": 1755, "run_id": 38749, "run_ref": "38749", "direction_id": 16, "scheduled_departure_utc": "2026-08-12T04:50:00Z", "estimated_departure_utc": null, "at_platform": false, "platform_number": null, "departure_sequence": 0 },
+    { "stop_id": 1181, "route_id": 1853, "run_id": 82682, "run_ref": "82682", "direction_id": 0, "scheduled_departure_utc": "2026-08-12T04:50:00Z", "estimated_departure_utc": null, "at_platform": false, "platform_number": null, "departure_sequence": 0 }
+  ],
+  "stops": { "1181": { "stop_id": 1181, "stop_name": "Southern Cross Railway Station", "route_type": 3 } },
+  "routes": {
+    "1728": { "route_id": 1728, "route_type": 3, "route_gtfs_id": "1-BAT", "route_name": "Ballarat - Melbourne" },
+    "1745": { "route_id": 1745, "route_type": 3, "route_gtfs_id": "1-GEL", "route_name": "Geelong - Melbourne" },
+    "1749": { "route_id": 1749, "route_type": 3, "route_gtfs_id": "1-V50", "route_name": "Warrnambool - Melbourne via Apollo Bay" },
+    "1755": { "route_id": 1755, "route_type": 3, "route_gtfs_id": "1-V02", "route_name": "Adelaide - Melbourne" },
+    "1853": { "route_id": 1853, "route_type": 3, "route_gtfs_id": "1-WBL", "route_name": "Warrnambool - Melbourne" }
+  },
+  "runs": {
+    "9520": { "run_id": 9520, "run_ref": "9520", "route_id": 1728, "route_type": 3, "final_stop_id": 1052, "destination_name": "Deer Park Railway Station", "status": "scheduled", "direction_id": 4 },
+    "24497": { "run_id": 24497, "run_ref": "24497", "route_id": 1745, "route_type": 3, "final_stop_id": 1596, "destination_name": "Waurn Ponds Railway Station", "status": "scheduled", "direction_id": 10 },
+    "78314": { "run_id": 78314, "run_ref": "78314", "route_id": 1749, "route_type": 3, "final_stop_id": 1527, "destination_name": "Geelong Railway Station", "status": "scheduled", "direction_id": 0 },
+    "38749": { "run_id": 38749, "run_ref": "38749", "route_id": 1755, "route_type": 3, "final_stop_id": 1527, "destination_name": "Geelong Railway Station", "status": "scheduled", "direction_id": 16 },
+    "82682": { "run_id": 82682, "run_ref": "82682", "route_id": 1853, "route_type": 3, "final_stop_id": 1596, "destination_name": "Waurn Ponds Railway Station", "status": "scheduled", "direction_id": 0 }
+  },
+  "directions": {
+    "4": { "direction_id": 4, "direction_name": "Ballarat", "route_id": 1728 },
+    "10": { "direction_id": 10, "direction_name": "Geelong", "route_id": 1745 },
+    "0": { "direction_id": 0, "direction_name": "Warrnambool", "route_id": 1749 },
+    "16": { "direction_id": 16, "direction_name": "Adelaide", "route_id": 1755 }
+  }
+}

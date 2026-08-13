@@ -5,6 +5,7 @@ import logger from "./logger.js";
 import { cacheFileExists, getCacheFilePath, loadCacheFile, writeCacheFile } from "./fs.js";
 import fs from "fs";
 import { entityKey, parseEntityKey } from "../identity.js";
+import { isRailLikeRouteType } from "./considered.js";
 
 function getPatternSignature(stopTimes: qdf.StopTime[]): string {
 	return stopTimes.map((st) => entityKey({ feedId: st.feed_id, localId: st.stop_id })).join("|");
@@ -37,7 +38,7 @@ export function getConsideredStations(ctx: CacheContext): qdf.Stop[] {
 		let startTime = Date.now();
 
 		const processTrip = (trip: qdf.Trip) => {
-			if (gtfs.getRoutes({ feed_id: trip.feed_id, route_id: trip.route_id })[0]?.route_type !== 2) return;
+			if (!isRailLikeRouteType(gtfs.getRoutes({ feed_id: trip.feed_id, route_id: trip.route_id })[0]?.route_type)) return;
 
 			const stopTimes = gtfs.getStopTimes({ feed_id: trip.feed_id, trip_id: trip.trip_id });
 			const sig = getPatternSignature(stopTimes);

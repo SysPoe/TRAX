@@ -7,6 +7,8 @@ export interface FeedSource {
 	/** Ordered alternatives used when the primary endpoint fails. */
 	fallbackUrls?: readonly string[];
 	headers?: Record<string, string>;
+	/** Path of a nested GTFS ZIP inside the downloaded archive. */
+	archiveEntry?: string;
 }
 
 export interface RealtimeSource {

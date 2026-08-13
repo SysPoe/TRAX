@@ -18,7 +18,16 @@ export const gthaPlugin: TransitPlugin = {
 	feedIds: ["go", "up"],
 	capabilities: ["vehicles", "consist", "platform-changes", "supplemental-realtime"],
 	afterRealtime(ctx) {
-		if (ctx.gtfs) return updateAllSources(ctx, ctx.gtfs);
+		if (!ctx.gtfs) return;
+		ctx.config.progressLog({
+			task: "Loading GTHA supplemental realtime",
+			current: 0,
+			total: 0,
+			percent: 0,
+			speed: 0,
+			eta: 0,
+		});
+		return updateAllSources(ctx, ctx.gtfs);
 	},
 	vehicleInfoForTrip: getVehicleInfo,
 	consistDetails: (trip, ctx) => {

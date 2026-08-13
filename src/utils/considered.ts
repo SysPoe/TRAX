@@ -9,7 +9,7 @@ export function clearConsideredCaches(ctx: CacheContext): void {
 	ctx.runtimeState.consideredTrips.clear();
 }
 
-function isRailLikeRouteType(routeType: number | null | undefined): boolean {
+export function isRailLikeRouteType(routeType: number | null | undefined): boolean {
 	if (routeType === null || routeType === undefined) return false;
 	if (routeType === qdf.RouteType.Rail || routeType === qdf.RouteType.Subway) return true;
 	return (routeType >= 100 && routeType < 200) || (routeType >= 400 && routeType < 500);

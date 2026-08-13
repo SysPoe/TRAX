@@ -9,6 +9,7 @@ import path from "node:path";
 import { entityKey, parseEntityKey } from "../identity.js";
 import type { QualifiedEntityId } from "qdf-gtfs";
 import { interpolateTimes as wasmInterpolateTimes } from "../../build/release.js";
+import { isRailLikeRouteType } from "./considered.js";
 
 export type SRTMatrix = {
 	[from: string]: {
@@ -36,10 +37,12 @@ interface NetworkData {
 	adjacency: Record<string, string[]>;
 	lastUpdated: number;
 	staticFingerprint?: string;
+	topologyVersion?: number;
 }
 
 const CACHE_FILE = "network_topology.json";
 const MAX_CACHE_AGE_DAYS = 7;
+const TOPOLOGY_CACHE_VERSION = 2;
 
 function loadNetworkData(ctx: cache.CacheContext): NetworkData | null {
 	const cacheDir = ctx.config.cacheDir;
@@ -49,6 +52,7 @@ function loadNetworkData(ctx: cache.CacheContext): NetworkData | null {
 			const ageDays = (Date.now() - (data.lastUpdated ?? 0)) / (1000 * 60 * 60 * 24);
 			if (
 				ctx.runtimeState.srtExpectedStaticFingerprint !== null &&
+				data.topologyVersion === TOPOLOGY_CACHE_VERSION &&
 				data.staticFingerprint === ctx.runtimeState.srtExpectedStaticFingerprint &&
 				ageDays < MAX_CACHE_AGE_DAYS
 			) {
@@ -66,13 +70,65 @@ function getPatternSignature(stopTimes: qdf.StopTime[]): string {
 	return stopTimes.map((st) => entityKey({ feedId: st.feed_id, localId: st.stop_id })).join("|");
 }
 
+function finiteTime(value: number | null | undefined): number | null {
+	return value != null && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Derive one duration per edge without treating untimed GTFS passing points as
+ * midnight. A timed span containing passing points is divided by shape distance
+ * when available, or evenly when the feed does not provide usable distances.
+ */
+function getPatternEdgeTimes(stopTimes: qdf.StopTime[]): number[] {
+	const edgeTimes = new Array(stopTimes.length).fill(0);
+	const timedIndexes = stopTimes.flatMap((stopTime, index) =>
+		finiteTime(stopTime.arrival_time) != null || finiteTime(stopTime.departure_time) != null ? [index] : [],
+	);
+
+	for (let anchor = 0; anchor < timedIndexes.length - 1; anchor++) {
+		const fromIndex = timedIndexes[anchor];
+		const toIndex = timedIndexes[anchor + 1];
+		const from = stopTimes[fromIndex];
+		const to = stopTimes[toIndex];
+		const startTime = finiteTime(from.departure_time) ?? finiteTime(from.arrival_time);
+		const endTime = finiteTime(to.arrival_time) ?? finiteTime(to.departure_time);
+		if (startTime == null || endTime == null || endTime <= startTime) continue;
+
+		const distances: number[] = [];
+		for (let i = fromIndex + 1; i <= toIndex; i++) {
+			const previousDistance = stopTimes[i - 1].shape_dist_traveled;
+			const currentDistance = stopTimes[i].shape_dist_traveled;
+			const distance =
+				previousDistance != null &&
+				currentDistance != null &&
+				Number.isFinite(previousDistance) &&
+				Number.isFinite(currentDistance)
+					? currentDistance - previousDistance
+					: 0;
+			distances.push(distance);
+		}
+
+		const useDistances = distances.every((distance) => distance > 0);
+		const weights = useDistances ? distances : distances.map(() => 1);
+		const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+		const elapsedMinutes = (endTime - startTime) / 60;
+		for (let i = fromIndex + 1; i <= toIndex; i++) {
+			edgeTimes[i] = elapsedMinutes * (weights[i - fromIndex - 1] / totalWeight);
+		}
+	}
+
+	return edgeTimes;
+}
+
 function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
 	const gtfs = ctx.gtfs;
 	const timer = ctx.augmented.timer;
 	timer.start("SRT:generateNetworkData");
 	const trips = gtfs.getTrips();
-	const railTrips = trips.filter((t) => gtfs.getRoutes({ feed_id: t.feed_id, route_id: t.route_id })[0]?.route_type === 2);
+	const railTrips = trips.filter((t) =>
+		isRailLikeRouteType(gtfs.getRoutes({ feed_id: t.feed_id, route_id: t.route_id })[0]?.route_type),
+	);
 
 	const uniquePatterns: { id: string; timeFromPrev: number }[][] = [];
 	const seenSignatures = new Set<string>();
@@ -88,19 +144,12 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		if (seenSignatures.has(signature)) return;
 		seenSignatures.add(signature);
 
+		const edgeTimes = getPatternEdgeTimes(stopTimes);
 		const stops = stopTimes.map((st: qdf.StopTime, i: number) => {
 			const stop = gtfs.getStops({ feed_id: st.feed_id, stop_id: st.stop_id })[0];
 			const id = entityKey({ feedId: st.feed_id, localId: stop ? (stop.parent_station ?? stop.stop_id) : st.stop_id });
 
-			let timeFromPrev = 0;
-			if (i > 0) {
-				const prev = stopTimes[i - 1];
-				const currTime = st.arrival_time ?? st.departure_time ?? 0;
-				const prevTime = prev.departure_time ?? prev.arrival_time ?? 0;
-				timeFromPrev = (currTime - prevTime) / 60;
-			}
-
-			return { id, timeFromPrev };
+			return { id, timeFromPrev: edgeTimes[i] };
 		});
 
 		uniquePatterns.push(stops);
@@ -167,6 +216,15 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		}
 	});
 
+	// The graph and matrix must describe the same physical edges. Keep a neutral
+	// weight for edge-only feed data that has neither usable times nor distances.
+	for (const key of validEdges) {
+		const [from, to] = key.split("|");
+		if (!segmentStats.has(key) && !segmentStats.has(`${to}|${from}`)) {
+			segmentStats.set(key, { total: 1, count: 1 });
+		}
+	}
+
 	for (const [key, stats] of segmentStats.entries()) {
 		const [from, to] = key.split("|");
 		const avg = stats.total / stats.count;
@@ -185,6 +243,7 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		adjacency,
 		lastUpdated: Date.now(),
 		staticFingerprint: ctx.runtimeState.srtExpectedStaticFingerprint ?? undefined,
+		topologyVersion: TOPOLOGY_CACHE_VERSION,
 	};
 	writeCacheFile(CACHE_FILE, JSON.stringify(result), ctx.config.cacheDir);
 	timer.stop("SRT:generateNetworkData");
@@ -527,9 +586,13 @@ export default {
 	findPassingStopTimes,
 };
 
+export const _test = {
+	getPatternEdgeTimes,
+};
+
 /**
  * Fingerprint the exact QDF static ZIP cache entries plus TRAX's static stop
- * actions. QDF keys those files by md5(url|headers), so stat identity is cheap
+ * actions. QDF keys those files by md5(url|headers|archiveEntry), so stat identity is cheap
  * to obtain and changes whenever QDF replaces a cached feed.
  */
 export function getStaticFeedFingerprint(config: TraxConfig): string | null {
@@ -540,9 +603,7 @@ export function getStaticFeedFingerprint(config: TraxConfig): string | null {
 
 	for (const feed of config.network.feeds) {
 		const feedConfig = feed.staticSource;
-		const keySource = feedConfig.headers
-			? `${feedConfig.url}|${JSON.stringify(feedConfig.headers)}`
-			: feedConfig.url;
+		const keySource = `${feedConfig.url}|${JSON.stringify(feedConfig.headers ?? {})}|${feedConfig.archiveEntry ?? ""}`;
 		const cacheName = crypto.createHash("md5").update(keySource).digest("hex");
 		const cachePath = path.join(config.cacheDir, cacheName);
 		try {

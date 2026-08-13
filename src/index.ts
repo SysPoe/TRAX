@@ -64,7 +64,8 @@ export class TRAX {
 	private hasRealtimeSources(): boolean {
 		return (
 			this.config.network.feeds.some((feed) => feed.realtimeSources.length > 0) ||
-			this.config.network.plugins.some((plugin) => plugin.beforeRealtime !== undefined)
+			this.config.network.plugins.some((plugin) => plugin.beforeRealtime !== undefined) ||
+			this.config.network.plugins.some((plugin) => plugin.afterRealtime !== undefined)
 		);
 	}
 
@@ -103,7 +104,7 @@ export class TRAX {
 				});
 		}
 		for (const plugin of network.plugins) {
-			if (!plugin.beforeRealtime) continue;
+			if (!plugin.beforeRealtime && !plugin.afterRealtime) continue;
 			const id = `${plugin.id}:supplemental`;
 			this.sourceHealth.set(id, {
 				id,
@@ -278,7 +279,9 @@ export class TRAX {
 				} catch (error) {
 					const message = error instanceof Error ? error.message : String(error);
 					this.reportSupplemental(plugin.id, plugin.feedIds[0], "error", message);
-					throw error;
+					logger.error(`Supplemental source '${plugin.id}' failed: ${message}`, {
+						module: "index", function: "refreshRealtime",
+					});
 				}
 			}
 			await cache.refreshRealtimeCache(gtfs, this.config, this.ctx);
@@ -491,10 +494,12 @@ export {
 	type TraxConfig,
 } from "./config.js";
 export { NetworkRuntimeRegistry } from "./registry.js";
-export { AU_SEQ_NETWORK, CA_VIA_NETWORK, createCaGthaNetwork } from "./networks.js";
+export { AU_SEQ_NETWORK, CA_VIA_NETWORK, createAuVicVlineNetwork, createCaGthaNetwork } from "./networks.js";
+export type { AuVicVlineNetworkOptions } from "./networks.js";
 export * from "./identity.js";
 export * as cache from "./cache/index.js";
 export * as stations from "./utils/stations.js";
+export { isRailLikeRouteType } from "./utils/considered.js";
 export * as calendar from "./utils/calendar.js";
 export * as qrTravel from "./region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
 
@@ -509,6 +514,55 @@ export {
 
 export type { AugmentedTrip, AugmentedTripInstance } from "./utils/augmentedTrip.js";
 export type { AugmentedStopTime, BoardingLocation, BoardingLocationKind } from "./utils/augmentedStopTime.js";
+export type {
+	Observation,
+	ObservationConfidence,
+	VLineChronosCallObservation,
+	VLineChronosServiceObservation,
+	VLinePlatformObservation,
+	VLineScsServiceObservation,
+	VLinePluginOptions,
+	VLineSourceStatus,
+	VLineTripDetails,
+} from "./region-specific/AU/VIC/types.js";
+export {
+	normalizeVLineUnit,
+	vlinePassengerCars,
+	vlineTdn,
+	vlineVehicleModel,
+} from "./region-specific/AU/VIC/identifiers.js";
+export { parseVLinePlatformServices, vlineAccessToken } from "./region-specific/AU/VIC/journey-planner.js";
+export { parseVLineScsBoard } from "./region-specific/AU/VIC/scs-board.js";
+export {
+	chronosHourlyToken,
+	getChronosBulkDepartures,
+	getChronosDepartures,
+	getChronosDirections,
+	getChronosDirectionalDepartures,
+	getChronosRunPattern,
+	searchChronosStops,
+} from "./region-specific/AU/VIC/chronos.js";
+export type {
+	ChronosBulkDepartureRequest,
+	ChronosDeparture,
+	ChronosDeparturesResponse,
+	ChronosDirection,
+	ChronosDirectionsResponse,
+	ChronosPatternOptions,
+	ChronosPatternResponse,
+	ChronosRoute,
+	ChronosRun,
+	ChronosSearchResponse,
+	ChronosStop,
+} from "./region-specific/AU/VIC/chronos.js";
+export {
+	isChronosRegionalRailRoute,
+	matchChronosRun,
+	normalizeChronosName,
+	vlineChronosRouteGtfsId,
+	type ChronosDepartureCandidate,
+	type ChronosMatchContext,
+} from "./region-specific/AU/VIC/chronos-match.js";
 export type { AugmentedStop } from "./utils/augmentedStop.js";
 export {
 	attachDeparturesHelpers,

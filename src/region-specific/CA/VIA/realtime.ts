@@ -355,6 +355,7 @@ export async function updateRealtime(ctx: CacheContext) {
 				congestion_level: null,
 				occupancy_status: null,
 				occupancy_percentage: null,
+				multi_carriage_details: [],
 				feed_id: VIA_STATIC_FEED_ID,
 				source_id: VIA_INJECTED_SOURCE_ID,
 			});

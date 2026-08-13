@@ -33,6 +33,13 @@ import {
 	ROUTE_GROUP_WEST,
 } from "./gtha-realtime-constants.js";
 
+function fetchWithTimeout(ctx: CacheContext, input: string | URL, init: RequestInit = {}): Promise<Response> {
+	return fetch(input, {
+		...init,
+		signal: init.signal ?? AbortSignal.timeout(ctx.config.requestTimeoutMs),
+	});
+}
+
 type GthaRealtimeState = {
 	activeModels: Set<string>;
 	activeIds: Set<string>;
@@ -423,7 +430,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	let sourceAPromise: Promise<any> | null = null;
 	if (nowMs - state.lastSourceAFetchMs >= SOURCE_A_THROTTLE_MS) {
 		state.lastSourceAFetchMs = nowMs;
-		sourceAPromise = fetch(SOURCE_A_URL, { headers: { Referer: SOURCE_E_REFERRER } })
+		sourceAPromise = fetchWithTimeout(ctx, SOURCE_A_URL, { headers: { Referer: SOURCE_E_REFERRER } })
 			.then((r) => (r.ok ? r.json() : null))
 			.catch(() => null);
 	}
@@ -432,7 +439,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	let sourceBPromise: Promise<any> | null = null;
 	if (nowMs - state.lastSourceBFetchMs >= SOURCE_B_THROTTLE_MS) {
 		state.lastSourceBFetchMs = nowMs;
-		sourceBPromise = fetch(SOURCE_B_URL, { headers: { Referer: SOURCE_E_REFERRER } })
+		sourceBPromise = fetchWithTimeout(ctx, SOURCE_B_URL, { headers: { Referer: SOURCE_E_REFERRER } })
 			.then((r) => (r.ok ? r.json() : null))
 			.catch(() => null);
 	}
@@ -444,7 +451,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 		return true;
 	}).map((stop_id) => ({
 		stop_id,
-		promise: fetch(SOURCE_C_URL_TEMPLATE(stop_id))
+		promise: fetchWithTimeout(ctx, SOURCE_C_URL_TEMPLATE(stop_id))
 			.then(async (r) => (r.ok ? ((await r.json()) as UPEDeparturesResponse) : null))
 			.catch((e) => {
 				logger.error(`Failed to update Source C platforms for stop ${stop_id}: ${e.message ?? e}`, {
@@ -474,7 +481,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 		})
 		.map((stop_id) => ({
 			stop_id: mergeId(ctx, stop_id),
-			promise: fetch(SOURCE_D_URL_TEMPLATE(stop_id))
+			promise: fetchWithTimeout(ctx, SOURCE_D_URL_TEMPLATE(stop_id))
 				.then(async (r) => (r.ok ? ((await r.json()) as GTHADeparturesResponse) : null))
 				.catch((e) => {
 					logger.error(`Failed to update Source D platforms for stop ${stop_id}: ${e.message ?? e}`, {
@@ -517,7 +524,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 				stop_id: mergeId(ctx, stop_id),
 				corridors: corridor_codes.map((code) => ({
 					code,
-					promise: fetch(SOURCE_E_URL_TEMPLATE(code, stop_id), { headers: { Referer: SOURCE_E_REFERRER } })
+					promise: fetchWithTimeout(ctx, SOURCE_E_URL_TEMPLATE(code, stop_id), { headers: { Referer: SOURCE_E_REFERRER } })
 						.then((r) => (r.ok ? r.json() : null))
 						.catch((e) => {
 							logger.error(
@@ -663,7 +670,7 @@ export async function updateSourceB(
 	timer.start("updateSourceB");
 	try {
 		if (!data) {
-			const response = await fetch(SOURCE_B_URL, { headers: { Referer: SOURCE_E_REFERRER } });
+			const response = await fetchWithTimeout(ctx, SOURCE_B_URL, { headers: { Referer: SOURCE_E_REFERRER } });
 			if (!response.ok) return;
 
 			data = await response.json();
@@ -784,7 +791,7 @@ export async function updateSourceA(
 	timer.start("updateSourceA");
 	try {
 		if (!data) {
-			const response = await fetch(SOURCE_A_URL, { headers: { Referer: SOURCE_E_REFERRER } });
+			const response = await fetchWithTimeout(ctx, SOURCE_A_URL, { headers: { Referer: SOURCE_E_REFERRER } });
 			if (!response.ok) return;
 
 			data = await response.json();
@@ -974,7 +981,7 @@ export async function updateSourceF(ctx: CacheContext, serviceDateStr: string, b
 	state.lastSourceFFetchMs = now;
 
 	try {
-		const response = await fetch(SOURCE_F_URL);
+		const response = await fetchWithTimeout(ctx, SOURCE_F_URL);
 		if (!response.ok) return;
 		const html = await response.text();
 

@@ -63,6 +63,18 @@ export function addVehicleModel(
 	ctx: CacheContext,
 	config: TraxConfig,
 ): AugmentedTripInstance {
+	const incoming = resolveVehicleInfo(inst, ctx, config);
+	// Regional sources may become available after the instance was initially read.
+	if (incoming) {
+		const info = mergeVehicleInfo(ctx, inst, incoming);
+		if (incoming.vehicle_model != null) inst.vehicle_model = info.vehicle_model;
+		if (incoming.vehicle_id != null) inst.vehicle_id = info.vehicle_id;
+		if (incoming.passenger_cars != null) inst.passenger_cars = info.passenger_cars ?? null;
+		if (incoming.scheduled_passenger_cars != null)
+			inst.scheduled_passenger_cars = info.scheduled_passenger_cars ?? null;
+		if (incoming.consist != null) inst.consist = info.consist ?? null;
+		if (incoming.details != null) inst.vehicle_details = info.details;
+	}
 	const needsModel = inst.vehicle_model == null;
 	const needsId = inst.vehicle_id === undefined || inst.vehicle_id == null;
 	const needsPassengerCars = inst.passenger_cars == null;
@@ -70,7 +82,7 @@ export function addVehicleModel(
 	const needsConsist = inst.consist == null;
 
 	if (needsModel || needsId || needsPassengerCars || needsScheduledPassengerCars || needsConsist) {
-		const info = mergeVehicleInfo(ctx, inst, resolveVehicleInfo(inst, ctx, config));
+		const info = mergeVehicleInfo(ctx, inst, incoming);
 		if (needsModel) inst.vehicle_model = info.vehicle_model;
 		if (needsId) inst.vehicle_id = info.vehicle_id;
 		if (needsPassengerCars) inst.passenger_cars = info.passenger_cars ?? null;

@@ -2,6 +2,8 @@ import type { NetworkDefinition } from "./config.js";
 import { seqPlugin } from "./plugins/seq.js";
 import { gthaPlugin } from "./plugins/gtha.js";
 import { viaPlugin } from "./plugins/via.js";
+import { createVLinePlugin } from "./plugins/vline.js";
+import type { VLinePluginOptions } from "./region-specific/AU/VIC/types.js";
 
 export const AU_SEQ_NETWORK: NetworkDefinition = {
 	id: "au-seq",
@@ -35,6 +37,58 @@ export const AU_SEQ_NETWORK: NetworkDefinition = {
 	modes: ["rail"],
 	plugins: [seqPlugin],
 };
+
+export type AuVicVlineNetworkOptions = VLinePluginOptions & { gtfsRtKey?: string };
+
+export function createAuVicVlineNetwork(options: AuVicVlineNetworkOptions = {}): NetworkDefinition {
+	const key = options.gtfsRtKey?.trim();
+	const realtime = (feedId: "vic-vline" | "vic-metro", operator: "vline" | "metro", kind: "trip-updates" | "vehicles", endpoint: string) => ({
+		id: `${feedId}-${endpoint}`,
+		targetFeedId: feedId,
+		kind,
+		source: {
+			url: `https://api.opendata.transport.vic.gov.au/opendata/public-transport/gtfs/realtime/v1/${operator}/${endpoint}`,
+			headers: { KeyId: key! },
+		},
+	});
+	const staticUrl = "https://opendata.transport.vic.gov.au/dataset/3f4e292e-7f8a-4ffe-831f-1953be0fe448/resource/fb152201-859f-4882-9206-b768060b50ad/download/gtfs.zip";
+	return {
+		id: "au-vic-vline",
+		name: "Victoria Rail",
+		feeds: [
+			{
+				id: "vic-vline",
+				staticSource: { url: staticUrl, archiveEntry: "1/google_transit.zip" },
+				realtimeSources: key
+					? [
+						realtime("vic-vline", "vline", "trip-updates", "trip-updates"),
+						realtime("vic-vline", "vline", "vehicles", "vehicle-positions"),
+					]
+					: [],
+			},
+			{
+				id: "vic-metro",
+				staticSource: { url: staticUrl, archiveEntry: "2/google_transit.zip" },
+				realtimeSources: key
+					? [
+						realtime("vic-metro", "metro", "trip-updates", "trip-updates"),
+						realtime("vic-metro", "metro", "vehicles", "vehicle-positions"),
+					]
+					: [],
+			},
+		],
+		modes: ["rail"],
+		plugins: [createVLinePlugin(options)],
+		places: [{
+			id: "southern-cross",
+			name: "Southern Cross Railway Station",
+			members: [
+				{ feedId: "vic-vline", localId: "vic:rail:SSS" },
+				{ feedId: "vic-metro", localId: "vic:rail:SSS" },
+			],
+		}],
+	};
+}
 
 export function createCaGthaNetwork(apiKeys: string | readonly string[]): NetworkDefinition {
 	const rawKeys = typeof apiKeys === "string" ? [apiKeys] : [...apiKeys];

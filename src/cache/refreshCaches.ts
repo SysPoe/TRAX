@@ -29,6 +29,8 @@ import { entityKey } from "../identity.js";
 import { getSeqState } from "../plugins/seq-state.js";
 import { addDaysToServiceDate, getToday } from "../utils/time.js";
 
+type CacheProgressReporter = (info: Parameters<TraxConfig["progressLog"]>[0] & { unit?: "bytes" | "items" }) => void;
+
 export function refreshQRTTrainsInBackground(ctx: CacheContext): void {
 	if (ctx.augmented.qrtRefreshInFlight) return;
 
@@ -432,7 +434,7 @@ export async function refreshStaticCache(
 		}
 
 		return augmentedTrip;
-	});
+	}, config.progressLog);
 	ctx.augmented.timer.stop("refreshStaticCache:augmentTrips");
 
 	ctx.augmented.timer.start("refreshStaticCache:buildServiceDateTrips");
@@ -551,6 +553,7 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 				ctx.augmented.tripUpdatesCache,
 				reusableTrips.get(entityKey({ feedId: t.feed_id, localId: t.trip_id })),
 			),
+			ctx.config.progressLog,
 		);
 
 		for (const at of updatedAugmented) {
@@ -631,6 +634,7 @@ async function processWithProgress<T, U>(
 	items: T[],
 	taskName: string,
 	processFn: (item: T) => U,
+	reportProgress: CacheProgressReporter = (info) => logger.progress(info),
 	chunkSize = 250,
 ): Promise<U[]> {
 	const results: U[] = [];
@@ -640,7 +644,7 @@ async function processWithProgress<T, U>(
 
 	if (total === 0) return results;
 
-	logger.progress({
+	reportProgress({
 		task: taskName,
 		current: 0,
 		total,
@@ -662,7 +666,7 @@ async function processWithProgress<T, U>(
 		const elapsed = (Date.now() - startTime) / 1000;
 		const speed = elapsed > 0 ? current / elapsed : 0;
 
-		logger.progress({
+		reportProgress({
 			task: taskName,
 			current,
 			total,

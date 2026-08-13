@@ -1,12 +1,25 @@
 import assert from "node:assert/strict";
 import http from "node:http";
+import { readFile } from "node:fs/promises";
 import TRAX, {
 	NetworkRuntimeRegistry,
 	createCaGthaNetwork,
 	decodeTripInstanceId,
 	encodePublicEntityId,
 	decodePublicEntityId,
+	createAuVicVlineNetwork,
+	normalizeVLineUnit,
+	parseVLinePlatformServices,
+	parseVLineScsBoard,
+	vlineAccessToken,
+	vlinePassengerCars,
+	vlineTdn,
+	vlineVehicleModel,
+	matchChronosRun,
+	chronosHourlyToken,
+	getChronosRunPattern,
 } from "../dist/index.js";
+import { applyChronosEstimate, matchScsRows } from "../dist/region-specific/AU/VIC/enrichment.js";
 import {
 	buildCisBoardingAssignments,
 	collectCisStationCandidates,
@@ -24,6 +37,107 @@ assert.deepEqual(gthaWithFallbacks.places.find((place) => place.id === "guelph")
 	{ feedId: "go", localId: "GL" },
 	{ feedId: "via", localId: "70" },
 ]);
+
+assert.equal(vlineTdn("01-GEL--8-T0-8761"), "8761");
+assert.equal(vlineTdn("01-GEL--8-T0-87612"), null);
+assert.equal(normalizeVLineUnit(" vl 131 "), "VL131");
+assert.equal(normalizeVLineUnit("N451"), null);
+assert.equal(vlineVehicleModel("N-Set"), "N Class");
+assert.equal(vlinePassengerCars("VLocity", 2), 6);
+assert.equal(vlinePassengerCars("N-Set", 5), 5);
+assert.equal(vlineAccessToken("caller", "signature", "JP_GETPLATFORMDEPARTURES").length, 40);
+const vlineNoKey = createAuVicVlineNetwork();
+assert.equal(vlineNoKey.id, "au-vic-vline");
+assert.equal(vlineNoKey.feeds[0].staticSource.archiveEntry, "1/google_transit.zip");
+assert.deepEqual(vlineNoKey.feeds[0].realtimeSources, []);
+assert.equal(vlineNoKey.feeds[1].id, "vic-metro");
+assert.equal(vlineNoKey.feeds[1].staticSource.archiveEntry, "2/google_transit.zip");
+assert.deepEqual(vlineNoKey.places[0].members, [
+	{ feedId: "vic-vline", localId: "vic:rail:SSS" },
+	{ feedId: "vic-metro", localId: "vic:rail:SSS" },
+]);
+const vlineWithKey = createAuVicVlineNetwork({ gtfsRtKey: "test-key" });
+assert.deepEqual(vlineWithKey.feeds.flatMap((feed) => feed.realtimeSources).map((source) => source.source.headers.KeyId), ["test-key", "test-key", "test-key", "test-key"]);
+
+const jpServices = parseVLinePlatformServices(`
+<GetPlatformDeparturesResult xmlns:a="urn:vline" xmlns:i="urn:nil"><a:PlatformService>
+<a:Origin>Melbourne, Southern Cross</a:Origin><a:Destination>Waurn Ponds Station</a:Destination>
+<a:ScheduledDepartureTime>2026-08-12T14:50:00</a:ScheduledDepartureTime>
+<a:ScheduledDestinationArrivalTime>2026-08-12T16:08:00</a:ScheduledDestinationArrivalTime>
+<a:ServiceIdentifier>8761</a:ServiceIdentifier><a:Platform>4A</a:Platform><a:Direction>D</a:Direction>
+<a:ConsistSubType>VLocity</a:ConsistSubType><a:ConsistCount>2</a:ConsistCount>
+<a:ConsistVehicles i:nil="true"/><a:IsLiveConsistInfo>true</a:IsLiveConsistInfo><a:ServiceStatus>Planned</a:ServiceStatus>
+</a:PlatformService></GetPlatformDeparturesResult>`);
+assert.equal(jpServices.length, 1);
+assert.deepEqual(jpServices[0], {
+	origin: "Melbourne, Southern Cross", destination: "Waurn Ponds Station",
+	scheduledDepartureTime: "2026-08-12T14:50:00", scheduledDestinationArrivalTime: "2026-08-12T16:08:00",
+	tdn: "8761", platform: "4A", direction: "Down", consistSubtype: "VLocity", consistCount: 2,
+	consistVehicles: null, isLiveConsistInfo: true, serviceStatus: "Planned",
+});
+const scsRows = parseVLineScsBoard(`<table><tr class="rowModule"><td class="first-service"><table class="main-module"><tr>
+<td><span class="mdepartuertime">14:50</span><span class="mtowardsdes">towards Waurn Ponds</span></td>
+<td><div class="mPlatform"><div class="platformbay">Platform</div>4A</div></td></tr></table></td></tr></table>`);
+assert.deepEqual(scsRows, [{
+	time: "14:50", destination: "Waurn Ponds", boardGroup: null, platform: "4A", boardingKind: "platform",
+	departingIn: null, departingInSeconds: null, cancelled: false,
+}]);
+const scsTrip = {
+	instance_id: "example", trip_headsign: "Waurn Ponds", serviceDate: "20260812", stopTimes: [{ scheduled_departure_time: 14 * 3600 + 50 * 60,
+		scheduled_arrival_time: 14 * 3600 + 50 * 60, scheduled_parent_station_id: "vic:rail:SSS",
+		scheduled_stop_id: "20043", scheduled_parent_station: { stop_name: "Southern Cross Railway Station" },
+		scheduled_stop: { stop_name: "Southern Cross Station" } }],
+};
+assert.equal(matchScsRows([scsTrip], scsRows, "2026-08-12T04:40:00Z").get("example").value, "4A");
+assert.equal(matchScsRows([scsTrip, { ...scsTrip, instance_id: "duplicate" }], scsRows, "2026-08-12T04:40:00Z").size, 0);
+assert.deepEqual(parseVLineScsBoard(`<table><tr class="rowModule"><td class="first-service"><table class="main-module"><tr>
+<td><div class="mdeparture-destination">Bendigo</div><span class="mdepartuertime">20:31</span><span class="mtowardsdes">towards Eaglehawk</span></td>
+<td><div class="mPlatform"><div class="platformbay">Coach bay</div>67</div></td></tr><tr><td class="mcocancalation">The service has been replaced by coaches</td><td><div class="mDepMin">24 min</div></td></tr></table></td></tr></table>`), []);
+assert.equal(chronosHourlyToken("test-key", new Date("2026-08-12T04:59:59Z")), "c92ffbde8535fc89f8902899658b9b4d4734ca81");
+const chronosFixture = JSON.parse(await readFile(new URL("./fixtures/chronos-same-time.json", import.meta.url), "utf8"));
+const chronosContext = {
+	chronosStopId: 1181, scheduledFirstDepartureUtc: "2026-08-12T04:50:00Z",
+	routeGtfsId: "1-GEL", destination: "Waurn Ponds Station", directionId: 10,
+};
+assert.equal(matchChronosRun(scsTrip, chronosFixture, chronosContext), "24497");
+const coachFixture = structuredClone(chronosFixture);
+coachFixture.routes[1745].route_gtfs_id = "5-GEL";
+assert.equal(matchChronosRun(scsTrip, coachFixture, chronosContext), null);
+const ambiguousFixture = structuredClone(chronosFixture);
+ambiguousFixture.departures.push({ ...ambiguousFixture.departures[1], run_id: 24498, run_ref: "24498" });
+ambiguousFixture.runs[24498] = { ...ambiguousFixture.runs[24497], run_id: 24498, run_ref: "24498" };
+assert.equal(matchChronosRun(scsTrip, ambiguousFixture, chronosContext), null);
+
+const estimateTrip = { serviceDate: "20260812", rt_start_date: null };
+const estimateCall = { actual_departure_time: 53_400, scheduled_departure_time: 53_400, scheduled_arrival_time: 53_400, rt_departure_updated: false, realtime: false, realtime_info: null };
+applyChronosEstimate(estimateTrip, estimateCall, "2026-08-12T04:55:00Z");
+assert.equal(estimateCall.actual_departure_time, 53_700);
+assert.equal(estimateCall.realtime, true);
+assert.equal(estimateCall.realtime_info.delay_secs, 300);
+const realtimeCall = { actual_departure_time: 53_820, scheduled_departure_time: 53_400, rt_departure_updated: true };
+applyChronosEstimate(estimateTrip, realtimeCall, "2026-08-12T04:55:00Z");
+assert.equal(realtimeCall.actual_departure_time, 53_820);
+
+let patternRequestUrl = null;
+const patternServer = http.createServer((request, response) => {
+	patternRequestUrl = new URL(request.url, "http://localhost");
+	response.setHeader("content-type", "application/json");
+	response.end(JSON.stringify({ departures: [{ platform_number: null }, { platform_number: "" }], stops: {}, routes: {}, runs: {}, directions: {} }));
+});
+await new Promise((resolve) => patternServer.listen(0, "127.0.0.1", resolve));
+const patternAddress = patternServer.address();
+const parsedPattern = await getChronosRunPattern(`http://127.0.0.1:${patternAddress.port}/v3/`, "test-key", "24497", {
+	dateUtc: "2026-08-12T04:50:00Z", stopId: 1181, expand: ["all"],
+});
+await new Promise((resolve) => patternServer.close(resolve));
+assert.deepEqual(parsedPattern.departures.map((departure) => departure.platform_number), [null, ""]);
+assert.equal(patternRequestUrl.pathname, "/v3/pattern/run/24497/route_type/3");
+assert.equal(patternRequestUrl.searchParams.get("date_utc"), "2026-08-12T04:50:00Z");
+assert.equal(patternRequestUrl.searchParams.get("stop_id"), "1181");
+assert.equal(patternRequestUrl.searchParams.get("expand"), "all");
+assert.equal(patternRequestUrl.searchParams.get("include_skipped_stops"), "true");
+assert.equal(patternRequestUrl.searchParams.get("include_geopath"), "true");
+assert.equal(patternRequestUrl.searchParams.get("include_advertised_interchange"), "true");
 
 const cisNow = Date.parse("2026-08-11T22:30:00Z");
 const cisCandidates = collectCisStationCandidates(
@@ -204,6 +318,22 @@ try {
 	};
 	const runtime = new TRAX(definition, { cacheDir: ".TRAXCACHE/test-synthetic" });
 	await runtime.loadGTFS(false, false);
+	const failingSupplemental = new TRAX({
+		...definition,
+		id: "synthetic-supplemental-failure",
+		feeds: [definition.feeds[0]],
+		places: [],
+		plugins: [{
+			id: "failing-chronos",
+			feedIds: ["alpha"],
+			capabilities: ["supplemental-realtime"],
+			beforeRealtime() { throw new Error("synthetic Chronos timeout"); },
+		}],
+	}, { cacheDir: ".TRAXCACHE/test-supplemental-failure" });
+	await failingSupplemental.loadGTFS(false, false);
+	await failingSupplemental.refreshRealtime();
+	assert.equal(failingSupplemental.getAugmentedTrips({ feedId: "alpha", localId: "shared" }).length, 1);
+	assert.equal(failingSupplemental.getSourceHealth().find((source) => source.id === "failing-chronos:supplemental").state, "error");
 	assert.equal(runtime.getRawTrips({ trip_id: "shared" }).length, 2);
 	assert.equal(runtime.getAugmentedStops({ feedId: "alpha", localId: "shared" })[0].stop_name, "Alpha Station");
 	assert.equal(runtime.getAugmentedStops({ feedId: "beta", localId: "shared" })[0].stop_name, "Beta Station");
@@ -288,6 +418,7 @@ try {
 	);
 	runtime.clearIntervals();
 	other.clearIntervals();
+	failingSupplemental.clearIntervals();
 	console.log("Architecture tests passed.");
 } finally {
 	server.close();
