@@ -9,6 +9,7 @@ import TRAX, {
 	decodePublicEntityId,
 	createAuVicVlineNetwork,
 	normalizeVLineUnit,
+	ptvVehicleDescriptorConsist,
 	parseVLinePlatformServices,
 	parseVLineScsBoard,
 	vlineAccessToken,
@@ -53,6 +54,11 @@ assert.equal(normalizeVLineUnit(" vl 131 "), "VL131");
 assert.equal(normalizeVLineUnit("N451"), null);
 assert.equal(vlineVehicleModel("N-Set"), "N Class");
 assert.equal(vlinePassengerCars("VLocity", 2), 6);
+assert.deepEqual(ptvVehicleDescriptorConsist("vic-metro", "1079T-1125T-457M-458M-549M-550M"), [
+	"1079T", "1125T", "457M", "458M", "549M", "550M",
+]);
+assert.deepEqual(ptvVehicleDescriptorConsist("vic-vline", " V1292 "), ["V1292"]);
+assert.equal(ptvVehicleDescriptorConsist("vic-metro", "singleton"), null);
 assert.equal(vlinePassengerCars("N-Set", 5), 5);
 assert.equal(vlineAccessToken("caller", "signature", "JP_GETPLATFORMDEPARTURES").length, 40);
 const vlineNoKey = createAuVicVlineNetwork();

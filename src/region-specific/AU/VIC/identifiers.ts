@@ -12,6 +12,18 @@ export function normalizeVLineUnit(value: string | null | undefined): string | n
 	return unit && /^(?:VL|V)\d{3,4}$/.test(unit) ? unit : null;
 }
 
+/** Convert PTV's VehicleDescriptor.id into the ordered vehicle IDs it actually reports. */
+export function ptvVehicleDescriptorConsist(feedId: "vic-vline" | "vic-metro", value: string | null | undefined): string[] | null {
+	if (feedId === "vic-vline") {
+		const unit = normalizeVLineUnit(value);
+		return unit ? [unit] : null;
+	}
+	const vehicles = value?.trim().toUpperCase().split("-").map((vehicle) => vehicle.trim())
+		.filter((vehicle) => /^[A-Z0-9]+$/.test(vehicle));
+	// Metro uses a hyphen-separated full consist. A singleton is only an opaque vehicle descriptor.
+	return vehicles && vehicles.length > 1 ? [...new Set(vehicles)] : null;
+}
+
 export function vlineInstanceMatchKey(trip: Pick<AugmentedTripInstance, "feed_id" | "trip_id" | "serviceDate">): string {
 	return `${trip.feed_id}\0${trip.trip_id}\0${trip.serviceDate}`;
 }

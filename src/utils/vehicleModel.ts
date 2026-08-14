@@ -12,6 +12,65 @@ export type VehicleInfo = {
 	details?: unknown | null;
 };
 
+/** Provider-neutral detail for one ordered unit in a vehicle formation. */
+export type VehicleFormationUnit = {
+	id: string;
+	type: string | null;
+	manufacturer: string | null;
+	model: string | null;
+	seats: number | null;
+	bicycles: number | null;
+	accessible: boolean | null;
+	wifi: boolean | null;
+	powerOutlets: boolean | null;
+	accentColor: string | null;
+};
+
+/** The single vehicle/consist contract exposed to every consumer. */
+export type VehicleFormation = {
+	vehicleId: string | null;
+	model: string | null;
+	passengerCars: number | null;
+	scheduledPassengerCars: number | null;
+	units: VehicleFormationUnit[];
+};
+
+export function createVehicleFormation(
+	trip: AugmentedTripInstance,
+	providerUnits: readonly VehicleFormationUnit[] | null = null,
+): VehicleFormation | null {
+	const units =
+		providerUnits && providerUnits.length > 0
+			? providerUnits.map((unit) => ({ ...unit }))
+			: (trip.consist ?? []).map((id): VehicleFormationUnit => ({
+					id,
+					type: null,
+					manufacturer: null,
+					model: null,
+					seats: null,
+					bicycles: null,
+					accessible: null,
+					wifi: null,
+					powerOutlets: null,
+					accentColor: null,
+				}));
+	if (
+		!trip.vehicle_id &&
+		!trip.vehicle_model &&
+		trip.passenger_cars == null &&
+		trip.scheduled_passenger_cars == null &&
+		units.length === 0
+	)
+		return null;
+	return {
+		vehicleId: trip.vehicle_id ?? null,
+		model: trip.vehicle_model ?? null,
+		passengerCars: trip.passenger_cars ?? null,
+		scheduledPassengerCars: trip.scheduled_passenger_cars ?? null,
+		units,
+	};
+}
+
 function resolveVehicleInfo(inst: AugmentedTripInstance, ctx: CacheContext, config: TraxConfig): VehicleInfo {
 	for (const plugin of config.network.plugins) {
 		if (!pluginSupportsFeed(plugin, inst.feed_id)) continue;

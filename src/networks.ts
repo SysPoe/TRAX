@@ -3,6 +3,7 @@ import { seqPlugin } from "./plugins/seq.js";
 import { gthaPlugin } from "./plugins/gtha.js";
 import { viaPlugin } from "./plugins/via.js";
 import { createVLinePlugin } from "./plugins/vline.js";
+import { ptvMetroPlugin } from "./plugins/ptv-metro.js";
 import type { VLinePluginOptions } from "./region-specific/AU/VIC/types.js";
 
 export const AU_SEQ_NETWORK: NetworkDefinition = {
@@ -78,7 +79,7 @@ export function createAuVicVlineNetwork(options: AuVicVlineNetworkOptions = {}):
 			},
 		],
 		modes: ["rail"],
-		plugins: [createVLinePlugin(options)],
+		plugins: [createVLinePlugin(options), ptvMetroPlugin],
 		places: [{
 			id: "southern-cross",
 			name: "Southern Cross Railway Station",

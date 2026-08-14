@@ -7,6 +7,7 @@ import path from "node:path";
 import { buildSeqDiagramTopology } from "../dist/index.js";
 import { _test as refreshCacheTest } from "../dist/cache/refreshCaches.js";
 import { _test as srtTest, getStaticFeedFingerprint } from "../dist/utils/SRT.js";
+import { propagateBlockHandoffs } from "../dist/region-specific/CA/GTHA/block-handoff.js";
 
 function testSeqDiagramUsesProvidedStopTimes() {
 	const trips = [
@@ -104,8 +105,42 @@ function testUntimedPassingPointsUseShapeDistance() {
 	assert.deepEqual(srtTest.getPatternEdgeTimes(stopTimes), [0, 10, 20, 30]);
 }
 
+function testBlockHandoffPropagation() {
+	const stop = (values = {}) => ({
+		actual_parent_station_id: "UN", actual_stop_id: "UN", scheduled_parent_station_id: "UN", scheduled_stop_id: "UN",
+		actual_platform_code: null, scheduled_platform_code: null, actual_arrival_boarding_locations: [], actual_departure_boarding_locations: [],
+		rt_platform_code_updated: false, rt_arrival_updated: false, rt_departure_updated: false, realtime: false, realtime_info: null,
+		...values,
+	});
+	const incoming = { instance_id: "incoming", stopTimes: [stop({
+		scheduled_arrival_time: 17_400, scheduled_departure_time: 17_400, actual_arrival_time: 18_000, actual_departure_time: 18_000,
+		actual_platform_code: "5", rt_platform_code_updated: true, rt_arrival_updated: true, realtime: true,
+		realtime_info: { delay_secs: 600, delay_string: "10m late", delay_class: "very-late", schedule_relationship: 0, propagated: false, rt_start_date: "20260813" },
+	})] };
+	const outgoing = { instance_id: "outgoing", stopTimes: [
+		stop({ scheduled_arrival_time: 17_700, scheduled_departure_time: 17_700, actual_arrival_time: 17_700, actual_departure_time: 17_700, scheduled_platform_code: "7 & 8", actual_platform_code: "7 & 8" }),
+		stop({ actual_parent_station_id: "CL", actual_stop_id: "CL", scheduled_parent_station_id: "CL", scheduled_stop_id: "CL", scheduled_arrival_time: 19_200, scheduled_departure_time: 19_200, actual_arrival_time: 19_200, actual_departure_time: 19_200 }),
+	] };
+	propagateBlockHandoffs(new Map([["block", [outgoing, incoming]]]), "2026-08-13T21:00:00.000Z");
+	assert.equal(outgoing.stopTimes[0].actual_platform_code, "5");
+	assert.equal(outgoing.stopTimes[0].actual_departure_boarding_locations[0].confidence, "inferred");
+	assert.equal(outgoing.stopTimes[0].actual_departure_time, 18_000);
+	assert.equal(outgoing.stopTimes[0].realtime_info.delay_secs, 300);
+	assert.equal(outgoing.stopTimes[1].actual_departure_time, 19_500);
+
+	const observed = { instance_id: "observed", stopTimes: [stop({
+		scheduled_arrival_time: 17_700, scheduled_departure_time: 17_700, actual_arrival_time: 18_300, actual_departure_time: 18_300,
+		rt_departure_updated: true, realtime: true,
+		realtime_info: { delay_secs: 600, delay_string: "10m late", delay_class: "very-late", schedule_relationship: 0, propagated: false, rt_start_date: "20260813" },
+	})] };
+	propagateBlockHandoffs(new Map([["block", [incoming, observed]]]));
+	assert.equal(observed.stopTimes[0].actual_departure_time, 18_300);
+	assert.equal(observed.stopTimes[0].realtime_info.delay_secs, 600);
+}
+
 testSeqDiagramUsesProvidedStopTimes();
 testDisappearingRealtimeUpdateIsChanged();
 testStaticFingerprintTracksQDFCacheFile();
 testUntimedPassingPointsUseShapeDistance();
+testBlockHandoffPropagation();
 console.log("Performance regression tests passed.");

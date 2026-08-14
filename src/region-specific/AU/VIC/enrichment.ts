@@ -11,6 +11,7 @@ import { getVLinePlatformDepartures } from "./journey-planner.js";
 import { getVLineScsBoard } from "./scs-board.js";
 import {
 	normalizeVLineUnit,
+	ptvVehicleDescriptorConsist,
 	vlinePassengerCars,
 	vlineTdn,
 	vlineVehicleModel,
@@ -652,6 +653,7 @@ export async function refreshVLineOfficialSources(ctx: CacheContext, options: VL
 
 export function applyVLineEnrichment(ctx: CacheContext, options: VLinePluginOptions): void {
 	const now = Date.now();
+	const observedAt = new Date(now).toISOString();
 	for (const trip of ctx.augmented.instancesRec.values()) {
 		if (trip.feed_id !== "vic-vline") continue;
 		const details = detailsFor(ctx, trip);
@@ -663,14 +665,19 @@ export function applyVLineEnrichment(ctx: CacheContext, options: VLinePluginOpti
 		const unit = normalizeVLineUnit(vehicle?.vehicle.id);
 		if (unit) {
 			const sourceTimestamp = vehicle?.timestamp ? new Date(vehicle.timestamp * 1000).toISOString() : undefined;
-			details.leadingUnit = { ...observation(unit, "vic-vline-gtfsrt-vehicle-positions", "reported", new Date().toISOString(), vehicle?.vehicle.id), sourceTimestamp };
+			details.leadingUnit = { ...observation(unit, "vic-vline-gtfsrt-vehicle-positions", "reported", observedAt, vehicle?.vehicle.id), sourceTimestamp };
 		}
+		const carriageIds = vehicle?.multi_carriage_details.map((carriage) => carriage.id.trim().toUpperCase()).filter(Boolean) ?? [];
+		const realtimeConsist = carriageIds.length ? [...new Set(carriageIds)] : null;
+		// Journey Planner's complete ConsistVehicles list wins over GTFS-RT multi-carriage data.
+		if (realtimeConsist?.length && (!details.fullConsist || details.fullConsist.source === "vic-vline-gtfsrt-vehicle-positions"))
+			details.fullConsist = observation(realtimeConsist, "vic-vline-gtfsrt-vehicle-positions", "reported", observedAt, vehicle?.vehicle.id);
 		if (vehicle?.occupancy_status != null)
-			details.occupancyStatus = observation(vehicle.occupancy_status, "vic-vline-gtfsrt-vehicle-positions", "reported", new Date().toISOString(), vehicle.update_id);
+			details.occupancyStatus = observation(vehicle.occupancy_status, "vic-vline-gtfsrt-vehicle-positions", "reported", observedAt, vehicle.update_id);
 		if (vehicle?.occupancy_percentage != null)
-			details.occupancyPercentage = observation(vehicle.occupancy_percentage, "vic-vline-gtfsrt-vehicle-positions", "reported", new Date().toISOString(), vehicle.update_id);
+			details.occupancyPercentage = observation(vehicle.occupancy_percentage, "vic-vline-gtfsrt-vehicle-positions", "reported", observedAt, vehicle.update_id);
 		if (vehicle?.multi_carriage_details.length)
-			details.carriageOccupancy = observation(vehicle.multi_carriage_details, "vic-vline-gtfsrt-vehicle-positions", "reported", new Date().toISOString(), vehicle.update_id);
+			details.carriageOccupancy = observation(vehicle.multi_carriage_details, "vic-vline-gtfsrt-vehicle-positions", "reported", observedAt, vehicle.update_id);
 		for (const chronosCall of details.chronosCalls) {
 			const call = trip.stopTimes.find((stop) => gtfsStopKey(stop) === chronosCall.stopId);
 			if (call) applyChronosEstimate(trip, call, chronosCall.estimatedDepartureUtc);
@@ -680,7 +687,7 @@ export function applyVLineEnrichment(ctx: CacheContext, options: VLinePluginOpti
 			if (!stopId || details.platforms.some((value) => value.stopId === stopId)) continue;
 			const name = stop.scheduled_parent_station?.stop_name ?? stop.scheduled_stop?.stop_name ?? "";
 			const value = inferVLinePlatform(name, trip.direction_id);
-			if (value) details.platforms.push({ ...observation(value, "static-platform-heuristic", "inferred", new Date().toISOString()), stopId, event: "both", kind: "platform" });
+			if (value) details.platforms.push({ ...observation(value, "static-platform-heuristic", "inferred", observedAt), stopId, event: "both", kind: "platform" });
 		}
 		const precedence = { confirmed: 3, reported: 2, inferred: 1 } as const;
 		for (const platform of [...details.platforms]
@@ -698,7 +705,7 @@ export function vlineVehicleInfoForTrip(trip: AugmentedTripInstance, ctx: CacheC
 		vehicle_model: vlineVehicleModel(details.subtype?.value),
 		passenger_cars: details.passengerCars?.value ?? null,
 		scheduled_passenger_cars: null,
-		consist: details.fullConsist?.value ?? null,
+		consist: details.fullConsist?.value ?? ptvVehicleDescriptorConsist("vic-vline", details.leadingUnit?.value),
 		details,
 	};
 }

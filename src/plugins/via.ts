@@ -12,6 +12,22 @@ export const viaPlugin: TransitPlugin = {
 	},
 	beforeRealtime: updateRealtime,
 	afterRealtime: applyCisBoardingLocations,
-	consistDetails: (trip, ctx) => getViaConsist(trip.instance_id, ctx),
+	vehicleFormationUnits: async (trip, ctx) => {
+		const consist = await getViaConsist(trip.instance_id, ctx);
+		return (
+			consist?.carriageLayout.carriages.map((carriage) => ({
+				id: carriage.carriage_number || carriage.carriage_name || String(carriage.sequence_number),
+				type: carriage.carriage_type || null,
+				manufacturer: null,
+				model: null,
+				seats: carriage.seats.length,
+				bicycles: null,
+				accessible: null,
+				wifi: null,
+				powerOutlets: null,
+				accentColor: null,
+			})) ?? null
+		);
+	},
 	api: (ctx) => ({ getConsist: (instanceId: string) => getViaConsist(instanceId, ctx) }),
 };

@@ -30,9 +30,29 @@ export const gthaPlugin: TransitPlugin = {
 		return updateAllSources(ctx, ctx.gtfs);
 	},
 	vehicleInfoForTrip: getVehicleInfo,
-	consistDetails: (trip, ctx) => {
+	vehicleFormationUnits: (trip, ctx) => {
 		const consist = trip.consist ?? (trip.vehicle_id ? getVehicleConsist(ctx, trip.vehicle_id) : null);
-		return consist?.map((carId) => ({ carId, details: getGTHAVehicleDetails(carId) })) ?? null;
+		return (
+			consist?.map((id) => {
+				const details = getGTHAVehicleDetails(id);
+				return {
+					id,
+					type: details?.type ?? null,
+					manufacturer: details?.description.manufacturer ?? null,
+					model: details?.description.model ?? null,
+					seats: details?.capacity.seating ?? null,
+					bicycles: details?.capacity.bicycles ?? null,
+					accessible:
+						details == null
+							? null
+							: details.accessibility.is_fully_accessible ||
+								(details.individual_car_data?.is_accessible ?? false),
+					wifi: details?.amenities.connectivity.has_wifi ?? null,
+					powerOutlets: details?.amenities.connectivity.has_power_outlets ?? null,
+					accentColor: details?.livery.hex_color ?? null,
+				};
+			}) ?? null
+		);
 	},
 	filterTrackEdges(edges) {
 		edges.delete(`${goStop("UN")}|${goStop("KE")}`);

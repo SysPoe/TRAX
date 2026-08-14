@@ -30,6 +30,7 @@ import {
 } from "./config.js";
 import { createGtfs, loadRealtime, type SourceReport } from "./gtfsInterfaceLayer.js";
 import { entityKey } from "./identity.js";
+import { createVehicleFormation, type VehicleFormation } from "./utils/vehicleModel.js";
 
 export interface TRAXEvent {
 	"realtime-update-start": [];
@@ -383,13 +384,14 @@ export class TRAX {
 		}));
 	public getAgencies = () => this.gtfs?.getAgencies() ?? [];
 	public getSourceHealth = (): SourceHealth[] => Array.from(this.sourceHealth.values(), (source) => ({ ...source }));
-	public getConsistDetails = async (instanceId: string): Promise<unknown | null> => {
+	public getConsistDetails = async (instanceId: string): Promise<VehicleFormation | null> => {
 		const trip = this.getAugmentedTripInstance(instanceId);
 		if (!trip) return null;
 		const plugin = this.config.network.plugins.find(
-			(candidate) => candidate.feedIds.includes(trip.feed_id) && candidate.consistDetails,
+			(candidate) => candidate.feedIds.includes(trip.feed_id) && candidate.vehicleFormationUnits,
 		);
-		return plugin?.consistDetails ? await plugin.consistDetails(trip, this.ctx) : null;
+		const units = plugin?.vehicleFormationUnits ? await plugin.vehicleFormationUnits(trip, this.ctx) : null;
+		return createVehicleFormation(trip, units);
 	};
 
 	public getPluginApi<T>(pluginId: string): T | null {
@@ -513,6 +515,7 @@ export {
 } from "./region-specific/AU/SEQ/seq-diagram.js";
 
 export type { AugmentedTrip, AugmentedTripInstance } from "./utils/augmentedTrip.js";
+export type { VehicleFormation, VehicleFormationUnit, VehicleInfo } from "./utils/vehicleModel.js";
 export type { AugmentedStopTime, BoardingLocation, BoardingLocationKind } from "./utils/augmentedStopTime.js";
 export type {
 	Observation,
@@ -527,6 +530,7 @@ export type {
 } from "./region-specific/AU/VIC/types.js";
 export {
 	normalizeVLineUnit,
+	ptvVehicleDescriptorConsist,
 	vlinePassengerCars,
 	vlineTdn,
 	vlineVehicleModel,

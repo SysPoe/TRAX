@@ -22,7 +22,6 @@ export function createVLinePlugin(options: VLinePluginOptions = {}): TransitPlug
 		canonicalRealtimeTripId: canonicalVLineRealtimeTripId,
 		afterRealtime: (ctx) => applyVLineEnrichment(ctx, options),
 		vehicleInfoForTrip: vlineVehicleInfoForTrip,
-		consistDetails: (trip, ctx) => vlineDetails(ctx, trip),
 		api: (ctx) => ({
 			getTripDetails: (instanceId: string) => {
 				const trip = ctx.augmented.instancesRec.get(instanceId);

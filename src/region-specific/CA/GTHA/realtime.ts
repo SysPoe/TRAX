@@ -9,6 +9,7 @@ import { getPluginState } from "../../../plugins/types.js";
 import { isConsideredTripId } from "../../../utils/considered.js";
 import { getModelFromId } from "./vehicleModel.js";
 import { mergeVehicleInfo } from "../../../utils/vehicleModel.js";
+import { propagateBlockHandoffs } from "./block-handoff.js";
 import { parse } from "node-html-parser";
 import {
 	SOURCE_A_THROTTLE_MS,
@@ -654,6 +655,8 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 		await updateSourceB(ctx, tripNumberToIds, serviceDateStr, blockMap, await sourceBPromise);
 		timer.stop("updateAllSources:SourceB");
 	}
+
+	propagateBlockHandoffs(blockMap);
 
 	timer.stop("updateAllSources");
 }

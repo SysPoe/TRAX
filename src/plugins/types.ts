@@ -4,7 +4,7 @@ import type { AugmentedStop } from "../utils/augmentedStop.js";
 import type { AugmentedTripInstance } from "../utils/augmentedTrip.js";
 import type { AugmentedStopTime } from "../utils/augmentedStopTime.js";
 import type { ServiceCapacity } from "../utils/serviceCapacity.js";
-import type { VehicleInfo } from "../utils/vehicleModel.js";
+import type { VehicleFormationUnit, VehicleInfo } from "../utils/vehicleModel.js";
 
 export type TransitCapability =
 	| "vehicles"
@@ -39,7 +39,11 @@ export interface TransitPlugin {
 		direction: string | undefined,
 		ctx: CacheContext,
 	): ServiceCapacity;
-	consistDetails?(trip: AugmentedTripInstance, ctx: CacheContext): Promise<unknown> | unknown;
+	/** Adapt provider-specific consist data into ordered, provider-neutral formation units. */
+	vehicleFormationUnits?(
+		trip: AugmentedTripInstance,
+		ctx: CacheContext,
+	): Promise<readonly VehicleFormationUnit[] | null> | readonly VehicleFormationUnit[] | null;
 	filterTrackEdges?(edges: Set<string>): void;
 	enrichTrackGraph?(matrix: Record<string, Record<string, number>>, adjacency: Record<string, string[]>): void;
 	/** Optional region service surface, available only when this plugin is installed. */
