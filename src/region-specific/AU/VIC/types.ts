@@ -85,6 +85,9 @@ export type VLineSourceStatus = {
 
 export type VLinePluginState = {
 	detailsByInstanceId: Map<string, VLineTripDetails>;
+	detailsByServiceKey: Map<string, VLineTripDetails>;
+	canonicalTripIdByRealtimeKey: Map<string, string>;
+	canonicalTripIdByServiceKey: Map<string, string>;
 	chronosRunByInstanceId: Map<string, string>;
 	chronosStopByGtfsStopId: Map<string, number>;
 	chronosRouteByStopAndGtfs: Map<string, number>;

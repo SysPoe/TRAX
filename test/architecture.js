@@ -21,6 +21,15 @@ import TRAX, {
 } from "../dist/index.js";
 import { applyChronosEstimate, matchScsRows } from "../dist/region-specific/AU/VIC/enrichment.js";
 import {
+	buildVLineRealtimeTripAliases,
+	canonicalVLineRealtimeTripId,
+} from "../dist/region-specific/AU/VIC/realtime-aliases.js";
+import {
+	canonicalizeRealtimeTripUpdate,
+	canonicalizeRealtimeVehiclePosition,
+} from "../dist/cache/realtime.js";
+import { TripScheduleRelationship } from "qdf-gtfs";
+import {
 	buildCisBoardingAssignments,
 	collectCisStationCandidates,
 	parseCisStationBoard,
@@ -58,6 +67,50 @@ assert.deepEqual(vlineNoKey.places[0].members, [
 ]);
 const vlineWithKey = createAuVicVlineNetwork({ gtfsRtKey: "test-key" });
 assert.deepEqual(vlineWithKey.feeds.flatMap((feed) => feed.realtimeSources).map((source) => source.source.headers.KeyId), ["test-key", "test-key", "test-key", "test-key"]);
+
+const canonicalVLineTripId = "01-BGO--10-T0-8021";
+const providerVLineTripId = "01-BGO--3-T0-8021";
+const vlineAliasCtx = {
+	config: { network: vlineNoKey },
+	pluginState: new Map(),
+	augmented: {
+		tripsRec: new Map([[`vic-vline\0${canonicalVLineTripId}`, {
+			feed_id: "vic-vline",
+			trip_id: canonicalVLineTripId,
+			scheduledStartServiceDates: ["20260814"],
+			instances: [{
+				serviceDate: "20260814",
+				stopTimes: [{ passing: false, scheduled_departure_time: 12 * 3600 + 2 * 60 }],
+			}],
+		}]]),
+	},
+};
+buildVLineRealtimeTripAliases(vlineAliasCtx);
+const vlineDescriptor = {
+	feed_id: "vic-vline",
+	trip_id: providerVLineTripId,
+	start_date: "20260814",
+	start_time: "12:02:00",
+	schedule_relationship: TripScheduleRelationship.SCHEDULED,
+};
+assert.equal(canonicalVLineRealtimeTripId(vlineDescriptor, vlineAliasCtx), canonicalVLineTripId);
+assert.equal(
+	canonicalVLineRealtimeTripId(
+		{ ...vlineDescriptor, schedule_relationship: TripScheduleRelationship.ADDED },
+		vlineAliasCtx,
+	),
+	providerVLineTripId,
+);
+const canonicalUpdate = canonicalizeRealtimeTripUpdate({
+	trip: vlineDescriptor,
+	stop_time_updates: [{ trip_id: providerVLineTripId }],
+}, vlineAliasCtx);
+assert.equal(canonicalUpdate.trip.trip_id, canonicalVLineTripId);
+assert.equal(canonicalUpdate.stop_time_updates[0].trip_id, canonicalVLineTripId);
+assert.equal(
+	canonicalizeRealtimeVehiclePosition({ trip: vlineDescriptor }, vlineAliasCtx).trip.trip_id,
+	canonicalVLineTripId,
+);
 
 const jpServices = parseVLinePlatformServices(`
 <GetPlatformDeparturesResult xmlns:a="urn:vline" xmlns:i="urn:nil"><a:PlatformService>
@@ -265,7 +318,7 @@ function feed(name, timezone) {
 		"trips.txt":
 			"route_id,service_id,trip_id,trip_headsign,direction_id,shape_id\nshared,shared,shared,End,0,shared\n",
 		"stop_times.txt":
-			"trip_id,arrival_time,departure_time,stop_id,stop_sequence\nshared,25:30:00,25:30:00,shared,1\nshared,26:00:00,26:00:00,end,2\n",
+			"trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type\nshared,25:30:00,25:30:00,shared,1,0,1\nshared,26:00:00,26:00:00,end,2,1,0\n",
 		"calendar.txt":
 			"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nshared,1,1,1,1,1,1,1,20260101,20261231\n",
 		"shapes.txt":
@@ -356,6 +409,10 @@ try {
 	assert.notEqual(alphaTrip.instances[0].instance_id, betaTrip.instances[0].instance_id);
 	assert.equal(decodeTripInstanceId(alphaTrip.instances[0].instance_id).feedId, "alpha");
 	assert.equal(alphaTrip.instances[0].stopTimes[0].scheduled_departure_time, 91_800);
+	assert.equal(alphaTrip.instances[0].stopTimes[0].pickup_type, 0);
+	assert.equal(alphaTrip.instances[0].stopTimes[0].drop_off_type, 1);
+	assert.equal(alphaTrip.instances[0].stopTimes[1].pickup_type, 1);
+	assert.equal(alphaTrip.instances[0].stopTimes[1].drop_off_type, 0);
 	assert.equal(runtime.metadata.feeds.find((value) => value.id === "beta").timeZone, "America/Toronto");
 
 	const eagerInstanceCount = alphaTrip.instances.length;

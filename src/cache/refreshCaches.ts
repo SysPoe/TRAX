@@ -28,6 +28,7 @@ import { clearPreviousVehicleInfo, prunePreviousVehicleInfo } from "../utils/veh
 import { entityKey } from "../identity.js";
 import { getSeqState } from "../plugins/seq-state.js";
 import { addDaysToServiceDate, getToday } from "../utils/time.js";
+import { canonicalizeRealtimeTripUpdates } from "./realtime.js";
 
 type CacheProgressReporter = (info: Parameters<TraxConfig["progressLog"]>[0] & { unit?: "bytes" | "items" }) => void;
 
@@ -479,7 +480,10 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 	});
 
 	const tripUpdates = gtfs.getRealtimeTripUpdates();
-	const allTripUpdates = tripUpdates.concat(ctx.raw.injectedTripUpdates ?? []);
+	const allTripUpdates = canonicalizeRealtimeTripUpdates(
+		tripUpdates.concat(ctx.raw.injectedTripUpdates ?? []),
+		ctx,
+	);
 	const nextUpdatesByTrip = new Map<string, typeof allTripUpdates>();
 	for (const update of allTripUpdates) {
 		const tripId = update.trip.trip_id;

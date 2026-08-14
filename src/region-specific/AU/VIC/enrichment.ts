@@ -3,6 +3,7 @@ import { StopTimeScheduleRelationship, TripScheduleRelationship } from "qdf-gtfs
 import type { CacheContext } from "../../../cache/types.js";
 import type { AugmentedTripInstance } from "../../../utils/augmentedTrip.js";
 import type { VehicleInfo } from "../../../utils/vehicleModel.js";
+import { getVehiclePositions } from "../../../cache/gtfsReads.js";
 import { getServiceDayStart, serviceTimeToInstant } from "../../../utils/time.js";
 import { getVLineState } from "./state.js";
 import { inferVLinePlatform } from "./platform-heuristics.js";
@@ -70,7 +71,9 @@ function detailsFor(ctx: CacheContext, trip: AugmentedTripInstance): VLineTripDe
 	const state = getVLineState(ctx);
 	let details = state.detailsByInstanceId.get(trip.instance_id);
 	if (!details) {
-		details = createEmptyVLineDetails(tdn);
+		const serviceKey = `${tdn}\0${trip.serviceDate}`;
+		details = state.detailsByServiceKey.get(serviceKey) ?? createEmptyVLineDetails(tdn);
+		state.detailsByServiceKey.set(serviceKey, details);
 		state.detailsByInstanceId.set(trip.instance_id, details);
 	}
 	return details;
@@ -653,7 +656,7 @@ export function applyVLineEnrichment(ctx: CacheContext, options: VLinePluginOpti
 		if (trip.feed_id !== "vic-vline") continue;
 		const details = detailsFor(ctx, trip);
 		if (!details) continue;
-		const vehicle = (ctx.gtfs?.getRealtimeVehiclePositions() ?? []).find((position: RealtimeVehiclePosition) =>
+		const vehicle = getVehiclePositions(ctx).find((position: RealtimeVehiclePosition) =>
 			position.feed_id === trip.feed_id && position.trip.trip_id === trip.trip_id &&
 			(!position.trip.start_date || position.trip.start_date === trip.serviceDate),
 		);

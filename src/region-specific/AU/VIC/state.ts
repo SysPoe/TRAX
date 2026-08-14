@@ -7,6 +7,9 @@ export const VLINE_PLUGIN_ID = "au-vic-vline";
 export function getVLineState(ctx: CacheContext): VLinePluginState {
 	return getPluginState(ctx, VLINE_PLUGIN_ID, () => ({
 		detailsByInstanceId: new Map(),
+		detailsByServiceKey: new Map(),
+		canonicalTripIdByRealtimeKey: new Map(),
+		canonicalTripIdByServiceKey: new Map(),
 		chronosRunByInstanceId: new Map(),
 		chronosStopByGtfsStopId: new Map(),
 		chronosRouteByStopAndGtfs: new Map(),

@@ -1,4 +1,4 @@
-import type { RealtimeVehiclePosition } from "qdf-gtfs";
+import type { RealtimeUpdateTripInfo, RealtimeVehiclePosition } from "qdf-gtfs";
 import type { CacheContext } from "../cache/types.js";
 import type { AugmentedStop } from "../utils/augmentedStop.js";
 import type { AugmentedTripInstance } from "../utils/augmentedTrip.js";
@@ -24,6 +24,8 @@ export interface TransitPlugin {
 	afterSnapshotBuilt?(ctx: CacheContext): Promise<void> | void;
 	/** Fetch and inject supplemental data before the generic realtime cache is rebuilt. */
 	beforeRealtime?(ctx: CacheContext): Promise<void> | void;
+	/** Resolve a provider trip descriptor to the static trip identity used by this runtime. */
+	canonicalRealtimeTripId?(trip: RealtimeUpdateTripInfo, ctx: CacheContext): string | null;
 	/** Enrich the completed realtime snapshot without leaking region checks into core code. */
 	afterRealtime?(ctx: CacheContext, changedTripKeys: ReadonlySet<string>): Promise<void> | void;
 	enrichStop?(stop: AugmentedStop, ctx: CacheContext, augmentationContext?: unknown): AugmentedStop | void;

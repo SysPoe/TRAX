@@ -29,6 +29,8 @@ export type AugmentedStopTime = {
 	feed_id: string;
 	trip_id: string;
 	passing: boolean;
+	pickup_type: qdf.PickupType;
+	drop_off_type: qdf.DropOffType;
 
 	instance_id: string;
 	service_date: string;
@@ -419,6 +421,8 @@ export function augmentStopTimes(
 						feed_id: feedId,
 						trip_id: tripId,
 						passing: false,
+						pickup_type: originalMergeItem.pickup_type,
+						drop_off_type: originalMergeItem.drop_off_type,
 						instance_id: "",
 						service_date: "",
 						schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED,
@@ -639,6 +643,8 @@ export function augmentStopTimes(
 			feed_id: feedId,
 			trip_id: tripId,
 			passing: isPassing,
+			pickup_type: stopTime.pickup_type,
+			drop_off_type: stopTime.drop_off_type,
 			instance_id: "",
 			service_date: "",
 			schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED,
