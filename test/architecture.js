@@ -138,7 +138,8 @@ const scsRows = parseVLineScsBoard(`<table><tr class="rowModule"><td class="firs
 <td><span class="mdepartuertime">14:50</span><span class="mtowardsdes">towards Waurn Ponds</span></td>
 <td><div class="mPlatform"><div class="platformbay">Platform</div>4A</div></td></tr></table></td></tr></table>`);
 assert.deepEqual(scsRows, [{
-	time: "14:50", destination: "Waurn Ponds", boardGroup: null, platform: "4A", boardingKind: "platform",
+	time: "14:50", destination: "Waurn Ponds", boardGroup: null, coachesFrom: null,
+	platform: "4A", boardingKind: "platform",
 	departingIn: null, departingInSeconds: null, cancelled: false,
 }]);
 const scsTrip = {
@@ -149,6 +150,28 @@ const scsTrip = {
 };
 assert.equal(matchScsRows([scsTrip], scsRows, "2026-08-12T04:40:00Z").get("example").value, "4A");
 assert.equal(matchScsRows([scsTrip, { ...scsTrip, instance_id: "duplicate" }], scsRows, "2026-08-12T04:40:00Z").size, 0);
+const coachHandoffRows = parseVLineScsBoard(`<table><tr class="rowModule"><td class="first-service"><table class="main-module"><tr>
+<td><div class="mdeparture-destination">Ballarat</div><span class="mdepartuertime">09:55</span><span class="mtowardsdes">towards Ararat</span></td>
+<td><div class="mPlatform"><div class="platformbay">Platform</div>3A</div></td></tr><tr>
+<td class="mcocancalation"><div class="normal-tdeparture-destination">COACHES FROM CAROLINE SPRINGS</div></td>
+<td><div class="mDepMin">11 min</div></td></tr></table></td></tr></table>`);
+assert.equal(coachHandoffRows[0].coachesFrom, "CAROLINE SPRINGS");
+const coachHandoffTrip = {
+	...scsTrip, instance_id: "coach-handoff", trip_headsign: "Wendouree", serviceDate: "20260815",
+	stopTimes: [
+		{ ...scsTrip.stopTimes[0], scheduled_departure_time: 9 * 3600 + 55 * 60, scheduled_arrival_time: 9 * 3600 + 55 * 60 },
+		{ passing: false, scheduled_arrival_time: 10 * 3600 + 19 * 60,
+			scheduled_parent_station_id: "vic:rail:CSP", scheduled_stop_id: "CSP",
+			scheduled_parent_station: { stop_name: "Caroline Springs Railway Station" },
+			scheduled_stop: { stop_name: "Caroline Springs Station" } },
+	],
+};
+assert.equal(matchScsRows([coachHandoffTrip], coachHandoffRows, "2026-08-14T23:44:00Z").get("coach-handoff").value, "3A");
+const wrongTerminalTrip = { ...coachHandoffTrip, instance_id: "wrong-terminal", stopTimes: [
+	coachHandoffTrip.stopTimes[0],
+	{ ...coachHandoffTrip.stopTimes[1], scheduled_parent_station: { stop_name: "Deer Park Railway Station" } },
+] };
+assert.equal(matchScsRows([wrongTerminalTrip], coachHandoffRows, "2026-08-14T23:44:00Z").size, 0);
 assert.deepEqual(parseVLineScsBoard(`<table><tr class="rowModule"><td class="first-service"><table class="main-module"><tr>
 <td><div class="mdeparture-destination">Bendigo</div><span class="mdepartuertime">20:31</span><span class="mtowardsdes">towards Eaglehawk</span></td>
 <td><div class="mPlatform"><div class="platformbay">Coach bay</div>67</div></td></tr><tr><td class="mcocancalation">The service has been replaced by coaches</td><td><div class="mDepMin">24 min</div></td></tr></table></td></tr></table>`), []);

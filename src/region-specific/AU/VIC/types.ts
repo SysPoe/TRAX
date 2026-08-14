@@ -30,6 +30,7 @@ export type VLineScsServiceObservation = Observation<{
 	boardGroup: string | null;
 	scheduledTime: string;
 	destination: string;
+	coachesFrom: string | null;
 	departingIn: string | null;
 	departingInSeconds: number | null;
 	cancelled: boolean;
@@ -141,6 +142,7 @@ export type VLineScsBoardRow = {
 	time: string;
 	destination: string;
 	boardGroup: string | null;
+	coachesFrom: string | null;
 	platform: string | null;
 	boardingKind: "platform" | null;
 	departingIn: string | null;

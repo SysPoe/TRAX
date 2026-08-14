@@ -142,12 +142,7 @@ export function matchScsRows(
 	const matches = new Map<string, VLinePlatformObservation>();
 	for (const row of rows) {
 		if (!row.platform) continue;
-		const candidates = trips.filter((trip) => {
-			const first = trip.stopTimes[0];
-			const firstName = first?.scheduled_parent_station?.stop_name ?? first?.scheduled_stop?.stop_name;
-			return normalizeStation(firstName) === "southerncross" && timeAt(first) === row.time &&
-				normalizeStation(trip.trip_headsign) === normalizeStation(row.destination);
-		});
+		const candidates = trips.filter((trip) => scsTripMatchesRow(trip, row));
 		const trip = selectScsTrip(candidates, row, observedAt);
 		if (!trip) continue;
 		const first = trip.stopTimes[0];
@@ -161,6 +156,16 @@ export function matchScsRows(
 	return matches;
 }
 
+function scsTripMatchesRow(trip: AugmentedTripInstance, row: VLineScsBoardRow): boolean {
+	const first = trip.stopTimes[0];
+	const firstName = first?.scheduled_parent_station?.stop_name ?? first?.scheduled_stop?.stop_name;
+	if (normalizeStation(firstName) !== "southerncross" || timeAt(first) !== row.time) return false;
+	if (normalizeStation(trip.trip_headsign) === normalizeStation(row.destination)) return true;
+	const terminal = lastScheduledCall(trip);
+	return Boolean(row.coachesFrom && terminal &&
+		normalizeStation(callName(terminal)) === normalizeStation(row.coachesFrom));
+}
+
 function matchScsServices(
 	trips: readonly AugmentedTripInstance[],
 	rows: readonly VLineScsBoardRow[],
@@ -168,12 +173,7 @@ function matchScsServices(
 ): Map<string, VLineScsBoardRow> {
 	const matches = new Map<string, VLineScsBoardRow>();
 	for (const row of rows) {
-		const candidates = trips.filter((trip) => {
-			const first = trip.stopTimes[0];
-			const firstName = first?.scheduled_parent_station?.stop_name ?? first?.scheduled_stop?.stop_name;
-			return normalizeStation(firstName) === "southerncross" && timeAt(first) === row.time &&
-				normalizeStation(trip.trip_headsign) === normalizeStation(row.destination);
-		});
+		const candidates = trips.filter((trip) => scsTripMatchesRow(trip, row));
 		const trip = selectScsTrip(candidates, row, observedAt);
 		if (trip) matches.set(trip.instance_id, row);
 	}
@@ -194,7 +194,9 @@ function selectScsTrip(
 		const instant = scheduledInstant(trip, seconds);
 		return instant == null ? [] : [{ trip, difference: Math.abs(instant - expected) }];
 	}).sort((a, b) => a.difference - b.difference);
-	return ranked[0] && ranked[0].difference <= 10 * 60_000 ? ranked[0].trip : null;
+	if (!ranked[0] || ranked[0].difference > 10 * 60_000) return null;
+	if (ranked[1]?.difference === ranked[0].difference) return null;
+	return ranked[0].trip;
 }
 
 function applyPlatform(trip: AugmentedTripInstance, platform: VLinePlatformObservation): void {
@@ -641,6 +643,7 @@ export async function refreshVLineOfficialSources(ctx: CacheContext, options: VL
 					boardGroup: row.boardGroup,
 					scheduledTime: row.time,
 					destination: row.destination,
+					coachesFrom: row.coachesFrom,
 					departingIn: row.departingIn,
 					departingInSeconds: row.departingInSeconds,
 					cancelled: row.cancelled,

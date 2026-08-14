@@ -23,7 +23,8 @@ function normalRow(element: ReturnType<typeof parse>, boardGroup: string | null)
 	if (!/^\d{1,2}:\d{2}$/.test(time) || !destination || !platformValue) return null;
 	const departingIn = clean(element.querySelector(".departing-in")?.text) || null;
 	return {
-		time: time.padStart(5, "0"), destination, boardGroup, platform: platformValue, boardingKind: "platform",
+		time: time.padStart(5, "0"), destination, boardGroup, coachesFrom: null,
+		platform: platformValue, boardingKind: "platform",
 		departingIn, departingInSeconds: parseDepartingIn(departingIn ?? ""),
 		cancelled: /service cancelled/i.test(element.text),
 	};
@@ -41,10 +42,12 @@ export function parseVLineScsBoard(html: string): VLineScsBoardRow[] {
 		const mainPlatform = platform(clean(main.querySelector(".mPlatform")?.text));
 		const time = clean(main.querySelector(".mdepartuertime")?.text);
 		const destination = clean(main.querySelector(".mtowardsdes")?.text).replace(/^towards\s+/i, "");
+		const coachesFrom = clean(/\bcoaches?\s+from\s+(.+)$/i.exec(cancellation)?.[1]) || null;
 		if (mainPlatform && !/replaced by coaches/i.test(cancellation) && /^\d{1,2}:\d{2}$/.test(time) && destination) {
 			const departingIn = clean(main.querySelector(".mDepMin")?.text) || null;
 			const row: VLineScsBoardRow = {
-				time: time.padStart(5, "0"), destination, boardGroup, platform: mainPlatform, boardingKind: "platform",
+				time: time.padStart(5, "0"), destination, boardGroup, coachesFrom,
+				platform: mainPlatform, boardingKind: "platform",
 				departingIn, departingInSeconds: parseDepartingIn(departingIn ?? ""),
 				cancelled: /service cancelled/i.test(main.text),
 			};
