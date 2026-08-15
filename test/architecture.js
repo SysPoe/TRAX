@@ -11,6 +11,8 @@ import TRAX, {
 	normalizeVLineUnit,
 	ptvVehicleDescriptorConsist,
 	parseVLinePlatformServices,
+	parseVLineJourneys,
+	parseVLineBookingPage,
 	parseVLineScsBoard,
 	vlineAccessToken,
 	vlinePassengerCars,
@@ -133,6 +135,39 @@ assert.deepEqual(jpServices[0], {
 	scheduledDepartureTime: "2026-08-12T14:50:00", scheduledDestinationArrivalTime: "2026-08-12T16:08:00",
 	tdn: "8761", platform: "4A", direction: "Down", consistSubtype: "VLocity", consistCount: 2,
 	consistVehicles: null, isLiveConsistInfo: true, serviceStatus: "Planned",
+	consistDescription: null, accessibleSpaces: null, bicycleSpaces: null,
+	reservationAvailable: false, reservationRequired: false, reservedCarriages: [],
+	reservedSeatsAvailable: null, unreservedTicketsAvailable: null, canBookInJourneyPlanner: false,
+});
+const journeyServices = parseVLineJourneys(`<GetNextPrevious5JourneysResult xmlns:a="urn:vline"><a:Journey><a:Legs><a:Leg>
+<a:Origin>Wallan Station</a:Origin><a:Destination>Melbourne, Southern Cross</a:Destination>
+<a:DepartureTime>2026-08-15T10:10:00</a:DepartureTime><a:ArrivalTime>2026-08-15T10:57:00</a:ArrivalTime>
+<a:ServiceIdentifier>8314</a:ServiceIdentifier><a:ServiceDirection>Up</a:ServiceDirection>
+<a:ConsistSubType>Sprinter</a:ConsistSubType><a:ConsistCount>4</a:ConsistCount>
+<a:DesignatedAccessibilitySpaceCount>8</a:DesignatedAccessibilitySpaceCount><a:DesignatedBikeSpaceCount>0</a:DesignatedBikeSpaceCount>
+<a:IsAccessibleAvailable>true</a:IsAccessibleAvailable><a:IsBikeAvailable>false</a:IsBikeAvailable>
+<a:IsLiveConsistInfo>true</a:IsLiveConsistInfo><a:ReservationAvailable>false</a:ReservationAvailable>
+<a:ReservationRequired>false</a:ReservationRequired><a:CanBookInJourneyPlanner>true</a:CanBookInJourneyPlanner>
+<a:EconomyClassSeatsAvailable>0</a:EconomyClassSeatsAvailable><a:UnreservedSeatsAvailable>0</a:UnreservedSeatsAvailable>
+</a:Leg></a:Legs></a:Journey></GetNextPrevious5JourneysResult>`);
+assert.equal(journeyServices[0].tdn, "8314");
+assert.equal(journeyServices[0].consistSubtype, "Sprinter");
+assert.equal(journeyServices[0].consistCount, 4);
+assert.equal(journeyServices[0].accessibleSpaces, 8);
+assert.equal(journeyServices[0].bicycleSpaces, 0);
+assert.equal(journeyServices[0].isLiveConsistInfo, true);
+
+const booking = parseVLineBookingPage(`<div class="journey-leg" data-departure-time="2026-08-15 12:36:00">
+<div class="view-consist-panel"><input id="x_hdnServiceCode" value="8351"><input id="x_hdnCarList" value="C,D">
+<tr id="x_spnReservedSeatsTrain" class="economy-seats"><span class="description">65 seats available</span><a id="x_lnbTrainSeats" class="viewseats">View seats</a></tr>
+<tr id="x_spnUnreservedSeats" class="unreserved-seats"><span class="description">50 tickets available</span></tr></div></div>`, {
+	tdn: "8351", scheduledDepartureTime: "2026-08-15T12:36:00",
+	journeyUrl: "https://www.vline.com.au/example", observedAt: "2026-08-15T00:20:00Z",
+});
+assert.deepEqual(booking, {
+	tdn: "8351", reservedCarriages: ["C", "D"], reservedSeatsAvailable: 65,
+	unreservedTicketsAvailable: 50, reservationAvailable: true, reservationRequired: false,
+	seatMapAvailable: true, journeyUrl: "https://www.vline.com.au/example", observedAt: "2026-08-15T00:20:00Z",
 });
 const scsRows = parseVLineScsBoard(`<table><tr class="rowModule"><td class="first-service"><table class="main-module"><tr>
 <td><span class="mdepartuertime">14:50</span><span class="mtowardsdes">towards Waurn Ponds</span></td>

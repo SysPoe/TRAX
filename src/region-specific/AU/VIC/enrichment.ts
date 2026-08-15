@@ -2,12 +2,21 @@ import type { RealtimeVehiclePosition } from "qdf-gtfs";
 import { StopTimeScheduleRelationship, TripScheduleRelationship } from "qdf-gtfs";
 import type { CacheContext } from "../../../cache/types.js";
 import type { AugmentedTripInstance } from "../../../utils/augmentedTrip.js";
-import type { VehicleInfo } from "../../../utils/vehicleModel.js";
+import {
+	createVehicleFormation,
+	type VehicleBookingAvailability,
+	type VehicleFormation,
+	type VehicleInfo,
+} from "../../../utils/vehicleModel.js";
 import { getVehiclePositions } from "../../../cache/gtfsReads.js";
 import { getServiceDayStart, serviceTimeToInstant } from "../../../utils/time.js";
 import { getVLineState } from "./state.js";
 import { inferVLinePlatform } from "./platform-heuristics.js";
-import { getVLinePlatformDepartures } from "./journey-planner.js";
+import {
+	getVLineJourneys,
+	getVLinePlatformDepartures,
+	getVLineWebBookingAvailability,
+} from "./journey-planner.js";
 import { getVLineScsBoard } from "./scs-board.js";
 import {
 	normalizeVLineUnit,
@@ -47,6 +56,8 @@ const LIVE_TTL_MS = 10 * 60_000;
 const CHRONOS_PATTERN_TTL_MS = 7 * 60_000;
 const CHRONOS_RETRY_MS = 5 * 60_000;
 const CHRONOS_CONCURRENCY = 4;
+const ON_DEMAND_JOURNEY_TTL_MS = 5 * 60_000;
+const MISSING_BOOKING_TTL_MS = 2 * 60_000;
 
 function observation<T>(
 	value: T,
@@ -61,7 +72,9 @@ function observation<T>(
 export function createEmptyVLineDetails(tdn: string): VLineTripDetails {
 	return {
 		tdn, chronosRunRef: null, leadingUnit: null, fullConsist: null, subtype: null, unitCount: null,
-		passengerCars: null, occupancyStatus: null, occupancyPercentage: null, carriageOccupancy: null,
+		passengerCars: null, accessibleSpaces: null, bicycleSpaces: null, isLiveConsistInfo: null,
+		consistDescription: null, bookingAvailability: null,
+		occupancyStatus: null, occupancyPercentage: null, carriageOccupancy: null,
 		serviceStatus: null, chronosService: null, chronosCalls: [], scsService: null, platforms: [],
 	};
 }
@@ -119,6 +132,10 @@ export function applyJourneyPlannerService(
 	const cars = vlinePassengerCars(service.consistSubtype, service.consistCount);
 	if (cars) details.passengerCars = observation(cars, "vline-journey-planner", "reported", observedAt, raw);
 	if (service.consistVehicles?.length) details.fullConsist = observation(service.consistVehicles, "vline-journey-planner", "reported", observedAt, raw);
+	if (service.accessibleSpaces != null) details.accessibleSpaces = observation(service.accessibleSpaces, "vline-journey-planner", "reported", observedAt, raw);
+	if (service.bicycleSpaces != null) details.bicycleSpaces = observation(service.bicycleSpaces, "vline-journey-planner", "reported", observedAt, raw);
+	details.isLiveConsistInfo = observation(service.isLiveConsistInfo, "vline-journey-planner", "reported", observedAt, raw);
+	if (service.consistDescription) details.consistDescription = observation(service.consistDescription, "vline-journey-planner", "reported", observedAt, raw);
 	if (service.serviceStatus) details.serviceStatus = observation(service.serviceStatus, "vline-journey-planner", "reported", observedAt, raw);
 	if (service.platform) {
 		const stop = findStop(trip, service);
@@ -697,6 +714,149 @@ export function applyVLineEnrichment(ctx: CacheContext, options: VLinePluginOpti
 			.filter((value) => !value.expiresAt || Date.parse(value.expiresAt) > now || value.confidence === "inferred")
 			.sort((a, b) => precedence[a.confidence] - precedence[b.confidence])) applyPlatform(trip, platform);
 	}
+}
+
+function journeyLocationName(value: string | null): string | null {
+	if (!value) return null;
+	if (/southern cross/i.test(value)) return "Melbourne, Southern Cross";
+	return value.replace(/\s+Railway\s+Station$/i, " Station").trim();
+}
+
+function scheduledLocalDateTime(trip: AugmentedTripInstance, seconds: number | null | undefined): string | null {
+	if (seconds == null) return null;
+	const dayOffset = Math.floor(seconds / 86_400);
+	const date = new Date(Date.UTC(
+		Number(trip.serviceDate.slice(0, 4)), Number(trip.serviceDate.slice(4, 6)) - 1,
+		Number(trip.serviceDate.slice(6, 8)) + dayOffset,
+	));
+	const local = ((seconds % 86_400) + 86_400) % 86_400;
+	const day = date.toISOString().slice(0, 10);
+	const time = `${Math.floor(local / 3600).toString().padStart(2, "0")}:${Math.floor((local % 3600) / 60).toString().padStart(2, "0")}:${(local % 60).toString().padStart(2, "0")}`;
+	return `${day}T${time}`;
+}
+
+async function cachedJourneyServices(
+	ctx: CacheContext,
+	options: NonNullable<VLinePluginOptions["journeyPlanner"]>,
+	origin: string,
+	destination: string,
+	serviceDate: string,
+	timeoutMs: number | undefined,
+): Promise<VLineJourneyPlannerService[]> {
+	const state = getVLineState(ctx), key = `${origin}\0${destination}\0${serviceDate}`;
+	const cached = state.journeyCache.get(key);
+	if (cached && cached.expiresAt > Date.now()) return cached.services;
+	const active = state.journeyInFlight.get(key);
+	if (active) return active;
+	const request = getVLineJourneys(options, origin, destination, true, timeoutMs)
+		.then((services) => {
+			state.journeyCache.set(key, { services, expiresAt: Date.now() + ON_DEMAND_JOURNEY_TTL_MS });
+			return services;
+		});
+	state.journeyInFlight.set(key, request);
+	try { return await request; }
+	finally { state.journeyInFlight.delete(key); }
+}
+
+async function cachedBookingAvailability(
+	ctx: CacheContext,
+	trip: AugmentedTripInstance,
+	origin: string,
+	destination: string,
+	scheduledDepartureTime: string,
+	timeoutMs: number | undefined,
+) {
+	const state = getVLineState(ctx), key = trip.instance_id;
+	const cached = state.bookingCache.get(key);
+	if (cached && cached.expiresAt > Date.now()) return cached.availability;
+	const active = state.bookingInFlight.get(key);
+	if (active) return active;
+	const request = getVLineWebBookingAvailability(
+		origin, destination, trip.serviceDate, vlineTdn(trip.trip_id)!, scheduledDepartureTime, timeoutMs,
+	).then((availability) => {
+		state.bookingCache.set(key, {
+			availability,
+			expiresAt: Date.now() + (availability ? ON_DEMAND_JOURNEY_TTL_MS : MISSING_BOOKING_TTL_MS),
+		});
+		return availability;
+	});
+	state.bookingInFlight.set(key, request);
+	try { return await request; }
+	finally { state.bookingInFlight.delete(key); }
+}
+
+/** Resolve the richer Journey Planner record only when a consumer asks for this trip's formation. */
+export async function getVLineVehicleFormation(
+	trip: AugmentedTripInstance,
+	ctx: CacheContext,
+	options: VLinePluginOptions,
+): Promise<VehicleFormation | null> {
+	if (trip.feed_id !== "vic-vline") return null;
+	const first = firstScheduledCall(trip), last = lastScheduledCall(trip);
+	const origin = journeyLocationName(first ? callName(first) : null);
+	const destination = journeyLocationName(last ? callName(last) : null);
+	const scheduled = first?.scheduled_departure_time ?? first?.scheduled_arrival_time;
+	const scheduledDepartureTime = scheduledLocalDateTime(trip, scheduled);
+	const details = detailsFor(ctx, trip);
+	if (!details) return null;
+
+	let service: VLineJourneyPlannerService | null = null;
+	if (options.journeyPlanner && origin && destination) {
+		try {
+			const services = await cachedJourneyServices(
+				ctx, options.journeyPlanner, origin, destination, trip.serviceDate, options.requestTimeoutMs,
+			);
+			const matches = services.filter((candidate) => serviceMatchesTrip(candidate, trip));
+			service = matches.find((candidate) => candidate.scheduledDepartureTime === scheduledDepartureTime) ?? matches[0] ?? null;
+			if (service) applyJourneyPlannerService(trip, details, service, new Date().toISOString());
+		} catch (error) {
+			getVLineState(ctx).sources["journey-planner"].error = error instanceof Error ? error.message : String(error);
+		}
+	}
+
+	if (origin && destination && scheduledDepartureTime) {
+		try {
+			const booking = await cachedBookingAvailability(
+				ctx, trip, origin, destination, scheduledDepartureTime, options.requestTimeoutMs,
+			);
+			if (booking) {
+				booking.reservationRequired ||= service?.reservationRequired ?? false;
+				details.bookingAvailability = booking;
+			}
+		} catch {
+			// Formation data remains useful when the public booking page is temporarily unavailable.
+		}
+	}
+
+	const info = vlineVehicleInfoForTrip(trip, ctx);
+	if (info) {
+		trip.vehicle_id = info.vehicle_id;
+		trip.vehicle_model = info.vehicle_model;
+		trip.passenger_cars = info.passenger_cars ?? null;
+		trip.scheduled_passenger_cars = info.scheduled_passenger_cars ?? null;
+		trip.consist = info.consist ?? null;
+		trip.vehicle_details = info.details ?? null;
+	}
+	const booking: VehicleBookingAvailability | null = details.bookingAvailability ? {
+		reservedCarriages: [...details.bookingAvailability.reservedCarriages],
+		reservedSeatsAvailable: details.bookingAvailability.reservedSeatsAvailable,
+		unreservedTicketsAvailable: details.bookingAvailability.unreservedTicketsAvailable,
+		reservationAvailable: details.bookingAvailability.reservationAvailable,
+		reservationRequired: details.bookingAvailability.reservationRequired,
+		seatMapAvailable: details.bookingAvailability.seatMapAvailable,
+		journeyUrl: details.bookingAvailability.journeyUrl,
+		source: "V/Line Journey Planner",
+		observedAt: details.bookingAvailability.observedAt,
+	} : null;
+	const observed = details.subtype ?? details.passengerCars ?? details.isLiveConsistInfo;
+	return createVehicleFormation(trip, null, {
+		accessibleSpaces: details.accessibleSpaces?.value ?? null,
+		bicycleSpaces: details.bicycleSpaces?.value ?? null,
+		isLive: details.isLiveConsistInfo?.value ?? null,
+		source: observed ? "V/Line Journey Planner" : null,
+		observedAt: observed?.observedAt ?? null,
+		bookingAvailability: booking,
+	});
 }
 
 export function vlineVehicleInfoForTrip(trip: AugmentedTripInstance, ctx: CacheContext): VehicleInfo | null {

@@ -2,6 +2,7 @@ import type { TransitPlugin } from "./types.js";
 import { getVLineState, VLINE_PLUGIN_ID } from "../region-specific/AU/VIC/state.js";
 import {
 	applyVLineEnrichment,
+	getVLineVehicleFormation,
 	refreshVLineOfficialSources,
 	vlineDetails,
 	vlineVehicleInfoForTrip,
@@ -22,6 +23,7 @@ export function createVLinePlugin(options: VLinePluginOptions = {}): TransitPlug
 		canonicalRealtimeTripId: canonicalVLineRealtimeTripId,
 		afterRealtime: (ctx) => applyVLineEnrichment(ctx, options),
 		vehicleInfoForTrip: vlineVehicleInfoForTrip,
+		vehicleFormation: (trip, ctx) => getVLineVehicleFormation(trip, ctx, options),
 		api: (ctx) => ({
 			getTripDetails: (instanceId: string) => {
 				const trip = ctx.augmented.instancesRec.get(instanceId);

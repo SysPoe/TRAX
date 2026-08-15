@@ -4,7 +4,7 @@ import type { AugmentedStop } from "../utils/augmentedStop.js";
 import type { AugmentedTripInstance } from "../utils/augmentedTrip.js";
 import type { AugmentedStopTime } from "../utils/augmentedStopTime.js";
 import type { ServiceCapacity } from "../utils/serviceCapacity.js";
-import type { VehicleFormationUnit, VehicleInfo } from "../utils/vehicleModel.js";
+import type { VehicleFormation, VehicleFormationUnit, VehicleInfo } from "../utils/vehicleModel.js";
 
 export type TransitCapability =
 	| "vehicles"
@@ -32,6 +32,11 @@ export interface TransitPlugin {
 	enrichTrip?(trip: AugmentedTripInstance, ctx: CacheContext): AugmentedTripInstance | void;
 	vehicleInfo?(vehicle: RealtimeVehiclePosition, ctx: CacheContext): unknown;
 	vehicleInfoForTrip?(trip: AugmentedTripInstance, ctx: CacheContext): VehicleInfo | null;
+	/** Resolve a complete formation when the provider needs an on-demand lookup. */
+	vehicleFormation?(
+		trip: AugmentedTripInstance,
+		ctx: CacheContext,
+	): Promise<VehicleFormation | null> | VehicleFormation | null;
 	serviceCapacity?(
 		trip: AugmentedTripInstance,
 		stopTime: AugmentedStopTime,

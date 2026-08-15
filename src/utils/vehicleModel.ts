@@ -26,6 +26,28 @@ export type VehicleFormationUnit = {
 	accentColor: string | null;
 };
 
+/** Segment-specific booking inventory. This is deliberately separate from the physical formation. */
+export type VehicleBookingAvailability = {
+	reservedCarriages: string[];
+	reservedSeatsAvailable: number | null;
+	unreservedTicketsAvailable: number | null;
+	reservationAvailable: boolean;
+	reservationRequired: boolean;
+	seatMapAvailable: boolean;
+	journeyUrl: string | null;
+	source: string;
+	observedAt: string;
+};
+
+export type VehicleFormationMetadata = {
+	accessibleSpaces?: number | null;
+	bicycleSpaces?: number | null;
+	isLive?: boolean | null;
+	source?: string | null;
+	observedAt?: string | null;
+	bookingAvailability?: VehicleBookingAvailability | null;
+};
+
 /** The single vehicle/consist contract exposed to every consumer. */
 export type VehicleFormation = {
 	vehicleId: string | null;
@@ -33,11 +55,18 @@ export type VehicleFormation = {
 	passengerCars: number | null;
 	scheduledPassengerCars: number | null;
 	units: VehicleFormationUnit[];
+	accessibleSpaces: number | null;
+	bicycleSpaces: number | null;
+	isLive: boolean | null;
+	source: string | null;
+	observedAt: string | null;
+	bookingAvailability: VehicleBookingAvailability | null;
 };
 
 export function createVehicleFormation(
 	trip: AugmentedTripInstance,
 	providerUnits: readonly VehicleFormationUnit[] | null = null,
+	metadata: VehicleFormationMetadata = {},
 ): VehicleFormation | null {
 	const units =
 		providerUnits && providerUnits.length > 0
@@ -59,7 +88,12 @@ export function createVehicleFormation(
 		!trip.vehicle_model &&
 		trip.passenger_cars == null &&
 		trip.scheduled_passenger_cars == null &&
-		units.length === 0
+		units.length === 0 &&
+		metadata.accessibleSpaces == null &&
+		metadata.bicycleSpaces == null &&
+		metadata.isLive == null &&
+		!metadata.source &&
+		!metadata.bookingAvailability
 	)
 		return null;
 	return {
@@ -68,6 +102,12 @@ export function createVehicleFormation(
 		passengerCars: trip.passenger_cars ?? null,
 		scheduledPassengerCars: trip.scheduled_passenger_cars ?? null,
 		units,
+		accessibleSpaces: metadata.accessibleSpaces ?? null,
+		bicycleSpaces: metadata.bicycleSpaces ?? null,
+		isLive: metadata.isLive ?? null,
+		source: metadata.source ?? null,
+		observedAt: metadata.observedAt ?? null,
+		bookingAvailability: metadata.bookingAvailability ?? null,
 	};
 }
 

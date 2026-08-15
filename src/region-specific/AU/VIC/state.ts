@@ -17,6 +17,10 @@ export function getVLineState(ctx: CacheContext): VLinePluginState {
 		chronosDirectionByStopAndRoute: new Map(),
 		chronosDiscoveryRetryAt: new Map(),
 		chronosPatternCache: new Map(),
+		journeyCache: new Map(),
+		journeyInFlight: new Map(),
+		bookingCache: new Map(),
+		bookingInFlight: new Map(),
 		sources: {
 			"journey-planner": { enabled: false, lastAttemptAt: null, lastSuccessAt: null, error: null },
 			chronos: { enabled: false, lastAttemptAt: null, lastSuccessAt: null, error: null },

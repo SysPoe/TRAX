@@ -387,6 +387,10 @@ export class TRAX {
 	public getConsistDetails = async (instanceId: string): Promise<VehicleFormation | null> => {
 		const trip = this.getAugmentedTripInstance(instanceId);
 		if (!trip) return null;
+		const formationPlugin = this.config.network.plugins.find(
+			(candidate) => candidate.feedIds.includes(trip.feed_id) && candidate.vehicleFormation,
+		);
+		if (formationPlugin?.vehicleFormation) return formationPlugin.vehicleFormation(trip, this.ctx);
 		const plugin = this.config.network.plugins.find(
 			(candidate) => candidate.feedIds.includes(trip.feed_id) && candidate.vehicleFormationUnits,
 		);
@@ -515,7 +519,13 @@ export {
 } from "./region-specific/AU/SEQ/seq-diagram.js";
 
 export type { AugmentedTrip, AugmentedTripInstance } from "./utils/augmentedTrip.js";
-export type { VehicleFormation, VehicleFormationUnit, VehicleInfo } from "./utils/vehicleModel.js";
+export type {
+	VehicleBookingAvailability,
+	VehicleFormation,
+	VehicleFormationMetadata,
+	VehicleFormationUnit,
+	VehicleInfo,
+} from "./utils/vehicleModel.js";
 export type { AugmentedStopTime, BoardingLocation, BoardingLocationKind } from "./utils/augmentedStopTime.js";
 export type {
 	Observation,
@@ -523,6 +533,7 @@ export type {
 	VLineChronosCallObservation,
 	VLineChronosServiceObservation,
 	VLinePlatformObservation,
+	VLineBookingAvailability,
 	VLineScsServiceObservation,
 	VLinePluginOptions,
 	VLineSourceStatus,
@@ -535,7 +546,12 @@ export {
 	vlineTdn,
 	vlineVehicleModel,
 } from "./region-specific/AU/VIC/identifiers.js";
-export { parseVLinePlatformServices, vlineAccessToken } from "./region-specific/AU/VIC/journey-planner.js";
+export {
+	parseVLineBookingPage,
+	parseVLineJourneys,
+	parseVLinePlatformServices,
+	vlineAccessToken,
+} from "./region-specific/AU/VIC/journey-planner.js";
 export { parseVLineScsBoard } from "./region-specific/AU/VIC/scs-board.js";
 export {
 	chronosHourlyToken,

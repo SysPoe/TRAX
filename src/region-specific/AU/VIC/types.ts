@@ -6,6 +6,7 @@ export type ObservationConfidence = "confirmed" | "reported" | "inferred";
 export type VLineObservationSource =
 	| "vic-vline-gtfsrt-vehicle-positions"
 	| "vline-journey-planner"
+	| "vline-journey-planner-web"
 	| "ptv-chronos"
 	| "vline-scs-html"
 	| "static-platform-heuristic";
@@ -65,6 +66,11 @@ export type VLineTripDetails = {
 	subtype: Observation<string> | null;
 	unitCount: Observation<number> | null;
 	passengerCars: Observation<number> | null;
+	accessibleSpaces: Observation<number> | null;
+	bicycleSpaces: Observation<number> | null;
+	isLiveConsistInfo: Observation<boolean> | null;
+	consistDescription: Observation<string> | null;
+	bookingAvailability: VLineBookingAvailability | null;
 	occupancyStatus: Observation<OccupancyStatus> | null;
 	occupancyPercentage: Observation<number> | null;
 	carriageOccupancy: Observation<RealtimeCarriageDetails[]> | null;
@@ -96,6 +102,10 @@ export type VLinePluginState = {
 	chronosDirectionByStopAndRoute: Map<string, number>;
 	chronosDiscoveryRetryAt: Map<string, number>;
 	chronosPatternCache: Map<string, { response: ChronosPatternResponse; expiresAt: number }>;
+	journeyCache: Map<string, { services: VLineJourneyPlannerService[]; expiresAt: number }>;
+	journeyInFlight: Map<string, Promise<VLineJourneyPlannerService[]>>;
+	bookingCache: Map<string, { availability: VLineBookingAvailability | null; expiresAt: number }>;
+	bookingInFlight: Map<string, Promise<VLineBookingAvailability | null>>;
 	sources: Record<VLineSourceName, VLineSourceStatus>;
 	lastRefreshAt: string | null;
 };
@@ -136,6 +146,27 @@ export type VLineJourneyPlannerService = {
 	consistVehicles: string[] | null;
 	isLiveConsistInfo: boolean;
 	serviceStatus: string | null;
+	consistDescription: string | null;
+	accessibleSpaces: number | null;
+	bicycleSpaces: number | null;
+	reservationAvailable: boolean;
+	reservationRequired: boolean;
+	reservedCarriages: string[];
+	reservedSeatsAvailable: number | null;
+	unreservedTicketsAvailable: number | null;
+	canBookInJourneyPlanner: boolean;
+};
+
+export type VLineBookingAvailability = {
+	tdn: string;
+	reservedCarriages: string[];
+	reservedSeatsAvailable: number | null;
+	unreservedTicketsAvailable: number | null;
+	reservationAvailable: boolean;
+	reservationRequired: boolean;
+	seatMapAvailable: boolean;
+	journeyUrl: string;
+	observedAt: string;
 };
 
 export type VLineScsBoardRow = {
