@@ -16,6 +16,7 @@ const TOKEN_SAFETY_MS = 1 * MINUTES;
 const BOOKING_CACHE_MS = 10 * MINUTES;
 const LAYOUT_CACHE_MS = 5 * MINUTES;
 const CONSIST_CACHE_MS = 24 * 60 * MINUTES;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 // --- Types & Interfaces ---
 
@@ -23,6 +24,35 @@ interface TokenRes {
 	access_token: string;
 	expires_in: number;
 	token_type: string;
+}
+
+type ViaBookingFare = {
+	leg: {
+		service_schedule_date: string;
+		service_name: string;
+		service_identifier: string;
+	};
+	tariffCode: string;
+};
+
+/** Pick an actually offered fare instead of assuming that Escape inventory is available. */
+export function selectViaBookingFare(orientation: any): ViaBookingFare | null {
+	const routes = orientation?.data?.offer?.travels?.[0]?.routes;
+	if (!Array.isArray(routes)) return null;
+	for (const route of routes) {
+		const leg = route?.legs?.[0];
+		if (!leg?.service_schedule_date || !leg?.service_name || !leg?.service_identifier) continue;
+		const items = Array.isArray(route?.bundles)
+			? route.bundles.flatMap((bundle: any) => (Array.isArray(bundle?.items) ? bundle.items : []))
+			: [];
+		const selectable = items.find((item: any) => item?.seat_selection_status === "SEAT_SELECTION_AVAILABLE") ?? items[0];
+		const fare = selectable?.passenger_fares?.find((candidate: any) => candidate?.passenger_id === "passenger_1")
+			?? selectable?.passenger_fares?.[0];
+		if (typeof fare?.tariff_code === "string" && fare.tariff_code) {
+			return { leg, tariffCode: fare.tariff_code };
+		}
+	}
+	return null;
 }
 
 export interface CarriageLayoutRes {
@@ -111,12 +141,13 @@ type ViaConsistState = {
 	cachedBooking: { booking: any; timestamp: number } | null;
 	layoutCache: Map<string, { data: CarriageLayoutRes; timestamp: number }>;
 	consistCache: Map<string, { data: CarriageLayoutRes; timestamp: number }>;
+	consistInFlight: Map<string, Promise<CarriageLayoutRes | null>>;
 	tripsData: Record<string, { from: string; to: string; stations: { station: string; code: string }[] }> | null;
 };
 
 function getState(ctx: CacheContext): ViaConsistState {
 	return getPluginState(ctx, "ca-via:consist", () => ({
-		cachedToken: null, cachedBooking: null, layoutCache: new Map(), consistCache: new Map(), tripsData: null,
+		cachedToken: null, cachedBooking: null, layoutCache: new Map(), consistCache: new Map(), consistInFlight: new Map(), tripsData: null,
 	}));
 }
 
@@ -143,9 +174,10 @@ async function getToken(state: ViaConsistState): Promise<string> {
 		},
 		body: '{"grant_type":"https://com.sqills.s3.oauth.public","code":"B2C_WEB_BOOKING"}',
 		method: "POST",
+		signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
 	});
 
-	if (!res.ok) throw new Error(`Failed to get VIA token: ${res.statusText}`);
+	if (!res.ok) throw new Error(`Failed to get VIA token: HTTP ${res.status}`);
 	const data: TokenRes = await res.json();
 	state.cachedToken = {
 		token: data.access_token,
@@ -155,9 +187,9 @@ async function getToken(state: ViaConsistState): Promise<string> {
 }
 
 async function getDummySegment(token: string): Promise<any> {
-	let date = new Date();
+	const date = new Date();
 	date.setDate(date.getDate() + 1);
-	let res = await fetch("https://api.reservia.viarail.ca/orientation/journey", {
+	const res = await fetch("https://api.reservia.viarail.ca/orientation/journey", {
 		headers: {
 			accept: "application/json, text/plain, */*",
 			"accept-language": "en-CA",
@@ -188,9 +220,13 @@ async function getDummySegment(token: string): Promise<any> {
 			],
 		}),
 		method: "POST",
+		signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
 	});
-	let json = await res.json();
-	let leg = json.data.offer.travels[0].routes[0].legs[0];
+	if (!res.ok) throw new Error(`Failed to find a VIA booking segment: HTTP ${res.status}`);
+	const json = await res.json();
+	const selected = selectViaBookingFare(json);
+	if (!selected) throw new Error("VIA orientation returned no bookable fare");
+	const { leg, tariffCode } = selected;
 	return {
 		origin: "TRTO",
 		destination: "OTTW",
@@ -198,7 +234,7 @@ async function getDummySegment(token: string): Promise<any> {
 		start_validity_date: leg.service_schedule_date.slice(0, 10),
 		service_name: leg.service_name,
 		service_identifier: leg.service_identifier,
-		items: [{ tariff_code: "ESC", passenger_id: "passenger_1" }],
+		items: [{ tariff_code: tariffCode, passenger_id: "passenger_1" }],
 	};
 }
 
@@ -224,6 +260,7 @@ async function getBooking(token: string, state: ViaConsistState): Promise<any> {
 			],
 		}),
 		method: "POST",
+		signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
 	});
 
 	if (!res.ok) {
@@ -232,7 +269,7 @@ async function getBooking(token: string, state: ViaConsistState): Promise<any> {
 			module: "VIA",
 			function: "getBooking",
 		});
-		throw new Error(`Failed to create VIA booking: ${res.statusText}`);
+		throw new Error(`Failed to create VIA booking: HTTP ${res.status}`);
 	}
 
 	const data = await res.json();
@@ -320,6 +357,7 @@ export async function getCarriageLayout(
 			product_code: "ESC",
 		}),
 		method: "POST",
+		signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
 	});
 
 	if (!res.ok) {
@@ -358,6 +396,7 @@ export async function getCarriageLayout(
 				product_code: "ESC",
 			}),
 			method: "POST",
+			signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
 		});
 
 		if (!res.ok) {
@@ -376,13 +415,27 @@ export async function getCarriageLayout(
  * Matches trip trip_number to tripNumber.
  */
 export async function getViaConsist(instance_id: string, ctx: CacheContext): Promise<CarriageLayoutRes | null> {
-	try {
-		const state = getState(ctx);
-		const cached = state.consistCache.get(instance_id);
-		if (cached && cached.timestamp > Date.now() - CONSIST_CACHE_MS) {
-			return cached.data;
-		}
+	const state = getState(ctx);
+	const cached = state.consistCache.get(instance_id);
+	if (cached && cached.timestamp > Date.now() - CONSIST_CACHE_MS) return cached.data;
+	const inFlight = state.consistInFlight.get(instance_id);
+	if (inFlight) return inFlight;
 
+	const request = loadViaConsist(instance_id, ctx, state);
+	state.consistInFlight.set(instance_id, request);
+	try {
+		return await request;
+	} finally {
+		state.consistInFlight.delete(instance_id);
+	}
+}
+
+async function loadViaConsist(
+	instance_id: string,
+	ctx: CacheContext,
+	state: ViaConsistState,
+): Promise<CarriageLayoutRes | null> {
+	try {
 		const instance = getAugmentedTripInstance(ctx, instance_id);
 		if (!instance) {
 			logger.warn(`Instance ${instance_id} not found.`, { module: "VIA", function: "getViaConsist" });

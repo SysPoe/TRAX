@@ -38,6 +38,28 @@ import {
 	parseCisStationBoard,
 	viaTrainKey,
 } from "../dist/region-specific/CA/VIA/station-board.js";
+import { selectViaBookingFare } from "../dist/region-specific/CA/VIA/consist.js";
+
+assert.deepEqual(
+	selectViaBookingFare({
+		data: {
+			offer: {
+				travels: [{ routes: [{
+					legs: [{ service_schedule_date: "2026-08-16T00:00:00-0400", service_name: "VIA50", service_identifier: "service-50" }],
+					bundles: [{ items: [{
+						seat_selection_status: "SEAT_SELECTION_AVAILABLE",
+						passenger_fares: [{ passenger_id: "passenger_1", tariff_code: "ECOPLUS" }],
+					}] }],
+				}] }],
+			},
+		},
+	}),
+	{
+		leg: { service_schedule_date: "2026-08-16T00:00:00-0400", service_name: "VIA50", service_identifier: "service-50" },
+		tariffCode: "ECOPLUS",
+	},
+);
+assert.equal(selectViaBookingFare({ data: { offer: { travels: [{ routes: [] }] } } }), null);
 
 const gthaWithFallbacks = createCaGthaNetwork(["primary", "secondary", "primary"]);
 const goVehicles = gthaWithFallbacks.feeds
