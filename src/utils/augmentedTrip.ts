@@ -4,7 +4,7 @@ import { AugmentedStopTime, augmentStopTimes } from "./augmentedStopTime.js";
 import * as cache from "../cache/index.js";
 import { getServiceCapacity, ServiceCapacity } from "./serviceCapacity.js";
 import { ExpressInfo, findExpress } from "./SRT.js";
-import { getFeedTimeZone } from "../config.js";
+import { canonicalStationIdentity, getFeedTimeZone } from "../config.js";
 import { getToday } from "./time.js";
 import { encodeTripInstanceId, entityKey } from "../identity.js";
 
@@ -138,7 +138,9 @@ export function augmentTrip(
 	for (let i = 0; i < rawStopTimes.length; i++) {
 		const cached = stopsRec.get(entityKey({ feedId: rawStopTimes[i].feed_id, localId: rawStopTimes[i].stop_id }));
 		const localStopId = cached?.parent_stop_id ?? rawStopTimes[i].stop_id;
-		parentStops[i] = entityKey({ feedId: rawStopTimes[i].feed_id, localId: localStopId });
+		parentStops[i] = entityKey(
+			canonicalStationIdentity(ctx.config, { feedId: rawStopTimes[i].feed_id, localId: localStopId }),
+		);
 	}
 	ctx.augmented.timer.stop("augmentTrip:getParentStops");
 

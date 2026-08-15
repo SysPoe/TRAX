@@ -23,6 +23,7 @@ import {
 import { AugmentedStop } from "./utils/augmentedStop.js";
 import {
 	getFeedTimeZone,
+	getPlaceForStation,
 	type NetworkDefinition,
 	type RuntimeOptions,
 	type TraxConfig,
@@ -382,6 +383,10 @@ export class TRAX {
 			...place,
 			members: place.members.map((member) => ({ ...member })),
 		}));
+	public getPlaceForStation = (station: QualifiedEntityId) => {
+		const place = getPlaceForStation(this.config, station);
+		return place ? { ...place, members: place.members.map((member) => ({ ...member })) } : null;
+	};
 	public getAgencies = () => this.gtfs?.getAgencies() ?? [];
 	public getSourceHealth = (): SourceHealth[] => Array.from(this.sourceHealth.values(), (source) => ({ ...source }));
 	public getConsistDetails = async (instanceId: string): Promise<VehicleFormation | null> => {
@@ -524,6 +529,7 @@ export type {
 	VehicleFormation,
 	VehicleFormationMetadata,
 	VehicleFormationUnit,
+	VehicleDiagramKind,
 	VehicleInfo,
 } from "./utils/vehicleModel.js";
 export type { AugmentedStopTime, BoardingLocation, BoardingLocationKind } from "./utils/augmentedStopTime.js";

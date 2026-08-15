@@ -13,8 +13,27 @@ export type VehicleInfo = {
 };
 
 /** Provider-neutral detail for one ordered unit in a vehicle formation. */
+export type VehicleDiagramKind =
+	| "locomotive"
+	| "cab"
+	| "bilevel"
+	| "accessible"
+	| "motor"
+	| "trailer"
+	| "dmu"
+	| "coach"
+	| "baggage"
+	| "diner"
+	| "dome"
+	| "sleeper"
+	| "service"
+	| "crew"
+	| "transition";
+
 export type VehicleFormationUnit = {
-	id: string;
+	/** Null when a provider reports the car count but not every fleet number. */
+	id: string | null;
+	diagramKind: VehicleDiagramKind;
 	type: string | null;
 	manufacturer: string | null;
 	model: string | null;
@@ -73,6 +92,7 @@ export function createVehicleFormation(
 			? providerUnits.map((unit) => ({ ...unit }))
 			: (trip.consist ?? []).map((id): VehicleFormationUnit => ({
 					id,
+					diagramKind: "coach",
 					type: null,
 					manufacturer: null,
 					model: null,

@@ -41,6 +41,26 @@ export const AU_SEQ_NETWORK: NetworkDefinition = {
 
 export type AuVicVlineNetworkOptions = VLinePluginOptions & { gtfsRtKey?: string };
 
+const SHARED_VICTORIA_RAIL_STATIONS = [
+	["southern-cross", "Southern Cross Railway Station", "vic:rail:SSS"],
+	["berwick", "Berwick Railway Station", "vic:rail:BEW"],
+	["broadmeadows", "Broadmeadows Railway Station", "vic:rail:BMS"],
+	["caulfield", "Caulfield Railway Station", "vic:rail:CFD"],
+	["clayton", "Clayton Railway Station", "vic:rail:CLA"],
+	["craigieburn", "Craigieburn Railway Station", "vic:rail:CGB"],
+	["dandenong", "Dandenong Railway Station", "vic:rail:DNG"],
+	["east-pakenham", "East Pakenham Railway Station", "vic:rail:EPH"],
+	["essendon", "Essendon Railway Station", "vic:rail:ESD"],
+	["flinders-street", "Flinders Street Railway Station", "vic:rail:FSS"],
+	["footscray", "Footscray Railway Station", "vic:rail:FSY"],
+	["north-melbourne", "North Melbourne Railway Station", "vic:rail:NME"],
+	["pakenham", "Pakenham Railway Station", "vic:rail:PKM"],
+	["richmond", "Richmond Railway Station", "vic:rail:RMD"],
+	["sunbury", "Sunbury Railway Station", "vic:rail:SUY"],
+	["sunshine", "Sunshine Railway Station", "vic:rail:SUN"],
+	["watergardens", "Watergardens Railway Station", "vic:rail:WGS"],
+] as const;
+
 export function createAuVicVlineNetwork(options: AuVicVlineNetworkOptions = {}): NetworkDefinition {
 	const key = options.gtfsRtKey?.trim();
 	const realtime = (feedId: "vic-vline" | "vic-metro", operator: "vline" | "metro", kind: "trip-updates" | "vehicles", endpoint: string) => ({
@@ -80,14 +100,14 @@ export function createAuVicVlineNetwork(options: AuVicVlineNetworkOptions = {}):
 		],
 		modes: ["rail"],
 		plugins: [createVLinePlugin(options), ptvMetroPlugin],
-		places: [{
-			id: "southern-cross",
-			name: "Southern Cross Railway Station",
+		places: SHARED_VICTORIA_RAIL_STATIONS.map(([id, name, localId]) => ({
+			id,
+			name,
 			members: [
-				{ feedId: "vic-vline", localId: "vic:rail:SSS" },
-				{ feedId: "vic-metro", localId: "vic:rail:SSS" },
+				{ feedId: "vic-vline", localId },
+				{ feedId: "vic-metro", localId },
 			],
-		}],
+		})),
 	};
 }
 

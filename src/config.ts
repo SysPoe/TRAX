@@ -1,6 +1,7 @@
 import type { ProgressInfo, QualifiedEntityId, Stop } from "qdf-gtfs";
 import logger from "./utils/logger.js";
 import type { TransitPlugin } from "./plugins/types.js";
+import { entityKey } from "./identity.js";
 
 export interface FeedSource {
 	url: string;
@@ -73,6 +74,8 @@ export interface TraxConfig {
 	requestTimeoutMs: number;
 	/** Populated and validated from agency_timezone after the static feed loads. */
 	feedTimeZones: Map<string, string>;
+	/** O(1) lookup for the cross-feed place containing a station member. */
+	placeByMember: Map<string, PlaceDefinition>;
 }
 
 export function resolveConfig(network: NetworkDefinition, options: RuntimeOptions = {}): TraxConfig {
@@ -96,6 +99,7 @@ export function resolveConfig(network: NetworkDefinition, options: RuntimeOption
 		}
 	}
 	const placeIds = new Set<string>();
+	const placeByMember = new Map<string, PlaceDefinition>();
 	for (const place of network.places ?? []) {
 		if (!place.id || !place.name || place.members.length === 0)
 			throw new Error(`Network '${network.id}' contains an invalid place`);
@@ -104,6 +108,13 @@ export function resolveConfig(network: NetworkDefinition, options: RuntimeOption
 		for (const member of place.members) {
 			if (!feedIds.has(member.feedId) || !member.localId)
 				throw new Error(`Place '${place.id}' contains invalid member '${member.feedId}:${member.localId}'`);
+			const memberKey = entityKey(member);
+			const existing = placeByMember.get(memberKey);
+			if (existing)
+				throw new Error(
+					`Station member '${member.feedId}:${member.localId}' belongs to both places '${existing.id}' and '${place.id}'`,
+				);
+			placeByMember.set(memberKey, place);
 		}
 	}
 
@@ -120,7 +131,17 @@ export function resolveConfig(network: NetworkDefinition, options: RuntimeOption
 		cacheMaxAgeMs: options.cacheMaxAgeMs ?? 24 * 60 * 60 * 1000,
 		requestTimeoutMs: options.requestTimeoutMs ?? 30_000,
 		feedTimeZones: new Map(),
+		placeByMember,
 	};
+}
+
+export function getPlaceForStation(config: TraxConfig, station: QualifiedEntityId): PlaceDefinition | null {
+	return config.placeByMember.get(entityKey(station)) ?? null;
+}
+
+/** Use one physical graph node for equivalent station records from different feeds. */
+export function canonicalStationIdentity(config: TraxConfig, station: QualifiedEntityId): QualifiedEntityId {
+	return getPlaceForStation(config, station)?.members[0] ?? station;
 }
 
 export function hasPlugin(config: TraxConfig, pluginId: string, feedId?: string): boolean {

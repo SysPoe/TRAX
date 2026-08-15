@@ -81,6 +81,16 @@ function testStaticFingerprintTracksQDFCacheFile() {
 		const second = getStaticFeedFingerprint(config);
 		assert.ok(second);
 		assert.notEqual(second, first);
+
+		const withPlace = getStaticFeedFingerprint({
+			...config,
+			network: {
+				...config.network,
+				places: [{ id: "shared", name: "Shared", members: [{ feedId: "test", localId: "A" }] }],
+			},
+		});
+		assert.ok(withPlace);
+		assert.notEqual(withPlace, second);
 	} finally {
 		fs.rmSync(cacheDir, { recursive: true, force: true });
 	}

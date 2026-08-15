@@ -2,7 +2,7 @@ import logger from "./logger.js";
 import { cacheFileExists, deleteCacheFile, loadCacheFile, writeCacheFile } from "./fs.js";
 import * as cache from "../cache/index.js";
 import * as qdf from "qdf-gtfs";
-import { type TraxConfig } from "../config.js";
+import { canonicalStationIdentity, type TraxConfig } from "../config.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -42,7 +42,7 @@ interface NetworkData {
 
 const CACHE_FILE = "network_topology.json";
 const MAX_CACHE_AGE_DAYS = 7;
-const TOPOLOGY_CACHE_VERSION = 2;
+const TOPOLOGY_CACHE_VERSION = 3;
 
 function loadNetworkData(ctx: cache.CacheContext): NetworkData | null {
 	const cacheDir = ctx.config.cacheDir;
@@ -66,8 +66,8 @@ function loadNetworkData(ctx: cache.CacheContext): NetworkData | null {
 	return null;
 }
 
-function getPatternSignature(stopTimes: qdf.StopTime[]): string {
-	return stopTimes.map((st) => entityKey({ feedId: st.feed_id, localId: st.stop_id })).join("|");
+function canonicalStationKey(config: TraxConfig, station: QualifiedEntityId): string {
+	return entityKey(canonicalStationIdentity(config, station));
 }
 
 function finiteTime(value: number | null | undefined): number | null {
@@ -139,18 +139,19 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 
 	railTrips.forEach((trip) => {
 		const stopTimes = gtfs.getStopTimes({ feed_id: trip.feed_id, trip_id: trip.trip_id });
-		const signature = getPatternSignature(stopTimes);
-
-		if (seenSignatures.has(signature)) return;
-		seenSignatures.add(signature);
-
 		const edgeTimes = getPatternEdgeTimes(stopTimes);
 		const stops = stopTimes.map((st: qdf.StopTime, i: number) => {
 			const stop = gtfs.getStops({ feed_id: st.feed_id, stop_id: st.stop_id })[0];
-			const id = entityKey({ feedId: st.feed_id, localId: stop ? (stop.parent_station ?? stop.stop_id) : st.stop_id });
+			const id = canonicalStationKey(ctx.config, {
+				feedId: st.feed_id,
+				localId: stop ? (stop.parent_station ?? stop.stop_id) : st.stop_id,
+			});
 
 			return { id, timeFromPrev: edgeTimes[i] };
 		});
+		const signature = stops.map((stop) => stop.id).join("|");
+		if (seenSignatures.has(signature)) return;
+		seenSignatures.add(signature);
 
 		uniquePatterns.push(stops);
 	});
@@ -306,9 +307,10 @@ export function findExpress(givenStops: string[], ctx: cache.CacheContext): Expr
 	timer.start("SRT:findExpress");
 	const result: ExpressInfo[] = [];
 
-	for (let i = 0; i < givenStops.length - 1; i++) {
-		const startStop = givenStops[i];
-		const endStop = givenStops[i + 1];
+	const canonicalStops = givenStops.map((stop) => canonicalStationKey(ctx.config, parseEntityKey(stop)));
+	for (let i = 0; i < canonicalStops.length - 1; i++) {
+		const startStop = canonicalStops[i];
+		const endStop = canonicalStops[i + 1];
 
 		const physicalPath = findPathBFS(startStop, endStop, ctx);
 
@@ -346,7 +348,7 @@ export function findExpressString(
 	ctx: cache.CacheContext,
 	stop: QualifiedEntityId | null = null,
 ): string {
-	const stop_id = stop ? entityKey(stop) : null;
+	const stop_id = stop ? canonicalStationKey(ctx.config, stop) : null;
 	if (stop_id != null)
 		expressData = expressData.slice(
 			expressData.findIndex((v) => v.from === stop_id || v.skipping?.includes(stop_id) || v.to === stop_id),
@@ -399,7 +401,7 @@ export function findExpressString(
 							: `${stoppingAtNames.slice(0, -1).join(", ")}, and ${stoppingAtNames[stoppingAtNames.length - 1]}`;
 
 				return stop_id !== null &&
-					(run.from === entityKey({ feedId: stop!.feedId, localId: cache.getRawStops(ctx, { feed_id: stop!.feedId, stop_id: stop!.localId })[0]?.parent_station ?? stop!.localId }) || run.from == stop_id)
+					(run.from === canonicalStationKey(ctx.config, { feedId: stop!.feedId, localId: cache.getRawStops(ctx, { feed_id: stop!.feedId, stop_id: stop!.localId })[0]?.parent_station ?? stop!.localId }) || run.from == stop_id)
 					? run.stoppingAt.length > 0
 						? `to ${endName}, stopping only at ${formattedStoppingAtNames}`
 						: `to ${endName}`
@@ -484,7 +486,9 @@ function getStopOrParentId(stopTime: qdf.StopTime, ctx: cache.CacheContext): str
 	const s =
 		ctx.augmented.stopsRec.get(key) ??
 		cache.getRawStops(ctx, { feed_id: stopTime.feed_id, stop_id: stopTime.stop_id })?.[0];
-	return s ? entityKey({ feedId: s.feed_id, localId: s.parent_station ?? s.stop_id }) : undefined;
+	return s
+		? canonicalStationKey(ctx.config, { feedId: s.feed_id, localId: s.parent_station ?? s.stop_id })
+		: undefined;
 }
 
 /** emu weights for wasmInterpolateTimes (length = passing legs + 1); only set on synthetic passing rows. */
@@ -600,6 +604,7 @@ export function getStaticFeedFingerprint(config: TraxConfig): string | null {
 	hash.update(config.network.id);
 	hash.update(JSON.stringify(config.mergeStops));
 	hash.update(JSON.stringify(config.updateStopActions));
+	hash.update(JSON.stringify(config.network.places ?? []));
 
 	for (const feed of config.network.feeds) {
 		const feedConfig = feed.staticSource;

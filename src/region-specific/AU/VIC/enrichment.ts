@@ -6,6 +6,7 @@ import {
 	createVehicleFormation,
 	type VehicleBookingAvailability,
 	type VehicleFormation,
+	type VehicleFormationUnit,
 	type VehicleInfo,
 } from "../../../utils/vehicleModel.js";
 import { getVehiclePositions } from "../../../cache/gtfsReads.js";
@@ -785,6 +786,48 @@ async function cachedBookingAvailability(
 	finally { state.bookingInFlight.delete(key); }
 }
 
+function vlineDiagramKind(subtype: string | null | undefined): VehicleFormationUnit["diagramKind"] {
+	const model = subtype?.trim().toLowerCase() ?? "";
+	if (model.includes("vlocity") || model.includes("sprinter")) return "dmu";
+	if (model.includes("locomotive")) return "locomotive";
+	return "coach";
+}
+
+/** Expand reported type/count into every physical car, retaining only identifiers the provider actually supplies. */
+export function vlineFormationUnits(
+	trip: AugmentedTripInstance,
+	details: VLineTripDetails,
+): VehicleFormationUnit[] {
+	const knownConsist = details.fullConsist?.value?.filter(Boolean) ?? [];
+	const carCount = Math.max(knownConsist.length, trip.passenger_cars ?? 0, details.leadingUnit ? 1 : 0);
+	if (carCount === 0) return [];
+	const model = vlineVehicleModel(details.subtype?.value);
+	const kind = vlineDiagramKind(model);
+	return Array.from({ length: carCount }, (_, index) => ({
+		id: knownConsist[index] ?? (knownConsist.length === 0 && index === 0 ? details.leadingUnit?.value ?? null : null),
+		diagramKind: kind,
+		type: model ? `${model} car` : "Passenger car",
+		manufacturer: null,
+		model,
+		seats: null,
+		bicycles: null,
+		accessible: null,
+		wifi: null,
+		powerOutlets: null,
+		accentColor: "#6b2c91",
+	}));
+}
+
+function journeyServiceSupportsBooking(service: VLineJourneyPlannerService | null): boolean {
+	return Boolean(
+		service &&
+			(service.canBookInJourneyPlanner ||
+				service.reservationAvailable ||
+				service.reservationRequired ||
+				service.reservedCarriages.length > 0),
+	);
+}
+
 /** Resolve the richer Journey Planner record only when a consumer asks for this trip's formation. */
 export async function getVLineVehicleFormation(
 	trip: AugmentedTripInstance,
@@ -814,7 +857,7 @@ export async function getVLineVehicleFormation(
 		}
 	}
 
-	if (origin && destination && scheduledDepartureTime) {
+	if (origin && destination && scheduledDepartureTime && journeyServiceSupportsBooking(service)) {
 		try {
 			const booking = await cachedBookingAvailability(
 				ctx, trip, origin, destination, scheduledDepartureTime, options.requestTimeoutMs,
@@ -848,11 +891,13 @@ export async function getVLineVehicleFormation(
 		source: "V/Line Journey Planner",
 		observedAt: details.bookingAvailability.observedAt,
 	} : null;
-	const observed = details.subtype ?? details.passengerCars ?? details.isLiveConsistInfo;
-	return createVehicleFormation(trip, null, {
+	const observed = details.fullConsist ?? details.subtype ?? details.passengerCars;
+	const units = vlineFormationUnits(trip, details);
+	return createVehicleFormation(trip, units, {
 		accessibleSpaces: details.accessibleSpaces?.value ?? null,
 		bicycleSpaces: details.bicycleSpaces?.value ?? null,
-		isLive: details.isLiveConsistInfo?.value ?? null,
+		// "IsLiveConsistInfo" can accompany type/count only. Do not describe that as a live formation.
+		isLive: details.fullConsist?.value?.length ? (details.isLiveConsistInfo?.value ?? null) : null,
 		source: observed ? "V/Line Journey Planner" : null,
 		observedAt: observed?.observedAt ?? null,
 		bookingAvailability: booking,

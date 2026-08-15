@@ -37,6 +37,16 @@ export const gthaPlugin: TransitPlugin = {
 				const details = getGTHAVehicleDetails(id);
 				return {
 					id,
+					diagramKind:
+						details?.type === "Locomotive"
+							? "locomotive"
+							: details?.type === "Cab Car"
+								? "cab"
+								: details?.type === "Accessible Coach"
+									? "accessible"
+									: details?.type === "DMU"
+										? "dmu"
+										: "bilevel",
 					type: details?.type ?? null,
 					manufacturer: details?.description.manufacturer ?? null,
 					model: details?.description.model ?? null,

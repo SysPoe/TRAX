@@ -400,6 +400,8 @@ export function augmentStopTimes(
 	for (const stopTime of interpolatedActiveStops) {
 		const seq = stopTime.stop_sequence;
 		const isPassing = Boolean((stopTime as qdf.StopTime & { _passing?: boolean })._passing);
+		// Synthetic topology rows retain the feed that owns the physical station.
+		const stopFeedId = isPassing ? stopTime.feed_id : feedId;
 
 		const prevWholeSeq = Math.floor(currentSequence);
 		const currWholeSeq = Math.floor(seq);
@@ -479,10 +481,10 @@ export function augmentStopTimes(
 		const stopId = stopTime.stop_id;
 		const rtUpdate = isPassing ? undefined : (rtBySeq.get(seq) ?? rtByStopId.get(stopId));
 
-		const scheduledStop = cache.getAugmentedStops(ctx, { feedId, localId: stopId })[0];
+		const scheduledStop = cache.getAugmentedStops(ctx, { feedId: stopFeedId, localId: stopId })[0];
 		const scheduledParentId = scheduledStop?.parent_stop_id ?? scheduledStop?.parent_station ?? null;
 		const scheduledParent = scheduledParentId
-			? cache.getAugmentedStops(ctx, { feedId, localId: scheduledParentId })[0]
+			? cache.getAugmentedStops(ctx, { feedId: stopFeedId, localId: scheduledParentId })[0]
 			: null;
 
 		const schedArr = stopTime.arrival_time;
@@ -640,7 +642,7 @@ export function augmentStopTimes(
 
 		const augmented: AugmentedStopTime = {
 			_stopTime: isPassing ? null : stopTime,
-			feed_id: feedId,
+			feed_id: stopFeedId,
 			trip_id: tripId,
 			passing: isPassing,
 			pickup_type: stopTime.pickup_type,

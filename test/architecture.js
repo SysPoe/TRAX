@@ -22,7 +22,18 @@ import TRAX, {
 	chronosHourlyToken,
 	getChronosRunPattern,
 } from "../dist/index.js";
-import { applyChronosEstimate, matchScsRows } from "../dist/region-specific/AU/VIC/enrichment.js";
+import {
+	applyChronosEstimate,
+	createEmptyVLineDetails,
+	matchScsRows,
+	vlineFormationUnits,
+} from "../dist/region-specific/AU/VIC/enrichment.js";
+import { ptvMetroFormationUnit } from "../dist/region-specific/AU/VIC/ptv-metro.js";
+import {
+	viaCarriageCodeDiagramKind,
+	viaCarriageDiagramKind,
+	viaCarriageTypeLabel,
+} from "../dist/plugins/via.js";
 import {
 	buildVLineRealtimeTripAliases,
 	canonicalVLineRealtimeTripId,
@@ -95,8 +106,27 @@ assert.deepEqual(vlineNoKey.places[0].members, [
 	{ feedId: "vic-vline", localId: "vic:rail:SSS" },
 	{ feedId: "vic-metro", localId: "vic:rail:SSS" },
 ]);
+assert.equal(vlineNoKey.places.length, 17);
+assert.ok(vlineNoKey.places.some((place) => place.id === "watergardens"));
 const vlineWithKey = createAuVicVlineNetwork({ gtfsRtKey: "test-key" });
 assert.deepEqual(vlineWithKey.feeds.flatMap((feed) => feed.realtimeSources).map((source) => source.source.headers.KeyId), ["test-key", "test-key", "test-key", "test-key"]);
+
+const inferredVLineDetails = createEmptyVLineDetails("8761");
+inferredVLineDetails.leadingUnit = { value: "V1292" };
+inferredVLineDetails.subtype = { value: "VLocity" };
+const inferredVLineUnits = vlineFormationUnits({ passenger_cars: 6 }, inferredVLineDetails);
+assert.equal(inferredVLineUnits.length, 6);
+assert.equal(inferredVLineUnits[0].id, "V1292");
+assert.deepEqual(inferredVLineUnits.slice(1).map((unit) => unit.id), [null, null, null, null, null]);
+assert.ok(inferredVLineUnits.every((unit) => unit.diagramKind === "dmu"));
+assert.deepEqual(
+	[ptvMetroFormationUnit("457M"), ptvMetroFormationUnit("1079T")].map((unit) => [unit.type, unit.model, unit.diagramKind]),
+	[["Motor", "Comeng", "motor"], ["Trailer", "Comeng", "trailer"]],
+);
+assert.equal(viaCarriageDiagramKind("Baggage car"), "baggage");
+assert.equal(viaCarriageDiagramKind("Prestige Sleeper"), "sleeper");
+assert.equal(viaCarriageTypeLabel(viaCarriageDiagramKind("SVC")), "Service car");
+assert.equal(viaCarriageCodeDiagramKind("CREW", "VIDE - (BAG, CREW, DINER)"), "crew");
 
 const canonicalVLineTripId = "01-BGO--10-T0-8021";
 const providerVLineTripId = "01-BGO--3-T0-8021";
@@ -396,15 +426,18 @@ function createZip(files) {
 	return Buffer.concat([...localParts, directory, end]);
 }
 
-function feed(name, timezone) {
+function feed(name, timezone, includeIntermediate = false) {
+	const middleStop = includeIntermediate ? `middle,${name} Middle,-27.45,153.05\n` : "";
+	const middleStopTime = includeIntermediate ? "shared,25:45:00,25:45:00,middle,2,0,0\n" : "";
+	const endSequence = includeIntermediate ? 3 : 2;
 	return createZip({
 		"agency.txt": `agency_id,agency_name,agency_url,agency_timezone\nagency,${name},https://example.test,${timezone}\n`,
 		"routes.txt": "route_id,agency_id,route_short_name,route_long_name,route_type\nshared,agency,R,Shared Rail,2\n",
-		"stops.txt": `stop_id,stop_name,stop_lat,stop_lon\nshared,${name} Station,-27.4,153.0\nend,${name} End,-27.5,153.1\n`,
+		"stops.txt": `stop_id,stop_name,stop_lat,stop_lon\nshared,${name} Station,-27.4,153.0\n${middleStop}end,${name} End,-27.5,153.1\n`,
 		"trips.txt":
 			"route_id,service_id,trip_id,trip_headsign,direction_id,shape_id\nshared,shared,shared,End,0,shared\n",
 		"stop_times.txt":
-			"trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type\nshared,25:30:00,25:30:00,shared,1,0,1\nshared,26:00:00,26:00:00,end,2,1,0\n",
+			`trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type\nshared,25:30:00,25:30:00,shared,1,0,1\n${middleStopTime}shared,26:00:00,26:00:00,end,${endSequence},1,0\n`,
 		"calendar.txt":
 			"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nshared,1,1,1,1,1,1,1,20260101,20261231\n",
 		"shapes.txt":
@@ -412,7 +445,7 @@ function feed(name, timezone) {
 	});
 }
 
-const feeds = { "/a.zip": feed("Alpha", "Australia/Brisbane"), "/b.zip": feed("Beta", "America/Toronto") };
+const feeds = { "/a.zip": feed("Alpha", "Australia/Brisbane"), "/b.zip": feed("Beta", "America/Toronto", true) };
 const server = http.createServer((request, response) => {
 	const body = feeds[request.url];
 	if (!body) {
@@ -453,8 +486,24 @@ try {
 					{ feedId: "beta", localId: "shared" },
 				],
 			},
+			{
+				id: "end-place",
+				name: "End Place",
+				members: [
+					{ feedId: "alpha", localId: "end" },
+					{ feedId: "beta", localId: "end" },
+				],
+			},
 		],
 	};
+	assert.throws(
+		() => new TRAX({
+			...definition,
+			id: "duplicate-place-member",
+			places: [...definition.places, { id: "duplicate", name: "Duplicate", members: [{ feedId: "alpha", localId: "shared" }] }],
+		}),
+		/belongs to both places/,
+	);
 	const runtime = new TRAX(definition, { cacheDir: ".TRAXCACHE/test-synthetic" });
 	await runtime.loadGTFS(false, false);
 	const failingSupplemental = new TRAX({
@@ -484,6 +533,7 @@ try {
 		{ feedId: "alpha", localId: "shared" },
 		{ feedId: "beta", localId: "shared" },
 	]);
+	assert.equal(runtime.getPlaceForStation({ feedId: "beta", localId: "shared" }).id, "shared-place");
 	assert.ok(
 		runtime
 			.getSourceHealth()
@@ -497,8 +547,11 @@ try {
 	assert.equal(alphaTrip.instances[0].stopTimes[0].scheduled_departure_time, 91_800);
 	assert.equal(alphaTrip.instances[0].stopTimes[0].pickup_type, 0);
 	assert.equal(alphaTrip.instances[0].stopTimes[0].drop_off_type, 1);
-	assert.equal(alphaTrip.instances[0].stopTimes[1].pickup_type, 1);
-	assert.equal(alphaTrip.instances[0].stopTimes[1].drop_off_type, 0);
+	assert.equal(alphaTrip.instances[0].stopTimes.at(-1).pickup_type, 1);
+	assert.equal(alphaTrip.instances[0].stopTimes.at(-1).drop_off_type, 0);
+	const crossFeedPassingStop = alphaTrip.instances[0].stopTimes.find((stop) => stop.passing);
+	assert.equal(crossFeedPassingStop?.feed_id, "beta");
+	assert.equal(crossFeedPassingStop?.scheduled_stop_id, "middle");
 	assert.equal(runtime.metadata.feeds.find((value) => value.id === "beta").timeZone, "America/Toronto");
 
 	const eagerInstanceCount = alphaTrip.instances.length;
