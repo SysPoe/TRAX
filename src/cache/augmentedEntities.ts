@@ -378,6 +378,24 @@ function enrichAugmentedTripInstance(
 	return addVehicleModel(addSCI(inst, ctx, config), ctx, config);
 }
 
+/**
+ * Realtime updates can replace a scheduled instance ID while a client still
+ * has the old URL open. Only follow that replacement when the trip/date has a
+ * single instance, so frequency services cannot be silently misidentified.
+ */
+export function findUniqueTripInstanceForServiceDate(
+	instances: readonly AugmentedTripInstance[],
+	serviceDate: string,
+): AugmentedTripInstance | null {
+	let match: AugmentedTripInstance | null = null;
+	for (const instance of instances) {
+		if (instance.serviceDate !== serviceDate) continue;
+		if (match) return null;
+		match = instance;
+	}
+	return match;
+}
+
 export function getAugmentedTrips(ctx: CacheContext, trip?: QualifiedEntityId): AugmentedTrip[] {
 	const context = ctx;
 	const { augmented } = context;
@@ -419,11 +437,16 @@ export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string)
 				ctx.augmented.instancesRec.set(instance_id, inst);
 				return enrichAugmentedTripInstance(context, context.config, inst);
 			}
+			const replacement = findUniqueTripInstanceForServiceDate(trip.instances, identity.serviceDate);
+			if (replacement) return enrichAugmentedTripInstance(context, context.config, replacement);
 		}
 
 		// Fallback to slow way if not in record (getAugmentedTrips already runs addSC + addVehicleModel per instance)
-		let res = getAugmentedTrips(ctx, tripRef)[0]?.instances.find((v) => v.instance_id === instance_id);
-		return res ?? null;
+		const instances = getAugmentedTrips(ctx, tripRef)[0]?.instances ?? [];
+		return (
+			instances.find((v) => v.instance_id === instance_id) ??
+			findUniqueTripInstanceForServiceDate(instances, identity.serviceDate)
+		);
 	} catch {
 		return null;
 	}

@@ -42,6 +42,7 @@ import {
 	canonicalizeRealtimeTripUpdate,
 	canonicalizeRealtimeVehiclePosition,
 } from "../dist/cache/realtime.js";
+import { findUniqueTripInstanceForServiceDate } from "../dist/cache/augmentedEntities.js";
 import { TripScheduleRelationship } from "qdf-gtfs";
 import {
 	buildCisBoardingAssignments,
@@ -564,6 +565,13 @@ try {
 	for (let day = 16; day <= 25; day++) runtime.getTripIdsByServiceDate(`202612${day}`);
 	assert.equal(alphaTrip.instances.some((instance) => instance.serviceDate === "20261215"), false);
 	assert.equal(runtime.getAugmentedTripInstance(lazyAlphaId)?.instance_id, lazyAlphaId);
+	const replacement = { ...lazyAlpha, instance_id: "replacement" };
+	assert.equal(findUniqueTripInstanceForServiceDate([replacement], lazyAlpha.serviceDate), replacement);
+	assert.equal(findUniqueTripInstanceForServiceDate([replacement], "20261216"), null);
+	assert.equal(
+		findUniqueTripInstanceForServiceDate([replacement, { ...replacement, instance_id: "ambiguous" }], lazyAlpha.serviceDate),
+		null,
+	);
 
 	const publicId = encodePublicEntityId({
 		networkId: "synthetic",
