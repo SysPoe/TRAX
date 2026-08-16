@@ -111,10 +111,9 @@ export function createAuVicVlineNetwork(options: AuVicVlineNetworkOptions = {}):
 	};
 }
 
-export function createCaGthaNetwork(apiKeys: string | readonly string[]): NetworkDefinition {
+export function createCaGthaNetwork(apiKeys: string | readonly string[] = []): NetworkDefinition {
 	const rawKeys = typeof apiKeys === "string" ? [apiKeys] : [...apiKeys];
 	const keys = [...new Set(rawKeys.map((key) => key.trim()).filter(Boolean))];
-	if (keys.length === 0) throw new Error("At least one Metrolinx API key is required");
 	const source = (id: string, targetFeedId: string, kind: "alerts" | "trip-updates" | "vehicles", url: string) => ({
 		id,
 		targetFeedId,
@@ -135,14 +134,14 @@ export function createCaGthaNetwork(apiKeys: string | readonly string[]): Networ
 	});
 	return {
 		id: "ca-gtha",
-		name: "Greater Toronto and Hamilton Area",
+		name: "Canada Rail",
 		feeds: [
 			{
 				id: "up",
 				staticSource: {
 					url: "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/UP-GTFS.zip",
 				},
-				realtimeSources: [
+				realtimeSources: keys.length > 0 ? [
 					source(
 						"up-alerts",
 						"up",
@@ -161,14 +160,14 @@ export function createCaGthaNetwork(apiKeys: string | readonly string[]): Networ
 						"vehicles",
 						"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/VehiclePosition",
 					),
-				],
+				] : [],
 			},
 			{
 				id: "go",
 				staticSource: {
 					url: "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/GO-GTFS.zip",
 				},
-				realtimeSources: [
+				realtimeSources: keys.length > 0 ? [
 					source(
 						"go-alerts",
 						"go",
@@ -187,7 +186,7 @@ export function createCaGthaNetwork(apiKeys: string | readonly string[]): Networ
 						"vehicles",
 						"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/VehiclePosition",
 					),
-				],
+				] : [],
 			},
 			{
 				id: "via",

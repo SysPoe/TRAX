@@ -74,6 +74,10 @@ assert.deepEqual(
 assert.equal(selectViaBookingFare({ data: { offer: { travels: [{ routes: [] }] } } }), null);
 
 const gthaWithFallbacks = createCaGthaNetwork(["primary", "secondary", "primary"]);
+const gthaWithoutKeys = createCaGthaNetwork();
+assert.equal(gthaWithoutKeys.name, "Canada Rail");
+assert.deepEqual(gthaWithoutKeys.feeds.find((feed) => feed.id === "go").realtimeSources, []);
+assert.ok(gthaWithoutKeys.feeds.some((feed) => feed.id === "via"));
 const goVehicles = gthaWithFallbacks.feeds
 	.find((feed) => feed.id === "go")
 	.realtimeSources.find((source) => source.id === "go-vehicles");
