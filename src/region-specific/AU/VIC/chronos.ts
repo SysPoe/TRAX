@@ -122,11 +122,12 @@ async function chronosRequest<T>(
 	init: RequestInit = {},
 	timeoutMs = 15_000,
 ): Promise<T> {
-	const response = await fetch(new URL(path, baseUrl), {
+	const url = new URL(path, baseUrl);
+	url.searchParams.set("token", chronosHourlyToken(apiKey));
+	const response = await fetch(url, {
 		...init,
 		signal: AbortSignal.timeout(timeoutMs),
 		headers: {
-			token: chronosHourlyToken(apiKey),
 			accept: "application/json",
 			...init.headers,
 		},

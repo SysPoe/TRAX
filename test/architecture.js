@@ -603,8 +603,10 @@ applyChronosEstimate(estimateTrip, realtimeCall, "2026-08-12T04:55:00Z");
 assert.equal(realtimeCall.actual_departure_time, 53_820);
 
 let patternRequestUrl = null;
+let patternRequestTokenHeader = null;
 const patternServer = http.createServer((request, response) => {
 	patternRequestUrl = new URL(request.url, "http://localhost");
+	patternRequestTokenHeader = request.headers.token ?? null;
 	response.setHeader("content-type", "application/json");
 	response.end(
 		JSON.stringify({
@@ -635,6 +637,8 @@ assert.equal(patternRequestUrl.searchParams.get("expand"), "all");
 assert.equal(patternRequestUrl.searchParams.get("include_skipped_stops"), "true");
 assert.equal(patternRequestUrl.searchParams.get("include_geopath"), "true");
 assert.equal(patternRequestUrl.searchParams.get("include_advertised_interchange"), "true");
+assert.match(patternRequestUrl.searchParams.get("token"), /^[0-9a-f]{40}$/);
+assert.equal(patternRequestTokenHeader, null);
 
 const cisNow = Date.parse("2026-08-11T22:30:00Z");
 const cisCandidates = collectCisStationCandidates(
