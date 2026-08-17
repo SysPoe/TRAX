@@ -3,6 +3,7 @@ import { parse } from "node-html-parser";
 import type {
 	VLineBookingAvailability,
 	VLineJourneyPlannerOptions,
+	VLineJourneyPlannerLocation,
 	VLineJourneyPlannerService,
 } from "./types.js";
 
@@ -28,18 +29,36 @@ function list(element: ReturnType<typeof parse>, tag: string, separator = /[,;|\
 	return text(element, tag)?.split(separator).map((value) => value.trim()).filter(Boolean) ?? [];
 }
 
-function parseService(element: ReturnType<typeof parse>, journeyLeg: boolean): VLineJourneyPlannerService {
+function carriageList(element: ReturnType<typeof parse>, tag: string): string[] {
+	return list(element, tag, /[,;|\s]+/).flatMap((value) => {
+		const range = /^([A-Z])-([A-Z])$/i.exec(value);
+		if (!range) return [value.toUpperCase()];
+		const first = range[1].toUpperCase().charCodeAt(0), last = range[2].toUpperCase().charCodeAt(0);
+		if (last < first) return [value.toUpperCase()];
+		return Array.from({ length: last - first + 1 }, (_, index) => String.fromCharCode(first + index));
+	});
+}
+
+function parseService(
+	element: ReturnType<typeof parse>,
+	journeyLeg: boolean,
+	platformEvent: VLineJourneyPlannerService["platformEvent"],
+): VLineJourneyPlannerService {
 	const direction = text(element, journeyLeg ? "ServiceDirection" : "Direction");
 	return {
+		locationName: text(element, "LocationName"),
 		origin: text(element, "Origin"),
 		destination: text(element, "Destination"),
 		scheduledDepartureTime: text(element, journeyLeg ? "DepartureTime" : "ScheduledDepartureTime") ?? "",
 		scheduledDestinationArrivalTime: text(element, journeyLeg ? "ArrivalTime" : "ScheduledDestinationArrivalTime"),
+		actualArrivalTime: text(element, "ActualArrivalTime"),
+		actualDestinationArrivalTime: text(element, "ActualDestinationArrivalTime"),
 		tdn: text(element, "ServiceIdentifier") ?? "",
 		platform: text(element, "Platform"),
+		platformEvent,
 		direction: direction === "U" || direction?.toLowerCase() === "up" ? "Up"
 			: direction === "D" || direction?.toLowerCase() === "down" ? "Down" : null,
-		consistSubtype: text(element, "ConsistSubType"),
+		consistSubtype: text(element, "ConsistSubType") ?? text(element, "ConsistType"),
 		consistCount: number(element, "ConsistCount"),
 		consistVehicles: list(element, "ConsistVehicles").length ? list(element, "ConsistVehicles") : null,
 		isLiveConsistInfo: boolean(element, "IsLiveConsistInfo"),
@@ -49,7 +68,7 @@ function parseService(element: ReturnType<typeof parse>, journeyLeg: boolean): V
 		bicycleSpaces: number(element, "DesignatedBikeSpaceCount"),
 		reservationAvailable: boolean(element, "ReservationAvailable"),
 		reservationRequired: boolean(element, "ReservationRequired"),
-		reservedCarriages: list(element, "CarList", /[,;|\s]+/),
+		reservedCarriages: carriageList(element, "CarList"),
 		reservedSeatsAvailable: number(element, "EconomyClassSeatsAvailable"),
 		unreservedTicketsAvailable: number(element, "UnreservedSeatsAvailable"),
 		canBookInJourneyPlanner: boolean(element, "CanBookInJourneyPlanner"),
@@ -64,7 +83,15 @@ export function parseVLinePlatformServices(xml: string): VLineJourneyPlannerServ
 	const document = parse(xml.replace(/(<\/?)[a-zA-Z]+:/g, "$1").replace(/\s+[a-zA-Z]+:([\w-]+)=/g, " $1="), { lowerCaseTagName: false });
 	const fault = document.querySelector("fault");
 	if (fault) throw new Error(document.querySelector("reason")?.text.trim() || "V/Line Journey Planner returned a fault");
-	return document.querySelectorAll("platformservice").map((service) => parseService(service, false))
+	return document.querySelectorAll("platformservice").map((service) => parseService(service, false, "departure"))
+		.filter((service) => service.tdn && service.scheduledDepartureTime);
+}
+
+export function parseVLinePlatformArrivals(xml: string): VLineJourneyPlannerService[] {
+	const document = parse(xml.replace(/(<\/?)[a-zA-Z]+:/g, "$1").replace(/\s+[a-zA-Z]+:([\w-]+)=/g, " $1="), { lowerCaseTagName: false });
+	const fault = document.querySelector("fault");
+	if (fault) throw new Error(document.querySelector("reason")?.text.trim() || "V/Line Journey Planner returned a fault");
+	return document.querySelectorAll("platformservice").map((service) => parseService(service, false, "arrival"))
 		.filter((service) => service.tdn && service.scheduledDepartureTime);
 }
 
@@ -72,15 +99,43 @@ export function parseVLineJourneys(xml: string): VLineJourneyPlannerService[] {
 	const document = parse(xml.replace(/(<\/?)[a-zA-Z]+:/g, "$1").replace(/\s+[a-zA-Z]+:([\w-]+)=/g, " $1="), { lowerCaseTagName: false });
 	const fault = document.querySelector("fault");
 	if (fault) throw new Error(document.querySelector("reason")?.text.trim() || "V/Line Journey Planner returned a fault");
-	return document.querySelectorAll("leg").map((leg) => parseService(leg, true))
+	return document.querySelectorAll("leg").map((leg) => parseService(leg, true, null))
 		.filter((service) => service.tdn && service.scheduledDepartureTime);
+}
+
+export function parseVLineLocations(xml: string): VLineJourneyPlannerLocation[] {
+	const document = parse(xml.replace(/(<\/?)[a-zA-Z]+:/g, "$1").replace(/\s+[a-zA-Z]+:([\w-]+)=/g, " $1="), { lowerCaseTagName: false });
+	const fault = document.querySelector("fault");
+	if (fault) throw new Error(document.querySelector("reason")?.text.trim() || "V/Line Journey Planner returned a fault");
+	return document.querySelectorAll("location").flatMap((location) => {
+		const name = text(location, "LocationName");
+		return name ? [{
+			name,
+			stopCode: text(location, "VNetStopCode"),
+			stopType: text(location, "StopType"),
+			line: text(location, "Line"),
+		}] : [];
+	});
+}
+
+export async function getVLineLocations(
+	options: VLineJourneyPlannerOptions,
+	timeoutMs = 15_000,
+): Promise<VLineJourneyPlannerLocation[]> {
+	const method = "JP_GETLOCATIONS";
+	const url = new URL(`${options.baseUrl ?? DEFAULT_BASE}/VLineLocations.svc/web/GetAllLocations`);
+	url.searchParams.set("CallerID", options.callerId);
+	url.searchParams.set("AccessToken", vlineAccessToken(options.callerId, options.applicationSignature, method));
+	const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs), headers: { accept: "application/xml" } });
+	if (!response.ok) throw new Error(`V/Line Journey Planner HTTP ${response.status}`);
+	return parseVLineLocations(await response.text());
 }
 
 export async function getVLinePlatformDepartures(
 	options: VLineJourneyPlannerOptions,
 	location: string,
 	direction = "B",
-	minutes = 180,
+	minutes = 240,
 	timeoutMs = 15_000,
 ): Promise<VLineJourneyPlannerService[]> {
 	const method = "JP_GETPLATFORMDEPARTURES";
@@ -92,7 +147,28 @@ export async function getVLinePlatformDepartures(
 	url.searchParams.set("AccessToken", vlineAccessToken(options.callerId, options.applicationSignature, method));
 	const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs), headers: { accept: "application/xml" } });
 	if (!response.ok) throw new Error(`V/Line Journey Planner HTTP ${response.status}`);
-	return parseVLinePlatformServices(await response.text());
+	return parseVLinePlatformServices(await response.text())
+		.map((service) => ({ ...service, locationName: service.locationName ?? location }));
+}
+
+export async function getVLinePlatformArrivals(
+	options: VLineJourneyPlannerOptions,
+	location: string,
+	direction = "B",
+	minutes = 240,
+	timeoutMs = 15_000,
+): Promise<VLineJourneyPlannerService[]> {
+	const method = "JP_GETPLATFORMARRIVALS";
+	const url = new URL(`${options.baseUrl ?? DEFAULT_BASE}/VLinePlatformServices.svc/web/GetPlatformArrivals`);
+	url.searchParams.set("LocationName", location);
+	url.searchParams.set("Direction", direction);
+	url.searchParams.set("minutes", String(minutes));
+	url.searchParams.set("CallerID", options.callerId);
+	url.searchParams.set("AccessToken", vlineAccessToken(options.callerId, options.applicationSignature, method));
+	const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs), headers: { accept: "application/xml" } });
+	if (!response.ok) throw new Error(`V/Line Journey Planner HTTP ${response.status}`);
+	return parseVLinePlatformArrivals(await response.text())
+		.map((service) => ({ ...service, locationName: service.locationName ?? location }));
 }
 
 export async function getVLineJourneys(
@@ -138,8 +214,13 @@ export function parseVLineBookingPage(
 	while (ancestor && !("classList" in ancestor && ancestor.classList.contains("view-consist-panel"))) ancestor = ancestor.parentNode;
 	const panel = ancestor && "querySelector" in ancestor ? ancestor : null;
 	const carList = control("hdnCarList")?.getAttribute("value")?.trim() ?? "";
-	const reservedCarriages = carList
-		.split(/[,;|\s]+/).map((value) => value.trim()).filter(Boolean);
+	const reservedCarriages = carList.split(/[,;|\s]+/).flatMap((value) => {
+		const range = /^([A-Z])-([A-Z])$/i.exec(value.trim());
+		if (!range) return value.trim() ? [value.trim().toUpperCase()] : [];
+		const first = range[1].toUpperCase().charCodeAt(0), last = range[2].toUpperCase().charCodeAt(0);
+		return last < first ? [value.trim().toUpperCase()]
+			: Array.from({ length: last - first + 1 }, (_, index) => String.fromCharCode(first + index));
+	});
 	const reservedRow = control("spnReservedSeatsTrain") ?? panel?.querySelector(".economy-seats") ?? null;
 	const unreservedRow = control("spnUnreservedSeats") ?? panel?.querySelector(".unreserved-seats") ?? null;
 	const reservedSeatsAvailable = reservedRow ? describedCount(reservedRow, ".description", "seats?") : null;

@@ -12,7 +12,9 @@ import TRAX, {
 	ptvVehicleDescriptorConsist,
 	parseVLinePlatformServices,
 	parseVLineJourneys,
+	parseVLineLocations,
 	parseVLineBookingPage,
+	parseVLinePlatformArrivals,
 	parseVLineScsBoard,
 	vlineAccessToken,
 	vlinePassengerCars,
@@ -24,10 +26,17 @@ import TRAX, {
 } from "../dist/index.js";
 import {
 	applyChronosEstimate,
+	applyJourneyPlannerService,
 	createEmptyVLineDetails,
 	matchScsRows,
+	vlinePlatformStationDemands,
+	vlinePlatformStationsDue,
 	vlineFormationUnits,
 } from "../dist/region-specific/AU/VIC/enrichment.js";
+import {
+	getVLineLocations,
+	getVLinePlatformDepartures,
+} from "../dist/region-specific/AU/VIC/journey-planner.js";
 import { ptvMetroFormationUnit } from "../dist/region-specific/AU/VIC/ptv-metro.js";
 import {
 	viaCarriageCodeDiagramKind,
@@ -188,14 +197,110 @@ const jpServices = parseVLinePlatformServices(`
 </a:PlatformService></GetPlatformDeparturesResult>`);
 assert.equal(jpServices.length, 1);
 assert.deepEqual(jpServices[0], {
+	locationName: null,
 	origin: "Melbourne, Southern Cross", destination: "Waurn Ponds Station",
 	scheduledDepartureTime: "2026-08-12T14:50:00", scheduledDestinationArrivalTime: "2026-08-12T16:08:00",
 	tdn: "8761", platform: "4A", direction: "Down", consistSubtype: "VLocity", consistCount: 2,
 	consistVehicles: null, isLiveConsistInfo: true, serviceStatus: "Planned",
 	consistDescription: null, accessibleSpaces: null, bicycleSpaces: null,
+	actualArrivalTime: null, actualDestinationArrivalTime: null, platformEvent: "departure",
 	reservationAvailable: false, reservationRequired: false, reservedCarriages: [],
 	reservedSeatsAvailable: null, unreservedTicketsAvailable: null, canBookInJourneyPlanner: false,
 });
+const jpArrivals = parseVLinePlatformArrivals(`
+<GetPlatformArrivalsResult xmlns:a="urn:vline"><a:PlatformService>
+<a:LocationName>Melbourne, Southern Cross</a:LocationName>
+<a:Origin>Caroline Springs Station</a:Origin><a:Destination>Melbourne, Southern Cross</a:Destination>
+<a:ScheduledDepartureTime>2026-08-12T08:53:00</a:ScheduledDepartureTime>
+<a:ScheduledDestinationArrivalTime>2026-08-12T09:25:00</a:ScheduledDestinationArrivalTime>
+<a:ActualArrivalTime>2026-08-12T09:31:00</a:ActualArrivalTime>
+<a:ActualDestinationArrivalTime>2026-08-12T09:32:00</a:ActualDestinationArrivalTime>
+<a:ServiceIdentifier>8301</a:ServiceIdentifier><a:Platform>16</a:Platform><a:Direction>U</a:Direction>
+<a:ServiceStatus>Running</a:ServiceStatus><a:CarList>C-F</a:CarList>
+</a:PlatformService></GetPlatformArrivalsResult>`);
+assert.equal(jpArrivals[0].platformEvent, "arrival");
+assert.equal(jpArrivals[0].locationName, "Melbourne, Southern Cross");
+assert.equal(jpArrivals[0].platform, "16");
+assert.equal(jpArrivals[0].actualArrivalTime, "2026-08-12T09:31:00");
+assert.equal(jpArrivals[0].actualDestinationArrivalTime, "2026-08-12T09:32:00");
+assert.deepEqual(jpArrivals[0].reservedCarriages, ["C", "D", "E", "F"]);
+const arrivalStop = {
+	scheduled_arrival_time: 9 * 3600 + 25 * 60, actual_arrival_time: 9 * 3600 + 25 * 60,
+	scheduled_parent_station_id: "vic:rail:SSS", scheduled_stop_id: "20043",
+	scheduled_parent_station: { stop_name: "Southern Cross Railway Station" },
+	scheduled_stop: { stop_name: "Southern Cross Station" }, rt_arrival_updated: false,
+	realtime: false, realtime_info: null,
+};
+const arrivalTrip = { serviceDate: "20260812", rt_start_date: null, stopTimes: [arrivalStop] };
+const arrivalDetails = createEmptyVLineDetails("8301");
+applyJourneyPlannerService(arrivalTrip, arrivalDetails, jpArrivals[0], "2026-08-11T23:30:00Z");
+assert.equal(arrivalDetails.platforms[0].stopId, "vic:rail:SSS");
+assert.equal(arrivalDetails.platforms[0].event, "arrival");
+assert.equal(arrivalStop.actual_arrival_time, 9 * 3600 + 31 * 60);
+assert.equal(arrivalStop.realtime_info.delay_secs, 6 * 60);
+const authoritativeArrival = { ...arrivalStop, actual_arrival_time: 9 * 3600 + 30 * 60, rt_arrival_updated: true };
+applyJourneyPlannerService({ ...arrivalTrip, stopTimes: [authoritativeArrival] }, createEmptyVLineDetails("8301"), jpArrivals[0], "2026-08-11T23:30:00Z");
+assert.equal(authoritativeArrival.actual_arrival_time, 9 * 3600 + 30 * 60);
+const fallbackDetails = createEmptyVLineDetails("8761");
+const existingObservation = (value) => ({ value, source: "vline-journey-planner", confidence: "reported", observedAt: "2026-08-12T00:00:00Z" });
+const platformFallbackDetails = createEmptyVLineDetails("8761");
+applyJourneyPlannerService(arrivalTrip, platformFallbackDetails, jpServices[0], "2026-08-12T00:00:30Z");
+assert.equal(platformFallbackDetails.subtype.source, "vline-platform-services");
+fallbackDetails.subtype = existingObservation("Sprinter");
+fallbackDetails.unitCount = existingObservation(4);
+fallbackDetails.passengerCars = existingObservation(4);
+applyJourneyPlannerService(arrivalTrip, fallbackDetails, jpServices[0], "2026-08-12T00:01:00Z");
+assert.equal(fallbackDetails.subtype.value, "Sprinter");
+assert.equal(fallbackDetails.unitCount.value, 4);
+assert.equal(fallbackDetails.passengerCars.value, 4);
+applyJourneyPlannerService(arrivalTrip, fallbackDetails, {
+	...jpServices[0], platformEvent: null, platform: null, consistSubtype: "VLocity", consistCount: 2,
+}, "2026-08-12T00:02:00Z");
+assert.equal(fallbackDetails.subtype.value, "VLocity");
+assert.equal(fallbackDetails.unitCount.value, 2);
+assert.equal(fallbackDetails.passengerCars.value, 6);
+const locations = parseVLineLocations(`<GetAllLocationsResult xmlns:a="urn:vline">
+<a:Location><a:LocationName>Geelong Station: Railway Terrace</a:LocationName><a:VNetStopCode>GEX</a:VNetStopCode><a:StopType>Station</a:StopType><a:Line>Geelong</a:Line></a:Location>
+<a:Location><a:LocationName>Geelong: Deakin University</a:LocationName><a:VNetStopCode>GLB</a:VNetStopCode><a:StopType>Coach</a:StopType><a:Line>Geelong</a:Line></a:Location>
+</GetAllLocationsResult>`);
+assert.deepEqual(locations[0], { name: "Geelong Station: Railway Terrace", stopCode: "GEX", stopType: "Station", line: "Geelong" });
+const demandNow = Date.parse("2026-08-12T00:00:00Z");
+const demandTrip = {
+	instance_id: "geelong-demand", serviceDate: "20260812", schedule_relationship: 0,
+	stopTimes: [{ passing: false, pickup_type: 0, drop_off_type: 0,
+		scheduled_arrival_time: 10 * 3600 + 20 * 60, scheduled_departure_time: 10 * 3600 + 22 * 60,
+		scheduled_parent_station: { stop_name: "Geelong Railway Station" }, scheduled_stop: null }],
+};
+const platformDemands = vlinePlatformStationDemands([demandTrip], locations, demandNow, 240);
+assert.deepEqual(platformDemands, [{
+	location: "Geelong Station: Railway Terrace", stationKey: "geelong", tripInstanceIds: ["geelong-demand"],
+	arrivals: true, departures: true, nextCallAt: Date.parse("2026-08-12T00:20:00Z"),
+}]);
+assert.equal(vlinePlatformStationsDue(platformDemands, new Map([["geelong", { lastAttemptAt: demandNow - 19 * 60_000 }]]), demandNow).length, 0);
+assert.equal(vlinePlatformStationsDue(platformDemands, new Map([["geelong", { lastAttemptAt: demandNow - 20 * 60_000 }]]), demandNow).length, 1);
+assert.equal(vlinePlatformStationsDue(Array.from({ length: 8 }, (_, index) => ({
+	...platformDemands[0], stationKey: `station-${index}`, location: `Station ${index}`,
+})), new Map(), demandNow).length, 7);
+const platformRequests = [];
+const platformServer = http.createServer((request, response) => {
+	platformRequests.push(new URL(request.url, "http://localhost"));
+	response.setHeader("content-type", "application/xml");
+	if (request.url.startsWith("/VLineLocations")) response.end(`<GetAllLocationsResult xmlns:a="urn:vline"><a:Location>
+		<a:LocationName>Geelong Station: Railway Terrace</a:LocationName><a:StopType>Station</a:StopType>
+	</a:Location></GetAllLocationsResult>`);
+	else response.end(`<GetPlatformDeparturesResult xmlns:a="urn:vline"><a:PlatformService>
+		<a:Origin>Melbourne, Southern Cross</a:Origin><a:Destination>Geelong Station</a:Destination>
+		<a:ScheduledDepartureTime>2026-08-12T10:00:00</a:ScheduledDepartureTime><a:ServiceIdentifier>8752</a:ServiceIdentifier>
+	</a:PlatformService></GetPlatformDeparturesResult>`);
+});
+await new Promise((resolve) => platformServer.listen(0, "127.0.0.1", resolve));
+const platformAddress = platformServer.address();
+const platformOptions = { callerId: "test-caller", applicationSignature: "test-signature", baseUrl: `http://127.0.0.1:${platformAddress.port}` };
+assert.equal((await getVLineLocations(platformOptions))[0].name, "Geelong Station: Railway Terrace");
+assert.equal((await getVLinePlatformDepartures(platformOptions, "Geelong Station: Railway Terrace"))[0].locationName, "Geelong Station: Railway Terrace");
+await new Promise((resolve) => platformServer.close(resolve));
+assert.equal(platformRequests[1].searchParams.get("Direction"), "B");
+assert.equal(platformRequests[1].searchParams.get("minutes"), "240");
 const journeyServices = parseVLineJourneys(`<GetNextPrevious5JourneysResult xmlns:a="urn:vline"><a:Journey><a:Legs><a:Leg>
 <a:Origin>Wallan Station</a:Origin><a:Destination>Melbourne, Southern Cross</a:Destination>
 <a:DepartureTime>2026-08-15T10:10:00</a:DepartureTime><a:ArrivalTime>2026-08-15T10:57:00</a:ArrivalTime>
@@ -213,6 +318,7 @@ assert.equal(journeyServices[0].consistCount, 4);
 assert.equal(journeyServices[0].accessibleSpaces, 8);
 assert.equal(journeyServices[0].bicycleSpaces, 0);
 assert.equal(journeyServices[0].isLiveConsistInfo, true);
+assert.equal(journeyServices[0].platformEvent, null);
 
 const booking = parseVLineBookingPage(`<div class="journey-leg" data-departure-time="2026-08-15 12:36:00">
 <div class="view-consist-panel"><input id="x_hdnServiceCode" value="8351"><input id="x_hdnCarList" value="C,D">

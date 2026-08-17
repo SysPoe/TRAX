@@ -6,6 +6,7 @@ export type ObservationConfidence = "confirmed" | "reported" | "inferred";
 export type VLineObservationSource =
 	| "vic-vline-gtfsrt-vehicle-positions"
 	| "vline-journey-planner"
+	| "vline-platform-services"
 	| "vline-journey-planner-web"
 	| "ptv-chronos"
 	| "vline-scs-html"
@@ -106,6 +107,8 @@ export type VLinePluginState = {
 	journeyInFlight: Map<string, Promise<VLineJourneyPlannerService[]>>;
 	bookingCache: Map<string, { availability: VLineBookingAvailability | null; expiresAt: number }>;
 	bookingInFlight: Map<string, Promise<VLineBookingAvailability | null>>;
+	platformLocationsCache: { locations: VLineJourneyPlannerLocation[]; expiresAt: number } | null;
+	platformPollByLocation: Map<string, { lastAttemptAt: number; lastSuccessAt: number | null; error: string | null }>;
 	sources: Record<VLineSourceName, VLineSourceStatus>;
 	lastRefreshAt: string | null;
 };
@@ -115,7 +118,10 @@ export type VLineJourneyPlannerOptions = {
 	applicationSignature: string;
 	baseUrl?: string;
 	locations?: readonly string[];
+	/** Forward-looking station-board window. The V/Line API rejects values below 30 minutes. */
 	windowMinutes?: number;
+	/** Minimum interval between platform-board requests for the same station. */
+	platformRefreshIntervalMs?: number;
 };
 
 export type VLineChronosOptions = {
@@ -134,12 +140,16 @@ export type VLinePluginOptions = {
 };
 
 export type VLineJourneyPlannerService = {
+	locationName: string | null;
 	origin: string | null;
 	destination: string | null;
 	scheduledDepartureTime: string;
 	scheduledDestinationArrivalTime: string | null;
+	actualArrivalTime: string | null;
+	actualDestinationArrivalTime: string | null;
 	tdn: string;
 	platform: string | null;
+	platformEvent: "arrival" | "departure" | null;
 	direction: "Up" | "Down" | null;
 	consistSubtype: string | null;
 	consistCount: number | null;
@@ -155,6 +165,13 @@ export type VLineJourneyPlannerService = {
 	reservedSeatsAvailable: number | null;
 	unreservedTicketsAvailable: number | null;
 	canBookInJourneyPlanner: boolean;
+};
+
+export type VLineJourneyPlannerLocation = {
+	name: string;
+	stopCode: string | null;
+	stopType: string | null;
+	line: string | null;
 };
 
 export type VLineBookingAvailability = {

@@ -540,6 +540,7 @@ export type {
 	VLineChronosServiceObservation,
 	VLinePlatformObservation,
 	VLineBookingAvailability,
+	VLineJourneyPlannerLocation,
 	VLineScsServiceObservation,
 	VLinePluginOptions,
 	VLineSourceStatus,
@@ -555,6 +556,8 @@ export {
 export {
 	parseVLineBookingPage,
 	parseVLineJourneys,
+	parseVLineLocations,
+	parseVLinePlatformArrivals,
 	parseVLinePlatformServices,
 	vlineAccessToken,
 } from "./region-specific/AU/VIC/journey-planner.js";

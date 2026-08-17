@@ -1,5 +1,5 @@
 import type { RealtimeVehiclePosition } from "qdf-gtfs";
-import { StopTimeScheduleRelationship, TripScheduleRelationship } from "qdf-gtfs";
+import { DropOffType, PickupType, StopTimeScheduleRelationship, TripScheduleRelationship } from "qdf-gtfs";
 import type { CacheContext } from "../../../cache/types.js";
 import type { AugmentedTripInstance } from "../../../utils/augmentedTrip.js";
 import {
@@ -10,11 +10,13 @@ import {
 	type VehicleInfo,
 } from "../../../utils/vehicleModel.js";
 import { getVehiclePositions } from "../../../cache/gtfsReads.js";
-import { getServiceDayStart, serviceTimeToInstant } from "../../../utils/time.js";
+import { getServiceDayStart, parseTimeWithConfig, serviceTimeToInstant } from "../../../utils/time.js";
 import { getVLineState } from "./state.js";
 import { inferVLinePlatform } from "./platform-heuristics.js";
 import {
 	getVLineJourneys,
+	getVLineLocations,
+	getVLinePlatformArrivals,
 	getVLinePlatformDepartures,
 	getVLineWebBookingAvailability,
 } from "./journey-planner.js";
@@ -28,6 +30,7 @@ import {
 } from "./identifiers.js";
 import type {
 	Observation,
+	VLineJourneyPlannerLocation,
 	VLineJourneyPlannerService,
 	VLinePluginOptions,
 	VLinePlatformObservation,
@@ -49,11 +52,15 @@ import {
 	vlineChronosRouteGtfsId,
 } from "./chronos-match.js";
 
-const DEFAULT_JP_LOCATIONS = [
-	"Melbourne, Southern Cross", "Geelong Station", "South Geelong Station", "Marshall Station", "Waurn Ponds Station",
-];
 const DAY_MS = 86_400_000;
 const LIVE_TTL_MS = 10 * 60_000;
+const PLATFORM_TTL_MS = 25 * 60_000;
+const DEFAULT_PLATFORM_WINDOW_MINUTES = 240;
+const DEFAULT_PLATFORM_REFRESH_MS = 20 * 60_000;
+const PLATFORM_LOCATION_TTL_MS = DAY_MS;
+// Seven stations per one-minute refresh covers the API's 132 canonical station keys in 20 minutes.
+const PLATFORM_STATIONS_PER_REFRESH = 7;
+const PLATFORM_POLL_CONCURRENCY = 1;
 const CHRONOS_PATTERN_TTL_MS = 7 * 60_000;
 const CHRONOS_RETRY_MS = 5 * 60_000;
 const CHRONOS_CONCURRENCY = 4;
@@ -95,7 +102,10 @@ function detailsFor(ctx: CacheContext, trip: AugmentedTripInstance): VLineTripDe
 }
 
 function normalizeStation(value: string | null | undefined): string {
-	return value?.toLowerCase().replace(/^melbourne\s*,\s*/, "").replace(/\b(railway|station)\b/g, "").replace(/[^a-z0-9]/g, "") ?? "";
+	if (!value) return "";
+	const withoutMelbourne = value.toLowerCase().replace(/^melbourne\s*,\s*/, "");
+	const stationName = withoutMelbourne.split(/[:,]/, 1)[0];
+	return stationName.replace(/\b(railway|station)\b/g, "").replace(/[^a-z0-9]/g, "");
 }
 
 function scheduledInstant(trip: AugmentedTripInstance, seconds: number | null | undefined): number | null {
@@ -108,17 +118,48 @@ export function serviceMatchesTrip(service: VLineJourneyPlannerService, trip: Au
 	const first = trip.stopTimes.find((stop) => !stop.passing);
 	const scheduled = first?.scheduled_departure_time ?? first?.scheduled_arrival_time;
 	if (scheduled == null) return true;
+	const tripInstant = scheduledInstant(trip, scheduled);
+	const serviceInstant = parseTimeWithConfig(service.scheduledDepartureTime, "Australia/Melbourne");
+	if (tripInstant != null && serviceInstant > 0) return Math.abs(tripInstant - serviceInstant) <= 5 * 60_000;
 	const serviceDate = service.scheduledDepartureTime.slice(0, 10).replaceAll("-", "");
 	if (!/^\d{8}$/.test(serviceDate)) return true;
 	return serviceDate === trip.serviceDate;
 }
 
 function findStop(trip: AugmentedTripInstance, service: VLineJourneyPlannerService) {
-	const desired = normalizeStation(service.origin);
+	const desired = normalizeStation(service.locationName ?? (service.platformEvent === "arrival" ? service.destination : service.origin));
 	return trip.stopTimes.find((stop) => {
 		const stopName = stop.scheduled_parent_station?.stop_name ?? stop.scheduled_stop?.stop_name;
 		return desired && normalizeStation(stopName) === desired;
-	}) ?? (service.direction === "Down" ? trip.stopTimes[0] : trip.stopTimes.at(-1));
+	}) ?? (service.platformEvent === "arrival" ? trip.stopTimes.at(-1) : trip.stopTimes[0]);
+}
+
+/** Apply the arrivals-board estimate only when GTFS-RT has not updated this arrival. */
+function applyJourneyPlannerArrival(
+	trip: AugmentedTripInstance,
+	stop: AugmentedTripInstance["stopTimes"][number],
+	actualDestinationArrivalTime: string | null,
+): void {
+	if (!actualDestinationArrivalTime || stop.rt_arrival_updated) return;
+	const epoch = parseTimeWithConfig(actualDestinationArrivalTime, "Australia/Melbourne") / 1000;
+	if (!Number.isFinite(epoch) || epoch <= 0) return;
+	const actual = Math.round(epoch - getServiceDayStart(trip.serviceDate, "Australia/Melbourne"));
+	const scheduled = stop.scheduled_arrival_time ?? actual;
+	const delay = actual - scheduled;
+	const delayClass = delay === 0 ? "on-time" : delay < 0 ? "early" : delay >= 600 ? "very-late" : "late";
+	stop.actual_arrival_time = actual;
+	if (stop.realtime) return;
+	Object.assign(stop, {
+		realtime: true,
+		realtime_info: {
+			delay_secs: delay,
+			delay_string: delay === 0 ? "On time" : `${Math.abs(Math.round(delay / 60))} min ${delay < 0 ? "early" : "late"}`,
+			delay_class: delayClass,
+			schedule_relationship: StopTimeScheduleRelationship.SCHEDULED,
+			propagated: false,
+			rt_start_date: trip.rt_start_date ?? trip.serviceDate,
+		},
+	});
 }
 
 export function applyJourneyPlannerService(
@@ -128,20 +169,44 @@ export function applyJourneyPlannerService(
 	observedAt: string,
 ): void {
 	const raw = service.tdn;
-	if (service.consistSubtype) details.subtype = observation(service.consistSubtype, "vline-journey-planner", "reported", observedAt, raw);
-	if (service.consistCount) details.unitCount = observation(service.consistCount, "vline-journey-planner", "reported", observedAt, raw);
+	const consistFallback = service.platformEvent !== null;
+	const source = consistFallback ? "vline-platform-services" : "vline-journey-planner";
+	if (service.consistSubtype && (!consistFallback || !details.subtype)) details.subtype = observation(service.consistSubtype, source, "reported", observedAt, raw);
+	if (service.consistCount && (!consistFallback || !details.unitCount)) details.unitCount = observation(service.consistCount, source, "reported", observedAt, raw);
 	const cars = vlinePassengerCars(service.consistSubtype, service.consistCount);
-	if (cars) details.passengerCars = observation(cars, "vline-journey-planner", "reported", observedAt, raw);
-	if (service.consistVehicles?.length) details.fullConsist = observation(service.consistVehicles, "vline-journey-planner", "reported", observedAt, raw);
-	if (service.accessibleSpaces != null) details.accessibleSpaces = observation(service.accessibleSpaces, "vline-journey-planner", "reported", observedAt, raw);
-	if (service.bicycleSpaces != null) details.bicycleSpaces = observation(service.bicycleSpaces, "vline-journey-planner", "reported", observedAt, raw);
-	details.isLiveConsistInfo = observation(service.isLiveConsistInfo, "vline-journey-planner", "reported", observedAt, raw);
-	if (service.consistDescription) details.consistDescription = observation(service.consistDescription, "vline-journey-planner", "reported", observedAt, raw);
-	if (service.serviceStatus) details.serviceStatus = observation(service.serviceStatus, "vline-journey-planner", "reported", observedAt, raw);
+	if (cars && (!consistFallback || !details.passengerCars)) details.passengerCars = observation(cars, source, "reported", observedAt, raw);
+	if (service.consistVehicles?.length && (!consistFallback || !details.fullConsist)) details.fullConsist = observation(service.consistVehicles, source, "reported", observedAt, raw);
+	if (service.accessibleSpaces != null && (!consistFallback || !details.accessibleSpaces)) details.accessibleSpaces = observation(service.accessibleSpaces, source, "reported", observedAt, raw);
+	if (service.bicycleSpaces != null && (!consistFallback || !details.bicycleSpaces)) details.bicycleSpaces = observation(service.bicycleSpaces, source, "reported", observedAt, raw);
+	if (!consistFallback || !details.isLiveConsistInfo) details.isLiveConsistInfo = observation(service.isLiveConsistInfo, source, "reported", observedAt, raw);
+	if (service.consistDescription && (!consistFallback || !details.consistDescription)) details.consistDescription = observation(service.consistDescription, source, "reported", observedAt, raw);
+	if (service.serviceStatus) details.serviceStatus = observation(service.serviceStatus, source, "reported", observedAt, raw);
+	const stop = findStop(trip, service);
 	if (service.platform) {
-		const stop = findStop(trip, service);
 		const stopId = stop?.scheduled_parent_station_id ?? stop?.scheduled_stop_id;
-		if (stopId) details.platforms.push({ ...observation(service.platform, "vline-journey-planner", "confirmed", observedAt, raw), stopId, event: "both", kind: "platform" });
+		if (stopId) {
+			const event = service.platformEvent ?? "both";
+			details.platforms = details.platforms.filter((value) =>
+				value.source !== "vline-platform-services" || value.stopId !== stopId || value.event !== event,
+			);
+			details.platforms.push({
+				...observation(service.platform, "vline-platform-services", "confirmed", observedAt, raw),
+				expiresAt: new Date(Date.parse(observedAt) + PLATFORM_TTL_MS).toISOString(),
+				stopId, event, kind: "platform",
+			});
+		}
+	}
+	if (stop && service.platformEvent !== null) {
+		applyJourneyPlannerArrival(trip, stop, service.actualArrivalTime);
+	}
+	if (service.actualDestinationArrivalTime) {
+		const destination = normalizeStation(service.destination);
+		const destinationStop = trip.stopTimes.find((call) => normalizeStation(callName(call)) === destination) ?? trip.stopTimes.at(-1);
+		if (destinationStop && destinationStop !== stop) {
+			applyJourneyPlannerArrival(trip, destinationStop, service.actualDestinationArrivalTime);
+		} else if (destinationStop && !service.actualArrivalTime) {
+			applyJourneyPlannerArrival(trip, destinationStop, service.actualDestinationArrivalTime);
+		}
 	}
 }
 
@@ -260,6 +325,208 @@ async function mapConcurrent<T, R>(
 		}
 	}));
 	return results;
+}
+
+export type VLinePlatformStationDemand = {
+	location: string;
+	stationKey: string;
+	tripInstanceIds: string[];
+	arrivals: boolean;
+	departures: boolean;
+	nextCallAt: number;
+};
+
+/** Select only API-canonical rail stations with a scheduled call inside the board window. */
+export function vlinePlatformStationDemands(
+	trips: readonly AugmentedTripInstance[],
+	locations: readonly VLineJourneyPlannerLocation[],
+	nowMs: number,
+	windowMinutes = DEFAULT_PLATFORM_WINDOW_MINUTES,
+): VLinePlatformStationDemand[] {
+	const apiLocationByKey = new Map<string, VLineJourneyPlannerLocation>();
+	for (const location of locations) {
+		if (location.stopType?.toLowerCase() !== "station") continue;
+		const key = normalizeStation(location.name);
+		if (key && !apiLocationByKey.has(key)) apiLocationByKey.set(key, location);
+	}
+	const latest = nowMs + Math.max(30, windowMinutes) * 60_000;
+	const demandByKey = new Map<string, {
+		location: string;
+		tripInstanceIds: Set<string>;
+		arrivals: boolean;
+		departures: boolean;
+		nextCallAt: number;
+	}>();
+	for (const trip of trips) {
+		if (trip.schedule_relationship === TripScheduleRelationship.CANCELED) continue;
+		for (const call of trip.stopTimes) {
+			if (call.passing) continue;
+			const stationKey = normalizeStation(callName(call));
+			const apiLocation = apiLocationByKey.get(stationKey);
+			if (!apiLocation) continue;
+			const arrivalAt = scheduledInstant(trip, call.scheduled_arrival_time);
+			const departureAt = scheduledInstant(trip, call.scheduled_departure_time);
+			const arrivals = call.drop_off_type !== DropOffType.None && arrivalAt != null && arrivalAt >= nowMs && arrivalAt <= latest;
+			const departures = call.pickup_type !== PickupType.None && departureAt != null && departureAt >= nowMs && departureAt <= latest;
+			if (!arrivals && !departures) continue;
+			const nextCallAt = Math.min(arrivals ? arrivalAt! : Number.POSITIVE_INFINITY, departures ? departureAt! : Number.POSITIVE_INFINITY);
+			const existing = demandByKey.get(stationKey);
+			if (existing) {
+				existing.tripInstanceIds.add(trip.instance_id);
+				existing.arrivals ||= arrivals;
+				existing.departures ||= departures;
+				existing.nextCallAt = Math.min(existing.nextCallAt, nextCallAt);
+			} else {
+				demandByKey.set(stationKey, {
+					location: apiLocation.name,
+					tripInstanceIds: new Set([trip.instance_id]),
+					arrivals,
+					departures,
+					nextCallAt,
+				});
+			}
+		}
+	}
+	return [...demandByKey.entries()].map(([stationKey, demand]) => ({
+		...demand,
+		stationKey,
+		tripInstanceIds: [...demand.tripInstanceIds],
+	})).sort((a, b) => a.nextCallAt - b.nextCallAt || a.location.localeCompare(b.location));
+}
+
+export function vlinePlatformStationsDue(
+	demands: readonly VLinePlatformStationDemand[],
+	polls: ReadonlyMap<string, { lastAttemptAt: number }>,
+	nowMs: number,
+	refreshIntervalMs = DEFAULT_PLATFORM_REFRESH_MS,
+	limit = PLATFORM_STATIONS_PER_REFRESH,
+): VLinePlatformStationDemand[] {
+	return demands.filter((demand) => {
+		const poll = polls.get(demand.stationKey);
+		return !poll || nowMs - poll.lastAttemptAt >= refreshIntervalMs;
+	}).sort((a, b) => {
+		const aAttempt = polls.get(a.stationKey)?.lastAttemptAt ?? 0;
+		const bAttempt = polls.get(b.stationKey)?.lastAttemptAt ?? 0;
+		return aAttempt - bAttempt || a.nextCallAt - b.nextCallAt;
+	}).slice(0, Math.max(0, limit));
+}
+
+async function platformLocationsForPolling(
+	state: ReturnType<typeof getVLineState>,
+	options: NonNullable<VLinePluginOptions["journeyPlanner"]>,
+	timeoutMs: number | undefined,
+): Promise<{ locations: VLineJourneyPlannerLocation[]; requested: boolean; error: string | null }> {
+	if (options.locations?.length) return {
+		locations: options.locations.map((name) => ({ name, stopCode: null, stopType: "Station", line: null })),
+		requested: false,
+		error: null,
+	};
+	const cached = state.platformLocationsCache;
+	if (cached && cached.expiresAt > Date.now()) return { locations: cached.locations, requested: false, error: null };
+	try {
+		const locations = await getVLineLocations(options, timeoutMs);
+		state.platformLocationsCache = { locations, expiresAt: Date.now() + PLATFORM_LOCATION_TTL_MS };
+		return { locations, requested: true, error: null };
+	} catch (error) {
+		return {
+			locations: cached?.locations ?? [{ name: "Melbourne, Southern Cross", stopCode: "MEL", stopType: "Station", line: "All" }],
+			requested: true,
+			error: `locations: ${error instanceof Error ? error.message : String(error)}`,
+		};
+	}
+}
+
+function serviceMatchesStation(
+	service: VLineJourneyPlannerService,
+	trip: AugmentedTripInstance,
+	stationKey: string,
+): boolean {
+	return serviceMatchesTrip(service, trip) && trip.stopTimes.some((call) =>
+		!call.passing && normalizeStation(callName(call)) === stationKey,
+	);
+}
+
+async function pollPlatformStation(
+	ctx: CacheContext,
+	options: NonNullable<VLinePluginOptions["journeyPlanner"]>,
+	demand: VLinePlatformStationDemand,
+	observedAt: string,
+	windowMinutes: number,
+	timeoutMs: number | undefined,
+): Promise<{ success: boolean; errors: string[] }> {
+	const requests: { event: "arrival" | "departure"; request: Promise<VLineJourneyPlannerService[]> }[] = [];
+	if (demand.departures) requests.push({
+		event: "departure",
+		request: getVLinePlatformDepartures(options, demand.location, "B", windowMinutes, timeoutMs),
+	});
+	if (demand.arrivals) requests.push({
+		event: "arrival",
+		request: getVLinePlatformArrivals(options, demand.location, "B", windowMinutes, timeoutMs),
+	});
+	const settled = await Promise.allSettled(requests.map((request) => request.request));
+	const errors: string[] = [];
+	let success = false;
+	for (let index = 0; index < settled.length; index++) {
+		const result = settled[index], event = requests[index].event;
+		if (result.status === "rejected") {
+			errors.push(`${demand.location} ${event}s: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
+			continue;
+		}
+		success = true;
+		for (const service of result.value) {
+			if (normalizeStation(service.locationName) !== demand.stationKey) continue;
+			for (const instanceId of demand.tripInstanceIds) {
+				const trip = ctx.augmented.instancesRec.get(instanceId);
+				if (!trip || !serviceMatchesStation(service, trip, demand.stationKey)) continue;
+				const details = detailsFor(ctx, trip);
+				if (details) applyJourneyPlannerService(trip, details, service, observedAt);
+			}
+		}
+	}
+	return { success, errors };
+}
+
+async function refreshVLinePlatformBoards(
+	ctx: CacheContext,
+	options: NonNullable<VLinePluginOptions["journeyPlanner"]>,
+	trips: readonly AugmentedTripInstance[],
+	observedAt: string,
+	timeoutMs: number | undefined,
+): Promise<void> {
+	const state = getVLineState(ctx), status = state.sources["journey-planner"];
+	status.enabled = true;
+	const windowMinutes = Math.max(30, options.windowMinutes ?? DEFAULT_PLATFORM_WINDOW_MINUTES);
+	const refreshIntervalMs = Math.max(60_000, options.platformRefreshIntervalMs ?? DEFAULT_PLATFORM_REFRESH_MS);
+	const now = Date.parse(observedAt);
+	const hasScheduledCall = trips.some((trip) => trip.stopTimes.some((call) => {
+		const seconds = call.scheduled_departure_time ?? call.scheduled_arrival_time;
+		const instant = scheduledInstant(trip, seconds);
+		return !call.passing && instant != null && instant >= now && instant <= now + windowMinutes * 60_000;
+	}));
+	if (!hasScheduledCall) return;
+	const locationResult = await platformLocationsForPolling(state, options, timeoutMs);
+	const demands = vlinePlatformStationDemands(trips, locationResult.locations, now, windowMinutes);
+	const due = vlinePlatformStationsDue(demands, state.platformPollByLocation, now, refreshIntervalMs);
+	if (locationResult.requested || due.length) status.lastAttemptAt = observedAt;
+	const results = await mapConcurrent(due, PLATFORM_POLL_CONCURRENCY, async (demand) => {
+		const previous = state.platformPollByLocation.get(demand.stationKey);
+		state.platformPollByLocation.set(demand.stationKey, { lastAttemptAt: now, lastSuccessAt: previous?.lastSuccessAt ?? null, error: null });
+		const result = await pollPlatformStation(ctx, options, demand, observedAt, windowMinutes, timeoutMs);
+		state.platformPollByLocation.set(demand.stationKey, {
+			lastAttemptAt: now,
+			lastSuccessAt: result.success ? now : (previous?.lastSuccessAt ?? null),
+			error: result.errors.length ? result.errors.join("; ") : null,
+		});
+		return result;
+	});
+	if (locationResult.error || results.some((result) => result.errors.length)) {
+		status.error = [locationResult.error, ...results.flatMap((result) => result.errors)].filter(Boolean).join("; ");
+	} else if (locationResult.requested || results.length) {
+		status.error = null;
+	}
+	if ((!locationResult.error && locationResult.requested) || results.some((result) => result.success)) {
+		status.lastSuccessAt = observedAt;
+	}
 }
 
 function firstScheduledCall(trip: AugmentedTripInstance) {
@@ -581,20 +848,11 @@ export async function refreshVLineOfficialSources(ctx: CacheContext, options: VL
 	state.lastRefreshAt = observedAt;
 
 	if (options.journeyPlanner) {
-		const status = state.sources["journey-planner"];
-		status.enabled = true; status.lastAttemptAt = observedAt;
 		try {
-			const locations = options.journeyPlanner.locations ?? DEFAULT_JP_LOCATIONS;
-			const batches = await Promise.all(locations.map((location) => getVLinePlatformDepartures(
-				options.journeyPlanner!, location, "B", options.journeyPlanner!.windowMinutes ?? 180,
-				options.requestTimeoutMs,
-			)));
-			for (const service of batches.flat()) for (const trip of trips) if (serviceMatchesTrip(service, trip)) {
-				const details = detailsFor(ctx, trip);
-				if (details) applyJourneyPlannerService(trip, details, service, observedAt);
-			}
-			status.lastSuccessAt = observedAt; status.error = null;
-		} catch (error) { status.error = error instanceof Error ? error.message : String(error); }
+			await refreshVLinePlatformBoards(ctx, options.journeyPlanner, trips, observedAt, options.requestTimeoutMs);
+		} catch (error) {
+			state.sources["journey-planner"].error = error instanceof Error ? error.message : String(error);
+		}
 	}
 	state.sources.chronos.enabled = Boolean(options.chronos);
 	if (options.chronos) {
@@ -691,7 +949,8 @@ export function applyVLineEnrichment(ctx: CacheContext, options: VLinePluginOpti
 		const carriageIds = vehicle?.multi_carriage_details.map((carriage) => carriage.id.trim().toUpperCase()).filter(Boolean) ?? [];
 		const realtimeConsist = carriageIds.length ? [...new Set(carriageIds)] : null;
 		// Journey Planner's complete ConsistVehicles list wins over GTFS-RT multi-carriage data.
-		if (realtimeConsist?.length && (!details.fullConsist || details.fullConsist.source === "vic-vline-gtfsrt-vehicle-positions"))
+		if (realtimeConsist?.length && (!details.fullConsist ||
+			details.fullConsist.source === "vic-vline-gtfsrt-vehicle-positions" || details.fullConsist.source === "vline-platform-services"))
 			details.fullConsist = observation(realtimeConsist, "vic-vline-gtfsrt-vehicle-positions", "reported", observedAt, vehicle?.vehicle.id);
 		if (vehicle?.occupancy_status != null)
 			details.occupancyStatus = observation(vehicle.occupancy_status, "vic-vline-gtfsrt-vehicle-positions", "reported", observedAt, vehicle.update_id);
@@ -828,6 +1087,24 @@ function journeyServiceSupportsBooking(service: VLineJourneyPlannerService | nul
 	);
 }
 
+export function vlineServiceBookingAvailability(
+	service: VLineJourneyPlannerService | null,
+	observedAt: string,
+): VehicleBookingAvailability | null {
+	if (!service || !journeyServiceSupportsBooking(service)) return null;
+	return {
+		reservedCarriages: [...service.reservedCarriages],
+		reservedSeatsAvailable: service.reservedSeatsAvailable,
+		unreservedTicketsAvailable: service.unreservedTicketsAvailable,
+		reservationAvailable: service.reservationAvailable,
+		reservationRequired: service.reservationRequired,
+		seatMapAvailable: false,
+		journeyUrl: null,
+		source: "V/Line Journey Planner",
+		observedAt,
+	};
+}
+
 /** Resolve the richer Journey Planner record only when a consumer asks for this trip's formation. */
 export async function getVLineVehicleFormation(
 	trip: AugmentedTripInstance,
@@ -864,6 +1141,11 @@ export async function getVLineVehicleFormation(
 			);
 			if (booking) {
 				booking.reservationRequired ||= service?.reservationRequired ?? false;
+				if (booking.reservedCarriages.length === 0 && service?.reservedCarriages.length) {
+					booking.reservedCarriages = [...service.reservedCarriages];
+				}
+				booking.reservedSeatsAvailable ??= service?.reservedSeatsAvailable ?? null;
+				booking.unreservedTicketsAvailable ??= service?.unreservedTicketsAvailable ?? null;
 				details.bookingAvailability = booking;
 			}
 		} catch {
@@ -890,15 +1172,17 @@ export async function getVLineVehicleFormation(
 		journeyUrl: details.bookingAvailability.journeyUrl,
 		source: "V/Line Journey Planner",
 		observedAt: details.bookingAvailability.observedAt,
-	} : null;
+	} : vlineServiceBookingAvailability(service, new Date().toISOString());
 	const observed = details.fullConsist ?? details.subtype ?? details.passengerCars;
+	const formationSource = observed?.source === "vline-platform-services" ? "V/Line Platform Services"
+		: observed ? "V/Line Journey Planner" : null;
 	const units = vlineFormationUnits(trip, details);
 	return createVehicleFormation(trip, units, {
 		accessibleSpaces: details.accessibleSpaces?.value ?? null,
 		bicycleSpaces: details.bicycleSpaces?.value ?? null,
 		// "IsLiveConsistInfo" can accompany type/count only. Do not describe that as a live formation.
 		isLive: details.fullConsist?.value?.length ? (details.isLiveConsistInfo?.value ?? null) : null,
-		source: observed ? "V/Line Journey Planner" : null,
+		source: formationSource,
 		observedAt: observed?.observedAt ?? null,
 		bookingAvailability: booking,
 	});

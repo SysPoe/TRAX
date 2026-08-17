@@ -21,6 +21,8 @@ export function getVLineState(ctx: CacheContext): VLinePluginState {
 		journeyInFlight: new Map(),
 		bookingCache: new Map(),
 		bookingInFlight: new Map(),
+		platformLocationsCache: null,
+		platformPollByLocation: new Map(),
 		sources: {
 			"journey-planner": { enabled: false, lastAttemptAt: null, lastSuccessAt: null, error: null },
 			chronos: { enabled: false, lastAttemptAt: null, lastSuccessAt: null, error: null },
