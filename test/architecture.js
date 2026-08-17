@@ -29,6 +29,7 @@ import {
 	applyJourneyPlannerService,
 	createEmptyVLineDetails,
 	matchScsRows,
+	serviceMatchesPlatformTrip,
 	vlinePlatformStationDemands,
 	vlinePlatformStationsDue,
 	vlineFormationUnits,
@@ -233,7 +234,7 @@ const jpServices = parseVLinePlatformServices(`
 <a:Origin>Melbourne, Southern Cross</a:Origin><a:Destination>Waurn Ponds Station</a:Destination>
 <a:ScheduledDepartureTime>2026-08-12T14:50:00</a:ScheduledDepartureTime>
 <a:ScheduledDestinationArrivalTime>2026-08-12T16:08:00</a:ScheduledDestinationArrivalTime>
-<a:ServiceIdentifier>8761</a:ServiceIdentifier><a:Platform>4A</a:Platform><a:Direction>D</a:Direction>
+<a:ServiceId>8761</a:ServiceId><a:Platform>4A</a:Platform><a:Direction>D</a:Direction>
 <a:ConsistSubType>VLocity</a:ConsistSubType><a:ConsistCount>2</a:ConsistCount>
 <a:ConsistVehicles i:nil="true"/><a:IsLiveConsistInfo>true</a:IsLiveConsistInfo><a:ServiceStatus>Planned</a:ServiceStatus>
 </a:PlatformService></GetPlatformDeparturesResult>`);
@@ -282,6 +283,49 @@ assert.equal(jpArrivals[0].platform, "16");
 assert.equal(jpArrivals[0].actualArrivalTime, "2026-08-12T09:31:00");
 assert.equal(jpArrivals[0].actualDestinationArrivalTime, "2026-08-12T09:32:00");
 assert.deepEqual(jpArrivals[0].reservedCarriages, ["C", "D", "E", "F"]);
+const platformMatchTrip = {
+	trip_id: "01-BGO--10-T0-8240",
+	serviceDate: "20260812",
+	stopTimes: [
+		{
+			passing: false,
+			scheduled_arrival_time: 12 * 3600,
+			scheduled_departure_time: 12 * 3600,
+			scheduled_parent_station: { stop_name: "Bendigo Railway Station" },
+		},
+		{
+			passing: false,
+			scheduled_arrival_time: 13 * 3600 + 13 * 60,
+			scheduled_departure_time: 13 * 3600 + 15 * 60,
+			scheduled_parent_station: { stop_name: "Geelong Railway Station" },
+		},
+		{
+			passing: false,
+			scheduled_arrival_time: 14 * 3600 + 32 * 60,
+			scheduled_departure_time: null,
+			scheduled_parent_station: { stop_name: "Southern Cross Railway Station" },
+		},
+	],
+};
+const platformRunMatch = {
+	...jpArrivals[0],
+	tdn: "8240",
+	scheduledDepartureTime: "2026-08-12T14:32:00",
+};
+assert.equal(serviceMatchesPlatformTrip(platformRunMatch, platformMatchTrip, "southerncross"), true);
+assert.equal(
+	serviceMatchesPlatformTrip(
+		{ ...platformRunMatch, platformEvent: "departure", scheduledDepartureTime: "2026-08-12T13:15:00" },
+		platformMatchTrip,
+		"geelong",
+	),
+	true,
+);
+assert.equal(serviceMatchesPlatformTrip({ ...platformRunMatch, tdn: "8241" }, platformMatchTrip, "southerncross"), false);
+assert.equal(
+	serviceMatchesPlatformTrip({ ...platformRunMatch, scheduledDepartureTime: "2026-08-13T14:32:00" }, platformMatchTrip, "southerncross"),
+	false,
+);
 const arrivalStop = {
 	scheduled_arrival_time: 9 * 3600 + 25 * 60,
 	actual_arrival_time: 9 * 3600 + 25 * 60,

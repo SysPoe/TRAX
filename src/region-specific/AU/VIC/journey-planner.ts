@@ -53,7 +53,9 @@ function parseService(
 		scheduledDestinationArrivalTime: text(element, journeyLeg ? "ArrivalTime" : "ScheduledDestinationArrivalTime"),
 		actualArrivalTime: text(element, "ActualArrivalTime"),
 		actualDestinationArrivalTime: text(element, "ActualDestinationArrivalTime"),
-		tdn: text(element, "ServiceIdentifier") ?? "",
+		// Platform Services calls this the service ID; other Journey Planner
+		// responses expose the same V/Line run number as ServiceIdentifier.
+		tdn: text(element, "ServiceIdentifier") ?? text(element, "ServiceId") ?? "",
 		platform: text(element, "Platform"),
 		platformEvent,
 		direction: direction === "U" || direction?.toLowerCase() === "up" ? "Up"

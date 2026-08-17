@@ -441,9 +441,38 @@ function serviceMatchesStation(
 	trip: AugmentedTripInstance,
 	stationKey: string,
 ): boolean {
-	return serviceMatchesTrip(service, trip) && trip.stopTimes.some((call) =>
+	return serviceMatchesPlatformTrip(service, trip, stationKey);
+}
+
+/** Match a platform-board row by V/Line run number at the requested station. */
+export function serviceMatchesPlatformTrip(
+	service: VLineJourneyPlannerService,
+	trip: AugmentedTripInstance,
+	stationKey: string,
+): boolean {
+	if (service.tdn !== vlineTdn(trip.trip_id)) return false;
+	const stationCalls = trip.stopTimes.filter((call) =>
 		!call.passing && normalizeStation(callName(call)) === stationKey,
 	);
+	if (!stationCalls.length) return false;
+
+	// Retain the precise origin-time match when the board supplies it, then try
+	// the requested station's event time for intermediate and terminating calls.
+	if (serviceMatchesTrip(service, trip)) return true;
+	const serviceInstant = parseTimeWithConfig(service.scheduledDepartureTime, "Australia/Melbourne");
+	if (serviceInstant > 0 && stationCalls.some((call) => {
+		const seconds = service.platformEvent === "arrival"
+			? call.scheduled_arrival_time ?? call.scheduled_departure_time
+			: call.scheduled_departure_time ?? call.scheduled_arrival_time;
+		const callInstant = scheduledInstant(trip, seconds);
+		return callInstant != null && Math.abs(callInstant - serviceInstant) <= 5 * 60_000;
+	})) return true;
+
+	// Some arrival/departure rows expose the run's origin time rather than the
+	// local platform time. The run number is stable, so use it as a same-service-
+	// day fallback after confirming that this trip actually calls at the station.
+	const serviceDate = service.scheduledDepartureTime.slice(0, 10).replaceAll("-", "");
+	return /^\d{8}$/.test(serviceDate) && serviceDate === trip.serviceDate;
 }
 
 async function pollPlatformStation(
