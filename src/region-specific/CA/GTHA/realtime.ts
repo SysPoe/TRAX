@@ -47,12 +47,12 @@ type GthaRealtimeState = {
 	activeCars: Set<string>;
 	activePassengerCars: Set<number>;
 	prevs: {
-	tripInstanceId: string;
-	stopId: string;
-	actualPlatform: string | null;
-	scheduledPlatform: string | null;
-	priority: number;
-}[];
+		tripInstanceId: string;
+		stopId: string;
+		actualPlatform: string | null;
+		scheduledPlatform: string | null;
+		priority: number;
+	}[];
 	lastSourceEFetchMs: Record<string, number>;
 	lastSourceBFetchMs: number;
 	lastSourceFFetchMs: number;
@@ -63,11 +63,40 @@ type GthaRealtimeState = {
 	vehicleConsists: Record<string, string[]>;
 };
 
+export type GthaRealtimeDiagnostics = {
+	sources: {
+		id: "A" | "B" | "C" | "D" | "E" | "F";
+		name: string;
+		provider: string;
+		purpose: string;
+		refreshIntervalMs: number;
+		lastRequestAt: string | null;
+		targets: number;
+	}[];
+	activeVehicles: number;
+	activeFleetItems: number;
+	activePassengerCarCounts: number;
+	activeModels: number;
+	knownConsists: number;
+	knownPassengerCarCounts: number;
+	retainedPlatformAssignments: number;
+};
+
 function getState(ctx: CacheContext): GthaRealtimeState {
 	return getPluginState(ctx, "ca-gtha:realtime", () => ({
-		activeModels: new Set(), activeIds: new Set(), activeCars: new Set(), activePassengerCars: new Set(), prevs: [],
-		lastSourceEFetchMs: {}, lastSourceBFetchMs: 0, lastSourceFFetchMs: 0, lastSourceAFetchMs: 0,
-		lastSourceCFetchMs: {}, lastSourceDFetchMs: {}, vehiclePassengerCars: {}, vehicleConsists: {},
+		activeModels: new Set(),
+		activeIds: new Set(),
+		activeCars: new Set(),
+		activePassengerCars: new Set(),
+		prevs: [],
+		lastSourceEFetchMs: {},
+		lastSourceBFetchMs: 0,
+		lastSourceFFetchMs: 0,
+		lastSourceAFetchMs: 0,
+		lastSourceCFetchMs: {},
+		lastSourceDFetchMs: {},
+		vehiclePassengerCars: {},
+		vehicleConsists: {},
 	}));
 }
 
@@ -82,6 +111,78 @@ export function getActiveCars(ctx: CacheContext): Set<string> {
 }
 export function getActivePassengerCars(ctx: CacheContext): Set<number> {
 	return getState(ctx).activePassengerCars;
+}
+
+/** Serializable coverage/cadence snapshot for the admin status page. */
+export function getGthaRealtimeDiagnostics(ctx: CacheContext): GthaRealtimeDiagnostics {
+	const state = getState(ctx);
+	const at = (timestamp: number) => (timestamp > 0 ? new Date(timestamp).toISOString() : null);
+	const latest = (timestamps: Record<string, number>) => Math.max(0, ...Object.values(timestamps));
+	return {
+		sources: [
+			{
+				id: "A",
+				name: "In-service AVL",
+				provider: "GO Tracker",
+				purpose: "Vehicle IDs and passenger-car counts",
+				refreshIntervalMs: SOURCE_A_THROTTLE_MS,
+				lastRequestAt: at(state.lastSourceAFetchMs),
+				targets: 1,
+			},
+			{
+				id: "B",
+				name: "Daily operating schedule",
+				provider: "GO Tracker",
+				purpose: "Platforms and locomotive assignments",
+				refreshIntervalMs: SOURCE_B_THROTTLE_MS,
+				lastRequestAt: at(state.lastSourceBFetchMs),
+				targets: 1,
+			},
+			{
+				id: "C",
+				name: "UP Express departures",
+				provider: "Metrolinx",
+				purpose: "UP Express platform assignments",
+				refreshIntervalMs: SOURCE_CD_THROTTLE_MS,
+				lastRequestAt: at(latest(state.lastSourceCFetchMs)),
+				targets: Object.keys(state.lastSourceCFetchMs).length || SOURCE_C_IDS.length,
+			},
+			{
+				id: "D",
+				name: "GO stop departures",
+				provider: "Metrolinx",
+				purpose: "Near-term actual and scheduled platforms",
+				refreshIntervalMs: SOURCE_CD_THROTTLE_MS,
+				lastRequestAt: at(latest(state.lastSourceDFetchMs)),
+				targets: Object.keys(state.lastSourceDFetchMs).length,
+			},
+			{
+				id: "E",
+				name: "Rail signage",
+				provider: "GO Tracker",
+				purpose: "Platforms and actual/scheduled coach counts",
+				refreshIntervalMs: SOURCE_E_THROTTLE_MS,
+				lastRequestAt: at(latest(state.lastSourceEFetchMs)),
+				targets: Object.keys(state.lastSourceEFetchMs).length,
+			},
+			{
+				id: "F",
+				name: "Fleet finder",
+				provider: "TransSee",
+				purpose: "Ordered locomotive, coach, and cab-car consists",
+				refreshIntervalMs: SOURCE_F_THROTTLE_MS,
+				lastRequestAt: at(state.lastSourceFFetchMs),
+				targets: 1,
+			},
+		],
+		activeVehicles: state.activeIds.size,
+		activeFleetItems: state.activeCars.size,
+		activePassengerCarCounts: state.activePassengerCars.size,
+		activeModels: state.activeModels.size,
+		knownConsists: Object.keys(state.vehicleConsists).length,
+		knownPassengerCarCounts: Object.keys(state.vehiclePassengerCars).length,
+		retainedPlatformAssignments: state.prevs.length,
+	};
 }
 
 /** Return the latest scraped fleet allocation even before it has propagated to every trip in the block. */
@@ -251,9 +352,11 @@ function propagateVehicleInfoToBlock(
 			inst.passenger_cars === (passengerCars ?? null) &&
 			JSON.stringify(inst.consist) === JSON.stringify(currentConsist)
 		) {
-			if (inst.vehicle_id) registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), inst.vehicle_id);
+			if (inst.vehicle_id)
+				registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), inst.vehicle_id);
 			if (inst.consist) {
-				for (const carId of inst.consist) registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), carId);
+				for (const carId of inst.consist)
+					registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), carId);
 			}
 			return;
 		}
@@ -264,9 +367,11 @@ function propagateVehicleInfoToBlock(
 		inst.passenger_cars = merged.passenger_cars ?? null;
 		if (currentConsist) inst.consist = currentConsist;
 
-		if (inst.vehicle_id) registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), inst.vehicle_id);
+		if (inst.vehicle_id)
+			registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), inst.vehicle_id);
 		if (inst.consist) {
-			for (const carId of inst.consist) registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), carId);
+			for (const carId of inst.consist)
+				registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), carId);
 		}
 	};
 
@@ -348,10 +453,13 @@ function getUniqueStopTimesForRange(
 					update.stop_time_updates
 						?.filter(
 							(stu) =>
-								(!stopId || stu.stop_id === stopId) &&
-								inWindow(stu.departure_time ?? stu.arrival_time),
+								(!stopId || stu.stop_id === stopId) && inWindow(stu.departure_time ?? stu.arrival_time),
 						)
-						.map((stu) => ({ feed_id: update.feed_id, stop_id: stu.stop_id, trip_id: update.trip.trip_id })) ?? [],
+						.map((stu) => ({
+							feed_id: update.feed_id,
+							stop_id: stu.stop_id,
+							trip_id: update.trip.trip_id,
+						})) ?? [],
 			),
 		)
 		.filter((v) => v);
@@ -398,9 +506,11 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 		if (!at) continue;
 		const inst = at.instances.find((i) => i.serviceDate === serviceDateStr);
 		if (inst) {
-			if (inst.vehicle_id) registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), inst.vehicle_id);
+			if (inst.vehicle_id)
+				registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), inst.vehicle_id);
 			if (inst.consist) {
-				for (const carId of inst.consist) registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), carId);
+				for (const carId of inst.consist)
+					registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), carId);
 			}
 		}
 	}
@@ -525,7 +635,9 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 				stop_id: mergeId(ctx, stop_id),
 				corridors: corridor_codes.map((code) => ({
 					code,
-					promise: fetchWithTimeout(ctx, SOURCE_E_URL_TEMPLATE(code, stop_id), { headers: { Referer: SOURCE_E_REFERRER } })
+					promise: fetchWithTimeout(ctx, SOURCE_E_URL_TEMPLATE(code, stop_id), {
+						headers: { Referer: SOURCE_E_REFERRER },
+					})
 						.then((r) => (r.ok ? r.json() : null))
 						.catch((e) => {
 							logger.error(
@@ -561,17 +673,19 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 
 			for (const st of uniqueStopTimesSourceD) {
 				if (!st.trip_id.endsWith(tripNumber)) continue;
-				const instance = getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances.find((v) => {
-					if (v.serviceDate === departure.scheduledDateTime.slice(0, 10).replace(/-/g, "")) return true;
-					const offset = v.stopTimes.find(
-						(fst) => fst.actual_stop_id === item.stop_id,
-					)?.scheduled_departure_date_offset;
-					if (!offset) return false;
+				const instance = getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances.find(
+					(v) => {
+						if (v.serviceDate === departure.scheduledDateTime.slice(0, 10).replace(/-/g, "")) return true;
+						const offset = v.stopTimes.find(
+							(fst) => fst.actual_stop_id === item.stop_id,
+						)?.scheduled_departure_date_offset;
+						if (!offset) return false;
 
-					const prevDate = new Date(departure.scheduledDateTime.slice(0, 10));
-					prevDate.setDate(prevDate.getDate() - offset);
-					return prevDate.toISOString().slice(0, 10).replace(/-/g, "") === v.serviceDate;
-				});
+						const prevDate = new Date(departure.scheduledDateTime.slice(0, 10));
+						prevDate.setDate(prevDate.getDate() - offset);
+						return prevDate.toISOString().slice(0, 10).replace(/-/g, "") === v.serviceDate;
+					},
+				);
 
 				const ast = instance?.stopTimes.find((ast) => ast.actual_stop_id === item.stop_id);
 				if (ast && ast.actual_stop_id)
@@ -603,8 +717,9 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 			for (const st of uniqueStopTimesSourceC) {
 				if (!st.trip_id.endsWith(departure.tripNumber)) continue;
 				const instance =
-					getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances.find((v) => v.serviceDate === dateStr) ??
-					getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances[0];
+					getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances.find(
+						(v) => v.serviceDate === dateStr,
+					) ?? getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances[0];
 
 				const ast = instance?.stopTimes.find((ast) => ast.actual_stop_id === mergeId(ctx, item.stop_id));
 				if (ast)
@@ -1021,9 +1136,7 @@ export async function updateSourceF(ctx: CacheContext, serviceDateStr: string, b
 				.querySelectorAll("td")
 				.slice(1)
 				.map((td) => td.text.trim());
-			const infoRow = rows[1]
-				.querySelectorAll("td")
-				.map((td) => td.text.trim());
+			const infoRow = rows[1].querySelectorAll("td").map((td) => td.text.trim());
 
 			let locoIdx = infoRow.findIndex((s) => s.toLowerCase().includes("locomotive"));
 			let cabIdx = infoRow.findIndex((s) => s.toLowerCase().includes("cab"));

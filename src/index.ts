@@ -282,11 +282,23 @@ export class TRAX {
 					const message = error instanceof Error ? error.message : String(error);
 					this.reportSupplemental(plugin.id, plugin.feedIds[0], "error", message);
 					logger.error(`Supplemental source '${plugin.id}' failed: ${message}`, {
-						module: "index", function: "refreshRealtime",
+						module: "index",
+						function: "refreshRealtime",
 					});
 				}
 			}
-			await cache.refreshRealtimeCache(gtfs, this.config, this.ctx);
+			const afterRealtimePlugins = this.config.network.plugins.filter((plugin) => plugin.afterRealtime);
+			for (const plugin of afterRealtimePlugins) this.reportSupplemental(plugin.id, plugin.feedIds[0], "loading");
+			try {
+				await cache.refreshRealtimeCache(gtfs, this.config, this.ctx);
+				for (const plugin of afterRealtimePlugins)
+					this.reportSupplemental(plugin.id, plugin.feedIds[0], "healthy");
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				for (const plugin of afterRealtimePlugins)
+					this.reportSupplemental(plugin.id, plugin.feedIds[0], "error", message);
+				throw error;
+			}
 			this.ctx.augmented.timer.stop("refreshRealtime");
 		})().finally(() => {
 			this.realtimeRefreshInFlight = null;
@@ -538,6 +550,7 @@ export type {
 	ObservationConfidence,
 	VLineChronosCallObservation,
 	VLineChronosServiceObservation,
+	VLineDiagnostics,
 	VLinePlatformObservation,
 	VLineBookingAvailability,
 	VLineJourneyPlannerLocation,

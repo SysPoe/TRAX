@@ -91,6 +91,40 @@ export type VLineSourceStatus = {
 	error: string | null;
 };
 
+export type VLineDiagnostics = {
+	lastRefreshAt: string | null;
+	trackedTrips: number;
+	linkedServiceKeys: number;
+	canonicalRealtimeTrips: number;
+	canonicalServiceTrips: number;
+	sources: Record<VLineSourceName, VLineSourceStatus>;
+	chronos: {
+		matchedRuns: number;
+		resolvedStops: number;
+		mappedRoutes: number;
+		cachedRouteDirections: number;
+		mappedDirections: number;
+		discoveryBackoffs: number;
+		patternCacheEntries: number;
+		freshPatternCacheEntries: number;
+		enrichedServices: number;
+		enrichedCalls: number;
+		platformObservations: number;
+	};
+	journeyPlanner: {
+		serviceCacheEntries: number;
+		requestsInFlight: number;
+		bookingCacheEntries: number;
+		bookingRequestsInFlight: number;
+		platformLocationsCached: number;
+		platformStationsPolled: number;
+		platformStationErrors: number;
+	};
+	scsBoard: {
+		enrichedServices: number;
+	};
+};
+
 export type VLinePluginState = {
 	detailsByInstanceId: Map<string, VLineTripDetails>;
 	detailsByServiceKey: Map<string, VLineTripDetails>;

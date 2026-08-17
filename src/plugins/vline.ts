@@ -1,5 +1,5 @@
 import type { TransitPlugin } from "./types.js";
-import { getVLineState, VLINE_PLUGIN_ID } from "../region-specific/AU/VIC/state.js";
+import { getVLineDiagnostics, getVLineState, VLINE_PLUGIN_ID } from "../region-specific/AU/VIC/state.js";
 import {
 	applyVLineEnrichment,
 	getVLineVehicleFormation,
@@ -17,7 +17,14 @@ export function createVLinePlugin(options: VLinePluginOptions = {}): TransitPlug
 	return {
 		id: VLINE_PLUGIN_ID,
 		feedIds: ["vic-vline"],
-		capabilities: ["vehicles", "occupancy", "consist", "platform-changes", "boarding-locations", "supplemental-realtime"],
+		capabilities: [
+			"vehicles",
+			"occupancy",
+			"consist",
+			"platform-changes",
+			"boarding-locations",
+			"supplemental-realtime",
+		],
 		afterSnapshotBuilt: buildVLineRealtimeTripAliases,
 		beforeRealtime: (ctx) => refreshVLineOfficialSources(ctx, options),
 		canonicalRealtimeTripId: canonicalVLineRealtimeTripId,
@@ -30,6 +37,7 @@ export function createVLinePlugin(options: VLinePluginOptions = {}): TransitPlug
 				return trip ? vlineDetails(ctx, trip) : null;
 			},
 			getSourceStatus: () => structuredClone(getVLineState(ctx).sources),
+			getDiagnostics: () => getVLineDiagnostics(ctx),
 		}),
 	};
 }

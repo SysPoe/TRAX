@@ -6,6 +6,7 @@ import {
 	getActiveVehicleIds,
 	getActiveVehicleModels,
 	getVehicleConsist,
+	getGthaRealtimeDiagnostics,
 } from "../region-specific/CA/GTHA/realtime.js";
 import { getVehicleInfo } from "../region-specific/CA/GTHA/vehicleModel.js";
 import { entityKey } from "../identity.js";
@@ -84,5 +85,6 @@ export const gthaPlugin: TransitPlugin = {
 		getVehicleDetails: (vehicleId: string) => getGTHAVehicleDetails(vehicleId),
 		getVehicleModels: () =>
 			Array.from(new Set(GTHAVehicleDetails.map((vehicle) => vehicle.description.model))).sort(),
+		getDiagnostics: () => getGthaRealtimeDiagnostics(ctx),
 	}),
 };
