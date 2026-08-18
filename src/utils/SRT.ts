@@ -216,8 +216,16 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 	const timer = ctx.augmented.timer;
 	timer.start("SRT:generateNetworkData");
 	const trips = gtfs.getTrips();
+	// Crossing the native addon once is substantially cheaper than issuing one
+	// route lookup per trip and one stop lookup per stop time.
+	const routesById = new Map(
+		gtfs.getRoutes().map((route) => [entityKey({ feedId: route.feed_id, localId: route.route_id }), route]),
+	);
+	const stopsById = new Map(
+		gtfs.getStops().map((stop) => [entityKey({ feedId: stop.feed_id, localId: stop.stop_id }), stop]),
+	);
 	const railTrips = trips.filter((trip) => {
-		const route = gtfs.getRoutes({ feed_id: trip.feed_id, route_id: trip.route_id })[0];
+		const route = routesById.get(entityKey({ feedId: trip.feed_id, localId: trip.route_id }));
 		return route ? isConsideredRoute(route, ctx) : false;
 	});
 
@@ -233,7 +241,7 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		const edgeTimes = getPatternEdgeTimes(stopTimes);
 		const edgeDistances = getPatternEdgeDistances(stopTimes);
 		const stops = stopTimes.map((st: qdf.StopTime, i: number) => {
-			const stop = gtfs.getStops({ feed_id: st.feed_id, stop_id: st.stop_id })[0];
+			const stop = stopsById.get(entityKey({ feedId: st.feed_id, localId: st.stop_id }));
 			const id = canonicalStationKey(ctx.config, {
 				feedId: st.feed_id,
 				localId: stop ? (stop.parent_station ?? stop.stop_id) : st.stop_id,
