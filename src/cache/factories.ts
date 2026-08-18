@@ -31,6 +31,7 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 		passingStopsCache: new LRUCache<string, PassingStop[]>(5000),
 		runSeriesCache: new Map(),
 		carTrips: new Map(),
+		tripNumberTrips: new Map(),
 		tripsStoppingAt: new Map(),
 		stopDeparturesCached: new Map(),
 		instancesRec: new Map(),

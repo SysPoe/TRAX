@@ -303,6 +303,14 @@ export async function refreshStaticCache(
 		);
 	}
 	for (const trip of trips) newAugmentedCache.rawTripsRec.set(entityKey({ feedId: trip.feed_id, localId: trip.trip_id }), trip);
+	for (const trip of trips) {
+		const tripNumber = trip.trip_short_name && /^\d{1,3}$/.test(trip.trip_short_name)
+			? trip.trip_short_name
+			: trip.trip_id.slice(-4);
+		const keys = newAugmentedCache.tripNumberTrips.get(tripNumber) ?? new Set<string>();
+		keys.add(entityKey({ feedId: trip.feed_id, localId: trip.trip_id }));
+		newAugmentedCache.tripNumberTrips.set(tripNumber, keys);
+	}
 	ctx.augmented.timer.stop("refreshStaticCache:loadTrips");
 	logger.debug(`Loaded ${trips.length} considered trips out of ${allTrips.length} total.`, {
 		module: "cache",

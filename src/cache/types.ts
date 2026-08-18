@@ -48,6 +48,7 @@ export type AugmentedCache = {
 	passingStopsCache: LRUCache<string, PassingStop[]>;
 	runSeriesCache: Map<string, Map<string, RunSeries>>;
 	carTrips: Map<string, Set<string>>;
+	tripNumberTrips: Map<string, Set<string>>;
 
 	tripsStoppingAt: Map<string, Set<string>>;
 	stopDeparturesCached: Map<string, Map<string, AugmentedStopTime[]>>;

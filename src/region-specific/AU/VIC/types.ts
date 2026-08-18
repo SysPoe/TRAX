@@ -1,5 +1,4 @@
 import type { OccupancyStatus, RealtimeCarriageDetails } from "qdf-gtfs";
-import type { ChronosDirection, ChronosPatternResponse } from "./chronos.js";
 
 export type ObservationConfidence = "confirmed" | "reported" | "inferred";
 
@@ -8,7 +7,6 @@ export type VLineObservationSource =
 	| "vline-journey-planner"
 	| "vline-platform-services"
 	| "vline-journey-planner-web"
-	| "ptv-chronos"
 	| "vline-scs-html"
 	| "static-platform-heuristic";
 
@@ -38,30 +36,8 @@ export type VLineScsServiceObservation = Observation<{
 	cancelled: boolean;
 }>;
 
-export type VLineChronosServiceObservation = Observation<{
-	status: string | null;
-	destination: string | null;
-	direction: string | null;
-	scheduledDepartureUtc: string | null;
-	estimatedDepartureUtc: string | null;
-	atPlatform: boolean;
-}>;
-
-export type VLineChronosCallObservation = {
-	stopId: string;
-	chronosStopId: number;
-	scheduledDepartureUtc: string;
-	estimatedDepartureUtc: string | null;
-	atPlatform: boolean;
-	platform: string | null;
-	source: "ptv-chronos";
-	observedAt: string;
-	expiresAt: string;
-};
-
 export type VLineTripDetails = {
 	tdn: string;
-	chronosRunRef: Observation<string> | null;
 	leadingUnit: Observation<string> | null;
 	fullConsist: Observation<string[]> | null;
 	subtype: Observation<string> | null;
@@ -76,13 +52,11 @@ export type VLineTripDetails = {
 	occupancyPercentage: Observation<number> | null;
 	carriageOccupancy: Observation<RealtimeCarriageDetails[]> | null;
 	serviceStatus: Observation<string> | null;
-	chronosService: VLineChronosServiceObservation | null;
-	chronosCalls: VLineChronosCallObservation[];
 	scsService: VLineScsServiceObservation | null;
 	platforms: VLinePlatformObservation[];
 };
 
-export type VLineSourceName = "journey-planner" | "chronos" | "scs-board";
+export type VLineSourceName = "journey-planner" | "scs-board";
 
 export type VLineSourceStatus = {
 	enabled: boolean;
@@ -98,19 +72,6 @@ export type VLineDiagnostics = {
 	canonicalRealtimeTrips: number;
 	canonicalServiceTrips: number;
 	sources: Record<VLineSourceName, VLineSourceStatus>;
-	chronos: {
-		matchedRuns: number;
-		resolvedStops: number;
-		mappedRoutes: number;
-		cachedRouteDirections: number;
-		mappedDirections: number;
-		discoveryBackoffs: number;
-		patternCacheEntries: number;
-		freshPatternCacheEntries: number;
-		enrichedServices: number;
-		enrichedCalls: number;
-		platformObservations: number;
-	};
 	journeyPlanner: {
 		serviceCacheEntries: number;
 		requestsInFlight: number;
@@ -130,13 +91,6 @@ export type VLinePluginState = {
 	detailsByServiceKey: Map<string, VLineTripDetails>;
 	canonicalTripIdByRealtimeKey: Map<string, string>;
 	canonicalTripIdByServiceKey: Map<string, string>;
-	chronosRunByInstanceId: Map<string, string>;
-	chronosStopByGtfsStopId: Map<string, number>;
-	chronosRouteByStopAndGtfs: Map<string, number>;
-	chronosDirectionsByRouteId: Map<number, ChronosDirection[]>;
-	chronosDirectionByStopAndRoute: Map<string, number>;
-	chronosDiscoveryRetryAt: Map<string, number>;
-	chronosPatternCache: Map<string, { response: ChronosPatternResponse; expiresAt: number }>;
 	journeyCache: Map<string, { services: VLineJourneyPlannerService[]; expiresAt: number }>;
 	journeyInFlight: Map<string, Promise<VLineJourneyPlannerService[]>>;
 	bookingCache: Map<string, { availability: VLineBookingAvailability | null; expiresAt: number }>;
@@ -158,19 +112,11 @@ export type VLineJourneyPlannerOptions = {
 	platformRefreshIntervalMs?: number;
 };
 
-export type VLineChronosOptions = {
-	apiKey: string;
-	baseUrl?: string;
-};
-
 export type VLinePluginOptions = {
 	journeyPlanner?: VLineJourneyPlannerOptions;
-	chronos?: VLineChronosOptions;
 	scsBoard?: false | { url?: string };
 	platformHeuristics?: boolean;
 	requestTimeoutMs?: number;
-	/** Optional explicit trip-instance override; normal production use discovers runs automatically. */
-	chronosRunRefs?: Readonly<Record<string, string>>;
 };
 
 export type VLineJourneyPlannerService = {

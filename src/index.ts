@@ -452,6 +452,8 @@ export class TRAX {
 	public getTripIdsByStop = (stop: QualifiedEntityId) =>
 		this.ctx.augmented.tripsStoppingAt.get(entityKey(stop)) ?? new Set<string>();
 	public getTripIdsByCar = (car_id: string) => this.ctx.augmented.carTrips.get(car_id) ?? new Set<string>();
+	public getTripIdsByNumber = (tripNumber: string) =>
+		this.ctx.augmented.tripNumberTrips.get(tripNumber) ?? new Set<string>();
 	public getAvailableServiceDates = () => cache.getAvailableServiceDates(this.ctx);
 
 	public logTimings = (label: string = "TRAX Operation", clear: boolean = true) =>
@@ -548,8 +550,6 @@ export type { AugmentedStopTime, BoardingLocation, BoardingLocationKind } from "
 export type {
 	Observation,
 	ObservationConfidence,
-	VLineChronosCallObservation,
-	VLineChronosServiceObservation,
 	VLineDiagnostics,
 	VLinePlatformObservation,
 	VLineBookingAvailability,
@@ -575,36 +575,6 @@ export {
 	vlineAccessToken,
 } from "./region-specific/AU/VIC/journey-planner.js";
 export { parseVLineScsBoard } from "./region-specific/AU/VIC/scs-board.js";
-export {
-	chronosHourlyToken,
-	getChronosBulkDepartures,
-	getChronosDepartures,
-	getChronosDirections,
-	getChronosDirectionalDepartures,
-	getChronosRunPattern,
-	searchChronosStops,
-} from "./region-specific/AU/VIC/chronos.js";
-export type {
-	ChronosBulkDepartureRequest,
-	ChronosDeparture,
-	ChronosDeparturesResponse,
-	ChronosDirection,
-	ChronosDirectionsResponse,
-	ChronosPatternOptions,
-	ChronosPatternResponse,
-	ChronosRoute,
-	ChronosRun,
-	ChronosSearchResponse,
-	ChronosStop,
-} from "./region-specific/AU/VIC/chronos.js";
-export {
-	isChronosRegionalRailRoute,
-	matchChronosRun,
-	normalizeChronosName,
-	vlineChronosRouteGtfsId,
-	type ChronosDepartureCandidate,
-	type ChronosMatchContext,
-} from "./region-specific/AU/VIC/chronos-match.js";
 export type { AugmentedStop } from "./utils/augmentedStop.js";
 export {
 	attachDeparturesHelpers,
