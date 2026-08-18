@@ -1,5 +1,5 @@
 import type { TransitPlugin } from "./types.js";
-import { updateAllSources } from "../region-specific/CA/GTHA/realtime.js";
+import { enrichGthaVehiclePosition, updateAllSources } from "../region-specific/CA/GTHA/realtime.js";
 import {
 	getActiveCars,
 	getActivePassengerCars,
@@ -30,6 +30,7 @@ export const gthaPlugin: TransitPlugin = {
 		});
 		return updateAllSources(ctx, ctx.gtfs);
 	},
+	enrichVehiclePosition: enrichGthaVehiclePosition,
 	vehicleInfoForTrip: getVehicleInfo,
 	vehicleFormationUnits: (trip, ctx) => {
 		const consist = trip.consist ?? (trip.vehicle_id ? getVehicleConsist(ctx, trip.vehicle_id) : null);

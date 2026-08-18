@@ -69,7 +69,14 @@ export function getVehiclePositions(ctx: CacheContext, trip?: QualifiedEntityId)
 	const gtfs = requireGtfs(ctx);
 	const positions = gtfs.getRealtimeVehiclePositions();
 	const injected = ctx.raw.injectedVehiclePositions ?? [];
-	const allPositions = canonicalizeRealtimeVehiclePositions(positions.concat(injected), ctx);
+	const allPositions = canonicalizeRealtimeVehiclePositions(positions.concat(injected), ctx).map((position) => {
+		let enriched = position;
+		for (const plugin of ctx.config.network.plugins) {
+			if (!plugin.feedIds.includes(enriched.feed_id) || !plugin.enrichVehiclePosition) continue;
+			enriched = plugin.enrichVehiclePosition(enriched, ctx) ?? enriched;
+		}
+		return enriched;
+	});
 	if (trip) return allPositions.filter((v: RealtimeVehiclePosition) => v.feed_id === trip.feedId && v.trip.trip_id === trip.localId);
 	return allPositions;
 }

@@ -1,5 +1,5 @@
 import { CacheContext, getAugmentedTripInstance, getAugmentedTrips, getTripUpdates } from "../../../cache/index.js";
-import { GTFS } from "qdf-gtfs";
+import { GTFS, type RealtimeVehiclePosition } from "qdf-gtfs";
 import { GTHADeparturesResponse, UPEDeparturesResponse } from "./types.js";
 import logger from "../../../utils/logger.js";
 import { getServiceDayStart, getServiceDate } from "../../../utils/time.js";
@@ -61,7 +61,10 @@ type GthaRealtimeState = {
 	lastSourceDFetchMs: Record<string, number>;
 	vehiclePassengerCars: Record<string, number>;
 	vehicleConsists: Record<string, string[]>;
+	vehicleBearings: Map<string, { bearing: number; receivedAt: number }>;
 };
+
+const SOURCE_A_BEARING_MAX_AGE_MS = SOURCE_A_THROTTLE_MS * 3;
 
 export type GthaRealtimeDiagnostics = {
 	sources: {
@@ -97,7 +100,48 @@ function getState(ctx: CacheContext): GthaRealtimeState {
 		lastSourceDFetchMs: {},
 		vehiclePassengerCars: {},
 		vehicleConsists: {},
+		vehicleBearings: new Map(),
 	}));
+}
+
+/** GO Tracker calls its compass bearing `course`; accept a full-turn 360 as north. */
+export function parseGthaCourse(value: unknown): number | null {
+	if (typeof value !== "number" && typeof value !== "string") return null;
+	const raw = typeof value === "string" ? value.trim() : value;
+	if (raw === "") return null;
+	const course = Number(raw);
+	if (!Number.isFinite(course) || course < 0 || course > 360) return null;
+	return course === 360 ? 0 : course;
+}
+
+/**
+ * Source A is authoritative when available. Metrolinx currently publishes an
+ * explicit zero placeholder for every GO bearing, so expose that as missing and
+ * let consumers infer direction from consecutive positions instead.
+ */
+export function applyGthaVehicleBearing(
+	vehicle: RealtimeVehiclePosition,
+	supplementalBearing: number | null,
+): RealtimeVehiclePosition {
+	if (vehicle.feed_id !== "go") return vehicle;
+	const bearing = supplementalBearing ?? (vehicle.position.bearing === 0 ? null : vehicle.position.bearing);
+	if (bearing === vehicle.position.bearing) return vehicle;
+	return { ...vehicle, position: { ...vehicle.position, bearing } };
+}
+
+export function enrichGthaVehiclePosition(
+	vehicle: RealtimeVehiclePosition,
+	ctx: CacheContext,
+	now = Date.now(),
+): RealtimeVehiclePosition {
+	const observation = getState(ctx).vehicleBearings.get(
+		entityKey({ feedId: vehicle.feed_id, localId: vehicle.trip.trip_id }),
+	);
+	const supplementalBearing =
+		observation && now - observation.receivedAt <= SOURCE_A_BEARING_MAX_AGE_MS
+			? observation.bearing
+			: null;
+	return applyGthaVehicleBearing(vehicle, supplementalBearing);
 }
 
 export function getActiveVehicleModels(ctx: CacheContext): Set<string> {
@@ -917,6 +961,16 @@ export async function updateSourceA(
 		if (!data) return;
 
 		const trips = (data.trip as any[]).filter((v) => v.source !== "B");
+		const receivedAt = Date.now();
+		const vehicleBearings = new Map<string, { bearing: number; receivedAt: number }>();
+		for (const trip of trips) {
+			const bearing = parseGthaCourse(trip.course);
+			if (bearing === null) continue;
+			for (const tripId of tripNumberToIds.get(String(trip.tripNumber)) ?? []) {
+				vehicleBearings.set(tripId, { bearing, receivedAt });
+			}
+		}
+		state.vehicleBearings = vehicleBearings;
 
 		logger.debug(`Source A: Processing ${trips.length} active trips`, {
 			module: "CA/GTHA",

@@ -51,6 +51,10 @@ import {
 	viaTrainKey,
 } from "../dist/region-specific/CA/VIA/station-board.js";
 import { selectViaBookingFare } from "../dist/region-specific/CA/VIA/consist.js";
+import {
+	applyGthaVehicleBearing,
+	parseGthaCourse,
+} from "../dist/region-specific/CA/GTHA/realtime.js";
 
 assert.deepEqual(
 	selectViaBookingFare({
@@ -111,6 +115,33 @@ assert.deepEqual(gthaWithFallbacks.places.find((place) => place.id === "guelph")
 	{ feedId: "go", localId: "GL" },
 	{ feedId: "via", localId: "70" },
 ]);
+assert.deepEqual(gthaWithFallbacks.places.find((place) => place.id === "toronto-union").members, [
+	{ feedId: "go", localId: "UN" },
+	{ feedId: "up", localId: "UN" },
+	{ feedId: "via", localId: "119" },
+]);
+assert.deepEqual(gthaWithFallbacks.places.find((place) => place.id === "guildwood").members, [
+	{ feedId: "go", localId: "GU" },
+	{ feedId: "via", localId: "450" },
+]);
+assert.deepEqual(gthaWithFallbacks.places.find((place) => place.id === "stratford").members, [
+	{ feedId: "go", localId: "SF" },
+	{ feedId: "via", localId: "7" },
+]);
+
+const goPosition = { feed_id: "go", position: { bearing: 0 } };
+assert.equal(parseGthaCourse("223"), 223);
+assert.equal(parseGthaCourse(0), 0);
+assert.equal(parseGthaCourse(360), 0);
+assert.equal(parseGthaCourse("not-a-course"), null);
+assert.equal(applyGthaVehicleBearing(goPosition, 223).position.bearing, 223);
+assert.equal(applyGthaVehicleBearing(goPosition, 0).position.bearing, 0);
+assert.equal(applyGthaVehicleBearing(goPosition, null).position.bearing, null);
+assert.equal(
+	applyGthaVehicleBearing({ feed_id: "go", position: { bearing: 42 } }, null).position.bearing,
+	42,
+);
+assert.equal(applyGthaVehicleBearing({ feed_id: "via", position: { bearing: 0 } }, null).position.bearing, 0);
 
 assert.equal(vlineTdn("01-GEL--8-T0-8761"), "8761");
 assert.equal(vlineTdn("01-GEL--8-T0-87612"), null);

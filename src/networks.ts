@@ -199,10 +199,12 @@ export function createCaGthaNetwork(apiKeys: string | readonly string[] = []): N
 		places: [
 			interchange("toronto-union", "Toronto Union Station", "UN", "119", true),
 			interchange("oshawa", "Oshawa", "OS", "367"),
+			interchange("guildwood", "Guildwood", "GU", "450"),
 			interchange("kitchener", "Kitchener", "KI", "114"),
 			interchange("aldershot", "Aldershot", "AL", "600"),
 			interchange("oakville", "Oakville", "OA", "436"),
 			interchange("guelph", "Guelph Central", "GL", "70"),
+			interchange("stratford", "Stratford", "SF", "7"),
 			interchange("brampton", "Brampton", "BR", "322"),
 			interchange("georgetown", "Georgetown", "GE", "6"),
 			interchange("malton", "Malton", "MA", "34"),

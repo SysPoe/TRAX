@@ -30,6 +30,11 @@ export interface TransitPlugin {
 	canonicalRealtimeTripId?(trip: RealtimeUpdateTripInfo, ctx: CacheContext): string | null;
 	/** Enrich the completed realtime snapshot without leaking region checks into core code. */
 	afterRealtime?(ctx: CacheContext, changedTripKeys: ReadonlySet<string>): Promise<void> | void;
+	/** Correct or enrich a provider vehicle observation when it crosses the runtime boundary. */
+	enrichVehiclePosition?(
+		vehicle: RealtimeVehiclePosition,
+		ctx: CacheContext,
+	): RealtimeVehiclePosition | void;
 	enrichStop?(stop: AugmentedStop, ctx: CacheContext, augmentationContext?: unknown): AugmentedStop | void;
 	enrichTrip?(trip: AugmentedTripInstance, ctx: CacheContext): AugmentedTripInstance | void;
 	vehicleInfo?(vehicle: RealtimeVehiclePosition, ctx: CacheContext): unknown;
