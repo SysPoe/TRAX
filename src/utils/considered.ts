@@ -2,6 +2,7 @@ import * as qdf from "qdf-gtfs";
 import type { AugmentedStop } from "./augmentedStop.js";
 import type { CacheContext } from "../cache/types.js";
 import { entityKey } from "../identity.js";
+import { pluginSupportsFeed } from "../plugins/types.js";
 
 export function clearConsideredCaches(ctx: CacheContext): void {
 	ctx.runtimeState.consideredRoutes.clear();
@@ -19,7 +20,11 @@ export function isConsideredRoute(route: qdf.Route, ctx: CacheContext): boolean 
 	const key = entityKey({ feedId: route.feed_id, localId: route.route_id });
 	const cached = ctx.runtimeState.consideredRoutes.get(key);
 	if (cached !== undefined) return cached;
-	const valid = isRailLikeRouteType(route.route_type);
+	const valid =
+		isRailLikeRouteType(route.route_type) &&
+		ctx.config.network.plugins.every(
+			(plugin) => !pluginSupportsFeed(plugin, route.feed_id) || plugin.considerRoute?.(route, ctx) !== false,
+		);
 	ctx.runtimeState.consideredRoutes.set(key, valid);
 	return valid;
 }

@@ -9,7 +9,7 @@ import path from "node:path";
 import { entityKey, parseEntityKey } from "../identity.js";
 import type { QualifiedEntityId } from "qdf-gtfs";
 import { interpolateTimes as wasmInterpolateTimes } from "../../build/release.js";
-import { isRailLikeRouteType } from "./considered.js";
+import { isConsideredRoute } from "./considered.js";
 
 export type SRTMatrix = {
 	[from: string]: {
@@ -42,7 +42,9 @@ interface NetworkData {
 
 const CACHE_FILE = "network_topology.json";
 const MAX_CACHE_AGE_DAYS = 7;
-const TOPOLOGY_CACHE_VERSION = 3;
+const TOPOLOGY_CACHE_VERSION = 4;
+
+type PatternStop = { id: string; timeFromPrev: number; distanceFromPrev: number };
 
 function loadNetworkData(ctx: cache.CacheContext): NetworkData | null {
 	const cacheDir = ctx.config.cacheDir;
@@ -120,18 +122,107 @@ function getPatternEdgeTimes(stopTimes: qdf.StopTime[]): number[] {
 	return edgeTimes;
 }
 
+function getPatternEdgeDistances(stopTimes: qdf.StopTime[]): number[] {
+	return stopTimes.map((stopTime, index) => {
+		if (index === 0) return 0;
+		const previous = finiteTime(stopTimes[index - 1].shape_dist_traveled);
+		const current = finiteTime(stopTime.shape_dist_traveled);
+		return previous != null && current != null && current > previous ? current - previous : 0;
+	});
+}
+
+/**
+ * Remove timetable-only express edges while retaining genuinely shorter tracks
+ * between the same stations (for example Flinders Street-Richmond versus the
+ * City Loop). Shape distance identifies the physical corridor independently of
+ * stopping pattern and running time.
+ */
+function pruneExpressSkipEdges(patterns: PatternStop[][], validEdges: Set<string>): void {
+	const directDistances = new Map<string, number[]>();
+	const directTimes = new Map<string, number[]>();
+	for (const pattern of patterns) {
+		for (let i = 0; i < pattern.length - 1; i++) {
+			const key = `${pattern[i].id}|${pattern[i + 1].id}`;
+			const distance = pattern[i + 1].distanceFromPrev;
+			if (distance > 0) {
+				const values = directDistances.get(key) ?? [];
+				values.push(distance);
+				directDistances.set(key, values);
+			}
+			const time = pattern[i + 1].timeFromPrev;
+			if (time > 0) {
+				const values = directTimes.get(key) ?? [];
+				values.push(time);
+				directTimes.set(key, values);
+			}
+		}
+	}
+
+	const alternatives = new Map<string, number[]>();
+	const alternativeTimes = new Map<string, number[]>();
+	for (const pattern of patterns) {
+		for (let i = 0; i < pattern.length - 2; i++) {
+			let distance = 0;
+			let distanceKnown = true;
+			let time = 0;
+			let timeKnown = true;
+			for (let j = i + 1; j < pattern.length; j++) {
+				if (pattern[j].distanceFromPrev <= 0) distanceKnown = false;
+				else distance += pattern[j].distanceFromPrev;
+				if (pattern[j].timeFromPrev <= 0) timeKnown = false;
+				else time += pattern[j].timeFromPrev;
+				if (j < i + 2) continue;
+				const key = `${pattern[i].id}|${pattern[j].id}`;
+				if (!validEdges.has(key)) continue;
+				const values = alternatives.get(key) ?? [];
+				values.push(distanceKnown ? distance : 0);
+				alternatives.set(key, values);
+				const times = alternativeTimes.get(key) ?? [];
+				times.push(timeKnown ? time : 0);
+				alternativeTimes.set(key, times);
+			}
+		}
+	}
+
+	for (const [key, alternateDistances] of alternatives) {
+		const measuredDirect = directDistances.get(key)?.filter((distance) => distance > 0) ?? [];
+		const measuredAlternatives = alternateDistances.filter((distance) => distance > 0);
+		if (measuredDirect.length > 0 && measuredAlternatives.length > 0) {
+			const shortestDirect = Math.min(...measuredDirect);
+			const shortestAlternative = Math.min(...measuredAlternatives);
+			// Small shape-distance differences are normal between trip variants. A
+			// materially shorter direct leg is a distinct physical corridor.
+			if (shortestAlternative <= shortestDirect * 1.25) validEdges.delete(key);
+			continue;
+		}
+
+		// Some feeds omit stop-level shape distance. Running time is weaker
+		// evidence, so only preserve a direct edge when the alternate is more
+		// than twice as long; otherwise retain the historical express pruning.
+		const measuredDirectTimes = directTimes.get(key)?.filter((value) => value > 0) ?? [];
+		const measuredAlternativeTimes = alternativeTimes.get(key)?.filter((value) => value > 0) ?? [];
+		if (
+			measuredDirectTimes.length === 0 ||
+			measuredAlternativeTimes.length === 0 ||
+			Math.min(...measuredAlternativeTimes) <= Math.min(...measuredDirectTimes) * 2
+		)
+			validEdges.delete(key);
+	}
+}
+
 function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
 	const gtfs = ctx.gtfs;
 	const timer = ctx.augmented.timer;
 	timer.start("SRT:generateNetworkData");
 	const trips = gtfs.getTrips();
-	const railTrips = trips.filter((t) =>
-		isRailLikeRouteType(gtfs.getRoutes({ feed_id: t.feed_id, route_id: t.route_id })[0]?.route_type),
-	);
+	const railTrips = trips.filter((trip) => {
+		const route = gtfs.getRoutes({ feed_id: trip.feed_id, route_id: trip.route_id })[0];
+		return route ? isConsideredRoute(route, ctx) : false;
+	});
 
-	const uniquePatterns: { id: string; timeFromPrev: number }[][] = [];
-	const seenSignatures = new Set<string>();
+	const uniquePatterns: PatternStop[][] = [];
+	const patternsBySignature = new Map<string, PatternStop[]>();
 
 	logger.debug("Extracting unique stopping patterns...", {
 		module: "topology",
@@ -140,6 +231,7 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 	railTrips.forEach((trip) => {
 		const stopTimes = gtfs.getStopTimes({ feed_id: trip.feed_id, trip_id: trip.trip_id });
 		const edgeTimes = getPatternEdgeTimes(stopTimes);
+		const edgeDistances = getPatternEdgeDistances(stopTimes);
 		const stops = stopTimes.map((st: qdf.StopTime, i: number) => {
 			const stop = gtfs.getStops({ feed_id: st.feed_id, stop_id: st.stop_id })[0];
 			const id = canonicalStationKey(ctx.config, {
@@ -147,11 +239,26 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 				localId: stop ? (stop.parent_station ?? stop.stop_id) : st.stop_id,
 			});
 
-			return { id, timeFromPrev: edgeTimes[i] };
+			return { id, timeFromPrev: edgeTimes[i], distanceFromPrev: edgeDistances[i] };
 		});
 		const signature = stops.map((stop) => stop.id).join("|");
-		if (seenSignatures.has(signature)) return;
-		seenSignatures.add(signature);
+		const existing = patternsBySignature.get(signature);
+		if (existing) {
+			for (let i = 1; i < stops.length; i++) {
+				if (
+					stops[i].distanceFromPrev > 0 &&
+					(existing[i].distanceFromPrev <= 0 || stops[i].distanceFromPrev < existing[i].distanceFromPrev)
+				)
+					existing[i].distanceFromPrev = stops[i].distanceFromPrev;
+				if (
+					stops[i].timeFromPrev > 0 &&
+					(existing[i].timeFromPrev <= 0 || stops[i].timeFromPrev < existing[i].timeFromPrev)
+				)
+					existing[i].timeFromPrev = stops[i].timeFromPrev;
+			}
+			return;
+		}
+		patternsBySignature.set(signature, stops);
 
 		uniquePatterns.push(stops);
 	});
@@ -167,18 +274,7 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		module: "topology",
 	});
 
-	uniquePatterns.forEach((pattern) => {
-		for (let i = 0; i < pattern.length - 2; i++) {
-			const startNode = pattern[i].id;
-			for (let j = i + 2; j < pattern.length; j++) {
-				const endNode = pattern[j].id;
-				const skipKey = `${startNode}|${endNode}`;
-				if (validEdges.has(skipKey)) {
-					validEdges.delete(skipKey);
-				}
-			}
-		}
-	});
+	pruneExpressSkipEdges(uniquePatterns, validEdges);
 
 	for (const plugin of ctx.config.network.plugins) plugin.filterTrackEdges?.(validEdges);
 
@@ -592,6 +688,8 @@ export default {
 
 export const _test = {
 	getPatternEdgeTimes,
+	getPatternEdgeDistances,
+	pruneExpressSkipEdges,
 };
 
 /**

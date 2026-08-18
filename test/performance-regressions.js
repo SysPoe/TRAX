@@ -8,6 +8,8 @@ import { buildSeqDiagramTopology } from "../dist/index.js";
 import { _test as refreshCacheTest } from "../dist/cache/refreshCaches.js";
 import { _test as srtTest, getStaticFeedFingerprint } from "../dist/utils/SRT.js";
 import { propagateBlockHandoffs } from "../dist/region-specific/CA/GTHA/block-handoff.js";
+import { ptvMetroPlugin } from "../dist/plugins/ptv-metro.js";
+import { isConsideredRoute } from "../dist/utils/considered.js";
 
 function testSeqDiagramUsesProvidedStopTimes() {
 	const trips = [
@@ -115,6 +117,57 @@ function testUntimedPassingPointsUseShapeDistance() {
 	assert.deepEqual(srtTest.getPatternEdgeTimes(stopTimes), [0, 10, 20, 30]);
 }
 
+function pattern(ids, edgeDistances) {
+	return ids.map((id, index) => ({ id, timeFromPrev: 0, distanceFromPrev: edgeDistances[index] ?? 0 }));
+}
+
+function testExpressPruningDistinguishesParallelCorridors() {
+	const directEdge = "A|D";
+	const parallelEdges = new Set([directEdge, "A|B", "B|C", "C|D"]);
+	srtTest.pruneExpressSkipEdges(
+		[pattern(["A", "D"], [0, 5]), pattern(["A", "B", "C", "D"], [0, 7, 7, 6])],
+		parallelEdges,
+	);
+	assert.ok(parallelEdges.has(directEdge), "a materially shorter parallel corridor must remain connected");
+
+	const timedParallelEdges = new Set([directEdge, "A|B", "B|C", "C|D"]);
+	const timedPattern = (ids, edgeTimes) =>
+		ids.map((id, index) => ({ id, timeFromPrev: edgeTimes[index] ?? 0, distanceFromPrev: 0 }));
+	srtTest.pruneExpressSkipEdges(
+		[timedPattern(["A", "D"], [0, 3]), timedPattern(["A", "B", "C", "D"], [0, 5, 5, 5])],
+		timedParallelEdges,
+	);
+	assert.ok(timedParallelEdges.has(directEdge), "a clearly shorter corridor must survive feeds without shape distance");
+
+	const expressEdges = new Set([directEdge, "A|B", "B|C", "C|D"]);
+	srtTest.pruneExpressSkipEdges(
+		[pattern(["A", "D"], [0, 20]), pattern(["A", "B", "C", "D"], [0, 7, 7, 6])],
+		expressEdges,
+	);
+	assert.ok(!expressEdges.has(directEdge), "an express skip over the same corridor must not become track");
+}
+
+function testPtvReplacementBusIsNotConsideredRail() {
+	const ctx = {
+		config: { network: { plugins: [ptvMetroPlugin] } },
+		runtimeState: { consideredRoutes: new Map() },
+	};
+	assert.equal(
+		isConsideredRoute(
+			{ feed_id: "vic-metro", route_id: "aus:vic:vic-02-GWY-R:", route_type: 400, route_short_name: "Replacement Bus" },
+			ctx,
+		),
+		false,
+	);
+	assert.equal(
+		isConsideredRoute(
+			{ feed_id: "vic-metro", route_id: "aus:vic:vic-02-GWY:", route_type: 400, route_short_name: "Glen Waverley" },
+			ctx,
+		),
+		true,
+	);
+}
+
 function testBlockHandoffPropagation() {
 	const stop = (values = {}) => ({
 		actual_parent_station_id: "UN", actual_stop_id: "UN", scheduled_parent_station_id: "UN", scheduled_stop_id: "UN",
@@ -152,5 +205,7 @@ testSeqDiagramUsesProvidedStopTimes();
 testDisappearingRealtimeUpdateIsChanged();
 testStaticFingerprintTracksQDFCacheFile();
 testUntimedPassingPointsUseShapeDistance();
+testExpressPruningDistinguishesParallelCorridors();
+testPtvReplacementBusIsNotConsideredRail();
 testBlockHandoffPropagation();
 console.log("Performance regression tests passed.");
