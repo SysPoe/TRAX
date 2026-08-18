@@ -1,5 +1,9 @@
 import type { TransitPlugin } from "./types.js";
-import { enrichGthaVehiclePosition, updateAllSources } from "../region-specific/CA/GTHA/realtime.js";
+import {
+	enrichGthaVehiclePosition,
+	refreshGthaOperatingSchedule,
+	updateAllSources,
+} from "../region-specific/CA/GTHA/realtime.js";
 import {
 	getActiveCars,
 	getActivePassengerCars,
@@ -18,6 +22,7 @@ export const gthaPlugin: TransitPlugin = {
 	id: "ca-gtha",
 	feedIds: ["go", "up"],
 	capabilities: ["vehicles", "consist", "platform-changes", "supplemental-realtime"],
+	beforeRealtime: refreshGthaOperatingSchedule,
 	afterRealtime(ctx) {
 		if (!ctx.gtfs) return;
 		ctx.config.progressLog({

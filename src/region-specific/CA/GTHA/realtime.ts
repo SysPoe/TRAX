@@ -1,6 +1,12 @@
-import { CacheContext, getAugmentedTripInstance, getAugmentedTrips, getTripUpdates } from "../../../cache/index.js";
+import {
+	type CacheContext,
+	getAugmentedTripInstance,
+	getAugmentedTrips,
+	getTripUpdates,
+	replaceInjectedTripUpdates,
+} from "../../../cache/index.js";
 import { GTFS, type RealtimeVehiclePosition } from "qdf-gtfs";
-import { GTHADeparturesResponse, UPEDeparturesResponse } from "./types.js";
+import { type GthaOperatingScheduleResponse, GTHADeparturesResponse, UPEDeparturesResponse } from "./types.js";
 import logger from "../../../utils/logger.js";
 import { getServiceDayStart, getServiceDate } from "../../../utils/time.js";
 import { getDefaultTimeZone } from "../../../config.js";
@@ -11,7 +17,9 @@ import { getModelFromId } from "./vehicleModel.js";
 import { mergeVehicleInfo } from "../../../utils/vehicleModel.js";
 import { propagateBlockHandoffs } from "./block-handoff.js";
 import { parse } from "node-html-parser";
+import { cacheFileExists, loadCacheFile, writeCacheFileAtomic } from "../../../utils/fs.js";
 import {
+	GO_TRACKER_HEADERS,
 	SOURCE_A_THROTTLE_MS,
 	SOURCE_A_URL,
 	SOURCE_B_THROTTLE_MS,
@@ -23,7 +31,6 @@ import {
 	SOURCE_D_LOOKAHEAD_SECS,
 	SOURCE_D_URL_TEMPLATE,
 	SOURCE_E_EXCLUDED_STOPS,
-	SOURCE_E_REFERRER,
 	SOURCE_E_STOP_CONVERSION,
 	SOURCE_E_THROTTLE_MS,
 	SOURCE_E_URL_TEMPLATE,
@@ -33,6 +40,11 @@ import {
 	ROUTE_GROUP_EAST,
 	ROUTE_GROUP_WEST,
 } from "./gtha-realtime-constants.js";
+import {
+	buildGthaOperatingScheduleUpdates,
+	GTHA_OPERATING_SCHEDULE_SOURCE_ID,
+	isGthaOperatingScheduleForServiceDate,
+} from "./operating-schedule.js";
 
 function fetchWithTimeout(ctx: CacheContext, input: string | URL, init: RequestInit = {}): Promise<Response> {
 	return fetch(input, {
@@ -55,6 +67,8 @@ type GthaRealtimeState = {
 	}[];
 	lastSourceEFetchMs: Record<string, number>;
 	lastSourceBFetchMs: number;
+	nextSourceBFetchMs: number;
+	sourceBCacheLoaded: boolean;
 	lastSourceFFetchMs: number;
 	lastSourceAFetchMs: number;
 	lastSourceCFetchMs: Record<string, number>;
@@ -62,9 +76,15 @@ type GthaRealtimeState = {
 	vehiclePassengerCars: Record<string, number>;
 	vehicleConsists: Record<string, string[]>;
 	vehicleBearings: Map<string, { bearing: number; receivedAt: number }>;
+	sourceBData: GthaOperatingScheduleResponse | null;
+	operatingScheduleOverrides: number;
+	operatingScheduleUnresolvedTrips: number;
+	operatingScheduleUnresolvedStops: number;
 };
 
 const SOURCE_A_BEARING_MAX_AGE_MS = SOURCE_A_THROTTLE_MS * 3;
+const SOURCE_B_RETRY_MS = 60 * 1000;
+const SOURCE_B_CACHE_FILE = "region-specific/ca-gtha/operating-schedule.json";
 
 export type GthaRealtimeDiagnostics = {
 	sources: {
@@ -83,6 +103,9 @@ export type GthaRealtimeDiagnostics = {
 	knownConsists: number;
 	knownPassengerCarCounts: number;
 	retainedPlatformAssignments: number;
+	operatingScheduleOverrides: number;
+	operatingScheduleUnresolvedTrips: number;
+	operatingScheduleUnresolvedStops: number;
 };
 
 function getState(ctx: CacheContext): GthaRealtimeState {
@@ -94,6 +117,8 @@ function getState(ctx: CacheContext): GthaRealtimeState {
 		prevs: [],
 		lastSourceEFetchMs: {},
 		lastSourceBFetchMs: 0,
+		nextSourceBFetchMs: 0,
+		sourceBCacheLoaded: false,
 		lastSourceFFetchMs: 0,
 		lastSourceAFetchMs: 0,
 		lastSourceCFetchMs: {},
@@ -101,6 +126,10 @@ function getState(ctx: CacheContext): GthaRealtimeState {
 		vehiclePassengerCars: {},
 		vehicleConsists: {},
 		vehicleBearings: new Map(),
+		sourceBData: null,
+		operatingScheduleOverrides: 0,
+		operatingScheduleUnresolvedTrips: 0,
+		operatingScheduleUnresolvedStops: 0,
 	}));
 }
 
@@ -138,9 +167,7 @@ export function enrichGthaVehiclePosition(
 		entityKey({ feedId: vehicle.feed_id, localId: vehicle.trip.trip_id }),
 	);
 	const supplementalBearing =
-		observation && now - observation.receivedAt <= SOURCE_A_BEARING_MAX_AGE_MS
-			? observation.bearing
-			: null;
+		observation && now - observation.receivedAt <= SOURCE_A_BEARING_MAX_AGE_MS ? observation.bearing : null;
 	return applyGthaVehicleBearing(vehicle, supplementalBearing);
 }
 
@@ -177,7 +204,7 @@ export function getGthaRealtimeDiagnostics(ctx: CacheContext): GthaRealtimeDiagn
 				id: "B",
 				name: "Daily operating schedule",
 				provider: "GO Tracker",
-				purpose: "Platforms and locomotive assignments",
+				purpose: "Operational stop patterns, platforms, and locomotive assignments",
 				refreshIntervalMs: SOURCE_B_THROTTLE_MS,
 				lastRequestAt: at(state.lastSourceBFetchMs),
 				targets: 1,
@@ -226,6 +253,9 @@ export function getGthaRealtimeDiagnostics(ctx: CacheContext): GthaRealtimeDiagn
 		knownConsists: Object.keys(state.vehicleConsists).length,
 		knownPassengerCarCounts: Object.keys(state.vehiclePassengerCars).length,
 		retainedPlatformAssignments: state.prevs.length,
+		operatingScheduleOverrides: state.operatingScheduleOverrides,
+		operatingScheduleUnresolvedTrips: state.operatingScheduleUnresolvedTrips,
+		operatingScheduleUnresolvedStops: state.operatingScheduleUnresolvedStops,
 	};
 }
 
@@ -516,6 +546,137 @@ function getUniqueStopTimesForRange(
 	return Array.from(map.values());
 }
 
+function normalizeStationName(value: string): string {
+	return value
+		.normalize("NFKD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.toLowerCase()
+		.replace(/\s+go$/i, "")
+		.replace(/[^a-z0-9]+/g, " ")
+		.trim();
+}
+
+function loadCachedSourceB(ctx: CacheContext, serviceDate: string): GthaOperatingScheduleResponse | null {
+	if (!cacheFileExists(SOURCE_B_CACHE_FILE, ctx.config.cacheDir)) return null;
+	try {
+		const cached: unknown = JSON.parse(loadCacheFile(SOURCE_B_CACHE_FILE, ctx.config.cacheDir));
+		return isGthaOperatingScheduleForServiceDate(cached, serviceDate) ? cached : null;
+	} catch (error) {
+		logger.warn(
+			`Ignoring an unreadable Source B cache: ${error instanceof Error ? error.message : String(error)}`,
+			{ module: "CA/GTHA", function: "loadCachedSourceB" },
+		);
+		return null;
+	}
+}
+
+async function fetchSourceB(ctx: CacheContext, serviceDate: string): Promise<GthaOperatingScheduleResponse> {
+	let lastError: unknown = new Error("Source B request failed");
+	for (let attempt = 0; attempt < 2; attempt++) {
+		try {
+			const response = await fetchWithTimeout(ctx, SOURCE_B_URL, { headers: GO_TRACKER_HEADERS });
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+			const data: unknown = await response.json();
+			if (!isGthaOperatingScheduleForServiceDate(data, serviceDate)) {
+				throw new Error(`response was not an operating schedule for ${serviceDate}`);
+			}
+			return data;
+		} catch (error) {
+			lastError = error;
+		}
+	}
+	throw lastError;
+}
+
+/** Inject complete Source B override patterns before generic realtime augmentation. */
+export async function refreshGthaOperatingSchedule(ctx: CacheContext): Promise<void> {
+	if (!ctx.gtfs) throw new Error("Attempted to load the GTHA operating schedule before GTFS initialization");
+	const state = getState(ctx);
+	const now = Date.now();
+	const serviceDate = getServiceDate(new Date(now), getDefaultTimeZone(ctx.config));
+
+	if (state.sourceBData && !isGthaOperatingScheduleForServiceDate(state.sourceBData, serviceDate)) {
+		state.sourceBData = null;
+		state.sourceBCacheLoaded = false;
+		state.nextSourceBFetchMs = 0;
+		replaceInjectedTripUpdates(ctx, GTHA_OPERATING_SCHEDULE_SOURCE_ID, []);
+		state.operatingScheduleOverrides = 0;
+		state.operatingScheduleUnresolvedTrips = 0;
+		state.operatingScheduleUnresolvedStops = 0;
+	}
+	if (!state.sourceBCacheLoaded) {
+		state.sourceBCacheLoaded = true;
+		state.sourceBData = loadCachedSourceB(ctx, serviceDate);
+	}
+
+	if (now >= state.nextSourceBFetchMs) {
+		state.lastSourceBFetchMs = now;
+		try {
+			const data = await fetchSourceB(ctx, serviceDate);
+			state.sourceBData = data;
+			state.nextSourceBFetchMs = now + SOURCE_B_THROTTLE_MS;
+			try {
+				writeCacheFileAtomic(SOURCE_B_CACHE_FILE, JSON.stringify(data), ctx.config.cacheDir);
+			} catch (error) {
+				logger.warn(
+					`Failed to persist the Source B cache: ${error instanceof Error ? error.message : String(error)}`,
+					{ module: "CA/GTHA", function: "refreshGthaOperatingSchedule" },
+				);
+			}
+		} catch (error) {
+			state.nextSourceBFetchMs = now + SOURCE_B_RETRY_MS;
+			if (!state.sourceBData) throw error;
+			logger.warn(
+				`Failed to refresh Source B; retaining today's cached operating schedule and retrying in one minute: ${error instanceof Error ? error.message : String(error)}`,
+				{ module: "CA/GTHA", function: "refreshGthaOperatingSchedule" },
+			);
+		}
+	}
+
+	const data = state.sourceBData;
+	if (!data) return;
+
+	const tripsByNumber = new Map<string, ReturnType<GTFS["getTrips"]>>();
+	for (const trip of ctx.gtfs.getTrips({ feed_id: "go", date: serviceDate })) {
+		const tripNumber = trip.trip_id.match(/(\d+)$/)?.[1];
+		if (!tripNumber) continue;
+		const candidates = tripsByNumber.get(tripNumber);
+		if (candidates) candidates.push(trip);
+		else tripsByNumber.set(tripNumber, [trip]);
+	}
+
+	const stopIdsByName = new Map<string, Set<string>>();
+	for (const stop of ctx.augmented.stops) {
+		if (stop.feed_id !== "go" || !stop.stop_name) continue;
+		const name = normalizeStationName(stop.stop_name);
+		const stopId = stop.parent_stop_id ?? stop.stop_id;
+		const ids = stopIdsByName.get(name);
+		if (ids) ids.add(stopId);
+		else stopIdsByName.set(name, new Set([stopId]));
+	}
+
+	const result = buildGthaOperatingScheduleUpdates(data, {
+		serviceDayStartEpochSeconds: getServiceDayStart(serviceDate, getDefaultTimeZone(ctx.config)),
+		resolveTrip: (tripNumber) => {
+			const candidates = tripsByNumber.get(tripNumber) ?? [];
+			return candidates.length === 1 ? candidates[0] : null;
+		},
+		resolveStopId: (stopName) => {
+			const ids = stopIdsByName.get(normalizeStationName(stopName));
+			return ids?.size === 1 ? ids.values().next().value! : null;
+		},
+	});
+
+	replaceInjectedTripUpdates(ctx, GTHA_OPERATING_SCHEDULE_SOURCE_ID, result.updates);
+	state.operatingScheduleOverrides = result.updates.length;
+	state.operatingScheduleUnresolvedTrips = result.unresolvedTrips.length;
+	state.operatingScheduleUnresolvedStops = result.unresolvedStops.length;
+	logger.debug(
+		`Source B injected ${result.updates.length} operating schedule overrides (${result.unresolvedTrips.length} unresolved trips, ${result.unresolvedStops.length} unresolved stops).`,
+		{ module: "CA/GTHA", function: "refreshGthaOperatingSchedule" },
+	);
+}
+
 export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	const state = getState(ctx);
 	const timer = ctx.augmented.timer;
@@ -585,16 +746,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	let sourceAPromise: Promise<any> | null = null;
 	if (nowMs - state.lastSourceAFetchMs >= SOURCE_A_THROTTLE_MS) {
 		state.lastSourceAFetchMs = nowMs;
-		sourceAPromise = fetchWithTimeout(ctx, SOURCE_A_URL, { headers: { Referer: SOURCE_E_REFERRER } })
-			.then((r) => (r.ok ? r.json() : null))
-			.catch(() => null);
-	}
-
-	// Source B
-	let sourceBPromise: Promise<any> | null = null;
-	if (nowMs - state.lastSourceBFetchMs >= SOURCE_B_THROTTLE_MS) {
-		state.lastSourceBFetchMs = nowMs;
-		sourceBPromise = fetchWithTimeout(ctx, SOURCE_B_URL, { headers: { Referer: SOURCE_E_REFERRER } })
+		sourceAPromise = fetchWithTimeout(ctx, SOURCE_A_URL, { headers: GO_TRACKER_HEADERS })
 			.then((r) => (r.ok ? r.json() : null))
 			.catch(() => null);
 	}
@@ -680,7 +832,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 				corridors: corridor_codes.map((code) => ({
 					code,
 					promise: fetchWithTimeout(ctx, SOURCE_E_URL_TEMPLATE(code, stop_id), {
-						headers: { Referer: SOURCE_E_REFERRER },
+						headers: GO_TRACKER_HEADERS,
 					})
 						.then((r) => (r.ok ? r.json() : null))
 						.catch((e) => {
@@ -809,9 +961,9 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 		timer.stop("updateAllSources:SourceA");
 	}
 
-	if (sourceBPromise) {
+	if (state.sourceBData) {
 		timer.start("updateAllSources:SourceB");
-		await updateSourceB(ctx, tripNumberToIds, serviceDateStr, blockMap, await sourceBPromise);
+		await updateSourceB(ctx, tripNumberToIds, serviceDateStr, state.sourceBData, blockMap);
 		timer.stop("updateAllSources:SourceB");
 	}
 
@@ -824,22 +976,14 @@ export async function updateSourceB(
 	ctx: CacheContext,
 	tripNumberToIds: Map<string, string[]>,
 	serviceDateStr: string,
+	data: GthaOperatingScheduleResponse,
 	blockMap?: Map<string, any[]>,
-	data?: any,
 ) {
 	const state = getState(ctx);
 	const timer = ctx.augmented.timer;
 	timer.start("updateSourceB");
 	try {
-		if (!data) {
-			const response = await fetchWithTimeout(ctx, SOURCE_B_URL, { headers: { Referer: SOURCE_E_REFERRER } });
-			if (!response.ok) return;
-
-			data = await response.json();
-		}
-		if (!data) return;
-
-		const commitmentTrips = data.commitmentTrip as any[];
+		const commitmentTrips = data.commitmentTrip;
 
 		logger.debug(`GTHA Schedule: Processing ${commitmentTrips.length} commitment trips`, {
 			module: "CA/GTHA",
@@ -859,6 +1003,15 @@ export async function updateSourceB(
 
 				const instance = augmentedTrip.instances.find((v: any) => v.serviceDate === serviceDateStr);
 				if (!instance) continue;
+				if (trip.stop.some((stop) => stop.isOverride === "1")) {
+					const destination = trip.stop
+						.filter((stop) => stop.isStopping === "1" && stop.isCancelled !== "1")
+						.at(-1)?.name;
+					if (destination) {
+						const prefix = instance.trip_headsign?.match(/^(.*? - )/)?.[1] ?? "";
+						instance.trip_headsign = `${prefix}${destination}`;
+					}
+				}
 
 				// Pre-calculate time map for this instance's stopTimes for faster lookup
 				const timeMap = new Map<string, any>();
@@ -953,7 +1106,7 @@ export async function updateSourceA(
 	timer.start("updateSourceA");
 	try {
 		if (!data) {
-			const response = await fetchWithTimeout(ctx, SOURCE_A_URL, { headers: { Referer: SOURCE_E_REFERRER } });
+			const response = await fetchWithTimeout(ctx, SOURCE_A_URL, { headers: GO_TRACKER_HEADERS });
 			if (!response.ok) return;
 
 			data = await response.json();

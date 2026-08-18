@@ -36,7 +36,12 @@ import {
 	buildVLineRealtimeTripAliases,
 	canonicalVLineRealtimeTripId,
 } from "../dist/region-specific/AU/VIC/realtime-aliases.js";
-import { canonicalizeRealtimeTripUpdate, canonicalizeRealtimeVehiclePosition } from "../dist/cache/realtime.js";
+import {
+	applyRealtimeReplacementPrecedence,
+	canonicalizeRealtimeTripUpdate,
+	canonicalizeRealtimeVehiclePosition,
+	replaceInjectedTripUpdates,
+} from "../dist/cache/realtime.js";
 import { findUniqueTripInstanceForServiceDate } from "../dist/cache/augmentedEntities.js";
 import { TripScheduleRelationship } from "qdf-gtfs";
 import {
@@ -46,10 +51,12 @@ import {
 	viaTrainKey,
 } from "../dist/region-specific/CA/VIA/station-board.js";
 import { selectViaBookingFare } from "../dist/region-specific/CA/VIA/consist.js";
+import { applyGthaVehicleBearing, parseGthaCourse } from "../dist/region-specific/CA/GTHA/realtime.js";
 import {
-	applyGthaVehicleBearing,
-	parseGthaCourse,
-} from "../dist/region-specific/CA/GTHA/realtime.js";
+	buildGthaOperatingScheduleUpdates,
+	GTHA_OPERATING_SCHEDULE_SOURCE_ID,
+	isGthaOperatingScheduleForServiceDate,
+} from "../dist/region-specific/CA/GTHA/operating-schedule.js";
 
 assert.deepEqual(
 	selectViaBookingFare({
@@ -132,11 +139,113 @@ assert.equal(parseGthaCourse("not-a-course"), null);
 assert.equal(applyGthaVehicleBearing(goPosition, 223).position.bearing, 223);
 assert.equal(applyGthaVehicleBearing(goPosition, 0).position.bearing, 0);
 assert.equal(applyGthaVehicleBearing(goPosition, null).position.bearing, null);
-assert.equal(
-	applyGthaVehicleBearing({ feed_id: "go", position: { bearing: 42 } }, null).position.bearing,
-	42,
-);
+assert.equal(applyGthaVehicleBearing({ feed_id: "go", position: { bearing: 42 } }, null).position.bearing, 42);
 assert.equal(applyGthaVehicleBearing({ feed_id: "via", position: { bearing: 0 } }, null).position.bearing, 0);
+assert.equal(
+	isGthaOperatingScheduleForServiceDate({ date: "2026-08-18T18:42:54-04:00", commitmentTrip: [] }, "20260818"),
+	true,
+);
+assert.equal(
+	isGthaOperatingScheduleForServiceDate({ date: "2026-08-17T18:42:54-04:00", commitmentTrip: [] }, "20260818"),
+	false,
+);
+assert.equal(isGthaOperatingScheduleForServiceDate({ date: "2026-08-18T18:42:54-04:00" }, "20260818"), false);
+
+const gthaStaticTrip = {
+	feed_id: "go",
+	trip_id: "20260818-GT-3031",
+	route_id: "GT",
+	direction_id: 0,
+};
+const gthaOverrideResult = buildGthaOperatingScheduleUpdates(
+	{
+		date: "2026-08-18T18:42:54-04:00",
+		commitmentTrip: [
+			{
+				tripNumber: "3031",
+				tripName: "Union Station 19:04 - Bramalea GO 19:42",
+				updateTime: "2026-08-18T18:42:54",
+				stop: [
+					{
+						order: 2,
+						name: "Union Station",
+						schArrival: "19:04",
+						schDeparture: "19:04",
+						isStopping: "1",
+						isCancelled: "0",
+						isOverride: "0",
+					},
+					{
+						order: 24,
+						name: "Bramalea GO",
+						schArrival: "19:42",
+						schDeparture: "19:42",
+						isStopping: "1",
+						isCancelled: "0",
+						isOverride: "0",
+					},
+					{
+						order: 28,
+						name: "Brampton Innovation District GO",
+						schArrival: "19:50",
+						schDeparture: "19:50",
+						isStopping: "1",
+						isCancelled: "0",
+						isOverride: "1",
+					},
+					{
+						order: 31,
+						name: "Mount Pleasant GO",
+						schArrival: "19:56",
+						schDeparture: null,
+						isStopping: "1",
+						isCancelled: "0",
+						isOverride: "1",
+					},
+				],
+			},
+		],
+	},
+	{
+		serviceDayStartEpochSeconds: 1_000_000,
+		resolveTrip: (tripNumber) => (tripNumber === "3031" ? gthaStaticTrip : null),
+		resolveStopId: (name) =>
+			({
+				"Union Station": "UN",
+				"Bramalea GO": "BE",
+				"Brampton Innovation District GO": "BR",
+				"Mount Pleasant GO": "MO",
+			})[name] ?? null,
+	},
+);
+assert.deepEqual(gthaOverrideResult.unresolvedTrips, []);
+assert.deepEqual(gthaOverrideResult.unresolvedStops, []);
+assert.equal(gthaOverrideResult.updates.length, 1);
+const gthaReplacement = gthaOverrideResult.updates[0];
+assert.equal(gthaReplacement.source_id, GTHA_OPERATING_SCHEDULE_SOURCE_ID);
+assert.equal(gthaReplacement.trip.schedule_relationship, TripScheduleRelationship.REPLACEMENT);
+assert.equal(gthaReplacement.trip.start_time, "19:04:00");
+assert.deepEqual(
+	gthaReplacement.stop_time_updates.map((stop) => stop.stop_id),
+	["UN", "BE", "BR", "MO"],
+);
+assert.equal(gthaReplacement.stop_time_updates.at(-1).arrival_time, 1_071_760);
+assert.equal(gthaReplacement.stop_time_updates.at(-1).departure_time, null);
+
+const officialScheduled = {
+	...gthaReplacement,
+	update_id: "official-3031",
+	source_id: "go-trip-updates",
+	trip: { ...gthaReplacement.trip, schedule_relationship: TripScheduleRelationship.SCHEDULED },
+	stop_time_updates: [],
+};
+assert.deepEqual(applyRealtimeReplacementPrecedence([officialScheduled, gthaReplacement]), [gthaReplacement]);
+const injectionCtx = { raw: { injectedTripUpdates: [{ ...officialScheduled, source_id: "other-source" }] } };
+replaceInjectedTripUpdates(injectionCtx, GTHA_OPERATING_SCHEDULE_SOURCE_ID, [gthaReplacement]);
+assert.deepEqual(
+	injectionCtx.raw.injectedTripUpdates.map((update) => update.source_id),
+	["other-source", GTHA_OPERATING_SCHEDULE_SOURCE_ID],
+);
 
 assert.equal(vlineTdn("01-GEL--8-T0-8761"), "8761");
 assert.equal(vlineTdn("01-GEL--8-T0-87612"), null);
@@ -347,9 +456,16 @@ assert.equal(
 	),
 	true,
 );
-assert.equal(serviceMatchesPlatformTrip({ ...platformRunMatch, tdn: "8241" }, platformMatchTrip, "southerncross"), false);
 assert.equal(
-	serviceMatchesPlatformTrip({ ...platformRunMatch, scheduledDepartureTime: "2026-08-13T14:32:00" }, platformMatchTrip, "southerncross"),
+	serviceMatchesPlatformTrip({ ...platformRunMatch, tdn: "8241" }, platformMatchTrip, "southerncross"),
+	false,
+);
+assert.equal(
+	serviceMatchesPlatformTrip(
+		{ ...platformRunMatch, scheduledDepartureTime: "2026-08-13T14:32:00" },
+		platformMatchTrip,
+		"southerncross",
+	),
 	false,
 );
 const arrivalStop = {

@@ -1,4 +1,8 @@
-import { CacheContext } from "../../../cache/index.js";
+import {
+	type CacheContext,
+	replaceInjectedTripUpdates,
+	replaceInjectedVehiclePositions,
+} from "../../../cache/index.js";
 import { MergeAction } from "../../../config.js";
 import logger from "../../../utils/logger.js";
 import * as qdf from "qdf-gtfs";
@@ -372,8 +376,8 @@ export async function updateRealtime(ctx: CacheContext) {
 		});
 	}
 
-	ctx.raw.injectedTripUpdates = tripUpdates;
-	ctx.raw.injectedVehiclePositions = vehiclePositions;
+	replaceInjectedTripUpdates(ctx, VIA_INJECTED_SOURCE_ID, tripUpdates);
+	replaceInjectedVehiclePositions(ctx, VIA_INJECTED_SOURCE_ID, vehiclePositions);
 	state.lastUpdateMs = now;
 	logger.debug(
 		`VIA realtime updated: ${tripUpdates.length} trips, ${vehiclePositions.length} positions, ${state.cisBoards.size} station boards.`,

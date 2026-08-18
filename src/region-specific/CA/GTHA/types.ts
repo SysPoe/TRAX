@@ -56,3 +56,36 @@ export interface UPEDeparturesResponse {
 		arrivalAt: string;
 	}[];
 }
+
+export interface GthaOperatingScheduleStop {
+	order: number;
+	id: number;
+	name: string;
+	engineId: string | null;
+	schArrival: string | null;
+	schDeparture: string | null;
+	revisedArrival: string | null;
+	isStopping: "0" | "1";
+	isCancelled: "0" | "1";
+	isOverride: "0" | "1";
+	schTrack: string | null;
+	actualTime: string;
+	completeInfo?: {
+		actArrival: string | null;
+		actDeparture: string | null;
+		delaySecond: number | null;
+		actTrack: string | null;
+	} | null;
+}
+
+export interface GthaOperatingScheduleTrip {
+	tripNumber: string;
+	tripName: string;
+	updateTime: string;
+	stop: GthaOperatingScheduleStop[];
+}
+
+export interface GthaOperatingScheduleResponse {
+	date: string;
+	commitmentTrip: GthaOperatingScheduleTrip[];
+}

@@ -15,6 +15,7 @@ import type { CacheContext } from "./types.js";
 import * as qdf from "qdf-gtfs";
 import { entityKey } from "../identity.js";
 import {
+	applyRealtimeReplacementPrecedence,
 	canonicalizeRealtimeTripUpdates,
 	canonicalizeRealtimeVehiclePositions,
 } from "./realtime.js";
@@ -55,10 +56,14 @@ export function getTripUpdates(ctx: CacheContext, trip?: QualifiedEntityId): Rea
 	const gtfs = requireGtfs(ctx);
 	const updates = gtfs.getRealtimeTripUpdates();
 	const injected = ctx.raw.injectedTripUpdates ?? [];
-	const allUpdates = canonicalizeRealtimeTripUpdates(updates.concat(injected), ctx);
+	const allUpdates = applyRealtimeReplacementPrecedence(
+		canonicalizeRealtimeTripUpdates(updates.concat(injected), ctx),
+	);
 
 	if (trip) {
-		const result = allUpdates.filter((v: RealtimeTripUpdate) => v.feed_id === trip.feedId && v.trip.trip_id === trip.localId);
+		const result = allUpdates.filter(
+			(v: RealtimeTripUpdate) => v.feed_id === trip.feedId && v.trip.trip_id === trip.localId,
+		);
 		ctx.augmented.tripUpdatesCache.set(entityKey(trip), result);
 		return result;
 	}
@@ -77,7 +82,10 @@ export function getVehiclePositions(ctx: CacheContext, trip?: QualifiedEntityId)
 		}
 		return enriched;
 	});
-	if (trip) return allPositions.filter((v: RealtimeVehiclePosition) => v.feed_id === trip.feedId && v.trip.trip_id === trip.localId);
+	if (trip)
+		return allPositions.filter(
+			(v: RealtimeVehiclePosition) => v.feed_id === trip.feedId && v.trip.trip_id === trip.localId,
+		);
 	return allPositions;
 }
 

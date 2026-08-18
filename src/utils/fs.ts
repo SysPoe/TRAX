@@ -93,6 +93,18 @@ export function writeCacheFile(filePath: string, data: string, cacheDir: string)
 	fs.writeFileSync(fullPath, data, "utf-8");
 }
 
+/** Write a cache snapshot without exposing a partially-written file to readers. */
+export function writeCacheFileAtomic(filePath: string, data: string, cacheDir: string): void {
+	const fullPath = getCacheFilePath(filePath, cacheDir);
+	const temporaryPath = `${fullPath}.${process.pid}.${Date.now()}.tmp`;
+	try {
+		fs.writeFileSync(temporaryPath, data, "utf-8");
+		fs.renameSync(temporaryPath, fullPath);
+	} finally {
+		if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath);
+	}
+}
+
 /** Removes a cache file if present (used to invalidate derived caches when static GTFS reloads). */
 export function deleteCacheFile(filePath: string, cacheDir: string): void {
 	const fullPath = getCacheFilePath(filePath, cacheDir);
@@ -108,5 +120,6 @@ export default {
 	loadCacheFileAsync,
 	cacheFileExists,
 	writeCacheFile,
+	writeCacheFileAtomic,
 	deleteCacheFile,
 };

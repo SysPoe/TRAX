@@ -4,7 +4,56 @@ import type {
 	RealtimeUpdateTripInfo,
 	RealtimeVehiclePosition,
 } from "qdf-gtfs";
+import { TripScheduleRelationship } from "qdf-gtfs";
 import type { CacheContext } from "./types.js";
+
+function tripServiceKey(update: RealtimeTripUpdate): string {
+	return [update.feed_id, update.trip.trip_id, update.trip.start_date ?? "", update.trip.start_time ?? ""].join("\0");
+}
+
+/** Replace one supplemental producer's snapshot without disturbing other plugins. */
+export function replaceInjectedTripUpdates(
+	ctx: CacheContext,
+	sourceId: string,
+	updates: readonly RealtimeTripUpdate[],
+): void {
+	if (updates.some((update) => update.source_id !== sourceId)) {
+		throw new Error(`Injected trip updates for '${sourceId}' contain a different source_id`);
+	}
+	ctx.raw.injectedTripUpdates = [
+		...(ctx.raw.injectedTripUpdates ?? []).filter((update) => update.source_id !== sourceId),
+		...updates,
+	];
+}
+
+/** Replace one supplemental producer's vehicle snapshot without disturbing other plugins. */
+export function replaceInjectedVehiclePositions(
+	ctx: CacheContext,
+	sourceId: string,
+	positions: readonly RealtimeVehiclePosition[],
+): void {
+	if (positions.some((position) => position.source_id !== sourceId)) {
+		throw new Error(`Injected vehicle positions for '${sourceId}' contain a different source_id`);
+	}
+	ctx.raw.injectedVehiclePositions = [
+		...(ctx.raw.injectedVehiclePositions ?? []).filter((position) => position.source_id !== sourceId),
+		...positions,
+	];
+}
+
+/** A GTFS-RT REPLACEMENT owns the trip instance for its service key. */
+export function applyRealtimeReplacementPrecedence(updates: readonly RealtimeTripUpdate[]): RealtimeTripUpdate[] {
+	const replacementKeys = new Set(
+		updates
+			.filter((update) => update.trip.schedule_relationship === TripScheduleRelationship.REPLACEMENT)
+			.map(tripServiceKey),
+	);
+	return updates.filter(
+		(update) =>
+			update.trip.schedule_relationship === TripScheduleRelationship.REPLACEMENT ||
+			!replacementKeys.has(tripServiceKey(update)),
+	);
+}
 
 function canonicalTripInfo(trip: RealtimeUpdateTripInfo, ctx: CacheContext): RealtimeUpdateTripInfo {
 	let tripId = trip.trip_id;
@@ -15,15 +64,13 @@ function canonicalTripInfo(trip: RealtimeUpdateTripInfo, ctx: CacheContext): Rea
 	return tripId === trip.trip_id ? trip : { ...trip, trip_id: tripId };
 }
 
-export function canonicalizeRealtimeTripUpdate(
-	update: RealtimeTripUpdate,
-	ctx: CacheContext,
-): RealtimeTripUpdate {
+export function canonicalizeRealtimeTripUpdate(update: RealtimeTripUpdate, ctx: CacheContext): RealtimeTripUpdate {
 	const trip = canonicalTripInfo(update.trip, ctx);
 	if (trip === update.trip) return update;
-	const stopTimeUpdates = update.stop_time_updates.map(
-		(stopTime): RealtimeStopTimeUpdate => ({ ...stopTime, trip_id: trip.trip_id }),
-	);
+	const stopTimeUpdates = update.stop_time_updates.map((stopTime): RealtimeStopTimeUpdate => ({
+		...stopTime,
+		trip_id: trip.trip_id,
+	}));
 	return { ...update, trip, stop_time_updates: stopTimeUpdates };
 }
 

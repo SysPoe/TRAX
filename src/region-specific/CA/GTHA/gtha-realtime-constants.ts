@@ -2,6 +2,10 @@ export const SOURCE_C_LOOKAHEAD_SECS = 7200;
 export const SOURCE_D_LOOKAHEAD_SECS = 600;
 
 export const SOURCE_E_REFERRER = "https://www.gotracker.ca/gotracker/web/";
+export const GO_TRACKER_HEADERS = {
+	Referer: SOURCE_E_REFERRER,
+	"X-Requested-With": "XMLHttpRequest",
+};
 export const SOURCE_E_EXCLUDED_STOPS = new Set(["PA", "UN"]);
 
 export const SOURCE_C_IDS = ["UN", "PA", "BL", "MD", "WE"];

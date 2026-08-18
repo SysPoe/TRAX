@@ -157,9 +157,7 @@ export function augmentTrip(
 	ctx.augmented.timer.stop("augmentTrip:findExpress");
 
 	ctx.augmented.timer.start("augmentTrip:getTripUpdates");
-	const allUpdates = tripUpdatesCache
-		? (tripUpdatesCache.get(tripKey) ?? [])
-		: cache.getTripUpdates(ctx, tripRef);
+	const allUpdates = tripUpdatesCache ? (tripUpdatesCache.get(tripKey) ?? []) : cache.getTripUpdates(ctx, tripRef);
 	const realtimeDateSet = options.realtimeDates
 		? new Set(options.realtimeDates)
 		: options.serviceDates
@@ -194,7 +192,8 @@ export function augmentTrip(
 		ctx.augmented.timer.start("createInstance:augmentStopTimes");
 		const stopTimes = augmentStopTimes(
 			scheduleRelationship === qdf.TripScheduleRelationship.ADDED ||
-				scheduleRelationship === qdf.TripScheduleRelationship.UNSCHEDULED
+				scheduleRelationship === qdf.TripScheduleRelationship.UNSCHEDULED ||
+				scheduleRelationship === qdf.TripScheduleRelationship.REPLACEMENT
 				? null
 				: rawStopTimes,
 			{
