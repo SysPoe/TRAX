@@ -274,6 +274,19 @@ function mergeId(ctx: CacheContext, stopId: string): string {
 	return merge ? merge.to : stopId;
 }
 
+/**
+ * Scheduled trips commonly have no actual stop ID. Once a realtime update has
+ * supplied one, it is authoritative so a relocated call is not matched back to
+ * its scheduled platform.
+ */
+export function stopTimeMatchesStopId(
+	stopTime: { actual_stop_id?: string | null; scheduled_stop_id?: string | null },
+	stopId: string,
+): boolean {
+	return stopTime.actual_stop_id === stopId ||
+		(stopTime.actual_stop_id == null && stopTime.scheduled_stop_id === stopId);
+}
+
 function applyPlatformUpdate(
 	ctx: CacheContext,
 	stopTime: {
@@ -694,7 +707,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	// Re-apply previous state (prevents UI flicker if context was reset but module state remains)
 	state.prevs.forEach((v) => {
 		const ti = getAugmentedTripInstance(ctx, v.tripInstanceId);
-		const st = ti?.stopTimes.find((st) => (st.actual_stop_id ?? st.scheduled_stop_id) === v.stopId);
+		const st = ti?.stopTimes.find((st) => stopTimeMatchesStopId(st, v.stopId));
 		if (st) {
 			st.actual_platform_code = v.actualPlatform;
 			st.scheduled_platform_code = v.scheduledPlatform;
@@ -872,9 +885,8 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 				const instance = getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances.find(
 					(v) => {
 						if (v.serviceDate === departure.scheduledDateTime.slice(0, 10).replace(/-/g, "")) return true;
-						const offset = v.stopTimes.find(
-							(fst) => fst.actual_stop_id === item.stop_id,
-						)?.scheduled_departure_date_offset;
+						const offset = v.stopTimes.find((fst) => stopTimeMatchesStopId(fst, item.stop_id))
+							?.scheduled_departure_date_offset;
 						if (!offset) return false;
 
 						const prevDate = new Date(departure.scheduledDateTime.slice(0, 10));
@@ -883,8 +895,8 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 					},
 				);
 
-				const ast = instance?.stopTimes.find((ast) => ast.actual_stop_id === item.stop_id);
-				if (ast && ast.actual_stop_id)
+				const ast = instance?.stopTimes.find((ast) => stopTimeMatchesStopId(ast, item.stop_id));
+				if (ast)
 					applyPlatformUpdate(ctx, ast, item.stop_id, platform, scheduledPlatform, "Source D", blockMap);
 			}
 		}
@@ -917,7 +929,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 						(v) => v.serviceDate === dateStr,
 					) ?? getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances[0];
 
-				const ast = instance?.stopTimes.find((ast) => ast.actual_stop_id === mergeId(ctx, item.stop_id));
+				const ast = instance?.stopTimes.find((ast) => stopTimeMatchesStopId(ast, mergeId(ctx, item.stop_id)));
 				if (ast)
 					applyPlatformUpdate(ctx, ast, mergeId(ctx, item.stop_id), platform, null, "Source C", blockMap);
 			}
@@ -1273,7 +1285,7 @@ function processSourceEUpdates(
 			);
 
 			if (!instance) continue;
-			const ast = instance.stopTimes.find((f_ast) => f_ast.actual_stop_id === st.stop_id);
+			const ast = instance.stopTimes.find((f_ast) => stopTimeMatchesStopId(f_ast, st.stop_id));
 			if (!ast) continue;
 			applyPlatformUpdate(ctx, ast, stop_id, platform, null, "Source E");
 
