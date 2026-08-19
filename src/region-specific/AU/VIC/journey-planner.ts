@@ -197,6 +197,19 @@ function describedCount(element: ReturnType<typeof parse>, selector: string, uni
 	return value ? Number.parseInt(value, 10) : null;
 }
 
+function normalizedBookingDateTime(value: string | null): string | null {
+	if (!value) return null;
+	const iso = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/.exec(value.trim());
+	if (iso) return iso[1];
+	const local = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP]M)?$/i.exec(value.trim());
+	if (!local) return null;
+	let hour = Number(local[4]);
+	const meridiem = local[7]?.toUpperCase();
+	if (meridiem === "AM" && hour === 12) hour = 0;
+	if (meridiem === "PM" && hour < 12) hour += 12;
+	return `${local[3]}-${local[2].padStart(2, "0")}-${local[1].padStart(2, "0")}T${String(hour).padStart(2, "0")}:${local[5]}:${local[6] ?? "00"}`;
+}
+
 export function parseVLineBookingPage(
 	html: string,
 	expected: { tdn: string; scheduledDepartureTime: string; journeyUrl: string; observedAt: string },
@@ -205,9 +218,21 @@ export function parseVLineBookingPage(
 	// The live page contains invalid table markup that node-html-parser reparents out of
 	// its journey card. Kentico generates a stable control-id prefix for every leg, so
 	// resolve the related fields by that prefix instead of relying on DOM ancestry.
-	const serviceInput = document.querySelectorAll("input").find((candidate) =>
-		candidate.getAttribute("id")?.endsWith("hdnServiceCode") && candidate.getAttribute("value") === expected.tdn,
+	const serviceInputs = document.querySelectorAll("input").filter((candidate) =>
+		candidate.getAttribute("id")?.endsWith("hdnServiceCode"),
 	);
+	const expectedDeparture = normalizedBookingDateTime(expected.scheduledDepartureTime);
+	const departureMatches = serviceInputs.filter((candidate) => {
+		const id = candidate.getAttribute("id")!;
+		const prefix = id.slice(0, -"hdnServiceCode".length);
+		const departure = document.querySelector(`[id="${prefix}hdnServiceOriginDateTime"]`)?.getAttribute("value") ?? null;
+		return expectedDeparture && normalizedBookingDateTime(departure) === expectedDeparture;
+	});
+	// Journey Planner run numbers and the public site's booking-leg codes can
+	// differ for the same service. Prefer the exact departure when it is unique.
+	const serviceInput = departureMatches.find((candidate) => candidate.getAttribute("value") === expected.tdn)
+		?? (departureMatches.length === 1 ? departureMatches[0] : null)
+		?? serviceInputs.find((candidate) => candidate.getAttribute("value") === expected.tdn);
 	if (!serviceInput) return null;
 	const serviceInputId = serviceInput.getAttribute("id")!;
 	const prefix = serviceInputId.slice(0, -"hdnServiceCode".length);

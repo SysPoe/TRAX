@@ -749,6 +749,12 @@ function journeyServiceSupportsBooking(service: VLineJourneyPlannerService | nul
 	);
 }
 
+function reportedAvailabilityCount(value: number | null | undefined): number | null {
+	// Journey Planner uses zero when live inventory is unavailable. The public
+	// booking page is the only source that can confirm a genuine zero count.
+	return value != null && value > 0 ? value : null;
+}
+
 export function vlineServiceBookingAvailability(
 	service: VLineJourneyPlannerService | null,
 	observedAt: string,
@@ -756,8 +762,8 @@ export function vlineServiceBookingAvailability(
 	if (!service || !journeyServiceSupportsBooking(service)) return null;
 	return {
 		reservedCarriages: [...service.reservedCarriages],
-		reservedSeatsAvailable: service.reservedSeatsAvailable,
-		unreservedTicketsAvailable: service.unreservedTicketsAvailable,
+		reservedSeatsAvailable: reportedAvailabilityCount(service.reservedSeatsAvailable),
+		unreservedTicketsAvailable: reportedAvailabilityCount(service.unreservedTicketsAvailable),
 		reservationAvailable: service.reservationAvailable,
 		reservationRequired: service.reservationRequired,
 		seatMapAvailable: false,
@@ -802,12 +808,14 @@ export async function getVLineVehicleFormation(
 				ctx, trip, origin, destination, scheduledDepartureTime, options.requestTimeoutMs,
 			);
 			if (booking) {
-				booking.reservationRequired ||= service?.reservationRequired ?? false;
+				if ((booking.unreservedTicketsAvailable ?? 0) <= 0) {
+					booking.reservationRequired ||= service?.reservationRequired ?? false;
+				}
 				if (booking.reservedCarriages.length === 0 && service?.reservedCarriages.length) {
 					booking.reservedCarriages = [...service.reservedCarriages];
 				}
-				booking.reservedSeatsAvailable ??= service?.reservedSeatsAvailable ?? null;
-				booking.unreservedTicketsAvailable ??= service?.unreservedTicketsAvailable ?? null;
+				booking.reservedSeatsAvailable ??= reportedAvailabilityCount(service?.reservedSeatsAvailable);
+				booking.unreservedTicketsAvailable ??= reportedAvailabilityCount(service?.unreservedTicketsAvailable);
 				details.bookingAvailability = booking;
 			}
 		} catch {

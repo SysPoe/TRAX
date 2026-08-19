@@ -28,6 +28,7 @@ import {
 	vlinePlatformStationDemands,
 	vlinePlatformStationsDue,
 	vlineFormationUnits,
+	vlineServiceBookingAvailability,
 } from "../dist/region-specific/AU/VIC/enrichment.js";
 import { getVLineLocations, getVLinePlatformDepartures } from "../dist/region-specific/AU/VIC/journey-planner.js";
 import { ptvMetroFormationUnit } from "../dist/region-specific/AU/VIC/ptv-metro.js";
@@ -656,6 +657,20 @@ assert.equal(journeyServices[0].accessibleSpaces, 8);
 assert.equal(journeyServices[0].bicycleSpaces, 0);
 assert.equal(journeyServices[0].isLiveConsistInfo, true);
 assert.equal(journeyServices[0].platformEvent, null);
+assert.deepEqual(
+	vlineServiceBookingAvailability(journeyServices[0], "2026-08-15T00:20:00Z"),
+	{
+		reservedCarriages: [],
+		reservedSeatsAvailable: null,
+		unreservedTicketsAvailable: null,
+		reservationAvailable: false,
+		reservationRequired: false,
+		seatMapAvailable: false,
+		journeyUrl: null,
+		source: "V/Line Journey Planner",
+		observedAt: "2026-08-15T00:20:00Z",
+	},
+);
 
 const booking = parseVLineBookingPage(
 	`<div class="journey-leg" data-departure-time="2026-08-15 12:36:00">
@@ -679,6 +694,30 @@ assert.deepEqual(booking, {
 	seatMapAvailable: true,
 	journeyUrl: "https://www.vline.com.au/example",
 	observedAt: "2026-08-15T00:20:00Z",
+});
+const bookingWithDifferentPublicCode = parseVLineBookingPage(
+	`<div class="journey-leg" data-departure-time="2026-08-20 09:25:00">
+<div class="view-consist-panel"><input id="x_hdnServiceCode" value="8307">
+<input id="x_hdnServiceOriginDateTime" value="20/08/2026 9:25:00 AM"><input id="x_hdnCarList" value="C,D">
+<tr id="x_spnReservedSeatsTrain" class="economy-seats"><span class="description">80 seats available</span><a id="x_lnbTrainSeats" class="viewseats">View seats</a></tr>
+<tr id="x_spnUnreservedSeats" class="unreserved-seats"><span class="description">50 tickets available</span></tr></div></div>`,
+	{
+		tdn: "8363",
+		scheduledDepartureTime: "2026-08-20T09:25:00",
+		journeyUrl: "https://www.vline.com.au/example",
+		observedAt: "2026-08-19T23:03:52Z",
+	},
+);
+assert.deepEqual(bookingWithDifferentPublicCode, {
+	tdn: "8363",
+	reservedCarriages: ["C", "D"],
+	reservedSeatsAvailable: 80,
+	unreservedTicketsAvailable: 50,
+	reservationAvailable: true,
+	reservationRequired: false,
+	seatMapAvailable: true,
+	journeyUrl: "https://www.vline.com.au/example",
+	observedAt: "2026-08-19T23:03:52Z",
 });
 const scsRows =
 	parseVLineScsBoard(`<table><tr class="rowModule"><td class="first-service"><table class="main-module"><tr>
