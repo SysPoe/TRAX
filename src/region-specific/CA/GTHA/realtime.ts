@@ -8,7 +8,7 @@ import {
 import { GTFS, type RealtimeVehiclePosition } from "qdf-gtfs";
 import { type GthaOperatingScheduleResponse, GTHADeparturesResponse, UPEDeparturesResponse } from "./types.js";
 import logger from "../../../utils/logger.js";
-import { getServiceDayStart, getServiceDate } from "../../../utils/time.js";
+import { addDaysToServiceDate, getServiceDayStart, getServiceDate } from "../../../utils/time.js";
 import { getDefaultTimeZone } from "../../../config.js";
 import { entityKey } from "../../../identity.js";
 import { getPluginState } from "../../../plugins/types.js";
@@ -513,6 +513,22 @@ function formatTrack(track: string | null | undefined): string | null {
 	return null;
 }
 
+/**
+ * A GTFS service day can extend past midnight. Search both the current service
+ * date and its previous day's extended-time window so an 00:45 departure
+ * encoded as 24:45 is available to platform sources.
+ */
+export function platformSourceServiceWindows(serviceDate: string, nowSecs: number, lookaheadSecs: number) {
+	return [
+		{ serviceDate, startTime: nowSecs, endTime: nowSecs + lookaheadSecs },
+		{
+			serviceDate: addDaysToServiceDate(serviceDate, -1),
+			startTime: 24 * 60 * 60 + nowSecs,
+			endTime: 24 * 60 * 60 + nowSecs + lookaheadSecs,
+		},
+	];
+}
+
 function getUniqueStopTimesForRange(
 	ctx: CacheContext,
 	gtfs: GTFS,
@@ -527,11 +543,15 @@ function getUniqueStopTimesForRange(
 		const serviceSeconds = timestamp > 1_000_000_000 ? timestamp - serviceDayStart : timestamp;
 		return serviceSeconds >= nowSecs && serviceSeconds <= nowSecs + lookaheadSecs;
 	};
-	const stopTimes = gtfs
-		.getStopTimes({
-			...{ date: serviceDateStr, start_time: nowSecs, end_time: nowSecs + lookaheadSecs },
+	const staticStopTimes = platformSourceServiceWindows(serviceDateStr, nowSecs, lookaheadSecs).flatMap((window) =>
+		gtfs.getStopTimes({
+			date: window.serviceDate,
+			start_time: window.startTime,
+			end_time: window.endTime,
 			...(stopId ? { stop_id: mergeId(ctx, stopId) } : {}),
-		})
+		}),
+	);
+	const stopTimes = staticStopTimes
 		.filter((v) => isConsideredTripId({ feedId: v.feed_id, localId: v.trip_id }, ctx))
 		.map((v) => ({ feed_id: v.feed_id, stop_id: v.stop_id, trip_id: v.trip_id }))
 		.concat(

@@ -51,7 +51,12 @@ import {
 	viaTrainKey,
 } from "../dist/region-specific/CA/VIA/station-board.js";
 import { selectViaBookingFare } from "../dist/region-specific/CA/VIA/consist.js";
-import { applyGthaVehicleBearing, parseGthaCourse, stopTimeMatchesStopId } from "../dist/region-specific/CA/GTHA/realtime.js";
+import {
+	applyGthaVehicleBearing,
+	parseGthaCourse,
+	platformSourceServiceWindows,
+	stopTimeMatchesStopId,
+} from "../dist/region-specific/CA/GTHA/realtime.js";
 import {
 	buildGthaOperatingScheduleUpdates,
 	GTHA_OPERATING_SCHEDULE_SOURCE_ID,
@@ -146,6 +151,10 @@ assert.equal(stopTimeMatchesStopId({ actual_stop_id: null, scheduled_stop_id: "U
 assert.equal(stopTimeMatchesStopId({ actual_stop_id: "UN", scheduled_stop_id: "OLD" }, "UN"), true);
 assert.equal(stopTimeMatchesStopId({ actual_stop_id: "NEW", scheduled_stop_id: "UN" }, "UN"), false);
 assert.equal(stopTimeMatchesStopId({ actual_stop_id: null, scheduled_stop_id: "PA" }, "UN"), false);
+assert.deepEqual(platformSourceServiceWindows("20260819", 45 * 60, 2 * 60 * 60), [
+	{ serviceDate: "20260819", startTime: 45 * 60, endTime: 2 * 60 * 60 + 45 * 60 },
+	{ serviceDate: "20260818", startTime: 24 * 60 * 60 + 45 * 60, endTime: 26 * 60 * 60 + 45 * 60 },
+]);
 assert.equal(
 	isGthaOperatingScheduleForServiceDate({ date: "2026-08-18T18:42:54-04:00", commitmentTrip: [] }, "20260818"),
 	true,
