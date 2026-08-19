@@ -62,6 +62,7 @@ import {
 	GTHA_OPERATING_SCHEDULE_SOURCE_ID,
 	isGthaOperatingScheduleForServiceDate,
 } from "../dist/region-specific/CA/GTHA/operating-schedule.js";
+import { SOURCE_C_LOOKAHEAD_SECS } from "../dist/region-specific/CA/GTHA/gtha-realtime-constants.js";
 
 assert.deepEqual(
 	selectViaBookingFare({
@@ -151,9 +152,10 @@ assert.equal(stopTimeMatchesStopId({ actual_stop_id: null, scheduled_stop_id: "U
 assert.equal(stopTimeMatchesStopId({ actual_stop_id: "UN", scheduled_stop_id: "OLD" }, "UN"), true);
 assert.equal(stopTimeMatchesStopId({ actual_stop_id: "NEW", scheduled_stop_id: "UN" }, "UN"), false);
 assert.equal(stopTimeMatchesStopId({ actual_stop_id: null, scheduled_stop_id: "PA" }, "UN"), false);
-assert.deepEqual(platformSourceServiceWindows("20260819", 45 * 60, 2 * 60 * 60), [
-	{ serviceDate: "20260819", startTime: 45 * 60, endTime: 2 * 60 * 60 + 45 * 60 },
-	{ serviceDate: "20260818", startTime: 24 * 60 * 60 + 45 * 60, endTime: 26 * 60 * 60 + 45 * 60 },
+assert.equal(SOURCE_C_LOOKAHEAD_SECS, 8 * 60 * 60);
+assert.deepEqual(platformSourceServiceWindows("20260819", 45 * 60, SOURCE_C_LOOKAHEAD_SECS), [
+	{ serviceDate: "20260819", startTime: 45 * 60, endTime: 8 * 60 * 60 + 45 * 60 },
+	{ serviceDate: "20260818", startTime: 24 * 60 * 60 + 45 * 60, endTime: 32 * 60 * 60 + 45 * 60 },
 ]);
 assert.equal(
 	isGthaOperatingScheduleForServiceDate({ date: "2026-08-18T18:42:54-04:00", commitmentTrip: [] }, "20260818"),

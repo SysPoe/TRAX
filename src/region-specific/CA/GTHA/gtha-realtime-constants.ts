@@ -1,4 +1,7 @@
-export const SOURCE_C_LOOKAHEAD_SECS = 7200;
+// UP's public board provides the next three departures, which can be more than
+// two hours away during the overnight service gap. Keep this aligned with the
+// DepartureBoard horizon so those published platforms can be matched.
+export const SOURCE_C_LOOKAHEAD_SECS = 8 * 60 * 60;
 export const SOURCE_D_LOOKAHEAD_SECS = 600;
 
 export const SOURCE_E_REFERRER = "https://www.gotracker.ca/gotracker/web/";
