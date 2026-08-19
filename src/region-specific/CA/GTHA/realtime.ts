@@ -499,11 +499,18 @@ function propagateVehicleInfoToBlock(
 	}
 }
 
-function formatTrack(track: string | null | undefined): string | null {
+export function formatTrack(track: string | null | undefined): string | null {
 	if (!track) return null;
 	track = track.trim();
 	if (track === "-" || track === "") return null;
-	if (/^\d+$/.test(track)) return track.replace(/^0+/, "");
+	if (/^\d{4}$/.test(track)) {
+		const pair = [Number.parseInt(track.slice(0, 2), 10), Number.parseInt(track.slice(2), 10)];
+		if (pair.every((value) => value > 0)) {
+			pair.sort((a, b) => a - b);
+			return `${pair[0]} & ${pair[1]}`;
+		}
+	}
+	if (/^\d+$/.test(track)) return track.replace(/^0+(?=\d)/, "");
 	let s = track.split(/[^\d]/g).filter((v) => v.length > 0);
 	if (s.length === 2) return `${s[0]} & ${s[1]}`;
 	logger.error("Failed to parse track: " + track + " " + s + "!", {

@@ -8,6 +8,7 @@ import { buildSeqDiagramTopology } from "../dist/index.js";
 import { _test as refreshCacheTest } from "../dist/cache/refreshCaches.js";
 import { _test as srtTest, getStaticFeedFingerprint } from "../dist/utils/SRT.js";
 import { propagateBlockHandoffs } from "../dist/region-specific/CA/GTHA/block-handoff.js";
+import { formatTrack } from "../dist/region-specific/CA/GTHA/realtime.js";
 import { ptvMetroPlugin } from "../dist/plugins/ptv-metro.js";
 import { isConsideredRoute } from "../dist/utils/considered.js";
 
@@ -201,6 +202,15 @@ function testBlockHandoffPropagation() {
 	assert.equal(observed.stopTimes[0].realtime_info.delay_secs, 600);
 }
 
+function testGthaTrackFormatting() {
+	assert.equal(formatTrack("1211"), "11 & 12");
+	assert.equal(formatTrack("0506"), "5 & 6");
+	assert.equal(formatTrack("0807"), "7 & 8");
+	assert.equal(formatTrack("0910"), "9 & 10");
+	assert.equal(formatTrack("03"), "3");
+	assert.equal(formatTrack("11 & 12"), "11 & 12");
+}
+
 testSeqDiagramUsesProvidedStopTimes();
 testDisappearingRealtimeUpdateIsChanged();
 testStaticFingerprintTracksQDFCacheFile();
@@ -208,4 +218,5 @@ testUntimedPassingPointsUseShapeDistance();
 testExpressPruningDistinguishesParallelCorridors();
 testPtvReplacementBusIsNotConsideredRail();
 testBlockHandoffPropagation();
+testGthaTrackFormatting();
 console.log("Performance regression tests passed.");
