@@ -1,4 +1,5 @@
 import type { OccupancyStatus, RealtimeCarriageDetails } from "qdf-gtfs";
+import type { VLineBookingSnapshot } from "./booking-snapshots.js";
 
 export type ObservationConfidence = "confirmed" | "reported" | "inferred";
 
@@ -77,6 +78,8 @@ export type VLineDiagnostics = {
 		requestsInFlight: number;
 		bookingCacheEntries: number;
 		bookingRequestsInFlight: number;
+		persistedBookingSnapshots: number;
+		bookingPrefetchAttempts: number;
 		platformLocationsCached: number;
 		platformStationsPolled: number;
 		platformStationErrors: number;
@@ -95,6 +98,8 @@ export type VLinePluginState = {
 	journeyInFlight: Map<string, Promise<VLineJourneyPlannerService[]>>;
 	bookingCache: Map<string, { availability: VLineBookingAvailability | null; expiresAt: number }>;
 	bookingInFlight: Map<string, Promise<VLineBookingAvailability | null>>;
+	bookingSnapshots: Map<string, VLineBookingSnapshot>;
+	bookingPrefetchAttempted: Set<string>;
 	platformLocationsCache: { locations: VLineJourneyPlannerLocation[]; expiresAt: number } | null;
 	platformPollByLocation: Map<string, { lastAttemptAt: number; lastSuccessAt: number | null; error: string | null }>;
 	sources: Record<VLineSourceName, VLineSourceStatus>;

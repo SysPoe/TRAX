@@ -10,7 +10,9 @@ import {
 	type VehicleInfo,
 } from "../../../utils/vehicleModel.js";
 import { getVehiclePositions } from "../../../cache/gtfsReads.js";
+import logger from "../../../utils/logger.js";
 import { getServiceDayStart, parseTimeWithConfig, serviceTimeToInstant } from "../../../utils/time.js";
+import { saveVLineBookingSnapshots, shouldPrefetchVLineBooking, vlineBookingSnapshotKey } from "./booking-snapshots.js";
 import { getVLineState } from "./state.js";
 import { inferVLinePlatform } from "./platform-heuristics.js";
 import {
@@ -49,6 +51,7 @@ const PLATFORM_STATIONS_PER_REFRESH = 7;
 const PLATFORM_POLL_CONCURRENCY = 1;
 const ON_DEMAND_JOURNEY_TTL_MS = 5 * 60_000;
 const MISSING_BOOKING_TTL_MS = 2 * 60_000;
+const BOOKING_SNAPSHOT_GRACE_MS = 6 * 60 * 60_000;
 
 function observation<T>(
 	value: T,
@@ -553,6 +556,36 @@ function lastScheduledCall(trip: AugmentedTripInstance) {
 function callName(call: AugmentedTripInstance["stopTimes"][number]): string | null {
 	return call.scheduled_parent_station?.stop_name ?? call.scheduled_stop?.stop_name ?? null;
 }
+
+function scheduleVLineBookingPrefetches(
+	ctx: CacheContext,
+	options: VLinePluginOptions,
+	trips: readonly AugmentedTripInstance[],
+	now = Date.now(),
+): void {
+	const state = getVLineState(ctx);
+	for (const trip of trips) {
+		const first = firstScheduledCall(trip), last = lastScheduledCall(trip);
+		const departure = first?.scheduled_departure_time ?? first?.scheduled_arrival_time;
+		const departureMs = scheduledInstant(trip, departure);
+		const origin = journeyLocationName(first ? callName(first) : null);
+		const destination = journeyLocationName(last ? callName(last) : null);
+		const scheduledDepartureTime = scheduledLocalDateTime(trip, departure);
+		if (departureMs == null || !shouldPrefetchVLineBooking(departureMs, now) ||
+			!origin || !destination || !scheduledDepartureTime) continue;
+		const key = bookingSnapshotKeyForTrip(trip, origin, destination, scheduledDepartureTime);
+		const snapshot = state.bookingSnapshots.get(key);
+		if ((snapshot && snapshot.expiresAt > now) || state.bookingPrefetchAttempted.has(key)) continue;
+		state.bookingPrefetchAttempted.add(key);
+		void getVLineVehicleFormation(trip, ctx, options).catch((error) => {
+			logger.warn(
+				`V/Line pre-departure booking capture failed: ${error instanceof Error ? error.message : String(error)}`,
+				{ module: "AU/VIC", function: "scheduleVLineBookingPrefetches" },
+			);
+		});
+	}
+}
+
 export async function refreshVLineOfficialSources(ctx: CacheContext, options: VLinePluginOptions): Promise<void> {
 	const state = getVLineState(ctx), observedAt = new Date().toISOString(), trips = currentInstances(ctx);
 	state.lastRefreshAt = observedAt;
@@ -594,6 +627,8 @@ export async function refreshVLineOfficialSources(ctx: CacheContext, options: VL
 			status.lastSuccessAt = observedAt; status.error = null;
 		} catch (error) { status.error = error instanceof Error ? error.message : String(error); }
 	}
+
+	if (options.journeyPlanner) scheduleVLineBookingPrefetches(ctx, options, trips);
 }
 
 export function applyVLineEnrichment(ctx: CacheContext, options: VLinePluginOptions): void {
@@ -655,6 +690,62 @@ function scheduledLocalDateTime(trip: AugmentedTripInstance, seconds: number | n
 	const day = date.toISOString().slice(0, 10);
 	const time = `${Math.floor(local / 3600).toString().padStart(2, "0")}:${Math.floor((local % 3600) / 60).toString().padStart(2, "0")}:${(local % 60).toString().padStart(2, "0")}`;
 	return `${day}T${time}`;
+}
+
+function bookingSnapshotKeyForTrip(
+	trip: AugmentedTripInstance,
+	origin: string,
+	destination: string,
+	scheduledDepartureTime: string,
+): string {
+	return vlineBookingSnapshotKey(
+		trip.serviceDate,
+		vlineTdn(trip.trip_id)!,
+		scheduledDepartureTime,
+		origin,
+		destination,
+	);
+}
+
+function bookingSnapshotExpiry(trip: AugmentedTripInstance): number {
+	const last = lastScheduledCall(trip);
+	const finalTime = last?.scheduled_arrival_time ?? last?.scheduled_departure_time;
+	return (scheduledInstant(trip, finalTime) ?? Date.now() + DAY_MS) + BOOKING_SNAPSHOT_GRACE_MS;
+}
+
+function restoreBookingSnapshot(ctx: CacheContext, details: VLineTripDetails, key: string): void {
+	const state = getVLineState(ctx);
+	const snapshot = state.bookingSnapshots.get(key);
+	if (!snapshot) return;
+	if (snapshot.expiresAt <= Date.now()) {
+		state.bookingSnapshots.delete(key);
+		return;
+	}
+	if (!details.bookingAvailability ||
+		Date.parse(details.bookingAvailability.observedAt) < Date.parse(snapshot.availability.observedAt)) {
+		details.bookingAvailability = structuredClone(snapshot.availability);
+	}
+}
+
+function persistBookingSnapshot(
+	ctx: CacheContext,
+	trip: AugmentedTripInstance,
+	key: string,
+	availability: NonNullable<VLineTripDetails["bookingAvailability"]>,
+): void {
+	const state = getVLineState(ctx);
+	state.bookingSnapshots.set(key, {
+		availability: structuredClone(availability),
+		expiresAt: bookingSnapshotExpiry(trip),
+	});
+	try {
+		saveVLineBookingSnapshots(ctx.config.cacheDir, state.bookingSnapshots);
+	} catch (error) {
+		logger.warn(
+			`Failed to persist V/Line booking snapshots: ${error instanceof Error ? error.message : String(error)}`,
+			{ module: "AU/VIC", function: "persistBookingSnapshot" },
+		);
+	}
 }
 
 async function cachedJourneyServices(
@@ -787,6 +878,10 @@ export async function getVLineVehicleFormation(
 	const scheduledDepartureTime = scheduledLocalDateTime(trip, scheduled);
 	const details = detailsFor(ctx, trip);
 	if (!details) return null;
+	const bookingSnapshotKey = origin && destination && scheduledDepartureTime
+		? bookingSnapshotKeyForTrip(trip, origin, destination, scheduledDepartureTime)
+		: null;
+	if (bookingSnapshotKey) restoreBookingSnapshot(ctx, details, bookingSnapshotKey);
 
 	let service: VLineJourneyPlannerService | null = null;
 	if (options.journeyPlanner && origin && destination) {
@@ -817,6 +912,7 @@ export async function getVLineVehicleFormation(
 				booking.reservedSeatsAvailable ??= reportedAvailabilityCount(service?.reservedSeatsAvailable);
 				booking.unreservedTicketsAvailable ??= reportedAvailabilityCount(service?.unreservedTicketsAvailable);
 				details.bookingAvailability = booking;
+				if (bookingSnapshotKey) persistBookingSnapshot(ctx, trip, bookingSnapshotKey, booking);
 			}
 		} catch {
 			// Formation data remains useful when the public booking page is temporarily unavailable.
