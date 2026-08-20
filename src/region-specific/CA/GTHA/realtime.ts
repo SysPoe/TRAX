@@ -145,14 +145,14 @@ export function parseGthaCourse(value: unknown): number | null {
 
 /**
  * Source A is authoritative when available. Metrolinx currently publishes an
- * explicit zero placeholder for every GO bearing, so expose that as missing and
- * let consumers infer direction from consecutive positions instead.
+ * explicit zero placeholder for GO and UP bearings, so expose that as missing
+ * and let consumers infer direction instead.
  */
 export function applyGthaVehicleBearing(
 	vehicle: RealtimeVehiclePosition,
 	supplementalBearing: number | null,
 ): RealtimeVehiclePosition {
-	if (vehicle.feed_id !== "go") return vehicle;
+	if (vehicle.feed_id !== "go" && vehicle.feed_id !== "up") return vehicle;
 	const bearing = supplementalBearing ?? (vehicle.position.bearing === 0 ? null : vehicle.position.bearing);
 	if (bearing === vehicle.position.bearing) return vehicle;
 	return { ...vehicle, position: { ...vehicle.position, bearing } };

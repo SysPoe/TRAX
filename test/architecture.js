@@ -148,6 +148,8 @@ assert.equal(applyGthaVehicleBearing(goPosition, 223).position.bearing, 223);
 assert.equal(applyGthaVehicleBearing(goPosition, 0).position.bearing, 0);
 assert.equal(applyGthaVehicleBearing(goPosition, null).position.bearing, null);
 assert.equal(applyGthaVehicleBearing({ feed_id: "go", position: { bearing: 42 } }, null).position.bearing, 42);
+assert.equal(applyGthaVehicleBearing({ feed_id: "up", position: { bearing: 0 } }, null).position.bearing, null);
+assert.equal(applyGthaVehicleBearing({ feed_id: "up", position: { bearing: 0 } }, 0).position.bearing, 0);
 assert.equal(applyGthaVehicleBearing({ feed_id: "via", position: { bearing: 0 } }, null).position.bearing, 0);
 // Platform sources must match ordinary scheduled calls, such as UP Express at Union.
 assert.equal(stopTimeMatchesStopId({ actual_stop_id: null, scheduled_stop_id: "UN" }, "UN"), true);
