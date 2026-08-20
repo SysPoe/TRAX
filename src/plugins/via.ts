@@ -36,6 +36,15 @@ export function viaCarriageTypeLabel(kind: VehicleDiagramKind): string {
 	}[kind];
 }
 
+export function viaCarriageEquipmentLabel(
+	carriageType: string | null | undefined,
+	diagramKind: VehicleDiagramKind,
+): string {
+	const type = carriageType?.trim();
+	if (!type) return viaCarriageTypeLabel(diagramKind);
+	return type.match(/^([A-Z0-9]{2,8})\s+-\s+/)?.[1] ?? type;
+}
+
 export function viaCarriageCodeDiagramKind(
 	...values: (string | null | undefined)[]
 ): VehicleDiagramKind | null {
@@ -71,7 +80,7 @@ export const viaPlugin: TransitPlugin = {
 				return {
 					id: carriage.carriage_number || carriage.carriage_name || String(carriage.sequence_number),
 					diagramKind,
-					type: viaCarriageTypeLabel(diagramKind),
+					type: viaCarriageEquipmentLabel(carriage.carriage_type, diagramKind),
 					manufacturer: null,
 					model: null,
 					seats: carriage.seats.length,

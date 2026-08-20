@@ -33,7 +33,12 @@ import {
 } from "../dist/region-specific/AU/VIC/enrichment.js";
 import { getVLineLocations, getVLinePlatformDepartures } from "../dist/region-specific/AU/VIC/journey-planner.js";
 import { ptvMetroFormationUnit } from "../dist/region-specific/AU/VIC/ptv-metro.js";
-import { viaCarriageCodeDiagramKind, viaCarriageDiagramKind, viaCarriageTypeLabel } from "../dist/plugins/via.js";
+import {
+	viaCarriageCodeDiagramKind,
+	viaCarriageDiagramKind,
+	viaCarriageEquipmentLabel,
+	viaCarriageTypeLabel,
+} from "../dist/plugins/via.js";
 import {
 	buildVLineRealtimeTripAliases,
 	canonicalVLineRealtimeTripId,
@@ -336,6 +341,9 @@ assert.equal(viaCarriageDiagramKind("Baggage car"), "baggage");
 assert.equal(viaCarriageDiagramKind("Prestige Sleeper"), "sleeper");
 assert.equal(viaCarriageTypeLabel(viaCarriageDiagramKind("SVC")), "Service car");
 assert.equal(viaCarriageCodeDiagramKind("CREW", "VIDE - (BAG, CREW, DINER)"), "crew");
+assert.equal(viaCarriageEquipmentLabel(" VEN - GL - 4A - 62 Eco car - NOwc ", "coach"), "VEN");
+assert.equal(viaCarriageEquipmentLabel("Prestige Sleeper", "sleeper"), "Prestige Sleeper");
+assert.equal(viaCarriageEquipmentLabel("", "coach"), "Coach");
 
 const canonicalVLineTripId = "01-BGO--10-T0-8021";
 const providerVLineTripId = "01-BGO--3-T0-8021";
