@@ -23,6 +23,7 @@ import TRAX, {
 import {
 	applyJourneyPlannerService,
 	createEmptyVLineDetails,
+	journeyLocationName,
 	matchScsRows,
 	serviceMatchesPlatformTrip,
 	vlinePlatformStationDemands,
@@ -294,6 +295,13 @@ assert.deepEqual(vlineNoKey.places[0].members, [
 ]);
 assert.equal(vlineNoKey.places.length, 17);
 assert.ok(vlineNoKey.places.some((place) => place.id === "watergardens"));
+assert.equal(
+	journeyLocationName("Traralgon Railway Station", [
+		{ name: "Traralgon: Coach Stop Plaza Shopping Centre", stopCode: "TG2", stopType: "Coach", line: "Gippsland" },
+		{ name: "Traralgon Station: Princes Hwy", stopCode: "TGN", stopType: "Station", line: "Gippsland" },
+	]),
+	"Traralgon Station: Princes Hwy",
+);
 const vlineWithKey = createAuVicVlineNetwork({ gtfsRtKey: "test-key" });
 assert.deepEqual(
 	vlineWithKey.feeds.flatMap((feed) => feed.realtimeSources).map((source) => source.source.headers.KeyId),

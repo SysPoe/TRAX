@@ -673,10 +673,18 @@ export function applyVLineEnrichment(ctx: CacheContext, options: VLinePluginOpti
 	}
 }
 
-function journeyLocationName(value: string | null): string | null {
+export function journeyLocationName(
+	value: string | null,
+	locations: readonly VLineJourneyPlannerLocation[] = [],
+): string | null {
 	if (!value) return null;
-	if (/southern cross/i.test(value)) return "Melbourne, Southern Cross";
-	return value.replace(/\s+Railway\s+Station$/i, " Station").trim();
+	const fallback = /southern cross/i.test(value)
+		? "Melbourne, Southern Cross"
+		: value.replace(/\s+Railway\s+Station$/i, " Station").trim();
+	const stationKey = normalizeStation(fallback);
+	return locations.find((location) =>
+		location.stopType?.toLowerCase() === "station" && normalizeStation(location.name) === stationKey,
+	)?.name ?? fallback;
 }
 
 function scheduledLocalDateTime(trip: AugmentedTripInstance, seconds: number | null | undefined): string | null {
@@ -872,12 +880,16 @@ export async function getVLineVehicleFormation(
 ): Promise<VehicleFormation | null> {
 	if (trip.feed_id !== "vic-vline") return null;
 	const first = firstScheduledCall(trip), last = lastScheduledCall(trip);
-	const origin = journeyLocationName(first ? callName(first) : null);
-	const destination = journeyLocationName(last ? callName(last) : null);
-	const scheduled = first?.scheduled_departure_time ?? first?.scheduled_arrival_time;
-	const scheduledDepartureTime = scheduledLocalDateTime(trip, scheduled);
 	const details = detailsFor(ctx, trip);
 	if (!details) return null;
+	const locationResult = options.journeyPlanner
+		? await platformLocationsForPolling(getVLineState(ctx), options.journeyPlanner, options.requestTimeoutMs)
+		: null;
+	const locations = locationResult?.locations ?? [];
+	const origin = journeyLocationName(first ? callName(first) : null, locations);
+	const destination = journeyLocationName(last ? callName(last) : null, locations);
+	const scheduled = first?.scheduled_departure_time ?? first?.scheduled_arrival_time;
+	const scheduledDepartureTime = scheduledLocalDateTime(trip, scheduled);
 	const bookingSnapshotKey = origin && destination && scheduledDepartureTime
 		? bookingSnapshotKeyForTrip(trip, origin, destination, scheduledDepartureTime)
 		: null;
