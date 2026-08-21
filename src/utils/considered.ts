@@ -36,9 +36,7 @@ export function isNonRevenueRoute(route: qdf.Route, ctx: CacheContext): boolean 
 }
 
 /** A call with neither passenger boarding nor alighting is a pass-through call. */
-export function isNonBoardingStopTime(
-	stopTime: Pick<qdf.StopTime, "pickup_type" | "drop_off_type">,
-): boolean {
+export function isNonBoardingStopTime(stopTime: Pick<qdf.StopTime, "pickup_type" | "drop_off_type">): boolean {
 	return stopTime.pickup_type === qdf.PickupType.None && stopTime.drop_off_type === qdf.DropOffType.None;
 }
 
@@ -85,11 +83,15 @@ export function isConsideredStop(stop: AugmentedStop | qdf.Stop, ctx: CacheConte
 	if (!gtfs) return false;
 	const children =
 		(stop as AugmentedStop).child_stop_ids ??
-		gtfs.getStops({ feed_id: stop.feed_id }).filter((candidate) => candidate.parent_station === stop.stop_id).map((candidate) => candidate.stop_id);
+		gtfs
+			.getStops({ feed_id: stop.feed_id })
+			.filter((candidate) => candidate.parent_station === stop.stop_id)
+			.map((candidate) => candidate.stop_id);
 	const valid =
-		gtfs.getStopTimes({ feed_id: stop.feed_id, stop_id: stop.stop_id }).some((stopTime) =>
-			isConsideredTripId({ feedId: stopTime.feed_id, localId: stopTime.trip_id }, ctx),
-		) || children.some((child) => isConsideredStopId({ feedId: stop.feed_id, localId: child }, ctx));
+		gtfs
+			.getStopTimes({ feed_id: stop.feed_id, stop_id: stop.stop_id })
+			.some((stopTime) => isConsideredTripId({ feedId: stopTime.feed_id, localId: stopTime.trip_id }, ctx)) ||
+		children.some((child) => isConsideredStopId({ feedId: stop.feed_id, localId: child }, ctx));
 	ctx.runtimeState.consideredStops.set(key, valid);
 	return valid;
 }

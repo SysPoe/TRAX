@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { CacheContext } from "../../../cache/types.js";
 import type { AugmentedTripInstance } from "../../../utils/augmentedTrip.js";
+import logger from "../../../utils/logger.js";
+import { getPluginState } from "../../../plugins/types.js";
 import {
 	createVehicleFormation,
 	type VehicleBookingAvailability,
@@ -11,9 +13,13 @@ import {
 const DEFAULT_PAGE_URL = "https://transportnsw.info/regional-travel/trip-selection";
 const DEFAULT_ACTION_ID = "7f0d1acc145b1083b6d4195f42bc401b36df4427c9";
 const STATION_CACHE_MS = 6 * 60 * 60 * 1000;
+const STATION_RETRY_MS = 5 * 60 * 1000;
 const INVENTORY_CACHE_MS = 5 * 60 * 1000;
 const MISSING_INVENTORY_CACHE_MS = 60 * 1000;
+const INVENTORY_PRUNE_INTERVAL_MS = 60 * 1000;
+const EMPTY_RESULT_WARNING_INTERVAL_MS = 15 * 60 * 1000;
 const NSW_TRAINLINK_FEED_ID = "nsw-trainlink";
+export const TFNSW_REGIONAL_BOOKING_PLUGIN_ID = "au-nsw-tfnsw-regional-booking";
 
 export type TfnswRegionalBookingOptions = {
 	/** The Next.js action identifier observed on the regional trip-selection page. */
@@ -55,7 +61,10 @@ type RegionalBookingState = {
 	stationCodesExpiresAt: number;
 	inventory: Map<string, { availability: VehicleBookingAvailability | null; expiresAt: number }>;
 	inFlight: Map<string, Promise<VehicleBookingAvailability | null>>;
+	lastInventoryPruneAt: number;
 };
+
+let lastEmptyResultWarningAt = 0;
 
 function record(value: unknown): Record<string, unknown> | null {
 	return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -239,15 +248,23 @@ async function stationMap(
 	const now = Date.now();
 	if (state.stationCodes && state.stationCodesExpiresAt > now) return state.stationCodes;
 	const result = new Map(Object.entries(options.stationCodes ?? {}));
+	let cacheDuration = STATION_CACHE_MS;
 	try {
-		for (const station of await fetchStations(options, timeoutMs)) {
+		const stations = await fetchStations(options, timeoutMs);
+		if (stations.length === 0) throw new Error("TfNSW regional station list was empty");
+		for (const station of stations) {
 			result.set(`name:${normalizeStationName(station.name)}`, station.id);
 		}
-	} catch {
-		// Explicit mappings remain useful if the provider's station page is unavailable.
+	} catch (error) {
+		cacheDuration = STATION_RETRY_MS;
+		const message = error instanceof Error ? error.message : String(error);
+		logger.warn(`TfNSW regional station list unavailable: ${message}. Retrying soon.`, {
+			module: "TfNSW regional booking",
+			function: "stationMap",
+		});
 	}
 	state.stationCodes = result;
-	state.stationCodesExpiresAt = now + STATION_CACHE_MS;
+	state.stationCodesExpiresAt = now + cacheDuration;
 	return result;
 }
 
@@ -311,6 +328,19 @@ function offersForTrip(trip: RegionalTrip): VehicleBookingFareClass[] {
 	);
 }
 
+function warnEmptySearchResult(trip: AugmentedTripInstance, serviceDate: string, resultCount: number): void {
+	const now = Date.now();
+	if (now - lastEmptyResultWarningAt < EMPTY_RESULT_WARNING_INTERVAL_MS) return;
+	lastEmptyResultWarningAt = now;
+	logger.warn(
+		`TfNSW regional booking returned no matching service for ${trip.trip_number} on ${serviceDate} (${resultCount} result(s)).`,
+		{
+			module: "TfNSW regional booking",
+			function: "queryAvailability",
+		},
+	);
+}
+
 async function queryAvailability(
 	trip: AugmentedTripInstance,
 	ctx: CacheContext,
@@ -347,7 +377,10 @@ async function queryAvailability(
 			leg: matchesTrip(regionalTrip, trip, originCode, destinationCode, serviceDate),
 		}))
 		.find((match): match is { regionalTrip: RegionalTrip; leg: RegionalLeg } => match.leg !== null);
-	if (!candidate) return null;
+	if (!candidate) {
+		warnEmptySearchResult(trip, serviceDate, regionalTrips.length);
+		return null;
+	}
 	const fareClasses = offersForTrip(candidate.regionalTrip);
 	if (!fareClasses.length) return null;
 	return {
@@ -366,13 +399,34 @@ async function queryAvailability(
 }
 
 function getState(ctx: CacheContext): RegionalBookingState {
-	const key = "au-nsw-tfnsw-rail-regional-booking";
-	let state = ctx.pluginState.get(key) as RegionalBookingState | undefined;
-	if (!state) {
-		state = { stationCodes: null, stationCodesExpiresAt: 0, inventory: new Map(), inFlight: new Map() };
-		ctx.pluginState.set(key, state);
+	return getPluginState(ctx, TFNSW_REGIONAL_BOOKING_PLUGIN_ID, () => ({
+		stationCodes: null,
+		stationCodesExpiresAt: 0,
+		inventory: new Map(),
+		inFlight: new Map(),
+		lastInventoryPruneAt: 0,
+	}));
+}
+
+function pruneExpiredInventory(state: RegionalBookingState, now: number): void {
+	if (now - state.lastInventoryPruneAt < INVENTORY_PRUNE_INTERVAL_MS) return;
+	for (const [key, entry] of state.inventory) {
+		if (entry.expiresAt <= now) state.inventory.delete(key);
 	}
-	return state;
+	state.lastInventoryPruneAt = now;
+}
+
+function formationFromAvailability(
+	trip: AugmentedTripInstance,
+	availability: VehicleBookingAvailability | null,
+): VehicleFormation | null {
+	return availability
+		? createVehicleFormation(trip, null, {
+				source: availability.source,
+				observedAt: availability.observedAt,
+				bookingAvailability: availability,
+			})
+		: null;
 }
 
 export async function getTfnswRegionalBookingFormation(
@@ -383,31 +437,19 @@ export async function getTfnswRegionalBookingFormation(
 	if (trip.feed_id !== NSW_TRAINLINK_FEED_ID) return null;
 	const timeoutMs = options.requestTimeoutMs ?? ctx.config.requestTimeoutMs;
 	const state = getState(ctx);
+	const now = Date.now();
+	pruneExpiredInventory(state, now);
 	const originCode = await resolveStationCode(trip, state, options, true, timeoutMs);
 	const destinationCode = await resolveStationCode(trip, state, options, false, timeoutMs);
 	const serviceDate = trip.serviceDate;
 	if (!originCode || !destinationCode || !isoDate(serviceDate)) return null;
 	const key = `${trip.instance_id}\0${originCode}\0${destinationCode}`;
 	const cached = state.inventory.get(key);
-	if (cached && cached.expiresAt > Date.now()) {
-		return cached.availability
-			? createVehicleFormation(trip, null, {
-					source: cached.availability.source,
-					observedAt: cached.availability.observedAt,
-					bookingAvailability: cached.availability,
-				})
-			: null;
-	}
+	if (cached && cached.expiresAt > now) return formationFromAvailability(trip, cached.availability);
 	const active = state.inFlight.get(key);
 	if (active) {
 		const availability = await active;
-		return availability
-			? createVehicleFormation(trip, null, {
-					source: availability.source,
-					observedAt: availability.observedAt,
-					bookingAvailability: availability,
-				})
-			: null;
+		return formationFromAvailability(trip, availability);
 	}
 	const request = queryAvailability(trip, ctx, options, originCode, destinationCode, serviceDate)
 		.catch(() => null)
@@ -421,13 +463,7 @@ export async function getTfnswRegionalBookingFormation(
 	state.inFlight.set(key, request);
 	try {
 		const availability = await request;
-		return availability
-			? createVehicleFormation(trip, null, {
-					source: availability.source,
-					observedAt: availability.observedAt,
-					bookingAvailability: availability,
-				})
-			: null;
+		return formationFromAvailability(trip, availability);
 	} finally {
 		state.inFlight.delete(key);
 	}

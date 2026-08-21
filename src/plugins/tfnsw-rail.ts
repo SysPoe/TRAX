@@ -5,6 +5,7 @@ import { getServiceDayStart } from "../utils/time.js";
 import type { TransitPlugin } from "./types.js";
 import {
 	getTfnswRegionalBookingFormation,
+	TFNSW_REGIONAL_BOOKING_PLUGIN_ID,
 	type TfnswRegionalBookingOptions,
 } from "../region-specific/AU/NSW/regional-booking.js";
 
@@ -83,27 +84,24 @@ export function createTfnswRailPlugin(): TransitPlugin {
 			}
 			if (route.feed_id === NSW_TRAINLINK_FEED_ID) {
 				return route.agency_id === "X000" || route.agency_id === "711";
-		}
-		return undefined;
-	},
-	enrichStop(stop) {
-		if (stop.platform_code) return;
-		const platformCode = tfnswPlatformCode(stop.stop_name);
-		if (platformCode) stop.platform_code = platformCode;
-	},
-	enrichRealtimeTripUpdate: enrichTfnswRealtimeTripUpdate,
-	isNonRevenueRoute: (route) =>
-			route.feed_id === SYDNEY_TRAINS_FEED_ID && route.route_id.startsWith("RTTA_"),
+			}
+			return undefined;
+		},
+		enrichStop(stop) {
+			if (stop.platform_code) return;
+			const platformCode = tfnswPlatformCode(stop.stop_name);
+			if (platformCode) stop.platform_code = platformCode;
+		},
+		enrichRealtimeTripUpdate: enrichTfnswRealtimeTripUpdate,
+		isNonRevenueRoute: (route) => route.feed_id === SYDNEY_TRAINS_FEED_ID && route.route_id.startsWith("RTTA_"),
 	};
 }
 
 export const tfnswRailPlugin: TransitPlugin = createTfnswRailPlugin();
 
-export function createTfnswRegionalBookingPlugin(
-	options: TfnswRegionalBookingOptions = {},
-): TransitPlugin {
+export function createTfnswRegionalBookingPlugin(options: TfnswRegionalBookingOptions = {}): TransitPlugin {
 	return {
-		id: "au-nsw-tfnsw-regional-booking",
+		id: TFNSW_REGIONAL_BOOKING_PLUGIN_ID,
 		feedIds: [NSW_TRAINLINK_FEED_ID],
 		capabilities: ["consist"],
 		vehicleFormation: (trip, ctx) => getTfnswRegionalBookingFormation(trip, ctx, options),
