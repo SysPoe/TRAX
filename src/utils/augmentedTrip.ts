@@ -7,7 +7,7 @@ import { ExpressInfo, findExpress } from "./SRT.js";
 import { canonicalStationIdentity, getFeedTimeZone } from "../config.js";
 import { getToday } from "./time.js";
 import { encodeTripInstanceId, entityKey } from "../identity.js";
-import { isNonRevenueRoute } from "./considered.js";
+import { isNonRevenueTrip } from "./considered.js";
 
 export type AugmentedTripInstance = qdf.Trip & {
 	instance_id: string;
@@ -132,8 +132,8 @@ export function augmentTrip(
 	const tripRef = { feedId: trip.feed_id, localId: trip.trip_id };
 	const tripKey = entityKey(tripRef);
 	const route = ctx.gtfs?.getRoutes({ feed_id: trip.feed_id, route_id: trip.route_id })[0];
-	const nonRevenue = route ? isNonRevenueRoute(route, ctx) : false;
 	const rawStopTimes = cache.getRawStopTimes(ctx, tripRef).sort((a, b) => a.stop_sequence - b.stop_sequence);
+	const nonRevenue = isNonRevenueTrip(route, rawStopTimes, ctx);
 	ctx.augmented.timer.stop("augmentTrip:getRawStopTimes");
 
 	ctx.augmented.timer.start("augmentTrip:getParentStops");

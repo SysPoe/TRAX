@@ -8,6 +8,7 @@ import type { PlatformData, PlatformDefinition } from "./platformData.js";
 import { ServiceCapacity } from "./serviceCapacity.js";
 import { getServiceDayStart } from "./time.js";
 import { getFeedTimeZone } from "../config.js";
+import { isPassingStopTime } from "./considered.js";
 import { Timer } from "./timer.js";
 import { addDaysToDateString as wasmAddDaysToDateString, calculateDelayClassWasm } from "../../build/release.js";
 import { getSeqState } from "../plugins/seq-state.js";
@@ -93,6 +94,22 @@ export type AugmentedStopTime = {
 	};
 
 type IntermediateAST = Omit<AugmentedStopTime, "actual_exit_side" | "scheduled_exit_side">;
+
+/** Match a realtime call by sequence, exact child stop, or the station parent. */
+export function matchRealtimeStopTimeUpdate(input: {
+	stopSequence: number;
+	stopId: string;
+	parentStationId: string | null;
+	bySequence: ReadonlyMap<number, qdf.RealtimeStopTimeUpdate>;
+	byStopId: ReadonlyMap<string, qdf.RealtimeStopTimeUpdate>;
+	byParentStationId: ReadonlyMap<string, qdf.RealtimeStopTimeUpdate>;
+}): qdf.RealtimeStopTimeUpdate | undefined {
+	return (
+		input.bySequence.get(input.stopSequence) ??
+		input.byStopId.get(input.stopId) ??
+		(input.parentStationId ? input.byParentStationId.get(input.parentStationId) : undefined)
+	);
+}
 
 function attachStopReferences(
 	ast: AugmentedStopTime,
@@ -279,11 +296,15 @@ export function augmentStopTimes(
 	// repeated linear scans of stopTimeUpdates.
 	const rtBySeq = new Map<number, qdf.RealtimeStopTimeUpdate>();
 	const rtByStopId = new Map<string, qdf.RealtimeStopTimeUpdate>();
+	const rtByParentStationId = new Map<string, qdf.RealtimeStopTimeUpdate>();
 	for (const rt of stopTimeUpdates) {
 		if (rt.stop_sequence != null) {
 			rtBySeq.set(rt.stop_sequence, rt);
 		} else if (rt.stop_id) {
 			rtByStopId.set(rt.stop_id, rt);
+			const rawStop = cache.getRawStops(ctx, { feed_id: feedId, stop_id: rt.stop_id })[0];
+			const parentStationId = rawStop?.parent_station;
+			if (parentStationId) rtByParentStationId.set(parentStationId, rt);
 		}
 	}
 
@@ -479,13 +500,21 @@ export function augmentStopTimes(
 		currentSequence = seq;
 
 		const stopId = stopTime.stop_id;
-		const rtUpdate = isPassing ? undefined : (rtBySeq.get(seq) ?? rtByStopId.get(stopId));
-
 		const scheduledStop = cache.getAugmentedStops(ctx, { feedId: stopFeedId, localId: stopId })[0];
 		const scheduledParentId = scheduledStop?.parent_stop_id ?? scheduledStop?.parent_station ?? null;
 		const scheduledParent = scheduledParentId
 			? cache.getAugmentedStops(ctx, { feedId: stopFeedId, localId: scheduledParentId })[0]
 			: null;
+		const rtUpdate = isPassing
+			? undefined
+			: matchRealtimeStopTimeUpdate({
+					stopSequence: seq,
+					stopId,
+					parentStationId: scheduledParentId,
+					bySequence: rtBySeq,
+					byStopId: rtByStopId,
+					byParentStationId: rtByParentStationId,
+				});
 
 		const schedArr = stopTime.arrival_time;
 		const schedDep = stopTime.departure_time;
@@ -640,11 +669,12 @@ export function augmentStopTimes(
 
 		const datesServiceDate = serviceDate;
 
+		const stopPassing = isPassingStopTime(stopTime, isPassing);
 		const augmented: AugmentedStopTime = {
 			_stopTime: isPassing ? null : stopTime,
 			feed_id: stopFeedId,
 			trip_id: tripId,
-			passing: isPassing,
+			passing: stopPassing,
 			pickup_type: stopTime.pickup_type,
 			drop_off_type: stopTime.drop_off_type,
 			instance_id: "",

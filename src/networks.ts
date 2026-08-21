@@ -38,6 +38,13 @@ export const AU_SEQ_NETWORK: NetworkDefinition = {
 	],
 	modes: ["rail"],
 	plugins: [seqPlugin],
+	places: [
+		{
+			id: "brisbane-central",
+			name: "Brisbane Central",
+			members: [{ feedId: "translink-seq", localId: "place_censta" }],
+		},
+	],
 };
 
 export type AuVicVlineNetworkOptions = VLinePluginOptions & { gtfsRtKey?: string };
@@ -117,7 +124,7 @@ export function createAuVicVlineNetwork(options: AuVicVlineNetworkOptions = {}):
 const SHARED_NSW_RAIL_STATIONS = [
 	["blacktown", "Blacktown Station", "214810"],
 	["campbelltown", "Campbelltown Station", "256020"],
-	["sydney-central", "Central Station", "200060"],
+	["sydney-central", "Sydney Central", "200060"],
 	["glenfield", "Glenfield Station", "216710"],
 	["hornsby", "Hornsby Station", "207720"],
 	["macarthur", "Macarthur Station", "256030"],
@@ -240,7 +247,7 @@ export function createAuRailNetwork(options: AuRailNetworkOptions = {}): Network
 		feeds: [...AU_SEQ_NETWORK.feeds, ...victoria.feeds, ...tfnswFeeds],
 		modes: ["rail"],
 		plugins: [...AU_SEQ_NETWORK.plugins, ...victoria.plugins, ...(tfnswKey ? [tfnswRailPlugin] : [])],
-		places: [...victoriaPlaces, ...tfnswPlaces],
+		places: [...(AU_SEQ_NETWORK.places ?? []), ...victoriaPlaces, ...tfnswPlaces],
 	};
 }
 

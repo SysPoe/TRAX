@@ -50,8 +50,14 @@ import {
 	canonicalizeRealtimeVehiclePosition,
 	replaceInjectedTripUpdates,
 } from "../dist/cache/realtime.js";
+import { isNonBoardingStopTime, isNonRevenueTrip, isPassingStopTime } from "../dist/utils/considered.js";
+import { matchRealtimeStopTimeUpdate } from "../dist/utils/augmentedStopTime.js";
+import {
+	inferTfnswRealtimeServiceDate,
+	tfnswPlatformCode,
+} from "../dist/plugins/tfnsw-rail.js";
 import { findUniqueTripInstanceForServiceDate } from "../dist/cache/augmentedEntities.js";
-import { TripScheduleRelationship } from "qdf-gtfs";
+import { DropOffType, PickupType, TripScheduleRelationship } from "qdf-gtfs";
 import {
 	buildCisBoardingAssignments,
 	collectCisStationCandidates,
@@ -358,6 +364,71 @@ const nonRevenueRoute = {
 };
 assert.equal(tfnswPlugin.considerRoute(nonRevenueRoute), true);
 assert.equal(tfnswPlugin.isNonRevenueRoute(nonRevenueRoute), true);
+assert.equal(
+	isNonBoardingStopTime({ pickup_type: PickupType.None, drop_off_type: DropOffType.None }),
+	true,
+);
+assert.equal(
+	isNonBoardingStopTime({ pickup_type: PickupType.Regular, drop_off_type: DropOffType.None }),
+	false,
+);
+assert.equal(
+	isPassingStopTime({ pickup_type: PickupType.None, drop_off_type: DropOffType.None }),
+	true,
+);
+assert.equal(
+	isPassingStopTime({ pickup_type: PickupType.Regular, drop_off_type: DropOffType.None }),
+	false,
+);
+assert.equal(
+	isPassingStopTime({ pickup_type: PickupType.Regular, drop_off_type: DropOffType.Regular }, true),
+	true,
+);
+assert.equal(
+	isNonRevenueTrip(
+		nonRevenueRoute,
+		[
+			{ pickup_type: PickupType.None, drop_off_type: DropOffType.None },
+			{ pickup_type: PickupType.None, drop_off_type: DropOffType.None },
+		],
+		{ config: { network: { plugins: [] } } },
+	),
+	true,
+);
+assert.equal(
+	isNonRevenueTrip(
+		nonRevenueRoute,
+		[
+			{ pickup_type: PickupType.None, drop_off_type: DropOffType.None },
+			{ pickup_type: PickupType.Regular, drop_off_type: DropOffType.None },
+		],
+		{ config: { network: { plugins: [] } } },
+	),
+	false,
+);
+assert.equal(tfnswPlatformCode("Redfern Station Platform 12"), "12");
+assert.equal(tfnswPlatformCode("Redfern Station"), null);
+assert.equal(
+	inferTfnswRealtimeServiceDate({
+		candidateServiceDates: ["20260820", "20260821"],
+		firstServiceTime: 23 * 60 * 60,
+		lastServiceTime: 23.5 * 60 * 60,
+		nowEpochSeconds: Date.parse("2026-08-20T13:15:00Z") / 1000,
+		timeZone: "Australia/Sydney",
+	}),
+	"20260820",
+);
+assert.equal(
+	matchRealtimeStopTimeUpdate({
+		stopSequence: 4,
+		stopId: "2015131",
+		parentStationId: "201510",
+		bySequence: new Map(),
+		byStopId: new Map(),
+		byParentStationId: new Map([["201510", { stop_id: "2015142" }]]),
+	})?.stop_id,
+	"2015142",
+);
 assert.equal(
 	tfnswPlugin.considerRoute({
 		feed_id: "nsw-sydney-trains",

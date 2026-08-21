@@ -35,6 +35,32 @@ export function isNonRevenueRoute(route: qdf.Route, ctx: CacheContext): boolean 
 	);
 }
 
+/** A call with neither passenger boarding nor alighting is a pass-through call. */
+export function isNonBoardingStopTime(
+	stopTime: Pick<qdf.StopTime, "pickup_type" | "drop_off_type">,
+): boolean {
+	return stopTime.pickup_type === qdf.PickupType.None && stopTime.drop_off_type === qdf.DropOffType.None;
+}
+
+export function isPassingStopTime(
+	stopTime: Pick<qdf.StopTime, "pickup_type" | "drop_off_type">,
+	topologyPassing = false,
+): boolean {
+	return topologyPassing || isNonBoardingStopTime(stopTime);
+}
+
+/** A trip with no passenger boarding or alighting at any call is a non-revenue movement. */
+export function isNonRevenueTrip(
+	route: qdf.Route | null | undefined,
+	stopTimes: Pick<qdf.StopTime, "pickup_type" | "drop_off_type">[],
+	ctx: CacheContext,
+): boolean {
+	return (
+		(route ? isNonRevenueRoute(route, ctx) : false) ||
+		(stopTimes.length > 0 && stopTimes.every(isNonBoardingStopTime))
+	);
+}
+
 export function isConsideredTrip(trip: qdf.Trip, ctx: CacheContext): boolean {
 	const route = ctx.gtfs?.getRoutes({ feed_id: trip.feed_id, route_id: trip.route_id })[0];
 	return route ? isConsideredRoute(route, ctx) : false;

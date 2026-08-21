@@ -65,13 +65,18 @@ function canonicalTripInfo(trip: RealtimeUpdateTripInfo, ctx: CacheContext): Rea
 }
 
 export function canonicalizeRealtimeTripUpdate(update: RealtimeTripUpdate, ctx: CacheContext): RealtimeTripUpdate {
-	const trip = canonicalTripInfo(update.trip, ctx);
-	if (trip === update.trip) return update;
-	const stopTimeUpdates = update.stop_time_updates.map((stopTime): RealtimeStopTimeUpdate => ({
+	let enriched = update;
+	for (const plugin of ctx.config.network.plugins) {
+		if (!plugin.feedIds.includes(enriched.feed_id) || !plugin.enrichRealtimeTripUpdate) continue;
+		enriched = plugin.enrichRealtimeTripUpdate(enriched, ctx) ?? enriched;
+	}
+	const trip = canonicalTripInfo(enriched.trip, ctx);
+	if (trip === enriched.trip) return enriched;
+	const stopTimeUpdates = enriched.stop_time_updates.map((stopTime): RealtimeStopTimeUpdate => ({
 		...stopTime,
 		trip_id: trip.trip_id,
 	}));
-	return { ...update, trip, stop_time_updates: stopTimeUpdates };
+	return { ...enriched, trip, stop_time_updates: stopTimeUpdates };
 }
 
 export function canonicalizeRealtimeVehiclePosition(

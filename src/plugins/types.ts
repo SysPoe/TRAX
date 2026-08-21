@@ -1,4 +1,4 @@
-import type { RealtimeUpdateTripInfo, RealtimeVehiclePosition, Route } from "qdf-gtfs";
+import type { RealtimeTripUpdate, RealtimeUpdateTripInfo, RealtimeVehiclePosition, Route } from "qdf-gtfs";
 import type { CacheContext } from "../cache/types.js";
 import type { AugmentedStop } from "../utils/augmentedStop.js";
 import type { AugmentedTripInstance } from "../utils/augmentedTrip.js";
@@ -30,6 +30,8 @@ export interface TransitPlugin {
 	isNonRevenueRoute?(route: Route, ctx: CacheContext): boolean;
 	/** Resolve a provider trip descriptor to the static trip identity used by this runtime. */
 	canonicalRealtimeTripId?(trip: RealtimeUpdateTripInfo, ctx: CacheContext): string | null;
+	/** Fill provider omissions in a realtime trip update before it joins static service instances. */
+	enrichRealtimeTripUpdate?(update: RealtimeTripUpdate, ctx: CacheContext): RealtimeTripUpdate | void;
 	/** Enrich the completed realtime snapshot without leaking region checks into core code. */
 	afterRealtime?(ctx: CacheContext, changedTripKeys: ReadonlySet<string>): Promise<void> | void;
 	/** Correct or enrich a provider vehicle observation when it crosses the runtime boundary. */
