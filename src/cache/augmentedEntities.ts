@@ -19,7 +19,7 @@ import type { CacheContext } from "./types.js";
 import { getFeedTimeZone, type TraxConfig } from "../config.js";
 import * as qdf from "qdf-gtfs";
 import type { ExpressInfo, PassingStop } from "../utils/SRT.js";
-import { getStops, getTrips } from "./gtfsReads.js";
+import { getRawStopTimes, getStops, getTrips } from "./gtfsReads.js";
 import { decodeTripInstanceId, entityKey } from "../identity.js";
 import { getSeqState } from "../plugins/seq-state.js";
 import { getServiceDatesByTrip } from "../utils/calendar.js";
@@ -404,7 +404,7 @@ export function getAugmentedTrips(ctx: CacheContext, trip?: QualifiedEntityId): 
 		const cachedTrip = augmented.tripsRec.get(key);
 		if (cachedTrip) return [addVehicleModelTrip(addSC(cachedTrip, ctx, context.config), ctx, context.config)];
 		const rawTrip = getTrips(ctx, { feed_id: trip.feedId, trip_id: trip.localId })[0];
-		if (rawTrip) {
+		if (rawTrip && getRawStopTimes(ctx, trip).length > 0) {
 			const augmentedTrip = augmentTrip(rawTrip, context);
 			registerAugmentedTrip(ctx, augmentedTrip);
 			augmented.tripsRec.set(key, augmentedTrip);

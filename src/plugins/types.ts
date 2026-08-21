@@ -26,6 +26,8 @@ export interface TransitPlugin {
 	beforeRealtime?(ctx: CacheContext): Promise<void> | void;
 	/** Veto routes that a provider encodes with a rail-like type but does not operate as rail. */
 	considerRoute?(route: Route, ctx: CacheContext): boolean | undefined;
+	/** Mark depot, empty-car, and other movements that normal passenger views hide. */
+	isNonRevenueRoute?(route: Route, ctx: CacheContext): boolean;
 	/** Resolve a provider trip descriptor to the static trip identity used by this runtime. */
 	canonicalRealtimeTripId?(trip: RealtimeUpdateTripInfo, ctx: CacheContext): string | null;
 	/** Enrich the completed realtime snapshot without leaking region checks into core code. */

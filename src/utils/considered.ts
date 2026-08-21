@@ -29,6 +29,12 @@ export function isConsideredRoute(route: qdf.Route, ctx: CacheContext): boolean 
 	return valid;
 }
 
+export function isNonRevenueRoute(route: qdf.Route, ctx: CacheContext): boolean {
+	return ctx.config.network.plugins.some(
+		(plugin) => pluginSupportsFeed(plugin, route.feed_id) && plugin.isNonRevenueRoute?.(route, ctx) === true,
+	);
+}
+
 export function isConsideredTrip(trip: qdf.Trip, ctx: CacheContext): boolean {
 	const route = ctx.gtfs?.getRoutes({ feed_id: trip.feed_id, route_id: trip.route_id })[0];
 	return route ? isConsideredRoute(route, ctx) : false;

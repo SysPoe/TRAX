@@ -7,6 +7,7 @@ import TRAX, {
 	encodePublicEntityId,
 	decodePublicEntityId,
 	createAuVicVlineNetwork,
+	createAuRailNetwork,
 	normalizeVLineUnit,
 	ptvVehicleDescriptorConsist,
 	parseVLinePlatformServices,
@@ -313,6 +314,57 @@ const vlineWithKey = createAuVicVlineNetwork({ gtfsRtKey: "test-key" });
 assert.deepEqual(
 	vlineWithKey.feeds.flatMap((feed) => feed.realtimeSources).map((source) => source.source.headers.KeyId),
 	["test-key", "test-key", "test-key", "test-key"],
+);
+
+const australiaWithoutTfnsw = createAuRailNetwork();
+assert.equal(australiaWithoutTfnsw.id, "au-rail");
+assert.deepEqual(
+	australiaWithoutTfnsw.feeds.map((feed) => feed.id),
+	["translink-seq", "vic-vline", "vic-metro"],
+);
+assert.equal(australiaWithoutTfnsw.places.length, 17);
+
+const australiaRail = createAuRailNetwork({ tfnswApiKey: "test-tfnsw-key" });
+assert.deepEqual(
+	australiaRail.feeds.map((feed) => feed.id),
+	["translink-seq", "vic-vline", "vic-metro", "nsw-sydney-trains", "nsw-trainlink"],
+);
+assert.deepEqual(australiaRail.places.find((place) => place.id === "southern-cross").members, [
+	{ feedId: "vic-vline", localId: "vic:rail:SSS" },
+	{ feedId: "vic-metro", localId: "vic:rail:SSS" },
+	{ feedId: "nsw-trainlink", localId: "22180" },
+]);
+assert.deepEqual(australiaRail.places.find((place) => place.id === "albury").members, [
+	{ feedId: "vic-vline", localId: "nsw:rail:ABY" },
+	{ feedId: "nsw-trainlink", localId: "26401" },
+]);
+assert.deepEqual(australiaRail.places.find((place) => place.id === "brisbane-roma-street").members, [
+	{ feedId: "translink-seq", localId: "place_romsta" },
+	{ feedId: "nsw-trainlink", localId: "40001" },
+]);
+assert.deepEqual(australiaRail.places.find((place) => place.id === "sydney-central").members, [
+	{ feedId: "nsw-sydney-trains", localId: "200060" },
+	{ feedId: "nsw-trainlink", localId: "200060" },
+]);
+assert.equal(
+	australiaRail.feeds.find((feed) => feed.id === "nsw-sydney-trains").staticSource.headers.Authorization,
+	"apikey test-tfnsw-key",
+);
+const tfnswPlugin = australiaRail.plugins.find((plugin) => plugin.id === "au-nsw-tfnsw-rail");
+const nonRevenueRoute = {
+	feed_id: "nsw-sydney-trains",
+	agency_id: "SydneyTrains",
+	route_id: "RTTA_REV",
+};
+assert.equal(tfnswPlugin.considerRoute(nonRevenueRoute), true);
+assert.equal(tfnswPlugin.isNonRevenueRoute(nonRevenueRoute), true);
+assert.equal(
+	tfnswPlugin.considerRoute({
+		feed_id: "nsw-sydney-trains",
+		agency_id: "NSWTrains",
+		route_id: "CTY_W1a",
+	}),
+	false,
 );
 
 const inferredVLineDetails = createEmptyVLineDetails("8761");
@@ -958,6 +1010,33 @@ function feed(name, timezone, includeIntermediate = false) {
 	});
 }
 
+function orphanTripFeed() {
+	return createZip({
+		"agency.txt":
+			"agency_id,agency_name,agency_url,agency_timezone\nSydneyTrains,Synthetic Sydney,https://example.test,Australia/Sydney\n",
+		"routes.txt":
+			"route_id,agency_id,route_short_name,route_long_name,route_type\n" +
+			"passenger,SydneyTrains,T1,Passenger service,2\n" +
+			"RTTA_REV,SydneyTrains,RTTA,Non-revenue movement,2\n",
+		"stops.txt":
+			"stop_id,stop_name,stop_lat,stop_lon\ncentral,Central,-33.883,151.207\nredfern,Redfern,-33.892,151.199\n",
+		"trips.txt":
+			"route_id,service_id,trip_id,trip_headsign,direction_id\n" +
+			"passenger,daily,passenger-trip,Redfern,0\n" +
+			"RTTA_REV,daily,valid-rtta,Redfern,0\n" +
+			"RTTA_REV,daily,orphan-rtta,Redfern,0\n",
+		"stop_times.txt":
+			"trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type\n" +
+			"passenger-trip,10:00:00,10:00:00,central,1,0,1\n" +
+			"passenger-trip,10:05:00,10:05:00,redfern,2,1,0\n" +
+			"valid-rtta,11:00:00,11:00:00,central,1,0,1\n" +
+			"valid-rtta,11:05:00,11:05:00,redfern,2,1,0\n",
+		"calendar.txt":
+			"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n" +
+			"daily,1,1,1,1,1,1,1,20260101,20261231\n",
+	});
+}
+
 function continuationFeed() {
 	return createZip({
 		"agency.txt":
@@ -1063,6 +1142,7 @@ function continuationFeed() {
 const feeds = {
 	"/a.zip": feed("Alpha", "Australia/Brisbane"),
 	"/b.zip": feed("Beta", "America/Toronto", true),
+	"/orphan.zip": orphanTripFeed(),
 	"/continuations.zip": continuationFeed(),
 };
 const server = http.createServer((request, response) => {
@@ -1129,6 +1209,41 @@ try {
 	);
 	const runtime = new TRAX(definition, { cacheDir: ".TRAXCACHE/test-synthetic" });
 	await runtime.loadGTFS(false, false);
+	const orphanRuntime = new TRAX(
+		{
+			id: "orphan-test",
+			name: "Orphan trip test",
+			modes: ["rail"],
+			feeds: [
+				{
+					id: "orphan",
+					staticSource: { url: `${origin}/orphan.zip` },
+					realtimeSources: [],
+				},
+			],
+			plugins: [
+				{
+					id: "synthetic-non-revenue",
+					feedIds: ["orphan"],
+					capabilities: [],
+					isNonRevenueRoute: (route) => route.route_id === "RTTA_REV",
+				},
+			],
+		},
+		{ cacheDir: ".TRAXCACHE/test-orphan" },
+	);
+	await orphanRuntime.loadGTFS(false, false);
+	assert.equal(orphanRuntime.getRawTrips({ feed_id: "orphan", trip_id: "orphan-rtta" }).length, 1);
+	assert.equal(orphanRuntime.getAugmentedTrips({ feedId: "orphan", localId: "orphan-rtta" }).length, 0);
+	assert.equal(
+		orphanRuntime.getAugmentedTrips({ feedId: "orphan", localId: "valid-rtta" })[0].instances[0].nonRevenue,
+		true,
+	);
+	assert.equal(
+		orphanRuntime.getAugmentedTrips({ feedId: "orphan", localId: "passenger-trip" })[0].instances[0]
+			.nonRevenue,
+		false,
+	);
 	const continuationRuntime = new TRAX(
 		{
 			id: "continuation-test",

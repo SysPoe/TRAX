@@ -15,6 +15,7 @@ import {
 } from "./utils/departures.js";
 import {
 	isConsideredRoute,
+	isNonRevenueRoute,
 	isConsideredStop,
 	isConsideredStopId,
 	isConsideredTrip,
@@ -484,6 +485,7 @@ export class TRAX {
 			getShapes: () => cache.getShapes(this.ctx),
 			isConsideredTrip: (trip: Trip) => isConsideredTrip(trip, this.ctx),
 			isConsideredRoute: (route: Route) => isConsideredRoute(route, this.ctx),
+			isNonRevenueRoute: (route: Route) => isNonRevenueRoute(route, this.ctx),
 			isConsideredTripId: (trip: import("qdf-gtfs").QualifiedEntityId) => isConsideredTripId(trip, this.ctx),
 			isConsideredStop: (stop: AugmentedStop | Stop) => isConsideredStop(stop, this.ctx),
 			isConsideredStopId: (stop: import("qdf-gtfs").QualifiedEntityId) => isConsideredStopId(stop, this.ctx),
@@ -522,8 +524,14 @@ export {
 	type TraxConfig,
 } from "./config.js";
 export { NetworkRuntimeRegistry } from "./registry.js";
-export { AU_SEQ_NETWORK, CA_VIA_NETWORK, createAuVicVlineNetwork, createCaGthaNetwork } from "./networks.js";
-export type { AuVicVlineNetworkOptions } from "./networks.js";
+export {
+	AU_SEQ_NETWORK,
+	CA_VIA_NETWORK,
+	createAuRailNetwork,
+	createAuVicVlineNetwork,
+	createCaGthaNetwork,
+} from "./networks.js";
+export type { AuRailNetworkOptions, AuVicVlineNetworkOptions } from "./networks.js";
 export * from "./identity.js";
 export * as cache from "./cache/index.js";
 export * as stations from "./utils/stations.js";

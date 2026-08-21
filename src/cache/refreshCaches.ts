@@ -25,6 +25,7 @@ import { entityKey } from "../identity.js";
 import { getSeqState } from "../plugins/seq-state.js";
 import { addDaysToServiceDate, getToday } from "../utils/time.js";
 import { applyRealtimeReplacementPrecedence, canonicalizeRealtimeTripUpdates } from "./realtime.js";
+import { getRawStopTimes } from "./gtfsReads.js";
 
 type CacheProgressReporter = (info: Parameters<TraxConfig["progressLog"]>[0] & { unit?: "bytes" | "items" }) => void;
 
@@ -291,7 +292,10 @@ export async function refreshStaticCache(
 
 	ctx.augmented.timer.start("refreshStaticCache:loadTrips");
 	const allTrips = gtfs.getTrips();
-	const trips = allTrips.filter((v: Trip) => isConsideredTrip(v, ctx));
+	const consideredTrips = allTrips.filter((v: Trip) => isConsideredTrip(v, ctx));
+	const trips = consideredTrips.filter((trip) =>
+		getRawStopTimes(ctx, { feedId: trip.feed_id, localId: trip.trip_id }).length > 0,
+	);
 	for (const t of allTrips) {
 		newRawCache.tripServiceIds!.set(
 			entityKey({ feedId: t.feed_id, localId: t.trip_id }),
@@ -310,10 +314,13 @@ export async function refreshStaticCache(
 		newAugmentedCache.tripNumberTrips.set(tripNumber, keys);
 	}
 	ctx.augmented.timer.stop("refreshStaticCache:loadTrips");
-	logger.debug(`Loaded ${trips.length} considered trips out of ${allTrips.length} total.`, {
+	logger.debug(
+		`Loaded ${trips.length} usable considered trips out of ${allTrips.length} total; skipped ${consideredTrips.length - trips.length} trip rows without stop times.`,
+		{
 		module: "cache",
 		function: "refreshStaticCache",
-	});
+		},
+	);
 
 	ctx.augmented.timer.start("refreshStaticCache:loadLinkedTransfers");
 	for (const transfer of gtfs.getTransfers()) {
@@ -332,9 +339,7 @@ export async function refreshStaticCache(
 	if (config.preloadStopTimes) {
 		ctx.augmented.timer.start("refreshStaticCache:preloadStopTimes");
 		for (const trip of trips) {
-			const key = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
-			const stopTimes = gtfs.getStopTimes({ feed_id: trip.feed_id, trip_id: trip.trip_id });
-			ctx.augmented.rawStopTimesCache.set(key, stopTimes);
+			getRawStopTimes(ctx, { feedId: trip.feed_id, localId: trip.trip_id });
 		}
 		ctx.augmented.timer.stop("refreshStaticCache:preloadStopTimes");
 	}

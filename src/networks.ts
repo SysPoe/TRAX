@@ -4,6 +4,7 @@ import { gthaPlugin } from "./plugins/gtha.js";
 import { viaPlugin } from "./plugins/via.js";
 import { createVLinePlugin } from "./plugins/vline.js";
 import { ptvMetroPlugin } from "./plugins/ptv-metro.js";
+import { tfnswRailPlugin } from "./plugins/tfnsw-rail.js";
 import type { VLinePluginOptions } from "./region-specific/AU/VIC/types.js";
 
 export const AU_SEQ_NETWORK: NetworkDefinition = {
@@ -40,6 +41,8 @@ export const AU_SEQ_NETWORK: NetworkDefinition = {
 };
 
 export type AuVicVlineNetworkOptions = VLinePluginOptions & { gtfsRtKey?: string };
+
+export type AuRailNetworkOptions = AuVicVlineNetworkOptions & { tfnswApiKey?: string };
 
 const SHARED_VICTORIA_RAIL_STATIONS = [
 	["southern-cross", "Southern Cross Railway Station", "vic:rail:SSS"],
@@ -108,6 +111,136 @@ export function createAuVicVlineNetwork(options: AuVicVlineNetworkOptions = {}):
 				{ feedId: "vic-metro", localId },
 			],
 		})),
+	};
+}
+
+const SHARED_NSW_RAIL_STATIONS = [
+	["blacktown", "Blacktown Station", "214810"],
+	["campbelltown", "Campbelltown Station", "256020"],
+	["sydney-central", "Central Station", "200060"],
+	["glenfield", "Glenfield Station", "216710"],
+	["hornsby", "Hornsby Station", "207720"],
+	["macarthur", "Macarthur Station", "256030"],
+	["parramatta", "Parramatta Station", "215020"],
+	["penrith", "Penrith Station", "275010"],
+	["strathfield", "Strathfield Station", "213510"],
+	["westmead", "Westmead Station", "214510"],
+	["wollongong", "Wollongong Station", "250020"],
+] as const;
+
+const SHARED_VLINE_TRAINLINK_STATIONS = [
+	["albury", "Albury Railway Station", "nsw:rail:ABY", "26401"],
+	["benalla", "Benalla Railway Station", "vic:rail:BXA", "20295"],
+	["seymour", "Seymour Railway Station", "vic:rail:SER", "20342"],
+	["wangaratta", "Wangaratta Railway Station", "vic:rail:WRT", "20356"],
+] as const;
+
+/**
+ * Build one Australian rail runtime. Cross-feed places are canonical graph
+ * nodes, so interstate, suburban, and long-distance services share departures,
+ * topology, passing stops, and station links.
+ */
+export function createAuRailNetwork(options: AuRailNetworkOptions = {}): NetworkDefinition {
+	const victoria = createAuVicVlineNetwork(options);
+	const tfnswKey = options.tfnswApiKey?.trim();
+	const tfnswHeaders = tfnswKey ? { Authorization: `apikey ${tfnswKey}` } : undefined;
+	const tfnswSource = (url: string) => ({ url, headers: tfnswHeaders! });
+	const tfnswFeeds: NetworkDefinition["feeds"] = tfnswKey
+		? [
+				{
+					id: "nsw-sydney-trains",
+					staticSource: tfnswSource("https://api.transport.nsw.gov.au/v1/gtfs/schedule/sydneytrains"),
+					realtimeSources: [
+						{
+							id: "nsw-sydney-trains-trip-updates",
+							targetFeedId: "nsw-sydney-trains",
+							kind: "trip-updates",
+							source: tfnswSource("https://api.transport.nsw.gov.au/v2/gtfs/realtime/sydneytrains"),
+						},
+						{
+							id: "nsw-sydney-trains-vehicles",
+							targetFeedId: "nsw-sydney-trains",
+							kind: "vehicles",
+							source: tfnswSource("https://api.transport.nsw.gov.au/v2/gtfs/vehiclepos/sydneytrains"),
+						},
+						{
+							id: "nsw-sydney-trains-alerts",
+							targetFeedId: "nsw-sydney-trains",
+							kind: "alerts",
+							source: tfnswSource("https://api.transport.nsw.gov.au/v2/gtfs/alerts/sydneytrains"),
+						},
+					],
+				},
+				{
+					id: "nsw-trainlink",
+					staticSource: tfnswSource("https://api.transport.nsw.gov.au/v1/gtfs/schedule/nswtrains"),
+					realtimeSources: [
+						{
+							id: "nsw-trainlink-trip-updates",
+							targetFeedId: "nsw-trainlink",
+							kind: "trip-updates",
+							source: tfnswSource("https://api.transport.nsw.gov.au/v1/gtfs/realtime/nswtrains"),
+						},
+						{
+							id: "nsw-trainlink-vehicles",
+							targetFeedId: "nsw-trainlink",
+							kind: "vehicles",
+							source: tfnswSource("https://api.transport.nsw.gov.au/v1/gtfs/vehiclepos/nswtrains"),
+						},
+						{
+							id: "nsw-trainlink-alerts",
+							targetFeedId: "nsw-trainlink",
+							kind: "alerts",
+							source: tfnswSource("https://api.transport.nsw.gov.au/v2/gtfs/alerts/nswtrains"),
+						},
+					],
+				},
+			]
+		: [];
+
+	const victoriaPlaces = (victoria.places ?? []).map((place) => {
+		const trainLinkId =
+			place.id === "broadmeadows" ? "20030" : place.id === "southern-cross" ? "22180" : null;
+		return trainLinkId && tfnswKey
+			? { ...place, members: [...place.members, { feedId: "nsw-trainlink", localId: trainLinkId }] }
+			: place;
+	});
+	const tfnswPlaces = tfnswKey
+		? [
+				...SHARED_NSW_RAIL_STATIONS.map(([id, name, localId]) => ({
+					id,
+					name,
+					members: [
+						{ feedId: "nsw-sydney-trains", localId },
+						{ feedId: "nsw-trainlink", localId },
+					],
+				})),
+				...SHARED_VLINE_TRAINLINK_STATIONS.map(([id, name, vlineId, trainLinkId]) => ({
+					id,
+					name,
+					members: [
+						{ feedId: "vic-vline", localId: vlineId },
+						{ feedId: "nsw-trainlink", localId: trainLinkId },
+					],
+				})),
+				{
+					id: "brisbane-roma-street",
+					name: "Roma Street station",
+					members: [
+						{ feedId: "translink-seq", localId: "place_romsta" },
+						{ feedId: "nsw-trainlink", localId: "40001" },
+					],
+				},
+			]
+		: [];
+
+	return {
+		id: "au-rail",
+		name: "Australia Rail",
+		feeds: [...AU_SEQ_NETWORK.feeds, ...victoria.feeds, ...tfnswFeeds],
+		modes: ["rail"],
+		plugins: [...AU_SEQ_NETWORK.plugins, ...victoria.plugins, ...(tfnswKey ? [tfnswRailPlugin] : [])],
+		places: [...victoriaPlaces, ...tfnswPlaces],
 	};
 }
 
