@@ -32,6 +32,7 @@ import {
 import { createGtfs, loadRealtime, type SourceReport } from "./gtfsInterfaceLayer.js";
 import { entityKey } from "./identity.js";
 import { createVehicleFormation, type VehicleFormation } from "./utils/vehicleModel.js";
+import { getOnboardReachableStops, type ReachabilityOrigin } from "./utils/passengerContinuations.js";
 
 export interface TRAXEvent {
 	"realtime-update-start": [];
@@ -455,6 +456,8 @@ export class TRAX {
 	public getTripIdsByNumber = (tripNumber: string) =>
 		this.ctx.augmented.tripNumberTrips.get(tripNumber) ?? new Set<string>();
 	public getAvailableServiceDates = () => cache.getAvailableServiceDates(this.ctx);
+	public getOnboardReachableStops = (instanceId: string, origin: ReachabilityOrigin) =>
+		getOnboardReachableStops(this.ctx, instanceId, origin);
 
 	public logTimings = (label: string = "TRAX Operation", clear: boolean = true) =>
 		this.ctx.augmented.timer.log(label, clear);
@@ -538,6 +541,11 @@ export {
 } from "./region-specific/AU/SEQ/seq-diagram.js";
 
 export type { AugmentedTrip, AugmentedTripInstance } from "./utils/augmentedTrip.js";
+export type {
+	OnboardReachableStop,
+	PassengerContinuationSource,
+	ReachabilityOrigin,
+} from "./utils/passengerContinuations.js";
 export type {
 	VehicleBookingAvailability,
 	VehicleFormation,

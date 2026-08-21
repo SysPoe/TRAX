@@ -463,7 +463,7 @@ export function revalidateSeqDiagramRealtimeEdges(ctx: CacheContext, affectedTri
 				else {
 					const lastOut = endpointAbsUnix(ctx, inst, "last");
 					const firstNext = endpointAbsUnix(ctx, nextInst, "first");
-					if (lastOut === null || firstNext === null) inst.seq_diagram_next_link_broken = false;
+					if (lastOut === null || firstNext === null) inst.seq_diagram_next_link_broken = true;
 					else inst.seq_diagram_next_link_broken = firstNext < lastOut + minGap;
 				}
 			}
@@ -476,7 +476,7 @@ export function revalidateSeqDiagramRealtimeEdges(ctx: CacheContext, affectedTri
 				else {
 					const prevLast = endpointAbsUnix(ctx, prevInst, "last");
 					const firstHere = endpointAbsUnix(ctx, inst, "first");
-					if (prevLast === null || firstHere === null) inst.seq_diagram_prev_link_broken = false;
+					if (prevLast === null || firstHere === null) inst.seq_diagram_prev_link_broken = true;
 					else inst.seq_diagram_prev_link_broken = firstHere < prevLast + minGap;
 				}
 			}

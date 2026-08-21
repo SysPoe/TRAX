@@ -958,7 +958,113 @@ function feed(name, timezone, includeIntermediate = false) {
 	});
 }
 
-const feeds = { "/a.zip": feed("Alpha", "Australia/Brisbane"), "/b.zip": feed("Beta", "America/Toronto", true) };
+function continuationFeed() {
+	return createZip({
+		"agency.txt":
+			"agency_id,agency_name,agency_url,agency_timezone\nagency,Continuation Test,https://example.test,Australia/Brisbane\n",
+		"routes.txt":
+			"route_id,agency_id,route_short_name,route_long_name,route_type\nrail,agency,R,Continuation Rail,2\n",
+		"stops.txt":
+			"stop_id,stop_name,stop_lat,stop_lon\n" +
+			"origin,Southern Cross,-27.40,153.00\n" +
+			"handoff,Flinders Street,-27.41,153.01\n" +
+			"central,Melbourne Central,-27.42,153.02\n" +
+			"random,Random Station,-27.43,153.03\n" +
+			"epping,Epping,-27.44,153.04\n",
+		"trips.txt":
+			"route_id,service_id,trip_id,trip_headsign,direction_id,block_id\n" +
+			"rail,daily,southern-flinders,Flinders Street,0,southern-block\n" +
+			"rail,daily,flinders-central,Melbourne Central,0,southern-block\n" +
+			"rail,daily,loop-out,Random Station,0,loop-block\n" +
+			"rail,daily,loop-back,Southern Cross,1,loop-block\n" +
+			"rail,daily,loop-epping,Epping,0,loop-block\n" +
+			"rail,daily,must-alight-a,Flinders Street,0,alight-block\n" +
+			"rail,daily,must-alight-b,Melbourne Central,0,alight-block\n" +
+			"rail,daily,block-a,Flinders Street,0,fallback-block\n" +
+			"rail,daily,block-b,Melbourne Central,0,fallback-block\n" +
+			"rail,daily,block-c,Epping,0,fallback-block\n" +
+			"rail,daily,block-wrong-a,Random Station,0,wrong-block\n" +
+			"rail,daily,block-wrong-b,Melbourne Central,0,wrong-block\n" +
+			"rail,daily,100-seq,Flinders Street,0,\n" +
+			"rail,daily,101-seq,Melbourne Central,0,\n" +
+			"rail,daily,200-seq,Flinders Street,0,\n" +
+			"rail,daily,205-seq,Melbourne Central,0,\n" +
+			"rail,daily,300-seq,Random Station,0,\n" +
+			"rail,daily,301-seq,Melbourne Central,0,\n" +
+			"rail,daily,400-seq,Flinders Street,0,\n" +
+			"rail,daily,401-seq,Melbourne Central,0,\n" +
+			"rail,daily,500-seq,Flinders Street,0,\n" +
+			"rail,daily,501-seq,Melbourne Central,0,\n" +
+			"rail,daily,600-seq,Flinders Street,0,\n" +
+			"rail,daily,601-seq,Melbourne Central,0,\n",
+		"stop_times.txt":
+			"trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type\n" +
+			"southern-flinders,10:00:00,10:00:00,origin,1,0,1\n" +
+			"southern-flinders,10:05:00,10:05:00,handoff,2,1,0\n" +
+			"flinders-central,10:07:00,10:07:00,handoff,1,0,1\n" +
+			"flinders-central,10:12:00,10:12:00,central,2,1,0\n" +
+			"loop-out,11:00:00,11:00:00,origin,1,0,1\n" +
+			"loop-out,11:20:00,11:20:00,random,2,1,0\n" +
+			"loop-back,11:22:00,11:22:00,random,1,0,1\n" +
+			"loop-back,11:42:00,11:42:00,origin,2,1,0\n" +
+			"loop-epping,11:44:00,11:44:00,origin,1,0,1\n" +
+			"loop-epping,12:04:00,12:04:00,epping,2,1,0\n" +
+			"must-alight-a,13:00:00,13:00:00,origin,1,0,1\n" +
+			"must-alight-a,13:05:00,13:05:00,handoff,2,1,0\n" +
+			"must-alight-b,13:07:00,13:07:00,handoff,1,0,1\n" +
+			"must-alight-b,13:12:00,13:12:00,central,2,1,0\n" +
+			"block-a,14:00:00,14:00:00,origin,1,0,1\n" +
+			"block-a,14:05:00,14:05:00,handoff,2,1,0\n" +
+			"block-b,14:07:00,14:07:00,handoff,1,0,1\n" +
+			"block-b,14:12:00,14:12:00,central,2,1,0\n" +
+			"block-c,14:14:00,14:14:00,central,1,0,1\n" +
+			"block-c,14:19:00,14:19:00,epping,2,1,0\n" +
+			"block-wrong-a,15:00:00,15:00:00,origin,1,0,1\n" +
+			"block-wrong-a,15:05:00,15:05:00,random,2,1,0\n" +
+			"block-wrong-b,15:07:00,15:07:00,handoff,1,0,1\n" +
+			"block-wrong-b,15:12:00,15:12:00,central,2,1,0\n" +
+			"100-seq,16:00:00,16:00:00,origin,1,0,1\n" +
+			"100-seq,16:05:00,16:05:00,handoff,2,1,0\n" +
+			"101-seq,16:07:00,16:07:00,handoff,1,0,1\n" +
+			"101-seq,16:12:00,16:12:00,central,2,1,0\n" +
+			"200-seq,17:00:00,17:00:00,origin,1,0,1\n" +
+			"200-seq,17:05:00,17:05:00,handoff,2,1,0\n" +
+			"205-seq,17:07:00,17:07:00,handoff,1,0,1\n" +
+			"205-seq,17:12:00,17:12:00,central,2,1,0\n" +
+			"300-seq,18:00:00,18:00:00,origin,1,0,1\n" +
+			"300-seq,18:05:00,18:05:00,random,2,1,0\n" +
+			"301-seq,18:07:00,18:07:00,handoff,1,0,1\n" +
+			"301-seq,18:12:00,18:12:00,central,2,1,0\n" +
+			"400-seq,19:00:00,19:00:00,origin,1,0,1\n" +
+			"400-seq,19:05:00,19:05:00,handoff,2,1,0\n" +
+			"401-seq,19:06:00,19:06:00,handoff,1,0,1\n" +
+			"401-seq,19:11:00,19:11:00,central,2,1,0\n" +
+			"500-seq,20:00:00,20:00:00,origin,1,0,1\n" +
+			"500-seq,20:05:00,20:05:00,handoff,2,1,0\n" +
+			"501-seq,20:36:00,20:36:00,handoff,1,0,1\n" +
+			"501-seq,20:41:00,20:41:00,central,2,1,0\n" +
+			"600-seq,21:00:00,21:00:00,origin,1,0,1\n" +
+			"600-seq,21:05:00,21:05:00,handoff,2,1,0\n" +
+			"601-seq,21:07:00,21:07:00,handoff,1,0,1\n" +
+			"601-seq,21:12:00,21:12:00,central,2,1,0\n",
+		"transfers.txt":
+			"from_stop_id,to_stop_id,from_trip_id,to_trip_id,transfer_type\n" +
+			"handoff,handoff,southern-flinders,flinders-central,4\n" +
+			"random,random,loop-out,loop-back,4\n" +
+			"origin,origin,loop-back,loop-epping,4\n" +
+			"handoff,handoff,must-alight-a,must-alight-b,4\n" +
+			"handoff,handoff,must-alight-a,must-alight-b,5\n",
+		"calendar.txt":
+			"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n" +
+			"daily,1,1,1,1,1,1,1,20260101,20261231\n",
+	});
+}
+
+const feeds = {
+	"/a.zip": feed("Alpha", "Australia/Brisbane"),
+	"/b.zip": feed("Beta", "America/Toronto", true),
+	"/continuations.zip": continuationFeed(),
+};
 const server = http.createServer((request, response) => {
 	const body = feeds[request.url];
 	if (!body) {
@@ -1023,6 +1129,60 @@ try {
 	);
 	const runtime = new TRAX(definition, { cacheDir: ".TRAXCACHE/test-synthetic" });
 	await runtime.loadGTFS(false, false);
+	const continuationRuntime = new TRAX(
+		{
+			id: "continuation-test",
+			name: "Continuation test",
+			modes: ["rail"],
+			plugins: [],
+			feeds: [
+				{
+					id: "continuation",
+					staticSource: { url: `${origin}/continuations.zip` },
+					realtimeSources: [],
+				},
+			],
+		},
+		{ cacheDir: ".TRAXCACHE/test-continuations" },
+	);
+	await continuationRuntime.loadGTFS(false, false);
+	const instanceFor = (tripId) =>
+		continuationRuntime
+			.getAugmentedTrips({ feedId: "continuation", localId: tripId })[0]
+			.instances.find((instance) => instance.serviceDate === continuationRuntime.today());
+	const destinationsFor = (tripId, departureTime) =>
+		continuationRuntime
+			.getOnboardReachableStops(instanceFor(tripId).instance_id, {
+				stopIds: ["origin"],
+				departureTime,
+			});
+	const destinationNames = (tripId, departureTime) =>
+		destinationsFor(tripId, departureTime).map((destination) => destination.station_name);
+	assert.deepEqual(destinationNames("southern-flinders", 10 * 3600), ["Flinders Street", "Melbourne Central"]);
+	assert.deepEqual(destinationNames("loop-out", 11 * 3600), ["Random Station"]);
+	assert.deepEqual(destinationNames("must-alight-a", 13 * 3600), ["Flinders Street"]);
+	assert.deepEqual(destinationNames("block-a", 14 * 3600), ["Flinders Street", "Melbourne Central"]);
+	assert.equal(destinationsFor("block-a", 14 * 3600)[1].continuation_source, "gtfs-block");
+	assert.deepEqual(destinationNames("block-wrong-a", 15 * 3600), ["Random Station"]);
+
+	const linkSeq = (fromTripId, toTripId, broken = false) => {
+		const from = instanceFor(fromTripId);
+		from.seq_diagram_next_instance_id = instanceFor(toTripId).instance_id;
+		from.seq_diagram_next_link_broken = broken;
+	};
+	linkSeq("100-seq", "101-seq");
+	linkSeq("200-seq", "205-seq");
+	linkSeq("300-seq", "301-seq");
+	linkSeq("400-seq", "401-seq");
+	linkSeq("500-seq", "501-seq");
+	linkSeq("600-seq", "601-seq", true);
+	assert.deepEqual(destinationNames("100-seq", 16 * 3600), ["Flinders Street", "Melbourne Central"]);
+	assert.equal(destinationsFor("100-seq", 16 * 3600)[1].continuation_source, "seq-inferred");
+	assert.deepEqual(destinationNames("200-seq", 17 * 3600), ["Flinders Street"]);
+	assert.deepEqual(destinationNames("300-seq", 18 * 3600), ["Random Station"]);
+	assert.deepEqual(destinationNames("400-seq", 19 * 3600), ["Flinders Street"]);
+	assert.deepEqual(destinationNames("500-seq", 20 * 3600), ["Flinders Street"]);
+	assert.deepEqual(destinationNames("600-seq", 21 * 3600), ["Flinders Street"]);
 	const failingSupplemental = new TRAX(
 		{
 			...definition,

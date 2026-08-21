@@ -21,6 +21,7 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 		baseStopTimes: {},
 		rawStopTimesCache: new Map(),
 		rawTripsRec: new Map(),
+		linkedTransfersFromTrip: new Map(),
 		tripsRec: new Map(),
 		stopsRec: new Map(),
 		serviceDateTrips: new Map(),

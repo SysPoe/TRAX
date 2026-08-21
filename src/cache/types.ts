@@ -8,6 +8,7 @@ import type {
 	Stop,
 	StopTime,
 	Trip,
+	Transfer,
 	GTFS,
 } from "qdf-gtfs";
 import type { AugmentedStop } from "../utils/augmentedStop.js";
@@ -35,6 +36,8 @@ export type AugmentedCache = {
 	baseStopTimes: { [trip_id: string]: AugmentedStopTime[] };
 	rawStopTimesCache: Map<string, qdf.StopTime[]>;
 	rawTripsRec: Map<string, Trip>;
+	/** GTFS type 4/5 linked-trip rules, indexed by feed-qualified from_trip_id. */
+	linkedTransfersFromTrip: Map<string, Transfer[]>;
 	tripsRec: Map<string, AugmentedTrip>;
 	stopsRec: Map<string, AugmentedStop>;
 

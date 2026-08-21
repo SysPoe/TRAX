@@ -1,4 +1,4 @@
-import type { GTFS, Trip, Stop } from "qdf-gtfs";
+import { TransferType, type GTFS, type Trip, type Stop } from "qdf-gtfs";
 import { isConsideredTrip } from "../utils/considered.js";
 import { syncCalendarsToWasm } from "../utils/calendar.js";
 import { augmentStop } from "../utils/augmentedStop.js";
@@ -314,6 +314,20 @@ export async function refreshStaticCache(
 		module: "cache",
 		function: "refreshStaticCache",
 	});
+
+	ctx.augmented.timer.start("refreshStaticCache:loadLinkedTransfers");
+	for (const transfer of gtfs.getTransfers()) {
+		if (
+			!transfer.from_trip_id ||
+			(transfer.transfer_type !== TransferType.InSeat && transfer.transfer_type !== TransferType.NoInSeat)
+		)
+			continue;
+		const key = entityKey({ feedId: transfer.feed_id, localId: transfer.from_trip_id });
+		const linked = newAugmentedCache.linkedTransfersFromTrip.get(key) ?? [];
+		linked.push(transfer);
+		newAugmentedCache.linkedTransfersFromTrip.set(key, linked);
+	}
+	ctx.augmented.timer.stop("refreshStaticCache:loadLinkedTransfers");
 
 	if (config.preloadStopTimes) {
 		ctx.augmented.timer.start("refreshStaticCache:preloadStopTimes");
