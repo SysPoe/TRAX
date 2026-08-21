@@ -328,7 +328,10 @@ assert.deepEqual(
 	australiaWithoutTfnsw.feeds.map((feed) => feed.id),
 	["translink-seq", "vic-vline", "vic-metro"],
 );
-assert.equal(australiaWithoutTfnsw.places.length, 17);
+assert.equal(australiaWithoutTfnsw.places.length, 18);
+assert.deepEqual(australiaWithoutTfnsw.places.find((place) => place.id === "brisbane-central").members, [
+	{ feedId: "translink-seq", localId: "place_censta" },
+]);
 
 const australiaRail = createAuRailNetwork({ tfnswApiKey: "test-tfnsw-key" });
 assert.deepEqual(
@@ -352,6 +355,8 @@ assert.deepEqual(australiaRail.places.find((place) => place.id === "sydney-centr
 	{ feedId: "nsw-sydney-trains", localId: "200060" },
 	{ feedId: "nsw-trainlink", localId: "200060" },
 ]);
+assert.equal(australiaRail.places.find((place) => place.id === "brisbane-central").name, "Brisbane Central");
+assert.equal(australiaRail.places.find((place) => place.id === "sydney-central").name, "Sydney Central");
 assert.equal(
 	australiaRail.feeds.find((feed) => feed.id === "nsw-sydney-trains").staticSource.headers.Authorization,
 	"apikey test-tfnsw-key",
