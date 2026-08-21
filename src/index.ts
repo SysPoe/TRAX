@@ -532,6 +532,8 @@ export {
 	createCaGthaNetwork,
 } from "./networks.js";
 export type { AuRailNetworkOptions, AuVicVlineNetworkOptions } from "./networks.js";
+export { createTfnswRegionalBookingPlugin } from "./plugins/tfnsw-rail.js";
+export type { TfnswRailPluginOptions } from "./plugins/tfnsw-rail.js";
 export * from "./identity.js";
 export * as cache from "./cache/index.js";
 export * as stations from "./utils/stations.js";
@@ -556,6 +558,7 @@ export type {
 } from "./utils/passengerContinuations.js";
 export type {
 	VehicleBookingAvailability,
+	VehicleBookingFareClass,
 	VehicleFormation,
 	VehicleFormationMetadata,
 	VehicleFormationUnit,
@@ -582,6 +585,11 @@ export {
 	vlineTdn,
 	vlineVehicleModel,
 } from "./region-specific/AU/VIC/identifiers.js";
+export {
+	getTfnswRegionalBookingFormation,
+	parseTfnswRegionalSearchResponse,
+	type TfnswRegionalBookingOptions,
+} from "./region-specific/AU/NSW/regional-booking.js";
 export {
 	parseVLineBookingPage,
 	parseVLineJourneys,

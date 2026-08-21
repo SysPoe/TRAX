@@ -46,16 +46,26 @@ export type VehicleFormationUnit = {
 };
 
 /** Segment-specific booking inventory. This is deliberately separate from the physical formation. */
+export type VehicleBookingFareClass = {
+	code: string;
+	label: string;
+	minimumAvailability: number;
+	price: number | null;
+	isSleeper: boolean;
+};
+
 export type VehicleBookingAvailability = {
 	reservedCarriages: string[];
 	reservedSeatsAvailable: number | null;
 	unreservedTicketsAvailable: number | null;
+	fareClasses?: VehicleBookingFareClass[];
 	reservationAvailable: boolean;
 	reservationRequired: boolean;
 	seatMapAvailable: boolean;
 	journeyUrl: string | null;
 	source: string;
 	observedAt: string;
+	timeZone?: string;
 };
 
 export type VehicleFormationMetadata = {

@@ -4,7 +4,11 @@ import { gthaPlugin } from "./plugins/gtha.js";
 import { viaPlugin } from "./plugins/via.js";
 import { createVLinePlugin } from "./plugins/vline.js";
 import { ptvMetroPlugin } from "./plugins/ptv-metro.js";
-import { tfnswRailPlugin } from "./plugins/tfnsw-rail.js";
+import {
+	createTfnswRailPlugin,
+	createTfnswRegionalBookingPlugin,
+	type TfnswRailPluginOptions,
+} from "./plugins/tfnsw-rail.js";
 import type { VLinePluginOptions } from "./region-specific/AU/VIC/types.js";
 
 export const AU_SEQ_NETWORK: NetworkDefinition = {
@@ -49,7 +53,7 @@ export const AU_SEQ_NETWORK: NetworkDefinition = {
 
 export type AuVicVlineNetworkOptions = VLinePluginOptions & { gtfsRtKey?: string };
 
-export type AuRailNetworkOptions = AuVicVlineNetworkOptions & { tfnswApiKey?: string };
+export type AuRailNetworkOptions = AuVicVlineNetworkOptions & { tfnswApiKey?: string } & TfnswRailPluginOptions;
 
 const SHARED_VICTORIA_RAIL_STATIONS = [
 	["southern-cross", "Southern Cross Railway Station", "vic:rail:SSS"],
@@ -246,7 +250,11 @@ export function createAuRailNetwork(options: AuRailNetworkOptions = {}): Network
 		name: "Australia Rail",
 		feeds: [...AU_SEQ_NETWORK.feeds, ...victoria.feeds, ...tfnswFeeds],
 		modes: ["rail"],
-		plugins: [...AU_SEQ_NETWORK.plugins, ...victoria.plugins, ...(tfnswKey ? [tfnswRailPlugin] : [])],
+		plugins: [
+			...AU_SEQ_NETWORK.plugins,
+			...victoria.plugins,
+			...(tfnswKey ? [createTfnswRailPlugin(), createTfnswRegionalBookingPlugin(options.regionalBooking)] : []),
+		],
 		places: [...(AU_SEQ_NETWORK.places ?? []), ...victoriaPlaces, ...tfnswPlaces],
 	};
 }

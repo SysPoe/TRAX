@@ -3,6 +3,10 @@ import type { CacheContext } from "../cache/types.js";
 import { entityKey } from "../identity.js";
 import { getServiceDayStart } from "../utils/time.js";
 import type { TransitPlugin } from "./types.js";
+import {
+	getTfnswRegionalBookingFormation,
+	type TfnswRegionalBookingOptions,
+} from "../region-specific/AU/NSW/regional-booking.js";
 
 const SYDNEY_TRAINS_FEED_ID = "nsw-sydney-trains";
 const NSW_TRAINLINK_FEED_ID = "nsw-trainlink";
@@ -64,16 +68,21 @@ function enrichTfnswRealtimeTripUpdate(update: RealtimeTripUpdate, ctx: CacheCon
  * The TfNSW rail archives overlap. Keep each operator in one feed so the
  * combined runtime does not emit duplicate intercity or regional trips.
  */
-export const tfnswRailPlugin: TransitPlugin = {
-	id: "au-nsw-tfnsw-rail",
-	feedIds: [SYDNEY_TRAINS_FEED_ID, NSW_TRAINLINK_FEED_ID],
-	capabilities: ["vehicles"],
-	considerRoute(route) {
-		if (route.feed_id === SYDNEY_TRAINS_FEED_ID) {
-			return route.agency_id === "SydneyTrains";
-		}
-		if (route.feed_id === NSW_TRAINLINK_FEED_ID) {
-			return route.agency_id === "X000" || route.agency_id === "711";
+export type TfnswRailPluginOptions = {
+	regionalBooking?: TfnswRegionalBookingOptions;
+};
+
+export function createTfnswRailPlugin(): TransitPlugin {
+	return {
+		id: "au-nsw-tfnsw-rail",
+		feedIds: [SYDNEY_TRAINS_FEED_ID, NSW_TRAINLINK_FEED_ID],
+		capabilities: ["vehicles"],
+		considerRoute(route) {
+			if (route.feed_id === SYDNEY_TRAINS_FEED_ID) {
+				return route.agency_id === "SydneyTrains";
+			}
+			if (route.feed_id === NSW_TRAINLINK_FEED_ID) {
+				return route.agency_id === "X000" || route.agency_id === "711";
 		}
 		return undefined;
 	},
@@ -84,5 +93,19 @@ export const tfnswRailPlugin: TransitPlugin = {
 	},
 	enrichRealtimeTripUpdate: enrichTfnswRealtimeTripUpdate,
 	isNonRevenueRoute: (route) =>
-		route.feed_id === SYDNEY_TRAINS_FEED_ID && route.route_id.startsWith("RTTA_"),
-};
+			route.feed_id === SYDNEY_TRAINS_FEED_ID && route.route_id.startsWith("RTTA_"),
+	};
+}
+
+export const tfnswRailPlugin: TransitPlugin = createTfnswRailPlugin();
+
+export function createTfnswRegionalBookingPlugin(
+	options: TfnswRegionalBookingOptions = {},
+): TransitPlugin {
+	return {
+		id: "au-nsw-tfnsw-regional-booking",
+		feedIds: [NSW_TRAINLINK_FEED_ID],
+		capabilities: ["consist"],
+		vehicleFormation: (trip, ctx) => getTfnswRegionalBookingFormation(trip, ctx, options),
+	};
+}
