@@ -12,6 +12,7 @@ import { propagateBlockHandoffs } from "../dist/region-specific/CA/GTHA/block-ha
 import { formatTrack } from "../dist/region-specific/CA/GTHA/realtime.js";
 import { ptvMetroPlugin } from "../dist/plugins/ptv-metro.js";
 import { isConsideredRoute } from "../dist/utils/considered.js";
+import { applyVLineEnrichment } from "../dist/region-specific/AU/VIC/enrichment.js";
 
 function testSeqDiagramUsesProvidedStopTimes() {
 	const trips = [
@@ -170,6 +171,37 @@ function testPtvReplacementBusIsNotConsideredRail() {
 	);
 }
 
+function testVLineEnrichmentReadsVehicleSnapshotOnce() {
+	let vehicleReads = 0;
+	const instances = Array.from({ length: 4 }, (_, index) => ({
+		feed_id: "vic-vline",
+		trip_id: `01-VLN--${index + 1}-T0-83${index}A`,
+		instance_id: `vline-${index}`,
+		serviceDate: "20260822",
+		stopTimes: [],
+	}));
+	const ctx = {
+		raw: { injectedVehiclePositions: [] },
+		augmented: { instancesRec: new Map(instances.map((trip) => [trip.instance_id, trip])) },
+		config: { network: { plugins: [] } },
+		gtfs: {
+			getRealtimeVehiclePositions() {
+				vehicleReads += 1;
+				return [];
+			},
+		},
+		pluginState: new Map([
+			["au-vic-vline", {
+				detailsByInstanceId: new Map(),
+				detailsByServiceKey: new Map(),
+			}],
+		]),
+	};
+
+	applyVLineEnrichment(ctx, {});
+	assert.equal(vehicleReads, 1, "V/Line enrichment must materialize the vehicle snapshot once per refresh");
+}
+
 function testRawTripsUsesTheStaticSnapshot() {
 	const trip = { feed_id: "test", trip_id: "trip-1", route_id: "route-1" };
 	const ctx = {
@@ -232,6 +264,7 @@ testStaticFingerprintTracksQDFCacheFile();
 testUntimedPassingPointsUseShapeDistance();
 testExpressPruningDistinguishesParallelCorridors();
 testPtvReplacementBusIsNotConsideredRail();
+testVLineEnrichmentReadsVehicleSnapshotOnce();
 testRawTripsUsesTheStaticSnapshot();
 testBlockHandoffPropagation();
 testGthaTrackFormatting();

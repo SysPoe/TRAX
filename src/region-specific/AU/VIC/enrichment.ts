@@ -634,12 +634,18 @@ export async function refreshVLineOfficialSources(ctx: CacheContext, options: VL
 export function applyVLineEnrichment(ctx: CacheContext, options: VLinePluginOptions): void {
 	const now = Date.now();
 	const observedAt = new Date(now).toISOString();
+	const vehiclesByTripId = new Map<string, RealtimeVehiclePosition[]>();
+	for (const vehicle of getVehiclePositions(ctx)) {
+		if (vehicle.feed_id !== "vic-vline") continue;
+		const vehicles = vehiclesByTripId.get(vehicle.trip.trip_id);
+		if (vehicles) vehicles.push(vehicle);
+		else vehiclesByTripId.set(vehicle.trip.trip_id, [vehicle]);
+	}
 	for (const trip of ctx.augmented.instancesRec.values()) {
 		if (trip.feed_id !== "vic-vline") continue;
 		const details = detailsFor(ctx, trip);
 		if (!details) continue;
-		const vehicle = getVehiclePositions(ctx).find((position: RealtimeVehiclePosition) =>
-			position.feed_id === trip.feed_id && position.trip.trip_id === trip.trip_id &&
+		const vehicle = vehiclesByTripId.get(trip.trip_id)?.find((position) =>
 			(!position.trip.start_date || position.trip.start_date === trip.serviceDate),
 		);
 		const unit = normalizeVLineUnit(vehicle?.vehicle.id);
