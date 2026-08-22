@@ -1062,6 +1062,7 @@ export async function updateSourceB(
 					timeMap.set(hhmm, st);
 				}
 
+				let engineId: string | null = null;
 				for (const gtStop of trip.stop) {
 					const schTime = gtStop.schDeparture || gtStop.schArrival;
 					if (!schTime) continue;
@@ -1085,35 +1086,38 @@ export async function updateSourceB(
 							updateCount++;
 						}
 
-						if (gtStop.engineId && gtStop.engineId !== "-" && gtStop.engineId.trim() !== "") {
-							state.activeIds.add(gtStop.engineId);
-							state.activeCars.add(gtStop.engineId);
-							const vehicle_model = getModelFromId(gtStop.engineId);
-							if (vehicle_model) state.activeModels.add(vehicle_model);
-
-							const vehicleInfo = mergeVehicleInfo(ctx, instance, {
-								vehicle_id: gtStop.engineId,
-								vehicle_model,
-								passenger_cars: state.vehiclePassengerCars[gtStop.engineId] ?? null,
-								consist: state.vehicleConsists[gtStop.engineId] ?? null,
-							});
-							instance.vehicle_id = vehicleInfo.vehicle_id;
-							instance.vehicle_model = vehicleInfo.vehicle_model;
-							instance.passenger_cars = vehicleInfo.passenger_cars ?? null;
-							instance.consist = vehicleInfo.consist ?? null;
-
-							propagateVehicleInfoToBlock(
-								ctx,
-								serviceDateStr,
-								instance.block_id,
-								instance.vehicle_id,
-								instance.passenger_cars,
-								blockMap,
-								instance.consist,
-								instance.trip_id,
-							);
-						}
+						if (gtStop.engineId && gtStop.engineId !== "-" && gtStop.engineId.trim() !== "")
+							engineId = gtStop.engineId;
 					}
+				}
+
+				if (engineId) {
+					state.activeIds.add(engineId);
+					state.activeCars.add(engineId);
+					const vehicle_model = getModelFromId(engineId);
+					if (vehicle_model) state.activeModels.add(vehicle_model);
+
+					const vehicleInfo = mergeVehicleInfo(ctx, instance, {
+						vehicle_id: engineId,
+						vehicle_model,
+						passenger_cars: state.vehiclePassengerCars[engineId] ?? null,
+						consist: state.vehicleConsists[engineId] ?? null,
+					});
+					instance.vehicle_id = vehicleInfo.vehicle_id;
+					instance.vehicle_model = vehicleInfo.vehicle_model;
+					instance.passenger_cars = vehicleInfo.passenger_cars ?? null;
+					instance.consist = vehicleInfo.consist ?? null;
+
+					propagateVehicleInfoToBlock(
+						ctx,
+						serviceDateStr,
+						instance.block_id,
+						instance.vehicle_id,
+						instance.passenger_cars,
+						blockMap,
+						instance.consist,
+						instance.trip_id,
+					);
 				}
 			}
 		}
