@@ -1,6 +1,6 @@
 import * as qdf from "qdf-gtfs";
 import type { CacheContext } from "../cache/types.js";
-import { canonicalStationIdentity, getFeedTimeZone } from "../config.js";
+import { canonicalStationIdentity, getFeedTimeZone, getPlaceForStation } from "../config.js";
 import { entityKey } from "../identity.js";
 import type { AugmentedStopTime } from "./augmentedStopTime.js";
 import type { AugmentedTripInstance } from "./augmentedTrip.js";
@@ -56,8 +56,15 @@ function canonicalStopKey(ctx: CacheContext, stopTime: AugmentedStopTime): strin
 	return entityKey(canonicalStationIdentity(ctx.config, { feedId: stopTime.feed_id, localId }));
 }
 
-function stationName(stopTime: AugmentedStopTime): string | null {
+function stationName(ctx: CacheContext, stopTime: AugmentedStopTime): string | null {
+	const localId =
+		stopTime.actual_parent_station_id ??
+		stopTime.scheduled_parent_station_id ??
+		stopTime.actual_stop_id ??
+		stopTime.scheduled_stop_id;
+	const place = localId ? getPlaceForStation(ctx.config, { feedId: stopTime.feed_id, localId }) : null;
 	return (
+		place?.name ??
 		stopTime.actual_parent_station?.stop_name ??
 		stopTime.actual_stop?.stop_name ??
 		stopTime.scheduled_parent_station?.stop_name ??
@@ -345,7 +352,7 @@ export function getOnboardReachableStops(
 				trip_id: state.instance.trip_id,
 				stop_id: stopTime.actual_stop_id ?? stopTime.scheduled_stop_id,
 				parent_station_id: stopTime.actual_parent_station_id ?? stopTime.scheduled_parent_station_id,
-				station_name: stationName(stopTime),
+				station_name: stationName(ctx, stopTime),
 				continuation_count: state.continuationCount,
 				continuation_source: state.continuationSource,
 			});

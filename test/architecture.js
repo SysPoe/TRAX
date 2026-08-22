@@ -1741,6 +1741,13 @@ try {
 					realtimeSources: [],
 				},
 			],
+			places: [
+				{
+					id: "sydney-central",
+					name: "Sydney Central",
+					members: [{ feedId: "continuation", localId: "central" }],
+				},
+			],
 		},
 		{ cacheDir: ".TRAXCACHE/test-continuations" },
 	);
@@ -1756,10 +1763,10 @@ try {
 		});
 	const destinationNames = (tripId, departureTime) =>
 		destinationsFor(tripId, departureTime).map((destination) => destination.station_name);
-	assert.deepEqual(destinationNames("southern-flinders", 10 * 3600), ["Flinders Street", "Melbourne Central"]);
+	assert.deepEqual(destinationNames("southern-flinders", 10 * 3600), ["Flinders Street", "Sydney Central"]);
 	assert.deepEqual(destinationNames("loop-out", 11 * 3600), ["Random Station"]);
 	assert.deepEqual(destinationNames("must-alight-a", 13 * 3600), ["Flinders Street"]);
-	assert.deepEqual(destinationNames("block-a", 14 * 3600), ["Flinders Street", "Melbourne Central"]);
+	assert.deepEqual(destinationNames("block-a", 14 * 3600), ["Flinders Street", "Sydney Central"]);
 	assert.equal(destinationsFor("block-a", 14 * 3600)[1].continuation_source, "gtfs-block");
 	assert.deepEqual(destinationNames("block-wrong-a", 15 * 3600), ["Random Station"]);
 
@@ -1774,7 +1781,7 @@ try {
 	linkSeq("400-seq", "401-seq");
 	linkSeq("500-seq", "501-seq");
 	linkSeq("600-seq", "601-seq", true);
-	assert.deepEqual(destinationNames("100-seq", 16 * 3600), ["Flinders Street", "Melbourne Central"]);
+	assert.deepEqual(destinationNames("100-seq", 16 * 3600), ["Flinders Street", "Sydney Central"]);
 	assert.equal(destinationsFor("100-seq", 16 * 3600)[1].continuation_source, "seq-inferred");
 	assert.deepEqual(destinationNames("200-seq", 17 * 3600), ["Flinders Street"]);
 	assert.deepEqual(destinationNames("300-seq", 18 * 3600), ["Random Station"]);
