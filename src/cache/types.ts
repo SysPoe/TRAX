@@ -23,6 +23,13 @@ import * as qdf from "qdf-gtfs";
 
 export type RawCache = {
 	tripServiceIds?: Map<string, string>;
+	/** Feed-qualified static entities, populated once per GTFS snapshot. */
+	routesByKey: Map<string, Route>;
+	tripsByKey: Map<string, Trip>;
+	/** Considered trips from the same static snapshot as {@link tripsByKey}. */
+	consideredTrips?: Trip[];
+	stopsByKey: Map<string, Stop>;
+	stopsByFeed: Map<string, Stop[]>;
 	injectedTripUpdates?: RealtimeTripUpdate[];
 	injectedVehiclePositions?: RealtimeVehiclePosition[];
 };

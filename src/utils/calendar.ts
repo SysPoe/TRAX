@@ -13,7 +13,10 @@ export function getServiceDatesByTrip(
 	const cacheKey = `${entityKey(trip)}|${minEpochDay}|${maxEpochDay}`;
 	const cached = ctx.runtimeState.serviceDates.get(cacheKey);
 	if (cached) return cached;
-	const dates = ctx.gtfs.getServiceDatesByTrip(trip);
+	const rawTrip = ctx.raw.tripsByKey.get(entityKey(trip));
+	const dates = rawTrip
+		? ctx.gtfs.getServiceDates({ feedId: rawTrip.feed_id, localId: rawTrip.service_id })
+		: ctx.gtfs.getServiceDatesByTrip(trip);
 	const result = dates.filter((date) => {
 		const epochDay = getEpochDayFromServiceDate(date);
 		return Number.isFinite(epochDay) && (minEpochDay < 0 || epochDay >= minEpochDay) && (maxEpochDay < 0 || epochDay <= maxEpochDay);

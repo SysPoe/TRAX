@@ -35,15 +35,87 @@ export function getCalendarDates(ctx: CacheContext, filter?: Partial<CalendarDat
 
 export function getTrips(ctx: CacheContext, filter?: Partial<Trip>): Trip[] {
 	const gtfs = requireGtfs(ctx);
+	if (!filter && ctx.raw.consideredTrips) return ctx.raw.consideredTrips;
+	if (ctx.raw.tripsByKey.size > 0 && filter?.feed_id && filter.trip_id) {
+		const trip = ctx.raw.tripsByKey.get(entityKey({ feedId: filter.feed_id, localId: filter.trip_id }));
+		return trip && isConsideredTrip(trip, ctx) ? [trip] : [];
+	}
 	return gtfs.getTrips(filter).filter((v: Trip) => isConsideredTrip(v, ctx));
 }
 
 export function getStops(ctx: CacheContext, filter?: Partial<Stop>): Stop[] {
-	return requireGtfs(ctx).getStops(filter);
+	const gtfs = requireGtfs(ctx);
+	if (ctx.raw.stopsByKey.size > 0 && filter?.feed_id && filter.stop_id) {
+		const stop = ctx.raw.stopsByKey.get(entityKey({ feedId: filter.feed_id, localId: filter.stop_id }));
+		return stop ? [stop] : [];
+	}
+	if (ctx.raw.stopsByKey.size > 0 && filter?.feed_id && !filter.stop_id)
+		return ctx.raw.stopsByFeed.get(filter.feed_id) ?? gtfs.getStops(filter);
+	return gtfs.getStops(filter);
 }
 
 export function getRoutes(ctx: CacheContext, filter?: Partial<Route>): Route[] {
-	return requireGtfs(ctx).getRoutes(filter);
+	const gtfs = requireGtfs(ctx);
+	if (ctx.raw.routesByKey.size > 0 && filter?.feed_id && filter.route_id) {
+		const route = ctx.raw.routesByKey.get(entityKey({ feedId: filter.feed_id, localId: filter.route_id }));
+		return route ? [route] : [];
+	}
+	return gtfs.getRoutes(filter);
+}
+
+export function getRawRoute(ctx: CacheContext, route: QualifiedEntityId): Route | undefined {
+	const cached = ctx.raw.routesByKey.get(entityKey(route));
+	if (cached) return cached;
+	const result = getRoutes(ctx, { feed_id: route.feedId, route_id: route.localId })[0];
+	if (result) ctx.raw.routesByKey.set(entityKey(route), result);
+	return result;
+}
+
+export function getRawTrip(ctx: CacheContext, trip: QualifiedEntityId): Trip | undefined {
+	const cached = ctx.raw.tripsByKey.get(entityKey(trip));
+	if (cached) return cached;
+	const result = getTrips(ctx, { feed_id: trip.feedId, trip_id: trip.localId })[0];
+	if (result) ctx.raw.tripsByKey.set(entityKey(trip), result);
+	return result;
+}
+
+export function getRawStop(ctx: CacheContext, stop: QualifiedEntityId): Stop | undefined {
+	const cached = ctx.raw.stopsByKey.get(entityKey(stop));
+	if (cached) return cached;
+	const result = getStops(ctx, { feed_id: stop.feedId, stop_id: stop.localId })[0];
+	if (result) ctx.raw.stopsByKey.set(entityKey(stop), result);
+	return result;
+}
+
+/** Load all requested trip stop-times with one indexed native query per feed. */
+export function primeRawStopTimes(ctx: CacheContext, trips: readonly Trip[]): void {
+	if (trips.length === 0) return;
+	const gtfs = requireGtfs(ctx);
+	const tripIdsByFeed = new Map<string, Set<string>>();
+	for (const trip of trips) {
+		const key = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
+		if (!ctx.augmented.rawStopTimesCache.has(key)) ctx.augmented.rawStopTimesCache.set(key, []);
+		let ids = tripIdsByFeed.get(trip.feed_id);
+		if (!ids) {
+			ids = new Set();
+			tripIdsByFeed.set(trip.feed_id, ids);
+		}
+		ids.add(trip.trip_id);
+	}
+
+	for (const [feedId, tripIds] of tripIdsByFeed) {
+		const stopTimesByTrip = new Map<string, StopTime[]>();
+		for (const stopTime of gtfs.getStopTimes({ feed_id: feedId, trip_ids: [...tripIds] })) {
+			const key = entityKey({ feedId: stopTime.feed_id, localId: stopTime.trip_id });
+			const rows = stopTimesByTrip.get(key) ?? [];
+			rows.push(stopTime);
+			stopTimesByTrip.set(key, rows);
+		}
+		for (const tripId of tripIds) {
+			const key = entityKey({ feedId, localId: tripId });
+			ctx.augmented.rawStopTimesCache.set(key, stopTimesByTrip.get(key) ?? []);
+		}
+	}
 }
 
 export function getTripUpdates(ctx: CacheContext, trip?: QualifiedEntityId): RealtimeTripUpdate[] {
@@ -141,7 +213,13 @@ export function getRawStopTimes(ctx: CacheContext, trip: QualifiedEntityId): Sto
 }
 
 export const getRawTrips = getTrips;
-export const getRawStops = getStops;
-export const getRawRoutes = getRoutes;
+export function getRawStops(ctx: CacheContext, filter?: Partial<Stop>): Stop[] {
+	if (!filter) return ctx.raw.stopsByKey.size ? [...ctx.raw.stopsByKey.values()] : getStops(ctx);
+	return getStops(ctx, filter);
+}
+export function getRawRoutes(ctx: CacheContext, filter?: Partial<Route>): Route[] {
+	if (!filter && ctx.raw.routesByKey.size) return [...ctx.raw.routesByKey.values()];
+	return getRoutes(ctx, filter);
+}
 export const getRawCalendars = getCalendars;
 export const getRawCalendarDates = getCalendarDates;

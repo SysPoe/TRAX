@@ -7,6 +7,10 @@ import type { ExpressInfo, PassingStop } from "../utils/SRT.js";
 export function createEmptyRawCache(): RawCache {
 	return {
 		tripServiceIds: new Map(),
+		routesByKey: new Map(),
+		tripsByKey: new Map(),
+		stopsByKey: new Map(),
+		stopsByFeed: new Map(),
 		injectedTripUpdates: [],
 		injectedVehiclePositions: [],
 	};

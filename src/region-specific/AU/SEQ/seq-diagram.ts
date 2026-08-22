@@ -217,20 +217,22 @@ export function buildSeqDiagramTopology(
 	if (stopTimesByTrip) {
 		byTrip = stopTimesByTrip;
 	} else {
-		const consideredIds = new Set<string>();
-		for (const t of trips) consideredIds.add(t.trip_id);
-
 		const materializedByTrip = new Map<string, StopTime[]>();
-		const allStopTimes = gtfs.getStopTimes();
-		for (let i = 0; i < allStopTimes.length; i++) {
-			const st = allStopTimes[i]!;
-			if (!consideredIds.has(st.trip_id)) continue;
-			let arr = materializedByTrip.get(st.trip_id);
-			if (!arr) {
-				arr = [];
+		const tripIdsByFeed = new Map<string, Set<string>>();
+		for (const trip of trips) {
+			let ids = tripIdsByFeed.get(trip.feed_id);
+			if (!ids) {
+				ids = new Set();
+				tripIdsByFeed.set(trip.feed_id, ids);
+			}
+			ids.add(trip.trip_id);
+		}
+		for (const [feedId, tripIds] of tripIdsByFeed) {
+			for (const st of gtfs.getStopTimes({ feed_id: feedId, trip_ids: [...tripIds] })) {
+				const arr = materializedByTrip.get(st.trip_id) ?? [];
+				arr.push(st);
 				materializedByTrip.set(st.trip_id, arr);
 			}
-			arr.push(st);
 		}
 		byTrip = materializedByTrip;
 	}

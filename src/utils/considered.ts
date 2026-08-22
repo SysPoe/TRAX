@@ -60,7 +60,9 @@ export function isNonRevenueTrip(
 }
 
 export function isConsideredTrip(trip: qdf.Trip, ctx: CacheContext): boolean {
-	const route = ctx.gtfs?.getRoutes({ feed_id: trip.feed_id, route_id: trip.route_id })[0];
+	const route =
+		ctx.raw.routesByKey.get(entityKey({ feedId: trip.feed_id, localId: trip.route_id })) ??
+		ctx.gtfs?.getRoutes({ feed_id: trip.feed_id, route_id: trip.route_id })[0];
 	return route ? isConsideredRoute(route, ctx) : false;
 }
 
@@ -68,7 +70,8 @@ export function isConsideredTripId(trip: qdf.QualifiedEntityId, ctx: CacheContex
 	const key = entityKey(trip);
 	const cached = ctx.runtimeState.consideredTrips.get(key);
 	if (cached !== undefined) return cached;
-	const rawTrip = ctx.gtfs?.getTrips({ feed_id: trip.feedId, trip_id: trip.localId })[0];
+	const rawTrip =
+		ctx.raw.tripsByKey.get(key) ?? ctx.gtfs?.getTrips({ feed_id: trip.feedId, trip_id: trip.localId })[0];
 	const valid = rawTrip ? isConsideredTrip(rawTrip, ctx) : false;
 	ctx.runtimeState.consideredTrips.set(key, valid);
 	return valid;
@@ -83,8 +86,7 @@ export function isConsideredStop(stop: AugmentedStop | qdf.Stop, ctx: CacheConte
 	if (!gtfs) return false;
 	const children =
 		(stop as AugmentedStop).child_stop_ids ??
-		gtfs
-			.getStops({ feed_id: stop.feed_id })
+		(ctx.raw.stopsByFeed.get(stop.feed_id) ?? gtfs.getStops({ feed_id: stop.feed_id }))
 			.filter((candidate) => candidate.parent_station === stop.stop_id)
 			.map((candidate) => candidate.stop_id);
 	const valid =
@@ -100,6 +102,7 @@ export function isConsideredStopId(stop: qdf.QualifiedEntityId, ctx: CacheContex
 	const key = entityKey(stop);
 	const cached = ctx.runtimeState.consideredStops.get(key);
 	if (cached !== undefined) return cached;
-	const rawStop = ctx.gtfs?.getStops({ feed_id: stop.feedId, stop_id: stop.localId })[0];
+	const rawStop =
+		ctx.raw.stopsByKey.get(key) ?? ctx.gtfs?.getStops({ feed_id: stop.feedId, stop_id: stop.localId })[0];
 	return rawStop ? isConsideredStop(rawStop, ctx) : false;
 }

@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { buildSeqDiagramTopology } from "../dist/index.js";
 import { _test as refreshCacheTest } from "../dist/cache/refreshCaches.js";
+import { getRawTrips } from "../dist/cache/gtfsReads.js";
 import { _test as srtTest, getStaticFeedFingerprint } from "../dist/utils/SRT.js";
 import { propagateBlockHandoffs } from "../dist/region-specific/CA/GTHA/block-handoff.js";
 import { formatTrack } from "../dist/region-specific/CA/GTHA/realtime.js";
@@ -169,6 +170,20 @@ function testPtvReplacementBusIsNotConsideredRail() {
 	);
 }
 
+function testRawTripsUsesTheStaticSnapshot() {
+	const trip = { feed_id: "test", trip_id: "trip-1", route_id: "route-1" };
+	const ctx = {
+		raw: { consideredTrips: [trip], tripsByKey: new Map() },
+		gtfs: {
+			getTrips() {
+				throw new Error("raw trip reads must not rematerialize the native table");
+			},
+		},
+	};
+
+	assert.deepEqual(getRawTrips(ctx), [trip]);
+}
+
 function testBlockHandoffPropagation() {
 	const stop = (values = {}) => ({
 		actual_parent_station_id: "UN", actual_stop_id: "UN", scheduled_parent_station_id: "UN", scheduled_stop_id: "UN",
@@ -217,6 +232,7 @@ testStaticFingerprintTracksQDFCacheFile();
 testUntimedPassingPointsUseShapeDistance();
 testExpressPruningDistinguishesParallelCorridors();
 testPtvReplacementBusIsNotConsideredRail();
+testRawTripsUsesTheStaticSnapshot();
 testBlockHandoffPropagation();
 testGthaTrackFormatting();
 console.log("Performance regression tests passed.");

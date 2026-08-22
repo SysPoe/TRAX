@@ -1,4 +1,5 @@
 import { CacheContext, getAugmentedStops } from "../cache/index.js";
+import * as cache from "../cache/index.js";
 import { AugmentedStop } from "./augmentedStop.js";
 import * as qdf from "qdf-gtfs";
 import logger from "./logger.js";
@@ -38,15 +39,15 @@ export function getConsideredStations(ctx: CacheContext): qdf.Stop[] {
 		let startTime = Date.now();
 
 		const processTrip = (trip: qdf.Trip) => {
-			if (!isRailLikeRouteType(gtfs.getRoutes({ feed_id: trip.feed_id, route_id: trip.route_id })[0]?.route_type)) return;
+			if (!isRailLikeRouteType(cache.getRawRoute(ctx, { feedId: trip.feed_id, localId: trip.route_id })?.route_type)) return;
 
-			const stopTimes = gtfs.getStopTimes({ feed_id: trip.feed_id, trip_id: trip.trip_id });
+			const stopTimes = cache.getRawStopTimes(ctx, { feedId: trip.feed_id, localId: trip.trip_id });
 			const sig = getPatternSignature(stopTimes);
 			if (seen[sig]) return;
 			seen[sig] = true;
 
 			stopTimes.forEach((st: qdf.StopTime) => {
-				const stop = gtfs.getStops({ feed_id: st.feed_id, stop_id: st.stop_id })[0];
+				const stop = cache.getRawStop(ctx, { feedId: st.feed_id, localId: st.stop_id });
 				if (stop) {
 					const stationId = entityKey({ feedId: stop.feed_id, localId: stop.parent_station ?? stop.stop_id });
 					if (!included[stationId]) {
@@ -70,7 +71,7 @@ export function getConsideredStations(ctx: CacheContext): qdf.Stop[] {
 
 	const result = stations.map((value) => {
 		const ref = parseEntityKey(value);
-		return gtfs.getStops({ feed_id: ref.feedId, stop_id: ref.localId })[0];
+		return cache.getRawStop(ctx, ref);
 	}).filter((v) => v) as qdf.Stop[];
 
 	if (ctx) {

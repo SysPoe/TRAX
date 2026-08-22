@@ -131,7 +131,7 @@ export function augmentTrip(
 	ctx.augmented.timer.start("augmentTrip:getRawStopTimes");
 	const tripRef = { feedId: trip.feed_id, localId: trip.trip_id };
 	const tripKey = entityKey(tripRef);
-	const route = ctx.gtfs?.getRoutes({ feed_id: trip.feed_id, route_id: trip.route_id })[0];
+	const route = cache.getRawRoute(ctx, { feedId: trip.feed_id, localId: trip.route_id });
 	const rawStopTimes = cache.getRawStopTimes(ctx, tripRef).sort((a, b) => a.stop_sequence - b.stop_sequence);
 	const nonRevenue = isNonRevenueTrip(route, rawStopTimes, ctx);
 	ctx.augmented.timer.stop("augmentTrip:getRawStopTimes");
