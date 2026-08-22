@@ -9,7 +9,7 @@ import { _test as refreshCacheTest } from "../dist/cache/refreshCaches.js";
 import { getRawTrips } from "../dist/cache/gtfsReads.js";
 import { _test as srtTest, getStaticFeedFingerprint } from "../dist/utils/SRT.js";
 import { propagateBlockHandoffs } from "../dist/region-specific/CA/GTHA/block-handoff.js";
-import { formatTrack } from "../dist/region-specific/CA/GTHA/realtime.js";
+import { formatTrack, updateSourceB } from "../dist/region-specific/CA/GTHA/realtime.js";
 import { ptvMetroPlugin } from "../dist/plugins/ptv-metro.js";
 import { isConsideredRoute } from "../dist/utils/considered.js";
 import { _test as vlineEnrichmentTest, applyVLineEnrichment } from "../dist/region-specific/AU/VIC/enrichment.js";
@@ -203,8 +203,9 @@ function testVLineEnrichmentReadsVehicleSnapshotOnce() {
 }
 
 async function testVLineInstanceScanYieldsToRequests() {
+	let feedReads = 0;
 	const instances = Array.from({ length: 1_000 }, (_, index) => ({
-		feed_id: "other-feed",
+		get feed_id() { feedReads += 1; return "other-feed"; },
 		trip_id: `trip-${index}`,
 		stopTimes: [],
 	}));
@@ -214,6 +215,26 @@ async function testVLineInstanceScanYieldsToRequests() {
 
 	await vlineEnrichmentTest.currentInstances(ctx);
 	assert.equal(requestHandled, true, "V/Line instance scans must yield to waiting HTTP work");
+	await vlineEnrichmentTest.currentInstances(ctx);
+	assert.equal(feedReads, instances.length, "V/Line instance scans must be reused for the same runtime snapshot");
+}
+
+async function testGthaSourceBYieldsToRequests() {
+	const ctx = {
+		pluginState: new Map(),
+		augmented: { timer: { start() {}, stop() {} } },
+	};
+	const data = {
+		date: "2026-08-22",
+		commitmentTrip: Array.from({ length: 100 }, (_, index) => ({
+			tripNumber: String(index), tripName: "", updateTime: "", stop: [],
+		})),
+	};
+	let requestHandled = false;
+	setImmediate(() => { requestHandled = true; });
+
+	await updateSourceB(ctx, new Map(), "20260822", data);
+	assert.equal(requestHandled, true, "GTHA Source B processing must yield to waiting HTTP work");
 }
 
 function testRawTripsUsesTheStaticSnapshot() {
@@ -280,6 +301,7 @@ testExpressPruningDistinguishesParallelCorridors();
 testPtvReplacementBusIsNotConsideredRail();
 testVLineEnrichmentReadsVehicleSnapshotOnce();
 await testVLineInstanceScanYieldsToRequests();
+await testGthaSourceBYieldsToRequests();
 testRawTripsUsesTheStaticSnapshot();
 testBlockHandoffPropagation();
 testGthaTrackFormatting();

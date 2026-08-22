@@ -1029,7 +1029,9 @@ export async function updateSourceB(
 		});
 
 		let updateCount = 0;
-		for (const trip of commitmentTrips) {
+		for (let tripIndex = 0; tripIndex < commitmentTrips.length; tripIndex++) {
+			if (tripIndex > 0 && tripIndex % 25 === 0) await new Promise((resolve) => setImmediate(resolve));
+			const trip = commitmentTrips[tripIndex];
 			const tripNumber = trip.tripNumber;
 			const tripIds = tripNumberToIds.get(tripNumber) || [];
 
