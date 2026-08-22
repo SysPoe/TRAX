@@ -17,6 +17,9 @@ import TRAX, {
 	parseVLinePlatformArrivals,
 	parseVLineScsBoard,
 	parseTfnswTripId,
+	parseAnyTripNswOccupancy,
+	applyAnyTripNswOccupancy,
+	AnyTripNswOccupancyClient,
 	resolveTripNumber,
 	vlineAccessToken,
 	vlinePassengerCars,
@@ -36,10 +39,7 @@ import {
 	vlineServiceBookingAvailability,
 	_test as vlineEnrichmentTest,
 } from "../dist/region-specific/AU/VIC/enrichment.js";
-import {
-	AnyTripPlatformClient,
-	_test as anyTripTest,
-} from "../dist/region-specific/AU/VIC/anytrip.js";
+import { AnyTripPlatformClient, _test as anyTripTest } from "../dist/region-specific/AU/VIC/anytrip.js";
 import { getVLineLocations, getVLinePlatformDepartures } from "../dist/region-specific/AU/VIC/journey-planner.js";
 import { ptvMetroFormationUnit } from "../dist/region-specific/AU/VIC/ptv-metro.js";
 import {
@@ -65,10 +65,7 @@ import {
 	isPassingStopTime,
 } from "../dist/utils/considered.js";
 import { matchRealtimeStopTimeUpdate } from "../dist/utils/augmentedStopTime.js";
-import {
-	inferTfnswRealtimeServiceDate,
-	tfnswPlatformCode,
-} from "../dist/plugins/tfnsw-rail.js";
+import { inferTfnswRealtimeServiceDate, tfnswPlatformCode } from "../dist/plugins/tfnsw-rail.js";
 import { _test as tfnswRegionalBookingTest } from "../dist/region-specific/AU/NSW/regional-booking.js";
 import { findUniqueTripInstanceForServiceDate } from "../dist/cache/augmentedEntities.js";
 import { DropOffType, PickupType, RouteType, TripScheduleRelationship } from "qdf-gtfs";
@@ -431,26 +428,11 @@ assert.equal(
 	}),
 	true,
 );
-assert.equal(
-	isNonBoardingStopTime({ pickup_type: PickupType.None, drop_off_type: DropOffType.None }),
-	true,
-);
-assert.equal(
-	isNonBoardingStopTime({ pickup_type: PickupType.Regular, drop_off_type: DropOffType.None }),
-	false,
-);
-assert.equal(
-	isPassingStopTime({ pickup_type: PickupType.None, drop_off_type: DropOffType.None }),
-	true,
-);
-assert.equal(
-	isPassingStopTime({ pickup_type: PickupType.Regular, drop_off_type: DropOffType.None }),
-	false,
-);
-assert.equal(
-	isPassingStopTime({ pickup_type: PickupType.Regular, drop_off_type: DropOffType.Regular }, true),
-	true,
-);
+assert.equal(isNonBoardingStopTime({ pickup_type: PickupType.None, drop_off_type: DropOffType.None }), true);
+assert.equal(isNonBoardingStopTime({ pickup_type: PickupType.Regular, drop_off_type: DropOffType.None }), false);
+assert.equal(isPassingStopTime({ pickup_type: PickupType.None, drop_off_type: DropOffType.None }), true);
+assert.equal(isPassingStopTime({ pickup_type: PickupType.Regular, drop_off_type: DropOffType.None }), false);
+assert.equal(isPassingStopTime({ pickup_type: PickupType.Regular, drop_off_type: DropOffType.Regular }, true), true);
 assert.equal(
 	isNonRevenueTrip(
 		nonRevenueRoute,
@@ -570,6 +552,83 @@ const tfnswVehicleContext = {
 tfnswPlugin.afterRealtime(tfnswVehicleContext, new Set());
 assert.equal(tfnswPlugin.vehicleInfoForTrip(allocatedTrainLinkTrip, tfnswVehicleContext)?.vehicle_id, "EA2502");
 assert.equal(tfnswPlugin.vehicleInfoForTrip(otherDayTrainLinkTrip, tfnswVehicleContext), null);
+const anyTripOccupancyPayload = {
+	header: { timestamp: 1787367261 },
+	response: {
+		tripInstance: {
+			trip: { id: "au2:st:104B.937.150.128.A.8.90926398" },
+			startDate: "20260822",
+		},
+		realtimePattern: [
+			{ stopSequence: 1, departure: { occupancy: [1] } },
+			{ stopSequence: 2, departure: { occupancy: [1, 2, 3, 4] } },
+		],
+	},
+};
+const parsedAnyTripOccupancy = parseAnyTripNswOccupancy(anyTripOccupancyPayload, {
+	feedId: "nsw-sydney-trains",
+	tripId: "104B.937.150.128.A.8.90926398",
+	serviceDate: "20260822",
+});
+assert.equal(parsedAnyTripOccupancy[0].scope, "vehicle");
+assert.equal(parsedAnyTripOccupancy[0].confidence, "historical");
+assert.equal(parsedAnyTripOccupancy[1].scope, "carriage");
+assert.equal(parsedAnyTripOccupancy[1].confidence, "reported");
+assert.equal(
+	parseAnyTripNswOccupancy(anyTripOccupancyPayload, {
+		feedId: "nsw-sydney-trains",
+		tripId: "different-trip",
+		serviceDate: "20260822",
+	}).length,
+	0,
+);
+assert.equal(
+	parseAnyTripNswOccupancy(anyTripOccupancyPayload, {
+		feedId: "nsw-sydney-trains",
+		tripId: "104B.937.150.128.A.8.90926398",
+		serviceDate: "20260823",
+	}).length,
+	0,
+);
+let anyTripOccupancyRequests = 0;
+let anyTripOccupancyUrl = "";
+const anyTripOccupancyClient = new AnyTripNswOccupancyClient(
+	{ baseUrl: "https://anytrip.test/api/v3/region/au2" },
+	async (url) => {
+		anyTripOccupancyRequests++;
+		anyTripOccupancyUrl = String(url);
+		return new Response(JSON.stringify(anyTripOccupancyPayload));
+	},
+);
+const anyTripOccupancyTrip = {
+	feed_id: "nsw-sydney-trains",
+	trip_id: "104B.937.150.128.A.8.90926398",
+	trip_number: "104B",
+	serviceDate: "20260822",
+};
+await Promise.all([
+	anyTripOccupancyClient.getTripOccupancy(anyTripOccupancyTrip),
+	anyTripOccupancyClient.getTripOccupancy(anyTripOccupancyTrip),
+]);
+assert.equal(anyTripOccupancyRequests, 1);
+assert.match(anyTripOccupancyUrl, /\/tripInstance\/20260822\/au2%3Ast%3A104B\/0$/);
+const officialOccupancy = {
+	statuses: [4],
+	scope: "vehicle",
+	source: "tfnsw-static-occupancies",
+	confidence: "historical",
+	observed_at: null,
+	expires_at: null,
+};
+const occupancyPriorityTrip = {
+	stopTimes: [
+		{ _stopTime: { stop_sequence: 1 }, occupancy: officialOccupancy },
+		{ _stopTime: { stop_sequence: 2 }, occupancy: null },
+	],
+};
+assert.equal(applyAnyTripNswOccupancy(occupancyPriorityTrip, parsedAnyTripOccupancy, "2026-08-22T12:00:00Z"), 1);
+assert.equal(occupancyPriorityTrip.stopTimes[0].occupancy, officialOccupancy);
+assert.equal(occupancyPriorityTrip.stopTimes[1].occupancy.source, "anytrip-nsw");
 const trainLinkBookingTrip = {
 	feed_id: "nsw-trainlink",
 	trip_number: "ST21",
@@ -941,10 +1000,7 @@ const anyTripMatchTrip = {
 	stopTimes: [anyTripMatchStop],
 };
 assert.equal(matchAnyTripPlatformCall(anyTripMatchTrip, anyTripCalls[0]), anyTripMatchStop);
-assert.equal(
-	matchAnyTripPlatformCall({ ...anyTripMatchTrip, serviceDate: "20260823" }, anyTripCalls[0]),
-	null,
-);
+assert.equal(matchAnyTripPlatformCall({ ...anyTripMatchTrip, serviceDate: "20260823" }, anyTripCalls[0]), null);
 assert.ok(
 	vlineEnrichmentTest.platformPriority({ source: "anytrip-v3", confidence: "reported" }) >
 		vlineEnrichmentTest.platformPriority({ source: "vline-scs-html", confidence: "confirmed" }),
@@ -991,13 +1047,13 @@ assert.equal(
 	1,
 );
 let anyTripRequestCount = 0;
-const anyTripClient = new AnyTripPlatformClient(
-	{ tripCacheTtlMs: 60_000 },
-	async () => {
-		anyTripRequestCount++;
-		return new Response(JSON.stringify(anyTripPayload), { status: 200, headers: { "content-type": "application/json" } });
-	},
-);
+const anyTripClient = new AnyTripPlatformClient({ tripCacheTtlMs: 60_000 }, async () => {
+	anyTripRequestCount++;
+	return new Response(JSON.stringify(anyTripPayload), {
+		status: 200,
+		headers: { "content-type": "application/json" },
+	});
+});
 const [firstAnyTripRequest, secondAnyTripRequest] = await Promise.all([
 	anyTripClient.getTripPlatforms("8605", "20260822"),
 	anyTripClient.getTripPlatforms("8605", "20260822"),
@@ -1006,13 +1062,10 @@ assert.equal(anyTripRequestCount, 1);
 assert.deepEqual(firstAnyTripRequest, secondAnyTripRequest);
 assert.equal(anyTripClient.diagnostics.tripCacheEntries, 1);
 let missingAnyTripRequestCount = 0;
-const missingAnyTripClient = new AnyTripPlatformClient(
-	{ tripCacheTtlMs: 60_000 },
-	async () => {
-		missingAnyTripRequestCount++;
-		return new Response("Trip instance not found", { status: 404 });
-	},
-);
+const missingAnyTripClient = new AnyTripPlatformClient({ tripCacheTtlMs: 60_000 }, async () => {
+	missingAnyTripRequestCount++;
+	return new Response("Trip instance not found", { status: 404 });
+});
 assert.deepEqual(await missingAnyTripClient.getTripPlatforms("9999", "20260822"), []);
 assert.deepEqual(await missingAnyTripClient.getTripPlatforms("9999", "20260822"), []);
 assert.equal(missingAnyTripRequestCount, 1);
@@ -1162,20 +1215,17 @@ assert.equal(journeyServices[0].accessibleSpaces, 8);
 assert.equal(journeyServices[0].bicycleSpaces, 0);
 assert.equal(journeyServices[0].isLiveConsistInfo, true);
 assert.equal(journeyServices[0].platformEvent, null);
-assert.deepEqual(
-	vlineServiceBookingAvailability(journeyServices[0], "2026-08-15T00:20:00Z"),
-	{
-		reservedCarriages: [],
-		reservedSeatsAvailable: null,
-		unreservedTicketsAvailable: null,
-		reservationAvailable: false,
-		reservationRequired: false,
-		seatMapAvailable: false,
-		journeyUrl: null,
-		source: "V/Line Journey Planner",
-		observedAt: "2026-08-15T00:20:00Z",
-	},
-);
+assert.deepEqual(vlineServiceBookingAvailability(journeyServices[0], "2026-08-15T00:20:00Z"), {
+	reservedCarriages: [],
+	reservedSeatsAvailable: null,
+	unreservedTicketsAvailable: null,
+	reservationAvailable: false,
+	reservationRequired: false,
+	seatMapAvailable: false,
+	journeyUrl: null,
+	source: "V/Line Journey Planner",
+	observedAt: "2026-08-15T00:20:00Z",
+});
 
 const booking = parseVLineBookingPage(
 	`<div class="journey-leg" data-departure-time="2026-08-15 12:36:00">
@@ -1675,8 +1725,7 @@ try {
 		true,
 	);
 	assert.equal(
-		orphanRuntime.getAugmentedTrips({ feedId: "orphan", localId: "passenger-trip" })[0].instances[0]
-			.nonRevenue,
+		orphanRuntime.getAugmentedTrips({ feedId: "orphan", localId: "passenger-trip" })[0].instances[0].nonRevenue,
 		false,
 	);
 	const continuationRuntime = new TRAX(
@@ -1701,11 +1750,10 @@ try {
 			.getAugmentedTrips({ feedId: "continuation", localId: tripId })[0]
 			.instances.find((instance) => instance.serviceDate === continuationRuntime.today());
 	const destinationsFor = (tripId, departureTime) =>
-		continuationRuntime
-			.getOnboardReachableStops(instanceFor(tripId).instance_id, {
-				stopIds: ["origin"],
-				departureTime,
-			});
+		continuationRuntime.getOnboardReachableStops(instanceFor(tripId).instance_id, {
+			stopIds: ["origin"],
+			departureTime,
+		});
 	const destinationNames = (tripId, departureTime) =>
 		destinationsFor(tripId, departureTime).map((destination) => destination.station_name);
 	assert.deepEqual(destinationNames("southern-flinders", 10 * 3600), ["Flinders Street", "Melbourne Central"]);

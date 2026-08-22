@@ -255,7 +255,7 @@ export function createAuRailNetwork(options: AuRailNetworkOptions = {}): Network
 		plugins: [
 			...AU_SEQ_NETWORK.plugins,
 			...victoria.plugins,
-			...(tfnswKey ? [createTfnswRailPlugin(), createTfnswRegionalBookingPlugin(options.regionalBooking)] : []),
+			...(tfnswKey ? [createTfnswRailPlugin(options), createTfnswRegionalBookingPlugin(options.regionalBooking)] : []),
 		],
 		places: [...(AU_SEQ_NETWORK.places ?? []), ...victoriaPlaces, ...tfnswPlaces],
 	};

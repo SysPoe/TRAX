@@ -516,9 +516,7 @@ export default TRAX;
 
 export { logger };
 
-export {
-	AnyTripPlatformClient,
-} from "./region-specific/AU/VIC/anytrip.js";
+export { AnyTripPlatformClient } from "./region-specific/AU/VIC/anytrip.js";
 export type {
 	AnyTripPlatformCall,
 	AnyTripPlatformClientDiagnostics,
@@ -547,6 +545,15 @@ export {
 export type { AuRailNetworkOptions, AuVicVlineNetworkOptions } from "./networks.js";
 export { createTfnswRegionalBookingPlugin, parseTfnswTripId } from "./plugins/tfnsw-rail.js";
 export type { TfnswRailPluginOptions, TfnswSetType, TfnswTripDescriptor } from "./plugins/tfnsw-rail.js";
+export {
+	AnyTripNswOccupancyClient,
+	applyAnyTripNswOccupancy,
+	parseAnyTripNswOccupancy,
+} from "./region-specific/AU/NSW/anytrip-occupancy.js";
+export type {
+	AnyTripNswOccupancyCall,
+	AnyTripNswOccupancyClientOptions,
+} from "./region-specific/AU/NSW/anytrip-occupancy.js";
 export * from "./identity.js";
 export * as cache from "./cache/index.js";
 export * as stations from "./utils/stations.js";
@@ -578,7 +585,12 @@ export type {
 	VehicleDiagramKind,
 	VehicleInfo,
 } from "./utils/vehicleModel.js";
-export type { AugmentedStopTime, BoardingLocation, BoardingLocationKind } from "./utils/augmentedStopTime.js";
+export type {
+	AugmentedStopTime,
+	BoardingLocation,
+	BoardingLocationKind,
+	OccupancyObservation,
+} from "./utils/augmentedStopTime.js";
 export type {
 	Observation,
 	ObservationConfidence,

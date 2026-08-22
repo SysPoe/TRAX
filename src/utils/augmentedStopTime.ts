@@ -25,6 +25,16 @@ export type BoardingLocation = {
 	expires_at?: string;
 };
 
+/** Provider-neutral load observation for a trip as it departs a stop. */
+export type OccupancyObservation = {
+	statuses: qdf.OccupancyStatus[];
+	scope: "vehicle" | "carriage";
+	source: string;
+	confidence: "historical" | "reported";
+	observed_at: string | null;
+	expires_at: string | null;
+};
+
 export type AugmentedStopTime = {
 	_stopTime: qdf.StopTime | null;
 	feed_id: string;
@@ -37,6 +47,7 @@ export type AugmentedStopTime = {
 	service_date: string;
 	schedule_relationship: qdf.TripScheduleRelationship;
 	service_capacity: ServiceCapacity;
+	occupancy: OccupancyObservation | null;
 
 	actual_exit_side: "left" | "right" | "both" | null;
 	scheduled_exit_side: "left" | "right" | "both" | null;
@@ -291,6 +302,11 @@ export function augmentStopTimes(
 	if (!feedId) throw new Error(`Cannot augment stop times for trip '${tripId}' without feed identity`);
 
 	const stopTimeUpdates = tripUpdate?.stop_time_updates ?? [];
+	const staticOccupancyBySequence = new Map(
+		(ctx.gtfs?.getStaticOccupancies({ feed_id: feedId, trip_id: tripId, date: serviceDate }) ?? []).map(
+			(occupancy) => [occupancy.stop_sequence, occupancy.occupancy_status] as const,
+		),
+	);
 
 	// Build O(1) lookup maps for realtime updates so the per-stop loop below avoids
 	// repeated linear scans of stopTimeUpdates.
@@ -450,6 +466,16 @@ export function augmentStopTimes(
 						service_date: "",
 						schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED,
 						service_capacity: ServiceCapacity.NOT_CALCULATED,
+						occupancy: staticOccupancyBySequence.has(s)
+							? {
+									statuses: [staticOccupancyBySequence.get(s)!],
+									scope: "vehicle",
+									source: "tfnsw-static-occupancies",
+									confidence: "historical",
+									observed_at: null,
+									expires_at: null,
+								}
+							: null,
 						actual_exit_side: null,
 						scheduled_exit_side: null,
 						actual_arrival_time: null,
@@ -681,6 +707,16 @@ export function augmentStopTimes(
 			service_date: "",
 			schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED,
 			service_capacity: ServiceCapacity.NOT_CALCULATED,
+			occupancy: staticOccupancyBySequence.has(seq)
+				? {
+						statuses: [staticOccupancyBySequence.get(seq)!],
+						scope: "vehicle",
+						source: "tfnsw-static-occupancies",
+						confidence: "historical",
+						observed_at: null,
+						expires_at: null,
+					}
+				: null,
 			actual_exit_side: null,
 			scheduled_exit_side: null,
 

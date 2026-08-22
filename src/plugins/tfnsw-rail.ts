@@ -11,6 +11,11 @@ import {
 	TFNSW_REGIONAL_BOOKING_PLUGIN_ID,
 	type TfnswRegionalBookingOptions,
 } from "../region-specific/AU/NSW/regional-booking.js";
+import {
+	AnyTripNswOccupancyClient,
+	applyAnyTripNswOccupancy,
+	type AnyTripNswOccupancyClientOptions,
+} from "../region-specific/AU/NSW/anytrip-occupancy.js";
 
 const SYDNEY_TRAINS_FEED_ID = "nsw-sydney-trains";
 const NSW_TRAINLINK_FEED_ID = "nsw-trainlink";
@@ -183,13 +188,17 @@ function enrichTfnswRealtimeTripUpdate(update: RealtimeTripUpdate, ctx: CacheCon
  */
 export type TfnswRailPluginOptions = {
 	regionalBooking?: TfnswRegionalBookingOptions;
+	/** Admin-triggered fallback for trips without official occupancies.txt data. */
+	anyTripOccupancy?: false | AnyTripNswOccupancyClientOptions;
 };
 
-export function createTfnswRailPlugin(): TransitPlugin {
+export function createTfnswRailPlugin(options: TfnswRailPluginOptions = {}): TransitPlugin {
+	const anyTripClient =
+		options.anyTripOccupancy === false ? null : new AnyTripNswOccupancyClient(options.anyTripOccupancy);
 	return {
 		id: TFNSW_RAIL_PLUGIN_ID,
 		feedIds: [SYDNEY_TRAINS_FEED_ID, NSW_TRAINLINK_FEED_ID],
-		capabilities: ["vehicles"],
+		capabilities: ["vehicles", "occupancy"],
 		considerRoute(route) {
 			if (route.feed_id === SYDNEY_TRAINS_FEED_ID) {
 				// isConsideredRoute has already limited this callback to rail-like route types.
@@ -216,6 +225,29 @@ export function createTfnswRailPlugin(): TransitPlugin {
 		afterRealtime: applyTfnswVehicleAllocations,
 		vehicleInfoForTrip: (trip, ctx) =>
 			getTfnswVehicleState(ctx).vehicleInfoByInstanceId.get(trip.instance_id) ?? null,
+		api: (ctx) => ({
+			refreshTripOccupancy: async (instanceId: string) => {
+				const trip = ctx.augmented.instancesRec.get(instanceId);
+				if (!trip || !anyTripClient) return 0;
+				const now = Date.now();
+				for (const stopTime of trip.stopTimes) {
+					if (
+						stopTime.occupancy?.source === "anytrip-nsw" &&
+						stopTime.occupancy.expires_at &&
+						Date.parse(stopTime.occupancy.expires_at) <= now
+					)
+						stopTime.occupancy = null;
+				}
+				if (trip.stopTimes.every((stopTime) => stopTime.occupancy !== null)) return 0;
+				let calls;
+				try {
+					calls = await anyTripClient.getTripOccupancy(trip);
+				} catch {
+					return 0;
+				}
+				return applyAnyTripNswOccupancy(trip, calls, new Date(Date.now() + 2 * 60_000).toISOString());
+			},
+		}),
 		isNonRevenueRoute: (route) => route.feed_id === SYDNEY_TRAINS_FEED_ID && route.route_id.startsWith("RTTA_"),
 	};
 }
