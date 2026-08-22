@@ -53,6 +53,7 @@ const ON_DEMAND_JOURNEY_TTL_MS = 5 * 60_000;
 const MISSING_BOOKING_TTL_MS = 2 * 60_000;
 const BOOKING_SNAPSHOT_GRACE_MS = 6 * 60 * 60_000;
 const currentVLineInstancesBySnapshot = new WeakMap<object, AugmentedTripInstance[]>();
+const scheduledInstantsByTrip = new WeakMap<AugmentedTripInstance, Map<number, number | null>>();
 
 function observation<T>(
 	value: T,
@@ -97,7 +98,15 @@ function normalizeStation(value: string | null | undefined): string {
 
 function scheduledInstant(trip: AugmentedTripInstance, seconds: number | null | undefined): number | null {
 	if (seconds == null) return null;
-	return Date.parse(serviceTimeToInstant(trip.serviceDate, seconds, "Australia/Melbourne"));
+	let instants = scheduledInstantsByTrip.get(trip);
+	if (!instants) {
+		instants = new Map();
+		scheduledInstantsByTrip.set(trip, instants);
+	}
+	if (instants.has(seconds)) return instants.get(seconds)!;
+	const instant = Date.parse(serviceTimeToInstant(trip.serviceDate, seconds, "Australia/Melbourne"));
+	instants.set(seconds, instant);
+	return instant;
 }
 
 export function serviceMatchesTrip(service: VLineJourneyPlannerService, trip: AugmentedTripInstance): boolean {
