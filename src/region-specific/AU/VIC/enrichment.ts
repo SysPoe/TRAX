@@ -12,6 +12,7 @@ import {
 import { getVehiclePositions } from "../../../cache/gtfsReads.js";
 import logger from "../../../utils/logger.js";
 import { getServiceDayStart, parseTimeWithConfig, serviceTimeToInstant } from "../../../utils/time.js";
+import { AnyTripPlatformClient, type AnyTripPlatformCall } from "./anytrip.js";
 import { saveVLineBookingSnapshots, shouldPrefetchVLineBooking, vlineBookingSnapshotKey } from "./booking-snapshots.js";
 import { getVLineState } from "./state.js";
 import { inferVLinePlatform } from "./platform-heuristics.js";
@@ -280,9 +281,15 @@ function selectScsTrip(
 
 function applyPlatform(trip: AugmentedTripInstance, platform: VLinePlatformObservation): void {
 	const stopTime = trip.stopTimes.find((stop) =>
-		(stop.scheduled_parent_station_id ?? stop.scheduled_stop_id) === platform.stopId,
+		stop.scheduled_parent_station_id === platform.stopId || stop.scheduled_stop_id === platform.stopId,
 	);
 	if (!stopTime) return;
+	const existingLocations = [
+		...stopTime.actual_arrival_boarding_locations,
+		...stopTime.actual_departure_boarding_locations,
+	];
+	// A direct GTFS-RT platform has no supplemental boarding-location source.
+	if (stopTime.rt_platform_code_updated && stopTime.actual_platform_code && existingLocations.length === 0) return;
 	const location = {
 		kind: platform.kind,
 		value: platform.value,
@@ -295,6 +302,173 @@ function applyPlatform(trip: AugmentedTripInstance, platform: VLinePlatformObser
 	stopTime.rt_platform_code_updated = platform.confidence !== "inferred";
 	if (platform.event !== "arrival") stopTime.actual_departure_boarding_locations = [location];
 	if (platform.event !== "departure") stopTime.actual_arrival_boarding_locations = [location];
+}
+
+function platformPriority(platform: VLinePlatformObservation): number {
+	if (platform.source === "static-platform-heuristic") return 10;
+	if (platform.source === "vline-scs-html") return 20;
+	if (platform.source === "anytrip-v3") return 30;
+	return platform.confidence === "confirmed" ? 50 : 40;
+}
+
+function applyStoredPlatforms(trip: AugmentedTripInstance, details: VLineTripDetails, now = Date.now()): void {
+	for (const platform of [...details.platforms]
+		.filter((value) => !value.expiresAt || Date.parse(value.expiresAt) > now || value.confidence === "inferred")
+		.sort((a, b) => platformPriority(a) - platformPriority(b))) applyPlatform(trip, platform);
+}
+
+function scheduledCallInstant(trip: AugmentedTripInstance, stopIndex: number): number | null {
+	const stop = trip.stopTimes[stopIndex];
+	const seconds = stop?.scheduled_departure_time ?? stop?.scheduled_arrival_time;
+	return seconds == null ? null : scheduledInstant(trip, seconds);
+}
+
+/** Resolve one normalized AnyTrip call without guessing when a trip revisits a station. */
+export function matchAnyTripPlatformCall(
+	trip: AugmentedTripInstance,
+	call: AnyTripPlatformCall,
+): AugmentedTripInstance["stopTimes"][number] | null {
+	if (trip.feed_id !== "vic-vline" || vlineTdn(trip.trip_id) !== call.tdn || trip.serviceDate !== call.serviceDate)
+		return null;
+	let candidates = trip.stopTimes.map((stop, index) => ({ stop, index }));
+	const exact = call.scheduledStopId
+		? candidates.filter(({ stop }) => stop.scheduled_stop_id === call.scheduledStopId)
+		: [];
+	if (exact.length) candidates = exact;
+	else if (call.parentStationId) candidates = candidates.filter(({ stop }) =>
+		stop.scheduled_parent_station_id === call.parentStationId || stop.scheduled_stop_id === call.parentStationId,
+	);
+	else return null;
+	if (candidates.length === 1) return candidates[0].stop;
+	if (call.stopSequence !== null) {
+		const bySequence = candidates.filter(({ index }) => index + 1 === call.stopSequence);
+		if (bySequence.length === 1) return bySequence[0].stop;
+	}
+	const providerEpoch = call.departureEpoch ?? call.arrivalEpoch;
+	if (providerEpoch === null) return null;
+	const ranked = candidates.flatMap(({ stop, index }) => {
+		const instant = scheduledCallInstant(trip, index);
+		return instant === null ? [] : [{ stop, difference: Math.abs(instant - providerEpoch * 1000) }];
+	}).sort((a, b) => a.difference - b.difference);
+	if (!ranked[0] || ranked[0].difference > 6 * 60 * 60_000 || ranked[1]?.difference === ranked[0].difference)
+		return null;
+	return ranked[0].stop;
+}
+
+function anyTripObservation(
+	stop: AugmentedTripInstance["stopTimes"][number],
+	call: AnyTripPlatformCall,
+): VLinePlatformObservation | null {
+	const stopId = stop.scheduled_stop_id ?? stop.scheduled_parent_station_id;
+	if (!stopId) return null;
+	return {
+		...observation(call.platform, "anytrip-v3", "reported", call.observedAt, call.rawIdentifier),
+		expiresAt: new Date(Date.parse(call.observedAt) + LIVE_TTL_MS).toISOString(),
+		stopId,
+		event: "both",
+		kind: "platform",
+	};
+}
+
+function storeAnyTripCalls(
+	ctx: CacheContext,
+	trip: AugmentedTripInstance,
+	calls: readonly AnyTripPlatformCall[],
+): number {
+	const details = detailsFor(ctx, trip);
+	if (!details) return 0;
+	let accepted = 0;
+	for (const call of calls) {
+		const stop = matchAnyTripPlatformCall(trip, call);
+		const platform = stop ? anyTripObservation(stop, call) : null;
+		if (!platform) continue;
+		details.platforms = details.platforms.filter((existing) =>
+			existing.source !== "anytrip-v3" || existing.stopId !== platform.stopId,
+		);
+		details.platforms.push(platform);
+		accepted++;
+	}
+	applyStoredPlatforms(trip, details);
+	return accepted;
+}
+
+function anyTripClient(ctx: CacheContext, options: VLinePluginOptions): AnyTripPlatformClient | null {
+	if (!options.anyTrip) return null;
+	const state = getVLineState(ctx);
+	state.anyTripClient ??= new AnyTripPlatformClient({
+		...options.anyTrip,
+		requestTimeoutMs: options.anyTrip.requestTimeoutMs ?? options.requestTimeoutMs,
+	});
+	return state.anyTripClient;
+}
+
+export async function refreshVLineAnyTripTripPlatforms(
+	ctx: CacheContext,
+	instanceId: string,
+	options: VLinePluginOptions,
+): Promise<number> {
+	const client = anyTripClient(ctx, options);
+	const trip = ctx.augmented.instancesRec.get(instanceId);
+	if (!client || !trip || trip.feed_id !== "vic-vline") return 0;
+	const tdn = vlineTdn(trip.trip_id);
+	if (!tdn) return 0;
+	const state = getVLineState(ctx), status = state.sources.anytrip;
+	status.enabled = true;
+	status.lastAttemptAt = new Date().toISOString();
+	try {
+		const accepted = storeAnyTripCalls(ctx, trip, await client.getTripPlatforms(tdn, trip.serviceDate));
+		status.lastSuccessAt = new Date().toISOString();
+		status.error = null;
+		return accepted;
+	} catch (error) {
+		status.error = error instanceof Error ? error.message : String(error);
+		return 0;
+	}
+}
+
+export async function refreshVLineAnyTripStationPlatforms(
+	ctx: CacheContext,
+	stationIds: readonly string[],
+	options: VLinePluginOptions,
+): Promise<number> {
+	const client = anyTripClient(ctx, options);
+	if (!client || stationIds.length === 0) return 0;
+	const state = getVLineState(ctx), status = state.sources.anytrip;
+	status.enabled = true;
+	status.lastAttemptAt = new Date().toISOString();
+	try {
+		const calls = (await Promise.all([...new Set(stationIds)].map((stationId) =>
+			client.getStationPlatforms(stationId),
+		))).flat();
+		const callsByService = new Map<string, AnyTripPlatformCall[]>();
+		for (const call of calls) {
+			const key = `${call.serviceDate}\0${call.tdn}`;
+			const existing = callsByService.get(key);
+			if (existing) existing.push(call);
+			else callsByService.set(key, [call]);
+		}
+		const tripsByService = new Map<string, AugmentedTripInstance[]>();
+		for (const trip of ctx.augmented.instancesRec.values()) {
+			if (trip.feed_id !== "vic-vline") continue;
+			const tdn = vlineTdn(trip.trip_id);
+			if (!tdn) continue;
+			const key = `${trip.serviceDate}\0${tdn}`;
+			const existing = tripsByService.get(key);
+			if (existing) existing.push(trip);
+			else tripsByService.set(key, [trip]);
+		}
+		let accepted = 0;
+		for (const [key, matching] of callsByService) {
+			const candidates = tripsByService.get(key);
+			if (candidates?.length === 1) accepted += storeAnyTripCalls(ctx, candidates[0], matching);
+		}
+		status.lastSuccessAt = new Date().toISOString();
+		status.error = null;
+		return accepted;
+	} catch (error) {
+		status.error = error instanceof Error ? error.message : String(error);
+		return 0;
+	}
 }
 
 async function currentInstances(ctx: CacheContext): Promise<AugmentedTripInstance[]> {
@@ -608,6 +782,7 @@ function scheduleVLineBookingPrefetches(
 export async function refreshVLineOfficialSources(ctx: CacheContext, options: VLinePluginOptions): Promise<void> {
 	const state = getVLineState(ctx), observedAt = new Date().toISOString(), trips = await currentInstances(ctx);
 	state.lastRefreshAt = observedAt;
+	state.sources.anytrip.enabled = options.anyTrip !== undefined;
 
 	if (options.journeyPlanner) {
 		try {
@@ -650,7 +825,7 @@ export async function refreshVLineOfficialSources(ctx: CacheContext, options: VL
 	if (options.journeyPlanner) scheduleVLineBookingPrefetches(ctx, options, trips);
 }
 
-export const _test = { currentInstances };
+export const _test = { applyStoredPlatforms, currentInstances, platformPriority };
 
 export function applyVLineEnrichment(ctx: CacheContext, options: VLinePluginOptions): void {
 	const now = Date.now();
@@ -693,10 +868,7 @@ export function applyVLineEnrichment(ctx: CacheContext, options: VLinePluginOpti
 			const value = inferVLinePlatform(name, trip.direction_id);
 			if (value) details.platforms.push({ ...observation(value, "static-platform-heuristic", "inferred", observedAt), stopId, event: "both", kind: "platform" });
 		}
-		const precedence = { confirmed: 3, reported: 2, inferred: 1 } as const;
-		for (const platform of [...details.platforms]
-			.filter((value) => !value.expiresAt || Date.parse(value.expiresAt) > now || value.confidence === "inferred")
-			.sort((a, b) => precedence[a.confidence] - precedence[b.confidence])) applyPlatform(trip, platform);
+		applyStoredPlatforms(trip, details, now);
 	}
 }
 

@@ -19,8 +19,10 @@ export function getVLineState(ctx: CacheContext): VLinePluginState {
 		bookingPrefetchAttempted: new Set(),
 		platformLocationsCache: null,
 		platformPollByLocation: new Map(),
+		anyTripClient: null,
 		sources: {
 			"journey-planner": { enabled: false, lastAttemptAt: null, lastSuccessAt: null, error: null },
+			anytrip: { enabled: false, lastAttemptAt: null, lastSuccessAt: null, error: null },
 			"scs-board": { enabled: true, lastAttemptAt: null, lastSuccessAt: null, error: null },
 		},
 		lastRefreshAt: null,
@@ -49,6 +51,16 @@ export function getVLineDiagnostics(ctx: CacheContext): VLineDiagnostics {
 			platformStationsPolled: state.platformPollByLocation.size,
 			platformStationErrors: [...state.platformPollByLocation.values()].filter((value) => value.error !== null)
 				.length,
+		},
+		anyTrip: {
+			stationCacheEntries: state.anyTripClient?.diagnostics.stationCacheEntries ?? 0,
+			tripCacheEntries: state.anyTripClient?.diagnostics.tripCacheEntries ?? 0,
+			requestsInFlight: state.anyTripClient?.diagnostics.requestsInFlight ?? 0,
+			enrichedTrips: details.filter((value) => value.platforms.some((platform) => platform.source === "anytrip-v3")).length,
+			platformObservations: details.reduce(
+				(count, value) => count + value.platforms.filter((platform) => platform.source === "anytrip-v3").length,
+				0,
+			),
 		},
 		scsBoard: {
 			enrichedServices: details.filter((value) => value.scsService !== null).length,

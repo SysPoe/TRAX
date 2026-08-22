@@ -26,13 +26,19 @@ import {
 	applyJourneyPlannerService,
 	createEmptyVLineDetails,
 	journeyLocationName,
+	matchAnyTripPlatformCall,
 	matchScsRows,
 	serviceMatchesPlatformTrip,
 	vlinePlatformStationDemands,
 	vlinePlatformStationsDue,
 	vlineFormationUnits,
 	vlineServiceBookingAvailability,
+	_test as vlineEnrichmentTest,
 } from "../dist/region-specific/AU/VIC/enrichment.js";
+import {
+	AnyTripPlatformClient,
+	_test as anyTripTest,
+} from "../dist/region-specific/AU/VIC/anytrip.js";
 import { getVLineLocations, getVLinePlatformDepartures } from "../dist/region-specific/AU/VIC/journey-planner.js";
 import { ptvMetroFormationUnit } from "../dist/region-specific/AU/VIC/ptv-metro.js";
 import {
@@ -695,6 +701,134 @@ applyJourneyPlannerService(
 	"2026-08-11T23:30:00Z",
 );
 assert.equal(authoritativeArrival.actual_arrival_time, 9 * 3600 + 30 * 60);
+const anyTripInstance = {
+	trip: {
+		shortName: "8605",
+		route: { mode: "au3:vlinetrains" },
+	},
+	startDate: "20260822",
+	instanceNumber: 0,
+	_path: "tripInstance/20260822/au3:aa:8605/0",
+};
+const anyTripStopTime = {
+	stop: {
+		id: "au3:G1181-P1",
+		disassembled: { platformName: "1" },
+		parent: { id: "au3:G1181", aliases: ["au3:vic:rail:SSS"] },
+	},
+	scheduledStop: { id: "au3:20043" },
+	stopSequence: 1,
+	arrival: { time: 1787346442 },
+	departure: { time: 1787346442 },
+	_path: "stopTime/20260822/au3:aa:8605/0/1",
+};
+const anyTripPayload = {
+	header: { timestamp: 1787373438 },
+	response: { tripInstance: anyTripInstance, realtimePattern: [anyTripStopTime] },
+};
+const anyTripCalls = anyTripTest.parseTripResponse(anyTripPayload, "8605", "20260822");
+assert.deepEqual(anyTripCalls[0], {
+	tdn: "8605",
+	serviceDate: "20260822",
+	instanceNumber: 0,
+	scheduledStopId: "20043",
+	parentStationId: "vic:rail:SSS",
+	stopSequence: 1,
+	arrivalEpoch: 1787346442,
+	departureEpoch: 1787346442,
+	platform: "1",
+	observedAt: "2026-08-22T04:37:18.000Z",
+	rawIdentifier: "stopTime/20260822/au3:aa:8605/0/1",
+});
+assert.equal(anyTripTest.parseTripResponse(anyTripPayload, "8605", "20260823").length, 0);
+const anyTripMatchStop = {
+	scheduled_stop_id: "20043",
+	scheduled_parent_station_id: "vic:rail:SSS",
+	scheduled_departure_time: 6 * 3600,
+	scheduled_arrival_time: 6 * 3600,
+};
+const anyTripMatchTrip = {
+	feed_id: "vic-vline",
+	trip_id: "01-ABY--4-T2-8605",
+	serviceDate: "20260822",
+	stopTimes: [anyTripMatchStop],
+};
+assert.equal(matchAnyTripPlatformCall(anyTripMatchTrip, anyTripCalls[0]), anyTripMatchStop);
+assert.equal(
+	matchAnyTripPlatformCall({ ...anyTripMatchTrip, serviceDate: "20260823" }, anyTripCalls[0]),
+	null,
+);
+assert.ok(
+	vlineEnrichmentTest.platformPriority({ source: "anytrip-v3", confidence: "reported" }) >
+		vlineEnrichmentTest.platformPriority({ source: "vline-scs-html", confidence: "confirmed" }),
+);
+const precedenceStop = {
+	scheduled_stop_id: "20043",
+	scheduled_parent_station_id: "vic:rail:SSS",
+	actual_platform_code: null,
+	rt_platform_code_updated: false,
+	actual_arrival_boarding_locations: [],
+	actual_departure_boarding_locations: [],
+};
+const platformObservation = (source, value) => ({
+	source,
+	value,
+	confidence: source === "vline-scs-html" ? "confirmed" : "reported",
+	observedAt: "2026-08-22T04:37:18.000Z",
+	stopId: "20043",
+	event: "both",
+	kind: "platform",
+});
+vlineEnrichmentTest.applyStoredPlatforms(
+	{ stopTimes: [precedenceStop] },
+	{ platforms: [platformObservation("anytrip-v3", "1"), platformObservation("vline-scs-html", "2")] },
+);
+assert.equal(precedenceStop.actual_platform_code, "1");
+const directPlatformStop = {
+	...precedenceStop,
+	actual_platform_code: "9",
+	rt_platform_code_updated: true,
+	actual_arrival_boarding_locations: [],
+	actual_departure_boarding_locations: [],
+};
+vlineEnrichmentTest.applyStoredPlatforms(
+	{ stopTimes: [directPlatformStop] },
+	{ platforms: [platformObservation("anytrip-v3", "1")] },
+);
+assert.equal(directPlatformStop.actual_platform_code, "9");
+assert.equal(
+	anyTripTest.parseStationResponse({
+		header: anyTripPayload.header,
+		response: { departures: [{ tripInstance: anyTripInstance, stopTimeInstance: anyTripStopTime }] },
+	}).length,
+	1,
+);
+let anyTripRequestCount = 0;
+const anyTripClient = new AnyTripPlatformClient(
+	{ tripCacheTtlMs: 60_000 },
+	async () => {
+		anyTripRequestCount++;
+		return new Response(JSON.stringify(anyTripPayload), { status: 200, headers: { "content-type": "application/json" } });
+	},
+);
+const [firstAnyTripRequest, secondAnyTripRequest] = await Promise.all([
+	anyTripClient.getTripPlatforms("8605", "20260822"),
+	anyTripClient.getTripPlatforms("8605", "20260822"),
+]);
+assert.equal(anyTripRequestCount, 1);
+assert.deepEqual(firstAnyTripRequest, secondAnyTripRequest);
+assert.equal(anyTripClient.diagnostics.tripCacheEntries, 1);
+let missingAnyTripRequestCount = 0;
+const missingAnyTripClient = new AnyTripPlatformClient(
+	{ tripCacheTtlMs: 60_000 },
+	async () => {
+		missingAnyTripRequestCount++;
+		return new Response("Trip instance not found", { status: 404 });
+	},
+);
+assert.deepEqual(await missingAnyTripClient.getTripPlatforms("9999", "20260822"), []);
+assert.deepEqual(await missingAnyTripClient.getTripPlatforms("9999", "20260822"), []);
+assert.equal(missingAnyTripRequestCount, 1);
 const fallbackDetails = createEmptyVLineDetails("8761");
 const existingObservation = (value) => ({
 	value,

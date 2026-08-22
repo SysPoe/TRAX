@@ -3,6 +3,8 @@ import { getVLineDiagnostics, getVLineState, VLINE_PLUGIN_ID } from "../region-s
 import {
 	applyVLineEnrichment,
 	getVLineVehicleFormation,
+	refreshVLineAnyTripStationPlatforms,
+	refreshVLineAnyTripTripPlatforms,
 	refreshVLineOfficialSources,
 	vlineDetails,
 	vlineVehicleInfoForTrip,
@@ -32,6 +34,10 @@ export function createVLinePlugin(options: VLinePluginOptions = {}): TransitPlug
 		vehicleInfoForTrip: vlineVehicleInfoForTrip,
 		vehicleFormation: (trip, ctx) => getVLineVehicleFormation(trip, ctx, options),
 		api: (ctx) => ({
+			refreshStationPlatforms: (stationIds: readonly string[]) =>
+				refreshVLineAnyTripStationPlatforms(ctx, stationIds, options),
+			refreshTripPlatforms: (instanceId: string) =>
+				refreshVLineAnyTripTripPlatforms(ctx, instanceId, options),
 			getTripDetails: (instanceId: string) => {
 				const trip = ctx.augmented.instancesRec.get(instanceId);
 				return trip ? vlineDetails(ctx, trip) : null;

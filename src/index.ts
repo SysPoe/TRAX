@@ -514,6 +514,14 @@ export default TRAX;
 export { logger };
 
 export {
+	AnyTripPlatformClient,
+} from "./region-specific/AU/VIC/anytrip.js";
+export type {
+	AnyTripPlatformCall,
+	AnyTripPlatformClientDiagnostics,
+	AnyTripPlatformClientOptions,
+} from "./region-specific/AU/VIC/anytrip.js";
+export {
 	resolveConfig,
 	type FeedDefinition,
 	type FeedSource,

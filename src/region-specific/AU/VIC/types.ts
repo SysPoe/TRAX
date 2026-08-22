@@ -1,4 +1,5 @@
 import type { OccupancyStatus, RealtimeCarriageDetails } from "qdf-gtfs";
+import type { AnyTripPlatformClient, AnyTripPlatformClientOptions } from "./anytrip.js";
 import type { VLineBookingSnapshot } from "./booking-snapshots.js";
 
 export type ObservationConfidence = "confirmed" | "reported" | "inferred";
@@ -8,6 +9,7 @@ export type VLineObservationSource =
 	| "vline-journey-planner"
 	| "vline-platform-services"
 	| "vline-journey-planner-web"
+	| "anytrip-v3"
 	| "vline-scs-html"
 	| "static-platform-heuristic";
 
@@ -57,7 +59,7 @@ export type VLineTripDetails = {
 	platforms: VLinePlatformObservation[];
 };
 
-export type VLineSourceName = "journey-planner" | "scs-board";
+export type VLineSourceName = "journey-planner" | "anytrip" | "scs-board";
 
 export type VLineSourceStatus = {
 	enabled: boolean;
@@ -84,6 +86,13 @@ export type VLineDiagnostics = {
 		platformStationsPolled: number;
 		platformStationErrors: number;
 	};
+	anyTrip: {
+		stationCacheEntries: number;
+		tripCacheEntries: number;
+		requestsInFlight: number;
+		enrichedTrips: number;
+		platformObservations: number;
+	};
 	scsBoard: {
 		enrichedServices: number;
 	};
@@ -102,6 +111,7 @@ export type VLinePluginState = {
 	bookingPrefetchAttempted: Set<string>;
 	platformLocationsCache: { locations: VLineJourneyPlannerLocation[]; expiresAt: number } | null;
 	platformPollByLocation: Map<string, { lastAttemptAt: number; lastSuccessAt: number | null; error: string | null }>;
+	anyTripClient: AnyTripPlatformClient | null;
 	sources: Record<VLineSourceName, VLineSourceStatus>;
 	lastRefreshAt: string | null;
 };
@@ -119,6 +129,7 @@ export type VLineJourneyPlannerOptions = {
 
 export type VLinePluginOptions = {
 	journeyPlanner?: VLineJourneyPlannerOptions;
+	anyTrip?: AnyTripPlatformClientOptions;
 	scsBoard?: false | { url?: string };
 	platformHeuristics?: boolean;
 	requestTimeoutMs?: number;
