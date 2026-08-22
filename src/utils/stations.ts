@@ -8,6 +8,19 @@ import fs from "fs";
 import { entityKey, parseEntityKey } from "../identity.js";
 import { isRailLikeRouteType } from "./considered.js";
 
+type ConsideredStationsCache = {
+	feedIds: string[];
+	stationIds: string[];
+};
+
+function getConfiguredFeedIds(ctx: CacheContext): string[] {
+	return ctx.config.network.feeds.map((feed) => feed.id).sort();
+}
+
+function hasSameFeedIds(cached: string[], configured: string[]): boolean {
+	return cached.length === configured.length && cached.every((feedId, index) => feedId === configured[index]);
+}
+
 function getPatternSignature(stopTimes: qdf.StopTime[]): string {
 	return stopTimes.map((st) => entityKey({ feedId: st.feed_id, localId: st.stop_id })).join("|");
 }
@@ -20,6 +33,7 @@ export function getConsideredStations(ctx: CacheContext): qdf.Stop[] {
 	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
 	const gtfs = ctx.gtfs;
 	const cacheDir = ctx.config.cacheDir;
+	const configuredFeedIds = getConfiguredFeedIds(ctx);
 
 	let stations: string[] | null = null;
 
@@ -28,7 +42,12 @@ export function getConsideredStations(ctx: CacheContext): qdf.Stop[] {
 		const mtime = new Date(stats.mtime);
 		const ageDays = (Date.now() - mtime.getTime()) / (1000 * 60 * 60 * 24);
 		if (ageDays <= 2) {
-			stations = JSON.parse(loadCacheFile("considered_stations_v2.json", cacheDir));
+			const cached = JSON.parse(loadCacheFile("considered_stations_v2.json", cacheDir)) as
+				| ConsideredStationsCache
+				| string[];
+			if (!Array.isArray(cached) && hasSameFeedIds(cached.feedIds, configuredFeedIds)) {
+				stations = cached.stationIds;
+			}
 		}
 	}
 
@@ -64,7 +83,11 @@ export function getConsideredStations(ctx: CacheContext): qdf.Stop[] {
 			gtfs.getTrips().forEach(processTrip);
 		}
 
-		writeCacheFile("considered_stations_v2.json", JSON.stringify(stations), cacheDir);
+		writeCacheFile(
+			"considered_stations_v2.json",
+			JSON.stringify({ feedIds: configuredFeedIds, stationIds: stations } satisfies ConsideredStationsCache),
+			cacheDir,
+		);
 
 		logger.debug(`Loaded considered_stations in ${Date.now() - startTime}ms`, { module: "SRT" });
 	}
