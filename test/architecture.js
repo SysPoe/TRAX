@@ -58,7 +58,12 @@ import {
 	canonicalizeRealtimeVehiclePosition,
 	replaceInjectedTripUpdates,
 } from "../dist/cache/realtime.js";
-import { isNonBoardingStopTime, isNonRevenueTrip, isPassingStopTime } from "../dist/utils/considered.js";
+import {
+	isConsideredRoute,
+	isNonBoardingStopTime,
+	isNonRevenueTrip,
+	isPassingStopTime,
+} from "../dist/utils/considered.js";
 import { matchRealtimeStopTimeUpdate } from "../dist/utils/augmentedStopTime.js";
 import {
 	inferTfnswRealtimeServiceDate,
@@ -66,7 +71,7 @@ import {
 } from "../dist/plugins/tfnsw-rail.js";
 import { _test as tfnswRegionalBookingTest } from "../dist/region-specific/AU/NSW/regional-booking.js";
 import { findUniqueTripInstanceForServiceDate } from "../dist/cache/augmentedEntities.js";
-import { DropOffType, PickupType, TripScheduleRelationship } from "qdf-gtfs";
+import { DropOffType, PickupType, RouteType, TripScheduleRelationship } from "qdf-gtfs";
 import {
 	buildCisBoardingAssignments,
 	collectCisStationCandidates,
@@ -390,6 +395,34 @@ const nonRevenueRoute = {
 };
 assert.equal(tfnswPlugin.considerRoute(nonRevenueRoute), true);
 assert.equal(tfnswPlugin.isNonRevenueRoute(nonRevenueRoute), true);
+const tfnswRouteContext = {
+	config: { network: { plugins: [tfnswPlugin] } },
+	runtimeState: { consideredRoutes: new Map() },
+};
+assert.equal(
+	isConsideredRoute(
+		{
+			feed_id: "nsw-sydney-trains",
+			agency_id: "Any Rail Operator",
+			route_id: "RTTA_ANY_RAIL",
+			route_type: RouteType.Rail,
+		},
+		tfnswRouteContext,
+	),
+	true,
+);
+assert.equal(
+	isConsideredRoute(
+		{
+			feed_id: "nsw-sydney-trains",
+			agency_id: "Any Bus Operator",
+			route_id: "RTTA_ANY_BUS",
+			route_type: RouteType.Bus,
+		},
+		tfnswRouteContext,
+	),
+	false,
+);
 assert.equal(
 	tfnswPlugin.considerRoute({
 		feed_id: "nsw-sydney-trains",
@@ -597,7 +630,7 @@ assert.equal(
 		agency_id: "NSWTrains",
 		route_id: "CTY_W1a",
 	}),
-	false,
+	true,
 );
 
 const inferredVLineDetails = createEmptyVLineDetails("8761");
