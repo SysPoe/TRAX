@@ -535,7 +535,7 @@ export function platformSourceServiceWindows(serviceDate: string, nowSecs: numbe
 	];
 }
 
-function getUniqueStopTimesForRange(
+async function getUniqueStopTimesForRange(
 	ctx: CacheContext,
 	gtfs: GTFS,
 	serviceDateStr: string,
@@ -557,31 +557,26 @@ function getUniqueStopTimesForRange(
 			...(stopId ? { stop_id: mergeId(ctx, stopId) } : {}),
 		}),
 	);
-	const stopTimes = staticStopTimes
-		.filter((v) => isConsideredTripId({ feedId: v.feed_id, localId: v.trip_id }, ctx))
-		.map((v) => ({ feed_id: v.feed_id, stop_id: v.stop_id, trip_id: v.trip_id }))
-		.concat(
-			getTripUpdates(ctx).flatMap(
-				(update) =>
-					update.stop_time_updates
-						?.filter(
-							(stu) =>
-								(!stopId || stu.stop_id === stopId) && inWindow(stu.departure_time ?? stu.arrival_time),
-						)
-						.map((stu) => ({
-							feed_id: update.feed_id,
-							stop_id: stu.stop_id,
-							trip_id: update.trip.trip_id,
-						})) ?? [],
-			),
-		)
-		.filter((v) => v);
-
 	const map = new Map<string, { feed_id: string; stop_id: string; trip_id: string }>();
-	stopTimes.forEach((st) => {
-		const key = `${st.feed_id}:${st.stop_id}-${st.trip_id}`;
-		if (!map.has(key)) map.set(key, st);
-	});
+	let processed = 0;
+	for (const value of staticStopTimes) {
+		if (isConsideredTripId({ feedId: value.feed_id, localId: value.trip_id }, ctx)) {
+			const st = { feed_id: value.feed_id, stop_id: value.stop_id, trip_id: value.trip_id };
+			const key = `${st.feed_id}:${st.stop_id}-${st.trip_id}`;
+			if (!map.has(key)) map.set(key, st);
+		}
+		if (++processed % 250 === 0) await new Promise((resolve) => setImmediate(resolve));
+	}
+	for (const update of getTripUpdates(ctx)) {
+		for (const stu of update.stop_time_updates ?? []) {
+			if ((!stopId || stu.stop_id === stopId) && inWindow(stu.departure_time ?? stu.arrival_time)) {
+				const st = { feed_id: update.feed_id, stop_id: stu.stop_id, trip_id: update.trip.trip_id };
+				const key = `${st.feed_id}:${st.stop_id}-${st.trip_id}`;
+				if (!map.has(key)) map.set(key, st);
+			}
+			if (++processed % 250 === 0) await new Promise((resolve) => setImmediate(resolve));
+		}
+	}
 	return Array.from(map.values());
 }
 
@@ -743,8 +738,11 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 		}
 	}
 
-	// Re-bootstrap carTrips from existing augmented data
+	// Re-bootstrap current-day vehicle and block indexes in one pass.
 	const existingTripsForDate = ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [];
+	const blockMap = new Map<string, any[]>();
+	let indexedTrips = 0;
+	timer.start("updateAllSources:buildBlockMap");
 	for (const tripId of existingTripsForDate) {
 		const at = ctx.augmented.tripsRec.get(tripId);
 		if (!at) continue;
@@ -756,24 +754,17 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 				for (const carId of inst.consist)
 					registerCarTrips(ctx, entityKey({ feedId: inst.feed_id, localId: inst.trip_id }), carId);
 			}
+			if (inst.block_id) {
+				if (!blockMap.has(inst.block_id)) blockMap.set(inst.block_id, []);
+				blockMap.get(inst.block_id)!.push(inst);
+			}
 		}
+		if (++indexedTrips % 100 === 0) await new Promise((resolve) => setImmediate(resolve));
 	}
+	timer.stop("updateAllSources:buildBlockMap");
 	const serviceDayStart = getServiceDayStart(serviceDateStr, getDefaultTimeZone(ctx.config));
 	const nowSecs = Math.floor(now.getTime() / 1000 - serviceDayStart);
 	const nowMs = Date.now();
-
-	timer.start("updateAllSources:buildBlockMap");
-	const blockMap = new Map<string, any[]>();
-	const tripsForDate = ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [];
-	for (const tripId of tripsForDate) {
-		const at = ctx.augmented.tripsRec.get(tripId);
-		if (!at) continue;
-		const inst = at.instances.find((i) => i.serviceDate === serviceDateStr);
-		if (!inst || !inst.block_id) continue;
-		if (!blockMap.has(inst.block_id)) blockMap.set(inst.block_id, []);
-		blockMap.get(inst.block_id)!.push(inst);
-	}
-	timer.stop("updateAllSources:buildBlockMap");
 
 	timer.start("updateSourceF");
 	await updateSourceF(ctx, serviceDateStr, blockMap);
@@ -809,7 +800,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 
 	// Source D (requires identifying active stops first)
 	timer.start("updateAllSources:getStopTimesSourceD");
-	const uniqueStopTimesSourceD = getUniqueStopTimesForRange(
+	const uniqueStopTimesSourceD = await getUniqueStopTimesForRange(
 		ctx,
 		gtfs,
 		serviceDateStr,
@@ -841,14 +832,16 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	// Source E
 	timer.start("updateAllSources:getStopTimesSourceE");
 	// Fetch all stop times for the current service day (24h)
-	const uniqueStopTimesSourceE = getUniqueStopTimesForRange(ctx, gtfs, serviceDateStr, 0, 86400);
+	const uniqueStopTimesSourceE = await getUniqueStopTimesForRange(ctx, gtfs, serviceDateStr, 0, 86400);
 	timer.stop("updateAllSources:getStopTimesSourceE");
 
 	// Group stop times by stop_id for O(1) lookup during Source E processing
 	const stopTimesByStopE = new Map<string, typeof uniqueStopTimesSourceE>();
+	let groupedStopTimes = 0;
 	for (const st of uniqueStopTimesSourceE) {
 		if (!stopTimesByStopE.has(st.stop_id)) stopTimesByStopE.set(st.stop_id, []);
 		stopTimesByStopE.get(st.stop_id)!.push(st);
+		if (++groupedStopTimes % 250 === 0) await new Promise((resolve) => setImmediate(resolve));
 	}
 
 	const sourceEStopIds = Array.from(
@@ -930,7 +923,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 
 	// Process Source C Departures
 	timer.start("updateAllSources:getStopTimesSourceC");
-	const uniqueStopTimesSourceC = getUniqueStopTimesForRange(
+	const uniqueStopTimesSourceC = await getUniqueStopTimesForRange(
 		ctx,
 		gtfs,
 		serviceDateStr,
@@ -981,6 +974,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	// --- 3. Process Source A & Source B ---
 
 	const tripNumberToIds = new Map<string, string[]>();
+	let indexedStopTimes = 0;
 	for (const item of uniqueStopTimesSourceE) {
 		const tid = item.trip_id;
 		const match = tid.match(/\d+$/);
@@ -991,6 +985,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 			const key = entityKey({ feedId: item.feed_id, localId: tid });
 			if (!list.includes(key)) list.push(key);
 		}
+		if (++indexedStopTimes % 250 === 0) await new Promise((resolve) => setImmediate(resolve));
 	}
 
 	if (sourceAPromise) {
@@ -1030,7 +1025,7 @@ export async function updateSourceB(
 
 		let updateCount = 0;
 		for (let tripIndex = 0; tripIndex < commitmentTrips.length; tripIndex++) {
-			if (tripIndex > 0 && tripIndex % 25 === 0) await new Promise((resolve) => setImmediate(resolve));
+			if (tripIndex > 0 && tripIndex % 5 === 0) await new Promise((resolve) => setImmediate(resolve));
 			const trip = commitmentTrips[tripIndex];
 			const tripNumber = trip.tripNumber;
 			const tripIds = tripNumberToIds.get(tripNumber) || [];

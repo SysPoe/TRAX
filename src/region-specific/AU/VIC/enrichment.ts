@@ -52,7 +52,7 @@ const PLATFORM_POLL_CONCURRENCY = 1;
 const ON_DEMAND_JOURNEY_TTL_MS = 5 * 60_000;
 const MISSING_BOOKING_TTL_MS = 2 * 60_000;
 const BOOKING_SNAPSHOT_GRACE_MS = 6 * 60 * 60_000;
-const vlineInstancesBySnapshot = new WeakMap<object, AugmentedTripInstance[]>();
+const currentVLineInstancesBySnapshot = new WeakMap<object, AugmentedTripInstance[]>();
 
 function observation<T>(
 	value: T,
@@ -291,21 +291,20 @@ function applyPlatform(trip: AugmentedTripInstance, platform: VLinePlatformObser
 async function currentInstances(ctx: CacheContext): Promise<AugmentedTripInstance[]> {
 	const earliest = Date.now() - DAY_MS, latest = Date.now() + DAY_MS * 2;
 	const snapshot = ctx.augmented.instancesRec;
-	let vlineTrips = vlineInstancesBySnapshot.get(snapshot);
-	if (!vlineTrips) {
-		vlineTrips = [];
-		let scanned = 0;
-		for (const trip of snapshot.values()) {
-			if (trip.feed_id === "vic-vline" && vlineTdn(trip.trip_id)) vlineTrips.push(trip);
-			if (++scanned % 250 === 0) await new Promise((resolve) => setImmediate(resolve));
+	const cached = currentVLineInstancesBySnapshot.get(snapshot);
+	if (cached) return cached;
+	const trips: AugmentedTripInstance[] = [];
+	let scanned = 0;
+	for (const trip of snapshot.values()) {
+		if (trip.feed_id === "vic-vline" && vlineTdn(trip.trip_id)) {
+			const first = trip.stopTimes[0], seconds = first?.scheduled_departure_time ?? first?.scheduled_arrival_time;
+			const instant = scheduledInstant(trip, seconds);
+			if (instant == null || (instant >= earliest && instant <= latest)) trips.push(trip);
 		}
-		vlineInstancesBySnapshot.set(snapshot, vlineTrips);
+		if (++scanned % 250 === 0) await new Promise((resolve) => setImmediate(resolve));
 	}
-	return vlineTrips.filter((trip) => {
-		const first = trip.stopTimes[0], seconds = first?.scheduled_departure_time ?? first?.scheduled_arrival_time;
-		const instant = scheduledInstant(trip, seconds);
-		return instant == null || (instant >= earliest && instant <= latest);
-	});
+	currentVLineInstancesBySnapshot.set(snapshot, trips);
+	return trips;
 }
 
 async function mapConcurrent<T, R>(
