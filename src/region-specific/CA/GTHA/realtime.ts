@@ -891,6 +891,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 		if (!data) continue;
 
 		for (const departure of data.trainDepartures.items) {
+			await new Promise((resolve) => setImmediate(resolve));
 			const tripNumber = departure.tripNumber;
 			let platform = formatTrack(departure.platform);
 			let scheduledPlatform = formatTrack(departure.scheduledPlatform);
@@ -938,6 +939,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 		const dateStr = data.metadata.timeStamp.slice(0, 10).replace(/-/g, "");
 
 		for (const departure of data.departures) {
+			await new Promise((resolve) => setImmediate(resolve));
 			const platform = formatTrack(departure.platform);
 			if (platform === null) continue;
 

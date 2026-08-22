@@ -451,11 +451,12 @@ async function processService(
 	direction: QRTDirection,
 	service: QRTService,
 	services: QRTService[],
+	gtfsStops: ReturnType<typeof getConsideredStations>,
 	ctx: CacheContext,
 ): Promise<QRTTravelTrip | null> {
 	try {
 		const serviceResponse = await trackTrain(service.ServiceId, service.ServiceDate, ctx.config);
-		const gtfsStops = getConsideredStations(ctx);
+		await new Promise((resolve) => setImmediate(resolve));
 
 		if (serviceResponse.Success) {
 			const qrtService = services.find(
@@ -532,12 +533,13 @@ export async function getCurrentQRTravelTrains(ctx: CacheContext, retries = 2): 
 	ensureQRTEnabled(ctx.config);
 	try {
 		const [services, serviceLines] = await Promise.all([getAllServices(ctx.config), getServiceLines(ctx.config)]);
+		const gtfsStops = getConsideredStations(ctx);
 
 		const tasks: Promise<QRTTravelTrip | null>[] = [];
 		for (const serviceLine of serviceLines) {
 			for (const direction of serviceLine.Directions) {
 				for (const service of direction.Services) {
-					tasks.push(processService(serviceLine, direction, service, services, ctx));
+					tasks.push(processService(serviceLine, direction, service, services, gtfsStops, ctx));
 				}
 			}
 		}
