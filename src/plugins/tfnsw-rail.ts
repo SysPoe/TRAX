@@ -183,17 +183,13 @@ function enrichTfnswRealtimeTripUpdate(update: RealtimeTripUpdate, ctx: CacheCon
  */
 export type TfnswRailPluginOptions = {
 	regionalBooking?: TfnswRegionalBookingOptions;
-	/** Admin-triggered fallback for trips without official occupancies.txt data. */
-	anyTripOccupancy?: false | AnyTripNswOccupancyClientOptions;
 };
 
-export function createTfnswRailPlugin(options: TfnswRailPluginOptions = {}): TransitPlugin {
-	const anyTripClient =
-		options.anyTripOccupancy === false ? null : new AnyTripNswOccupancyClient(options.anyTripOccupancy);
+export function createTfnswRailPlugin(): TransitPlugin {
 	return {
 		id: TFNSW_RAIL_PLUGIN_ID,
 		feedIds: [SYDNEY_TRAINS_FEED_ID, NSW_TRAINLINK_FEED_ID],
-		capabilities: ["vehicles", "occupancy"],
+		capabilities: ["vehicles"],
 		considerRoute(route) {
 			if (route.feed_id === SYDNEY_TRAINS_FEED_ID) {
 				// isConsideredRoute has already limited this callback to rail-like route types.
