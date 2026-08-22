@@ -17,6 +17,7 @@ import TRAX, {
 	parseVLinePlatformArrivals,
 	parseVLineScsBoard,
 	parseTfnswTripId,
+	resolveTripNumber,
 	vlineAccessToken,
 	vlinePassengerCars,
 	vlineTdn,
@@ -344,6 +345,18 @@ const australiaRail = createAuRailNetwork({ tfnswApiKey: "test-tfnsw-key" });
 assert.deepEqual(
 	australiaRail.feeds.map((feed) => feed.id),
 	["translink-seq", "vic-vline", "vic-metro", "nsw-sydney-trains", "nsw-trainlink"],
+);
+assert.equal(
+	resolveTripNumber(australiaRail, {
+		feed_id: "nsw-sydney-trains",
+		trip_id: "ST21.220826.96.X.7.2042",
+		trip_short_name: null,
+	}),
+	"ST21",
+);
+assert.equal(
+	resolveTripNumber(australiaRail, { feed_id: "vic-vline", trip_id: "service-2042", trip_short_name: null }),
+	"2042",
 );
 assert.deepEqual(australiaRail.places.find((place) => place.id === "southern-cross").members, [
 	{ feedId: "vic-vline", localId: "vic:rail:SSS" },

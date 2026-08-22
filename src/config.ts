@@ -1,4 +1,4 @@
-import type { ProgressInfo, QualifiedEntityId, Stop } from "qdf-gtfs";
+import type { ProgressInfo, QualifiedEntityId, Stop, Trip } from "qdf-gtfs";
 import logger from "./utils/logger.js";
 import type { TransitPlugin } from "./plugins/types.js";
 import { entityKey } from "./identity.js";
@@ -19,12 +19,17 @@ export interface RealtimeSource {
 	source: FeedSource;
 }
 
+/** Derives the public run number for one static feed's trips. */
+export type TripNumberResolver = (trip: Pick<Trip, "trip_id" | "trip_short_name">) => string | undefined;
+
 export interface FeedDefinition {
 	id: string;
 	staticSource: FeedSource;
 	realtimeSources: RealtimeSource[];
 	/** Only use this when a feed's agency_timezone is defective. */
 	timeZone?: string;
+	/** Overrides TRAX's numeric short-name, then trailing-four-character default. */
+	tripNumber?: TripNumberResolver;
 }
 
 export type TransitMode = "rail" | "subway" | "tram" | "bus" | "ferry";
@@ -158,4 +163,13 @@ export function getFeedTimeZone(config: TraxConfig, feedId: string): string {
 
 export function getDefaultTimeZone(config: TraxConfig): string {
 	return getFeedTimeZone(config, config.network.feeds[0].id);
+}
+
+/** Resolve a trip's run number using its feed rule, or TRAX's shared default. */
+export function resolveTripNumber(network: NetworkDefinition, trip: Pick<Trip, "feed_id" | "trip_id" | "trip_short_name">): string {
+	const configured = network.feeds.find((feed) => feed.id === trip.feed_id)?.tripNumber?.(trip)?.trim();
+	if (configured) return configured;
+	return trip.trip_short_name && /^\d{1,3}$/.test(trip.trip_short_name)
+		? trip.trip_short_name
+		: trip.trip_id.slice(-4);
 }

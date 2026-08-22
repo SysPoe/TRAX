@@ -160,6 +160,7 @@ export function createAuRailNetwork(options: AuRailNetworkOptions = {}): Network
 		? [
 				{
 					id: "nsw-sydney-trains",
+					tripNumber: (trip) => trip.trip_id.slice(0, 4),
 					staticSource: tfnswSource("https://api.transport.nsw.gov.au/v1/gtfs/schedule/sydneytrains"),
 					realtimeSources: [
 						{
@@ -184,6 +185,7 @@ export function createAuRailNetwork(options: AuRailNetworkOptions = {}): Network
 				},
 				{
 					id: "nsw-trainlink",
+					tripNumber: (trip) => trip.trip_id.slice(0, 4),
 					staticSource: tfnswSource("https://api.transport.nsw.gov.au/v1/gtfs/schedule/nswtrains"),
 					realtimeSources: [
 						{

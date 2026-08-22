@@ -523,6 +523,7 @@ export type {
 } from "./region-specific/AU/VIC/anytrip.js";
 export {
 	resolveConfig,
+	resolveTripNumber,
 	type FeedDefinition,
 	type FeedSource,
 	type NetworkDefinition,
@@ -530,6 +531,7 @@ export {
 	type RealtimeSource,
 	type RuntimeOptions,
 	type TraxConfig,
+	type TripNumberResolver,
 } from "./config.js";
 export { NetworkRuntimeRegistry } from "./registry.js";
 export {

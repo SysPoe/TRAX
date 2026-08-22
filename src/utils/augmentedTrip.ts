@@ -4,7 +4,7 @@ import { AugmentedStopTime, augmentStopTimes } from "./augmentedStopTime.js";
 import * as cache from "../cache/index.js";
 import { getServiceCapacity, ServiceCapacity } from "./serviceCapacity.js";
 import { ExpressInfo, findExpress } from "./SRT.js";
-import { canonicalStationIdentity, getFeedTimeZone } from "../config.js";
+import { canonicalStationIdentity, getFeedTimeZone, resolveTripNumber } from "../config.js";
 import { getToday } from "./time.js";
 import { encodeTripInstanceId, entityKey } from "../identity.js";
 import { isNonRevenueTrip } from "./considered.js";
@@ -237,10 +237,7 @@ export function augmentTrip(
 		const actualTripDates = getUniqueDates(stopTimes, "actual");
 		ctx.augmented.timer.stop("createInstance:calculateTripDates");
 
-		let trip_number = "";
-
-		trip_number = trip.trip_id.slice(-4);
-		if (trip.trip_short_name && /^\d{1,3}$/.test(trip.trip_short_name)) trip_number = trip.trip_short_name;
+		const trip_number = resolveTripNumber(ctx.config.network, trip);
 
 		let instance: AugmentedTripInstance = {
 			...trip,
@@ -347,7 +344,7 @@ export function augmentTrip(
 }
 
 export function calculateRunSeries(instance: AugmentedTripInstance, ctx: cache.CacheContext): RunSeries {
-	const seriesRaw = instance.trip_number || instance.trip_id.slice(-4);
+	const seriesRaw = instance.trip_number || resolveTripNumber(ctx.config.network, instance);
 	const series = seriesRaw.toUpperCase();
 	const tripKey = entityKey({ feedId: instance.feed_id, localId: instance.trip_id });
 	const vehicle_sightings: { vehicle_id: string; trip_id: string }[] = [];

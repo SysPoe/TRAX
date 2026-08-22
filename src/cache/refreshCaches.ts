@@ -15,7 +15,7 @@ import { getRailwayStationFacilities } from "../region-specific/AU/SEQ/facilitie
 import type { QRTPlace, QRTStationDetails, QRTTravelTrip } from "../region-specific/AU/SEQ/qr-travel/types.js";
 import type { RailwayStationFacility } from "../region-specific/AU/SEQ/facilities-types.js";
 import logger from "../utils/logger.js";
-import { type TraxConfig } from "../config.js";
+import { resolveTripNumber, type TraxConfig } from "../config.js";
 import { clearConsideredCaches } from "../utils/considered.js";
 import type { CacheContext } from "./types.js";
 import { createEmptyRawCache, createAugmentedCacheWithConfig, createRuntimeState } from "./factories.js";
@@ -324,10 +324,7 @@ export async function refreshStaticCache(
 	for (const trip of trips)
 		newAugmentedCache.rawTripsRec.set(entityKey({ feedId: trip.feed_id, localId: trip.trip_id }), trip);
 	for (const trip of trips) {
-		const tripNumber =
-			trip.trip_short_name && /^\d{1,3}$/.test(trip.trip_short_name)
-				? trip.trip_short_name
-				: trip.trip_id.slice(-4);
+		const tripNumber = resolveTripNumber(ctx.config.network, trip);
 		const keys = newAugmentedCache.tripNumberTrips.get(tripNumber) ?? new Set<string>();
 		keys.add(entityKey({ feedId: trip.feed_id, localId: trip.trip_id }));
 		newAugmentedCache.tripNumberTrips.set(tripNumber, keys);
