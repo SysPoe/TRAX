@@ -68,6 +68,8 @@ export type VehicleBookingAvailability = {
 	timeZone?: string;
 };
 
+export type VehicleBookingAvailabilityStatus = "available" | "unavailable";
+
 export type VehicleFormationMetadata = {
 	accessibleSpaces?: number | null;
 	bicycleSpaces?: number | null;
@@ -75,6 +77,7 @@ export type VehicleFormationMetadata = {
 	source?: string | null;
 	observedAt?: string | null;
 	bookingAvailability?: VehicleBookingAvailability | null;
+	bookingAvailabilityStatus?: VehicleBookingAvailabilityStatus | null;
 };
 
 /** The single vehicle/consist contract exposed to every consumer. */
@@ -90,6 +93,7 @@ export type VehicleFormation = {
 	source: string | null;
 	observedAt: string | null;
 	bookingAvailability: VehicleBookingAvailability | null;
+	bookingAvailabilityStatus: VehicleBookingAvailabilityStatus | null;
 };
 
 export function createVehicleFormation(
@@ -123,7 +127,8 @@ export function createVehicleFormation(
 		metadata.bicycleSpaces == null &&
 		metadata.isLive == null &&
 		!metadata.source &&
-		!metadata.bookingAvailability
+		!metadata.bookingAvailability &&
+		metadata.bookingAvailabilityStatus == null
 	)
 		return null;
 	return {
@@ -138,6 +143,8 @@ export function createVehicleFormation(
 		source: metadata.source ?? null,
 		observedAt: metadata.observedAt ?? null,
 		bookingAvailability: metadata.bookingAvailability ?? null,
+		bookingAvailabilityStatus:
+			metadata.bookingAvailabilityStatus ?? (metadata.bookingAvailability ? "available" : null),
 	};
 }
 

@@ -64,6 +64,7 @@ import {
 	inferTfnswRealtimeServiceDate,
 	tfnswPlatformCode,
 } from "../dist/plugins/tfnsw-rail.js";
+import { _test as tfnswRegionalBookingTest } from "../dist/region-specific/AU/NSW/regional-booking.js";
 import { findUniqueTripInstanceForServiceDate } from "../dist/cache/augmentedEntities.js";
 import { DropOffType, PickupType, TripScheduleRelationship } from "qdf-gtfs";
 import {
@@ -447,6 +448,13 @@ assert.deepEqual(parseTfnswTripId("7.937.150.128.G.2.90926399"), {
 	numberOfCars: 2,
 	isPassenger: false,
 });
+assert.deepEqual(parseTfnswTripId("ST21.220826.96.X.7.2042"), {
+	runNumber: "ST21",
+	setType: "X",
+	trainType: "XPT",
+	numberOfCars: 7,
+	isPassenger: true,
+});
 assert.equal(parseTfnswTripId("104B.937.150.128.unknown.8.90926398"), null);
 assert.equal(parseTfnswTripId("104B.937.150.128.A.eight.90926398"), null);
 assert.equal(parseTfnswTripId("104B.937.150.128.A..90926398"), null);
@@ -470,6 +478,90 @@ tfnswPlugin.enrichTrip(parsedTfnswFreightTrip);
 assert.equal(parsedTfnswFreightTrip.trip_number, "7");
 assert.equal(parsedTfnswFreightTrip.vehicle_model, "Freight");
 assert.equal(parsedTfnswFreightTrip.scheduled_passenger_cars, null);
+const parsedTrainLinkTrip = {
+	trip_id: "ST21.220826.96.X.7.2042",
+	trip_number: "2042",
+	vehicle_model: null,
+	scheduled_passenger_cars: null,
+};
+tfnswPlugin.enrichTrip(parsedTrainLinkTrip);
+assert.equal(parsedTrainLinkTrip.trip_number, "ST21");
+assert.equal(parsedTrainLinkTrip.vehicle_model, "XPT");
+assert.equal(parsedTrainLinkTrip.scheduled_passenger_cars, 7);
+const trainLinkBookingTrip = {
+	feed_id: "nsw-trainlink",
+	trip_number: "ST21",
+	serviceDate: "20260822",
+	stopTimes: [
+		{
+			scheduled_stop_id: "200060",
+			scheduled_departure_time: 20 * 60 * 60 + 42 * 60,
+		},
+		{ scheduled_stop_id: "22180", scheduled_arrival_time: 31 * 60 * 60 + 30 * 60 },
+	],
+};
+const trainLinkBookingCandidate = {
+	origin: { id: "SYD", name: "Sydney Central Station" },
+	destination: { id: "MEL", name: "Melbourne Southern Cross Station" },
+	legs: [
+		{
+			origin: "SYD",
+			destination: "MEL",
+			startDate: "2026-08-22T20:42:00+10:00",
+			endDate: "2026-08-23T07:30:00+10:00",
+			isUnreservedService: false,
+			service: { carrier: "NSW TrainLink", lineNumber: "621" },
+		},
+	],
+	offers: {},
+};
+assert.ok(
+	tfnswRegionalBookingTest.matchesTrip(
+		trainLinkBookingCandidate,
+		trainLinkBookingTrip,
+		"SYD",
+		"MEL",
+		"20260822",
+		"621",
+	),
+);
+assert.equal(
+	tfnswRegionalBookingTest.matchesTrip(
+		trainLinkBookingCandidate,
+		trainLinkBookingTrip,
+		"SYD",
+		"MEL",
+		"20260822",
+		"635",
+	),
+	null,
+);
+assert.deepEqual(
+	tfnswRegionalBookingTest.formationFromAvailability(
+		{
+			vehicle_id: null,
+			vehicle_model: "XPT",
+			passenger_cars: null,
+			scheduled_passenger_cars: 7,
+			consist: null,
+		},
+		null,
+	),
+	{
+		vehicleId: null,
+		model: "XPT",
+		passengerCars: null,
+		scheduledPassengerCars: 7,
+		units: [],
+		accessibleSpaces: null,
+		bicycleSpaces: null,
+		isLive: null,
+		source: "Transport for NSW regional booking",
+		observedAt: null,
+		bookingAvailability: null,
+		bookingAvailabilityStatus: "unavailable",
+	},
+);
 assert.equal(
 	inferTfnswRealtimeServiceDate({
 		candidateServiceDates: ["20260820", "20260821"],

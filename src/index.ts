@@ -409,7 +409,10 @@ export class TRAX {
 		const formationPlugin = this.config.network.plugins.find(
 			(candidate) => candidate.feedIds.includes(trip.feed_id) && candidate.vehicleFormation,
 		);
-		if (formationPlugin?.vehicleFormation) return formationPlugin.vehicleFormation(trip, this.ctx);
+		if (formationPlugin?.vehicleFormation) {
+			const formation = await formationPlugin.vehicleFormation(trip, this.ctx);
+			return formation ?? createVehicleFormation(trip);
+		}
 		const plugin = this.config.network.plugins.find(
 			(candidate) => candidate.feedIds.includes(trip.feed_id) && candidate.vehicleFormationUnits,
 		);

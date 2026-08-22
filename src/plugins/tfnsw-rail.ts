@@ -54,14 +54,18 @@ export type TfnswTripDescriptor = {
 /** Parse TfNSW's provider-specific fields from a static GTFS trip ID. */
 export function parseTfnswTripId(tripId: string): TfnswTripDescriptor | null {
 	const parts = tripId.split(".");
-	if (parts.length !== 7 || parts[0].length === 0) return null;
+	if ((parts.length !== 6 && parts.length !== 7) || parts[0].length === 0) return null;
 
-	const setType = parts[4] as TfnswSetType;
+	// Sydney Trains IDs have one more operational field before the set type than
+	// NSW TrainLink IDs. Both formats end with set type, car count, and a trip key.
+	const setTypeIndex = parts.length - 3;
+	const setType = parts[setTypeIndex] as TfnswSetType;
 	const passengerType = TFNSW_PASSENGER_SET_TYPES[setType as keyof typeof TFNSW_PASSENGER_SET_TYPES];
 	const operationalType = TFNSW_OPERATIONAL_SET_TYPES[setType as keyof typeof TFNSW_OPERATIONAL_SET_TYPES];
 	const trainType = passengerType ?? operationalType;
-	if (!/^\d+$/.test(parts[5])) return null;
-	const numberOfCars = Number(parts[5]);
+	const carCount = parts[setTypeIndex + 1];
+	if (!/^\d+$/.test(carCount)) return null;
+	const numberOfCars = Number(carCount);
 	if (!trainType || !Number.isSafeInteger(numberOfCars) || numberOfCars < 0) return null;
 
 	return {
