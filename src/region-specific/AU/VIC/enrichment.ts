@@ -287,14 +287,19 @@ function applyPlatform(trip: AugmentedTripInstance, platform: VLinePlatformObser
 	if (platform.event !== "departure") stopTime.actual_arrival_boarding_locations = [location];
 }
 
-function currentInstances(ctx: CacheContext): AugmentedTripInstance[] {
+async function currentInstances(ctx: CacheContext): Promise<AugmentedTripInstance[]> {
 	const earliest = Date.now() - DAY_MS, latest = Date.now() + DAY_MS * 2;
-	return Array.from(ctx.augmented.instancesRec.values()).filter((trip) => {
-		if (trip.feed_id !== "vic-vline" || !vlineTdn(trip.trip_id)) return false;
-		const first = trip.stopTimes[0], seconds = first?.scheduled_departure_time ?? first?.scheduled_arrival_time;
-		const instant = scheduledInstant(trip, seconds);
-		return instant == null || (instant >= earliest && instant <= latest);
-	});
+	const trips: AugmentedTripInstance[] = [];
+	let scanned = 0;
+	for (const trip of ctx.augmented.instancesRec.values()) {
+		if (trip.feed_id === "vic-vline" && vlineTdn(trip.trip_id)) {
+			const first = trip.stopTimes[0], seconds = first?.scheduled_departure_time ?? first?.scheduled_arrival_time;
+			const instant = scheduledInstant(trip, seconds);
+			if (instant == null || (instant >= earliest && instant <= latest)) trips.push(trip);
+		}
+		if (++scanned % 250 === 0) await new Promise((resolve) => setImmediate(resolve));
+	}
+	return trips;
 }
 
 async function mapConcurrent<T, R>(
@@ -587,7 +592,7 @@ function scheduleVLineBookingPrefetches(
 }
 
 export async function refreshVLineOfficialSources(ctx: CacheContext, options: VLinePluginOptions): Promise<void> {
-	const state = getVLineState(ctx), observedAt = new Date().toISOString(), trips = currentInstances(ctx);
+	const state = getVLineState(ctx), observedAt = new Date().toISOString(), trips = await currentInstances(ctx);
 	state.lastRefreshAt = observedAt;
 
 	if (options.journeyPlanner) {
@@ -630,6 +635,8 @@ export async function refreshVLineOfficialSources(ctx: CacheContext, options: VL
 
 	if (options.journeyPlanner) scheduleVLineBookingPrefetches(ctx, options, trips);
 }
+
+export const _test = { currentInstances };
 
 export function applyVLineEnrichment(ctx: CacheContext, options: VLinePluginOptions): void {
 	const now = Date.now();

@@ -12,7 +12,7 @@ import { propagateBlockHandoffs } from "../dist/region-specific/CA/GTHA/block-ha
 import { formatTrack } from "../dist/region-specific/CA/GTHA/realtime.js";
 import { ptvMetroPlugin } from "../dist/plugins/ptv-metro.js";
 import { isConsideredRoute } from "../dist/utils/considered.js";
-import { applyVLineEnrichment } from "../dist/region-specific/AU/VIC/enrichment.js";
+import { _test as vlineEnrichmentTest, applyVLineEnrichment } from "../dist/region-specific/AU/VIC/enrichment.js";
 
 function testSeqDiagramUsesProvidedStopTimes() {
 	const trips = [
@@ -202,6 +202,20 @@ function testVLineEnrichmentReadsVehicleSnapshotOnce() {
 	assert.equal(vehicleReads, 1, "V/Line enrichment must materialize the vehicle snapshot once per refresh");
 }
 
+async function testVLineInstanceScanYieldsToRequests() {
+	const instances = Array.from({ length: 1_000 }, (_, index) => ({
+		feed_id: "other-feed",
+		trip_id: `trip-${index}`,
+		stopTimes: [],
+	}));
+	const ctx = { augmented: { instancesRec: new Map(instances.map((trip, index) => [String(index), trip])) } };
+	let requestHandled = false;
+	setImmediate(() => { requestHandled = true; });
+
+	await vlineEnrichmentTest.currentInstances(ctx);
+	assert.equal(requestHandled, true, "V/Line instance scans must yield to waiting HTTP work");
+}
+
 function testRawTripsUsesTheStaticSnapshot() {
 	const trip = { feed_id: "test", trip_id: "trip-1", route_id: "route-1" };
 	const ctx = {
@@ -265,6 +279,7 @@ testUntimedPassingPointsUseShapeDistance();
 testExpressPruningDistinguishesParallelCorridors();
 testPtvReplacementBusIsNotConsideredRail();
 testVLineEnrichmentReadsVehicleSnapshotOnce();
+await testVLineInstanceScanYieldsToRequests();
 testRawTripsUsesTheStaticSnapshot();
 testBlockHandoffPropagation();
 testGthaTrackFormatting();
