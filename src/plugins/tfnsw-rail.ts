@@ -1,8 +1,11 @@
-import type { RealtimeTripUpdate, StopTime } from "qdf-gtfs";
+import type { RealtimeTripUpdate, RealtimeVehiclePosition, StopTime } from "qdf-gtfs";
 import type { CacheContext } from "../cache/types.js";
+import { getVehiclePositions } from "../cache/gtfsReads.js";
 import { entityKey } from "../identity.js";
+import { getPluginState } from "./types.js";
 import { getServiceDayStart } from "../utils/time.js";
 import type { TransitPlugin } from "./types.js";
+import type { VehicleInfo } from "../utils/vehicleModel.js";
 import {
 	getTfnswRegionalBookingFormation,
 	TFNSW_REGIONAL_BOOKING_PLUGIN_ID,
@@ -11,6 +14,50 @@ import {
 
 const SYDNEY_TRAINS_FEED_ID = "nsw-sydney-trains";
 const NSW_TRAINLINK_FEED_ID = "nsw-trainlink";
+const TFNSW_RAIL_PLUGIN_ID = "au-nsw-tfnsw-rail";
+const TFNSW_VEHICLE_SOURCE = "tfnsw-gtfsrt-vehicle-positions";
+
+type TfnswVehicleState = { vehicleInfoByInstanceId: Map<string, VehicleInfo> };
+
+function getTfnswVehicleState(ctx: CacheContext): TfnswVehicleState {
+	return getPluginState(ctx, TFNSW_RAIL_PLUGIN_ID, () => ({ vehicleInfoByInstanceId: new Map() }));
+}
+
+function tfnswVehicleSetId(vehicle: RealtimeVehiclePosition): string | null {
+	return vehicle.vehicle.label.trim() || vehicle.vehicle.id.trim() || null;
+}
+
+function matchingTfnswInstances(ctx: CacheContext, vehicle: RealtimeVehiclePosition) {
+	const trip = ctx.augmented.tripsRec.get(entityKey({ feedId: vehicle.feed_id, localId: vehicle.trip.trip_id }));
+	if (!trip) return [];
+	return vehicle.trip.start_date
+		? trip.instances.filter((instance) => instance.serviceDate === vehicle.trip.start_date)
+		: trip.instances.length === 1
+			? trip.instances
+			: [];
+}
+
+/** Attach TfNSW's reported set allocation to the matching service-day instance. */
+function applyTfnswVehicleAllocations(ctx: CacheContext): void {
+	const state = getTfnswVehicleState(ctx);
+	state.vehicleInfoByInstanceId.clear();
+	for (const vehicle of getVehiclePositions(ctx)) {
+		if (vehicle.feed_id !== SYDNEY_TRAINS_FEED_ID && vehicle.feed_id !== NSW_TRAINLINK_FEED_ID) continue;
+		const setId = tfnswVehicleSetId(vehicle);
+		if (!setId) continue;
+		for (const instance of matchingTfnswInstances(ctx, vehicle)) {
+			state.vehicleInfoByInstanceId.set(instance.instance_id, {
+				vehicle_id: setId,
+				vehicle_model: null,
+				details: {
+					source: TFNSW_VEHICLE_SOURCE,
+					observedAt: vehicle.timestamp ? new Date(vehicle.timestamp * 1000).toISOString() : null,
+					rawIdentifier: vehicle.vehicle.id || null,
+				},
+			});
+		}
+	}
+}
 
 const TFNSW_PASSENGER_SET_TYPES = {
 	A: "Waratah",
@@ -136,13 +183,17 @@ function enrichTfnswRealtimeTripUpdate(update: RealtimeTripUpdate, ctx: CacheCon
  */
 export type TfnswRailPluginOptions = {
 	regionalBooking?: TfnswRegionalBookingOptions;
+	/** Admin-triggered fallback for trips without official occupancies.txt data. */
+	anyTripOccupancy?: false | AnyTripNswOccupancyClientOptions;
 };
 
-export function createTfnswRailPlugin(): TransitPlugin {
+export function createTfnswRailPlugin(options: TfnswRailPluginOptions = {}): TransitPlugin {
+	const anyTripClient =
+		options.anyTripOccupancy === false ? null : new AnyTripNswOccupancyClient(options.anyTripOccupancy);
 	return {
-		id: "au-nsw-tfnsw-rail",
+		id: TFNSW_RAIL_PLUGIN_ID,
 		feedIds: [SYDNEY_TRAINS_FEED_ID, NSW_TRAINLINK_FEED_ID],
-		capabilities: ["vehicles"],
+		capabilities: ["vehicles", "occupancy"],
 		considerRoute(route) {
 			if (route.feed_id === SYDNEY_TRAINS_FEED_ID) {
 				// isConsideredRoute has already limited this callback to rail-like route types.
@@ -166,6 +217,9 @@ export function createTfnswRailPlugin(): TransitPlugin {
 			if (descriptor.isPassenger) trip.scheduled_passenger_cars = descriptor.numberOfCars;
 		},
 		enrichRealtimeTripUpdate: enrichTfnswRealtimeTripUpdate,
+		afterRealtime: applyTfnswVehicleAllocations,
+		vehicleInfoForTrip: (trip, ctx) =>
+			getTfnswVehicleState(ctx).vehicleInfoByInstanceId.get(trip.instance_id) ?? null,
 		isNonRevenueRoute: (route) => route.feed_id === SYDNEY_TRAINS_FEED_ID && route.route_id.startsWith("RTTA_"),
 	};
 }

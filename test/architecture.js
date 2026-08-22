@@ -529,6 +529,47 @@ tfnswPlugin.enrichTrip(parsedTrainLinkTrip);
 assert.equal(parsedTrainLinkTrip.trip_number, "ST21");
 assert.equal(parsedTrainLinkTrip.vehicle_model, "XPT");
 assert.equal(parsedTrainLinkTrip.scheduled_passenger_cars, 7);
+const allocatedTrainLinkTrip = {
+	feed_id: "nsw-trainlink",
+	trip_id: "635.220826.96.P.3.2043",
+	serviceDate: "20260822",
+	instance_id: "trainlink-635-20260822",
+};
+const otherDayTrainLinkTrip = {
+	...allocatedTrainLinkTrip,
+	serviceDate: "20260823",
+	instance_id: "trainlink-635-20260823",
+};
+const tfnswVehicleContext = {
+	raw: { injectedVehiclePositions: [] },
+	augmented: {
+		tripsRec: new Map([
+			[
+				`13:nsw-trainlink${allocatedTrainLinkTrip.trip_id}`,
+				{ instances: [allocatedTrainLinkTrip, otherDayTrainLinkTrip] },
+			],
+		]),
+	},
+	config: { network: { plugins: [tfnswPlugin] } },
+	gtfs: {
+		getRealtimeVehiclePositions: () => [
+			{
+				feed_id: "nsw-trainlink",
+				trip: {
+					feed_id: "nsw-trainlink",
+					trip_id: allocatedTrainLinkTrip.trip_id,
+					start_date: "20260822",
+				},
+				vehicle: { id: "opaque-vehicle-id", label: "EA2502", license_plate: "" },
+				timestamp: 1787367261,
+			},
+		],
+	},
+	pluginState: new Map(),
+};
+tfnswPlugin.afterRealtime(tfnswVehicleContext, new Set());
+assert.equal(tfnswPlugin.vehicleInfoForTrip(allocatedTrainLinkTrip, tfnswVehicleContext)?.vehicle_id, "EA2502");
+assert.equal(tfnswPlugin.vehicleInfoForTrip(otherDayTrainLinkTrip, tfnswVehicleContext), null);
 const trainLinkBookingTrip = {
 	feed_id: "nsw-trainlink",
 	trip_number: "ST21",
