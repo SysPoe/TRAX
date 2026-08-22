@@ -58,13 +58,13 @@ type GthaRealtimeState = {
 	activeIds: Set<string>;
 	activeCars: Set<string>;
 	activePassengerCars: Set<number>;
-	prevs: {
+	prevs: Map<string, {
 		tripInstanceId: string;
 		stopId: string;
 		actualPlatform: string | null;
 		scheduledPlatform: string | null;
 		priority: number;
-	}[];
+	}>;
 	lastSourceEFetchMs: Record<string, number>;
 	lastSourceBFetchMs: number;
 	nextSourceBFetchMs: number;
@@ -114,7 +114,7 @@ function getState(ctx: CacheContext): GthaRealtimeState {
 		activeIds: new Set(),
 		activeCars: new Set(),
 		activePassengerCars: new Set(),
-		prevs: [],
+		prevs: new Map(),
 		lastSourceEFetchMs: {},
 		lastSourceBFetchMs: 0,
 		nextSourceBFetchMs: 0,
@@ -252,7 +252,7 @@ export function getGthaRealtimeDiagnostics(ctx: CacheContext): GthaRealtimeDiagn
 		activeModels: state.activeModels.size,
 		knownConsists: Object.keys(state.vehicleConsists).length,
 		knownPassengerCarCounts: Object.keys(state.vehiclePassengerCars).length,
-		retainedPlatformAssignments: state.prevs.length,
+		retainedPlatformAssignments: state.prevs.size,
 		operatingScheduleOverrides: state.operatingScheduleOverrides,
 		operatingScheduleUnresolvedTrips: state.operatingScheduleUnresolvedTrips,
 		operatingScheduleUnresolvedStops: state.operatingScheduleUnresolvedStops,
@@ -312,8 +312,7 @@ function applyPlatformUpdate(
 
 	if (currentPriority > priority) return;
 
-	state.prevs = state.prevs.filter((v) => !(v.tripInstanceId === stopTime.instance_id && v.stopId === stopId));
-	state.prevs.push({
+	state.prevs.set(`${stopTime.instance_id}\0${stopId}`, {
 		tripInstanceId: stopTime.instance_id,
 		stopId,
 		actualPlatform: newActual,
@@ -732,7 +731,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	const serviceDateStr = getServiceDate(now, getDefaultTimeZone(ctx.config));
 
 	// Re-apply previous state (prevents UI flicker if context was reset but module state remains)
-	state.prevs.forEach((v) => {
+	for (const v of state.prevs.values()) {
 		const ti = getAugmentedTripInstance(ctx, v.tripInstanceId);
 		const st = ti?.stopTimes.find((st) => stopTimeMatchesStopId(st, v.stopId));
 		if (st) {
@@ -742,7 +741,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 			(st as any).platformSource = "prevs";
 			(st as any).platformPriority = v.priority ?? SOURCE_PRIORITIES.prevs;
 		}
-	});
+	}
 
 	// Re-bootstrap carTrips from existing augmented data
 	const existingTripsForDate = ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [];
