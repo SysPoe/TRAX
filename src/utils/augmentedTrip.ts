@@ -8,6 +8,7 @@ import { canonicalStationIdentity, getFeedTimeZone } from "../config.js";
 import { getToday } from "./time.js";
 import { encodeTripInstanceId, entityKey } from "../identity.js";
 import { isNonRevenueTrip } from "./considered.js";
+import { pluginSupportsFeed } from "../plugins/types.js";
 
 export type AugmentedTripInstance = qdf.Trip & {
 	instance_id: string;
@@ -241,7 +242,7 @@ export function augmentTrip(
 		trip_number = trip.trip_id.slice(-4);
 		if (trip.trip_short_name && /^\d{1,3}$/.test(trip.trip_short_name)) trip_number = trip.trip_short_name;
 
-		const instance: AugmentedTripInstance = {
+		let instance: AugmentedTripInstance = {
 			...trip,
 			instance_id,
 			serviceDate,
@@ -267,6 +268,11 @@ export function augmentTrip(
 			seq_diagram_prev_link_broken: false,
 			seq_diagram_next_link_broken: false,
 		};
+
+		for (const plugin of ctx.config.network.plugins) {
+			if (!pluginSupportsFeed(plugin, instance.feed_id) || !plugin.enrichTrip) continue;
+			instance = plugin.enrichTrip(instance, ctx) ?? instance;
+		}
 
 		ctx.augmented.timer.start("createInstance:serviceCapacity");
 		let prev_cap: ServiceCapacity = ServiceCapacity.UNKNOWN;

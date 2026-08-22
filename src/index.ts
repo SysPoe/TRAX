@@ -532,8 +532,8 @@ export {
 	createCaGthaNetwork,
 } from "./networks.js";
 export type { AuRailNetworkOptions, AuVicVlineNetworkOptions } from "./networks.js";
-export { createTfnswRegionalBookingPlugin } from "./plugins/tfnsw-rail.js";
-export type { TfnswRailPluginOptions } from "./plugins/tfnsw-rail.js";
+export { createTfnswRegionalBookingPlugin, parseTfnswTripId } from "./plugins/tfnsw-rail.js";
+export type { TfnswRailPluginOptions, TfnswSetType, TfnswTripDescriptor } from "./plugins/tfnsw-rail.js";
 export * from "./identity.js";
 export * as cache from "./cache/index.js";
 export * as stations from "./utils/stations.js";

@@ -16,6 +16,7 @@ import TRAX, {
 	parseVLineBookingPage,
 	parseVLinePlatformArrivals,
 	parseVLineScsBoard,
+	parseTfnswTripId,
 	vlineAccessToken,
 	vlinePassengerCars,
 	vlineTdn,
@@ -413,6 +414,43 @@ assert.equal(
 );
 assert.equal(tfnswPlatformCode("Redfern Station Platform 12"), "12");
 assert.equal(tfnswPlatformCode("Redfern Station"), null);
+assert.deepEqual(parseTfnswTripId("104B.937.150.128.A.8.90926398"), {
+	runNumber: "104B",
+	setType: "A",
+	trainType: "Waratah",
+	numberOfCars: 8,
+	isPassenger: true,
+});
+assert.deepEqual(parseTfnswTripId("7.937.150.128.G.2.90926399"), {
+	runNumber: "7",
+	setType: "G",
+	trainType: "Freight",
+	numberOfCars: 2,
+	isPassenger: false,
+});
+assert.equal(parseTfnswTripId("104B.937.150.128.unknown.8.90926398"), null);
+assert.equal(parseTfnswTripId("104B.937.150.128.A.eight.90926398"), null);
+assert.equal(parseTfnswTripId("104B.937.150.128.A..90926398"), null);
+const parsedTfnswTrip = {
+	trip_id: "104B.937.150.128.A.8.90926398",
+	trip_number: "6398",
+	vehicle_model: null,
+	scheduled_passenger_cars: null,
+};
+tfnswPlugin.enrichTrip(parsedTfnswTrip);
+assert.equal(parsedTfnswTrip.trip_number, "104B");
+assert.equal(parsedTfnswTrip.vehicle_model, "Waratah");
+assert.equal(parsedTfnswTrip.scheduled_passenger_cars, 8);
+const parsedTfnswFreightTrip = {
+	trip_id: "7.937.150.128.G.2.90926399",
+	trip_number: "6399",
+	vehicle_model: null,
+	scheduled_passenger_cars: null,
+};
+tfnswPlugin.enrichTrip(parsedTfnswFreightTrip);
+assert.equal(parsedTfnswFreightTrip.trip_number, "7");
+assert.equal(parsedTfnswFreightTrip.vehicle_model, "Freight");
+assert.equal(parsedTfnswFreightTrip.scheduled_passenger_cars, null);
 assert.equal(
 	inferTfnswRealtimeServiceDate({
 		candidateServiceDates: ["20260820", "20260821"],

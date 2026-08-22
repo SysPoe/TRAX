@@ -12,6 +12,67 @@ import {
 const SYDNEY_TRAINS_FEED_ID = "nsw-sydney-trains";
 const NSW_TRAINLINK_FEED_ID = "nsw-trainlink";
 
+const TFNSW_PASSENGER_SET_TYPES = {
+	A: "Waratah",
+	B: "Waratah Series 2",
+	C: "C Set",
+	D: "Mariyung, New Intercity Fleet",
+	H: "Oscar",
+	J: "Hunter",
+	K: "K Set",
+	M: "Millennium",
+	N: "Endeavour",
+	P: "Xplorer",
+	S: "S Set",
+	T: "Tangara",
+	V: "V Set, Intercity",
+	X: "XPT",
+	Z: "Heritage and private passenger operator",
+} as const;
+
+const TFNSW_OPERATIONAL_SET_TYPES = {
+	G: "Freight",
+	I: "Track inspection",
+	L: "Light locomotive",
+	O: "Other",
+	Q: "Maintenance track machine",
+	U: "Bus",
+	W: "Fast freight",
+	Y: "Other",
+} as const;
+
+export type TfnswSetType = keyof typeof TFNSW_PASSENGER_SET_TYPES | keyof typeof TFNSW_OPERATIONAL_SET_TYPES;
+
+export type TfnswTripDescriptor = {
+	runNumber: string;
+	setType: TfnswSetType;
+	trainType: string;
+	numberOfCars: number;
+	isPassenger: boolean;
+};
+
+/** Parse TfNSW's provider-specific fields from a static GTFS trip ID. */
+export function parseTfnswTripId(tripId: string): TfnswTripDescriptor | null {
+	const parts = tripId.split(".");
+	if (parts.length !== 7 || parts[0].length === 0) return null;
+
+	const setType = parts[4] as TfnswSetType;
+	const passengerType = TFNSW_PASSENGER_SET_TYPES[setType as keyof typeof TFNSW_PASSENGER_SET_TYPES];
+	const operationalType = TFNSW_OPERATIONAL_SET_TYPES[setType as keyof typeof TFNSW_OPERATIONAL_SET_TYPES];
+	const trainType = passengerType ?? operationalType;
+	if (!/^\d+$/.test(parts[5])) return null;
+	const numberOfCars = Number(parts[5]);
+	if (!trainType || !Number.isSafeInteger(numberOfCars) || numberOfCars < 0) return null;
+
+	return {
+		runNumber: parts[0],
+		setType,
+		trainType,
+		numberOfCars,
+		isPassenger: passengerType != null,
+	};
+}
+
 export function tfnswPlatformCode(stopName: string | null | undefined): string | null {
 	const match = stopName?.match(/\bplatform\s+([0-9]+(?:\s*[A-Za-z])?)\b/i);
 	return match?.[1]?.replace(/\s+/g, " ") ?? null;
@@ -91,6 +152,13 @@ export function createTfnswRailPlugin(): TransitPlugin {
 			if (stop.platform_code) return;
 			const platformCode = tfnswPlatformCode(stop.stop_name);
 			if (platformCode) stop.platform_code = platformCode;
+		},
+		enrichTrip(trip) {
+			const descriptor = parseTfnswTripId(trip.trip_id);
+			if (!descriptor) return;
+			trip.trip_number = descriptor.runNumber;
+			trip.vehicle_model = descriptor.trainType;
+			if (descriptor.isPassenger) trip.scheduled_passenger_cars = descriptor.numberOfCars;
 		},
 		enrichRealtimeTripUpdate: enrichTfnswRealtimeTripUpdate,
 		isNonRevenueRoute: (route) => route.feed_id === SYDNEY_TRAINS_FEED_ID && route.route_id.startsWith("RTTA_"),
