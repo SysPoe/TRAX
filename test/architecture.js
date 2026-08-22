@@ -391,6 +391,14 @@ const nonRevenueRoute = {
 assert.equal(tfnswPlugin.considerRoute(nonRevenueRoute), true);
 assert.equal(tfnswPlugin.isNonRevenueRoute(nonRevenueRoute), true);
 assert.equal(
+	tfnswPlugin.considerRoute({
+		feed_id: "nsw-sydney-trains",
+		agency_id: "Pacific National",
+		route_id: "RTTA_PN",
+	}),
+	true,
+);
+assert.equal(
 	isNonBoardingStopTime({ pickup_type: PickupType.None, drop_off_type: DropOffType.None }),
 	true,
 );

@@ -11,6 +11,7 @@ import {
 
 const SYDNEY_TRAINS_FEED_ID = "nsw-sydney-trains";
 const NSW_TRAINLINK_FEED_ID = "nsw-trainlink";
+const PACIFIC_NATIONAL_AGENCY_ID = "Pacific National";
 
 const TFNSW_PASSENGER_SET_TYPES = {
 	A: "Waratah",
@@ -145,7 +146,7 @@ export function createTfnswRailPlugin(): TransitPlugin {
 		capabilities: ["vehicles"],
 		considerRoute(route) {
 			if (route.feed_id === SYDNEY_TRAINS_FEED_ID) {
-				return route.agency_id === "SydneyTrains";
+				return route.agency_id === "SydneyTrains" || route.agency_id === PACIFIC_NATIONAL_AGENCY_ID;
 			}
 			if (route.feed_id === NSW_TRAINLINK_FEED_ID) {
 				return route.agency_id === "X000" || route.agency_id === "711";
