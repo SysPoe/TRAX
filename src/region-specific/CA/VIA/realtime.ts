@@ -280,13 +280,22 @@ export async function updateRealtime(ctx: CacheContext) {
 	const tripUpdates: qdf.RealtimeTripUpdate[] = [];
 	const vehiclePositions: qdf.RealtimeVehiclePosition[] = [];
 	const tripMatches = new Map<string, ViaTripMatch>();
+	const tripsByDateAndNumber = new Map<string, Map<string, qdf.Trip[]>>();
 
 	for (const [tripNumber, train] of Object.entries(data)) {
 		const startDate = train.instance.replaceAll("-", "");
 		const canonicalTripNumber = tripNumber.match(/^\d+/)?.[0] ?? tripNumber;
-		const matchingTrips = ctx.gtfs
-			.getTrips({ feed_id: VIA_STATIC_FEED_ID, date: startDate })
-			.filter((trip) => trip.trip_short_name === canonicalTripNumber);
+		let tripsByNumber = tripsByDateAndNumber.get(startDate);
+		if (!tripsByNumber) {
+			tripsByNumber = new Map();
+			for (const trip of ctx.gtfs.getTrips({ feed_id: VIA_STATIC_FEED_ID, date: startDate })) {
+				const trips = tripsByNumber.get(trip.trip_short_name ?? "");
+				if (trips) trips.push(trip);
+				else tripsByNumber.set(trip.trip_short_name ?? "", [trip]);
+			}
+			tripsByDateAndNumber.set(startDate, tripsByNumber);
+		}
+		const matchingTrips = tripsByNumber.get(canonicalTripNumber) ?? [];
 		const gtfsTrip = selectMatchingTrip(ctx, matchingTrips, train, codeIdMap);
 		if (!gtfsTrip) continue;
 		tripMatches.set(viaTrainKey(canonicalTripNumber, startDate), {
