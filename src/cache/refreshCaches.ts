@@ -528,7 +528,7 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		function: "refreshRealtimeCache",
 	});
 
-	const tripUpdates = gtfs.getRealtimeTripUpdates();
+	const tripUpdates = await getRealtimeTripUpdatesByFeed(gtfs, config);
 	const allTripUpdates = applyRealtimeReplacementPrecedence(
 		canonicalizeRealtimeTripUpdates(tripUpdates.concat(ctx.raw.injectedTripUpdates ?? []), ctx),
 	);
@@ -684,6 +684,17 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 	});
 }
 
+async function getRealtimeTripUpdatesByFeed(gtfs: GTFS, config: TraxConfig) {
+	const feedIds = [...new Set(config.network.feeds.map((feed) => feed.id))];
+	if (feedIds.length === 0) return gtfs.getRealtimeTripUpdates();
+	const updates: ReturnType<GTFS["getRealtimeTripUpdates"]> = [];
+	for (const feedId of feedIds) {
+		updates.push(...gtfs.getRealtimeTripUpdates({ feed_id: feedId }));
+		await new Promise((resolve) => setImmediate(resolve));
+	}
+	return updates;
+}
+
 async function processWithProgress<T, U>(
 	items: T[],
 	taskName: string,
@@ -737,4 +748,5 @@ async function processWithProgress<T, U>(
 export const _test = {
 	tripUpdateSignature,
 	findChangedRealtimeTripIds,
+	getRealtimeTripUpdatesByFeed,
 };

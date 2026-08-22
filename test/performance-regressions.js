@@ -59,6 +59,24 @@ function testDisappearingRealtimeUpdateIsChanged() {
 	assert.deepEqual([...changed], ["trip-a"]);
 }
 
+async function testRealtimeUpdatesMaterializeByFeed() {
+	const filters = [];
+	const gtfs = {
+		getRealtimeTripUpdates(filter) {
+			filters.push(filter);
+			return [{ feed_id: filter.feed_id }];
+		},
+	};
+	const config = { network: { feeds: [{ id: "feed-a" }, { id: "feed-b" }] } };
+	let requestHandled = false;
+	setImmediate(() => { requestHandled = true; });
+
+	const updates = await refreshCacheTest.getRealtimeTripUpdatesByFeed(gtfs, config);
+	assert.equal(requestHandled, true, "realtime materialization must yield between feeds");
+	assert.deepEqual(filters, [{ feed_id: "feed-a" }, { feed_id: "feed-b" }]);
+	assert.deepEqual(updates.map((update) => update.feed_id), ["feed-a", "feed-b"]);
+}
+
 function testStaticFingerprintTracksQDFCacheFile() {
 	const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "trax-fingerprint-"));
 	try {
@@ -295,6 +313,7 @@ function testGthaTrackFormatting() {
 
 testSeqDiagramUsesProvidedStopTimes();
 testDisappearingRealtimeUpdateIsChanged();
+await testRealtimeUpdatesMaterializeByFeed();
 testStaticFingerprintTracksQDFCacheFile();
 testUntimedPassingPointsUseShapeDistance();
 testExpressPruningDistinguishesParallelCorridors();
