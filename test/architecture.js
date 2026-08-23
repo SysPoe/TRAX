@@ -612,7 +612,7 @@ await Promise.all([
 ]);
 assert.equal(anyTripOccupancyRequests, 1);
 assert.match(anyTripOccupancyUrl, /\/tripInstance\/20260822\/au2%3Ast%3A104B\/0$/);
-const officialOccupancy = {
+const historicalOccupancy = {
 	statuses: [4],
 	scope: "vehicle",
 	source: "tfnsw-static-occupancies",
@@ -622,12 +622,12 @@ const officialOccupancy = {
 };
 const occupancyPriorityTrip = {
 	stopTimes: [
-		{ _stopTime: { stop_sequence: 1 }, occupancy: officialOccupancy },
-		{ _stopTime: { stop_sequence: 2 }, occupancy: null },
+		{ _stopTime: { stop_sequence: 1 }, occupancy: historicalOccupancy },
+		{ _stopTime: { stop_sequence: 2 }, occupancy: historicalOccupancy },
 	],
 };
 assert.equal(applyAnyTripNswOccupancy(occupancyPriorityTrip, parsedAnyTripOccupancy, "2026-08-22T12:00:00Z"), 1);
-assert.equal(occupancyPriorityTrip.stopTimes[0].occupancy, officialOccupancy);
+assert.equal(occupancyPriorityTrip.stopTimes[0].occupancy, historicalOccupancy);
 assert.equal(occupancyPriorityTrip.stopTimes[1].occupancy.source, "anytrip-nsw");
 const trainLinkBookingTrip = {
 	feed_id: "nsw-trainlink",

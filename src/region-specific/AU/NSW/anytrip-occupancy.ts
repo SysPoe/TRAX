@@ -19,7 +19,7 @@ export type AnyTripNswOccupancyClientOptions = {
 	requestTimeoutMs?: number;
 };
 
-/** Fill only stop rows that do not already have official occupancy data. */
+/** Prefer reported per-car occupancy over TfNSW's historical vehicle-wide estimate. */
 export function applyAnyTripNswOccupancy(
 	trip: AugmentedTripInstance,
 	calls: readonly AnyTripNswOccupancyCall[],
@@ -28,10 +28,14 @@ export function applyAnyTripNswOccupancy(
 	const callsBySequence = new Map(calls.map((call) => [call.stopSequence, call]));
 	let applied = 0;
 	for (const stopTime of trip.stopTimes) {
-		if (stopTime.occupancy) continue;
 		const sequence = stopTime._stopTime?.stop_sequence;
 		const call = sequence == null ? null : callsBySequence.get(sequence);
 		if (!call) continue;
+		if (
+			stopTime.occupancy &&
+			!(stopTime.occupancy.source === "tfnsw-static-occupancies" && call.confidence === "reported")
+		)
+			continue;
 		stopTime.occupancy = {
 			statuses: call.statuses,
 			scope: call.scope,

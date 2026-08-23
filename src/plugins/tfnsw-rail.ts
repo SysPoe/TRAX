@@ -188,7 +188,7 @@ function enrichTfnswRealtimeTripUpdate(update: RealtimeTripUpdate, ctx: CacheCon
  */
 export type TfnswRailPluginOptions = {
 	regionalBooking?: TfnswRegionalBookingOptions;
-	/** Admin-triggered fallback for trips without official occupancies.txt data. */
+	/** Admin-triggered live per-car occupancy with occupancies.txt as fallback. */
 	anyTripOccupancy?: false | AnyTripNswOccupancyClientOptions;
 };
 
@@ -238,7 +238,13 @@ export function createTfnswRailPlugin(options: TfnswRailPluginOptions = {}): Tra
 					)
 						stopTime.occupancy = null;
 				}
-				if (trip.stopTimes.every((stopTime) => stopTime.occupancy !== null)) return 0;
+				if (
+					trip.stopTimes.every(
+						(stopTime) =>
+							stopTime.occupancy !== null && stopTime.occupancy.source !== "tfnsw-static-occupancies",
+					)
+				)
+					return 0;
 				let calls;
 				try {
 					calls = await anyTripClient.getTripOccupancy(trip);
