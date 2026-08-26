@@ -43,6 +43,21 @@ export type VehicleFormationUnit = {
 	wifi: boolean | null;
 	powerOutlets: boolean | null;
 	accentColor: string | null;
+	/** Published descriptive sections for this car. Omitted when the provider has no car profile. */
+	publishedSections?: VehiclePublishedSection[];
+};
+
+export type VehiclePublishedSection = {
+	title: string;
+	details: string[];
+};
+
+export type VehiclePublishedProfile = {
+	title: string;
+	logoUrl: string | null;
+	accentColor: string | null;
+	sections: VehiclePublishedSection[];
+	sourceUrl: string | null;
 };
 
 /** Segment-specific booking inventory. This is deliberately separate from the physical formation. */
@@ -52,6 +67,8 @@ export type VehicleBookingFareClass = {
 	minimumAvailability: number;
 	price: number | null;
 	isSleeper: boolean;
+	capacity?: number | null;
+	currency?: string | null;
 };
 
 export type VehicleBookingAvailability = {
@@ -78,6 +95,7 @@ export type VehicleFormationMetadata = {
 	observedAt?: string | null;
 	bookingAvailability?: VehicleBookingAvailability | null;
 	bookingAvailabilityStatus?: VehicleBookingAvailabilityStatus | null;
+	publishedProfile?: VehiclePublishedProfile | null;
 };
 
 /** The single vehicle/consist contract exposed to every consumer. */
@@ -94,6 +112,7 @@ export type VehicleFormation = {
 	observedAt: string | null;
 	bookingAvailability: VehicleBookingAvailability | null;
 	bookingAvailabilityStatus: VehicleBookingAvailabilityStatus | null;
+	publishedProfile: VehiclePublishedProfile | null;
 };
 
 export function createVehicleFormation(
@@ -103,7 +122,13 @@ export function createVehicleFormation(
 ): VehicleFormation | null {
 	const units =
 		providerUnits && providerUnits.length > 0
-			? providerUnits.map((unit) => ({ ...unit }))
+			? providerUnits.map((unit) => ({
+					...unit,
+					publishedSections: unit.publishedSections?.map((section) => ({
+						...section,
+						details: [...section.details],
+					})),
+				}))
 			: (trip.consist ?? []).map((id): VehicleFormationUnit => ({
 					id,
 					diagramKind: "coach",
@@ -128,7 +153,8 @@ export function createVehicleFormation(
 		metadata.isLive == null &&
 		!metadata.source &&
 		!metadata.bookingAvailability &&
-		metadata.bookingAvailabilityStatus == null
+		metadata.bookingAvailabilityStatus == null &&
+		!metadata.publishedProfile
 	)
 		return null;
 	return {
@@ -145,6 +171,15 @@ export function createVehicleFormation(
 		bookingAvailability: metadata.bookingAvailability ?? null,
 		bookingAvailabilityStatus:
 			metadata.bookingAvailabilityStatus ?? (metadata.bookingAvailability ? "available" : null),
+		publishedProfile: metadata.publishedProfile
+			? {
+					...metadata.publishedProfile,
+					sections: metadata.publishedProfile.sections.map((section) => ({
+						...section,
+						details: [...section.details],
+					})),
+				}
+			: null,
 	};
 }
 

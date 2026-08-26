@@ -6,6 +6,7 @@ import { SEQgetQRTPlaces, SEQgetQRTStations, SEQgetQRTTrains, SEQgetRailwayStati
 import { enrichSeqStop, type AugmentationContext } from "../utils/augmentedStop.js";
 import { getVehicleInfo } from "../region-specific/AU/SEQ/vehicleModel.js";
 import { getServiceCapacity } from "../region-specific/AU/SEQ/serviceCapacity.js";
+import { getQrtFormation } from "../region-specific/AU/SEQ/qr-travel/formation.js";
 
 export const seqPlugin: TransitPlugin = {
 	id: "au-seq",
@@ -28,6 +29,10 @@ export const seqPlugin: TransitPlugin = {
 		getQrtPlaces: () => SEQgetQRTPlaces(ctx),
 		getQrtStations: () => SEQgetQRTStations(ctx),
 		getQrtTrains: () => SEQgetQRTTrains(ctx),
+		getQrtFormation: (serviceId: string) => {
+			const service = SEQgetQRTTrains(ctx).find((candidate) => candidate.serviceId === serviceId);
+			return service ? getQrtFormation(service, ctx) : Promise.resolve(null);
+		},
 		getRailwayStationFacilities: () => SEQgetRailwayStationFacilities(ctx),
 	}),
 };

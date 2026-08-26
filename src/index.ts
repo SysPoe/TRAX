@@ -582,6 +582,8 @@ export type {
 	VehicleFormation,
 	VehicleFormationMetadata,
 	VehicleFormationUnit,
+	VehiclePublishedProfile,
+	VehiclePublishedSection,
 	VehicleDiagramKind,
 	VehicleInfo,
 } from "./utils/vehicleModel.js";

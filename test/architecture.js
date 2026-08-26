@@ -68,6 +68,17 @@ import {
 import { matchRealtimeStopTimeUpdate } from "../dist/utils/augmentedStopTime.js";
 import { inferTfnswRealtimeServiceDate, tfnswPlatformCode } from "../dist/plugins/tfnsw-rail.js";
 import { _test as tfnswRegionalBookingTest } from "../dist/region-specific/AU/NSW/regional-booking.js";
+import {
+	matchQrtBookingStation,
+	parseQrtBookingStations,
+	parseQrtSignerBundle,
+	qrtRegularFareClasses,
+	selectQrtRailService,
+} from "../dist/region-specific/AU/SEQ/qr-travel/booking.js";
+import {
+	matchQrtPublishedFormation,
+	parseQrtPublishedFormations,
+} from "../dist/region-specific/AU/SEQ/qr-travel/published-formations.js";
 import { findUniqueTripInstanceForServiceDate } from "../dist/cache/augmentedEntities.js";
 import { DropOffType, PickupType, RouteType, TripScheduleRelationship } from "qdf-gtfs";
 import {
@@ -89,6 +100,115 @@ import {
 	isGthaOperatingScheduleForServiceDate,
 } from "../dist/region-specific/CA/GTHA/operating-schedule.js";
 import { SOURCE_C_LOOKAHEAD_SECS } from "../dist/region-specific/CA/GTHA/gtha-realtime-constants.js";
+
+const qrtSigner = parseQrtSignerBundle('{id:"client",k1:"one",k2:"two",k3:"three",k4:"four"}');
+assert.deepEqual(qrtSigner, { clientId: "client", keys: ["one", "two", "three", "four"] });
+assert.equal(parseQrtSignerBundle("no client signing values here"), null);
+
+const qrtStations = parseQrtBookingStations({
+	fields: {
+		stations: [
+			{ isstart: true, genericid: 6002, name: "BNE - Brisbane (Roma St)" },
+			{ isstart: false, genericid: 6002, name: "BNE - Brisbane (Roma St)" },
+			{ isstart: true, genericid: 6030, name: "MBJ - Maryborough West" },
+		],
+	},
+});
+assert.equal(qrtStations.length, 2);
+assert.equal(matchQrtBookingStation({ placeCode: "BNE", placeName: "Brisbane - Roma Street" }, qrtStations)?.id, 6002);
+
+const qrtRailService = {
+	traiN_NAME: "Q301 Rockhampton Tilt Train",
+	traveL_DATE: "2026-09-01T00:00:00",
+	departurE_TIME: "9999-12-31T11:00:00",
+	startregioncode: "BNE",
+	endregioncode: "MBJ",
+	currency: "AUD",
+	raiL_OPTIONS: [
+		{
+			servicE_OPTION_TYPE: 0,
+			servicE_OPTION_NAME: "Economy Seat",
+			availablE_QUANTITY: 133,
+			totalcapacity: 251,
+			adulT_PRICE_WITH_DISCOUNT: 66.3,
+			pricE_TYPE: "BQuick",
+			servicE_TYPE_OPTIONID: 100,
+			pricE_TYPE_ID: 2,
+		},
+		{
+			servicE_OPTION_TYPE: 0,
+			servicE_OPTION_NAME: "Accessible Seat (+ accessible space + carers seat)",
+			availablE_QUANTITY: 1,
+			totalcapacity: 2,
+			adulT_PRICE_WITH_DISCOUNT: 66.3,
+			pricE_TYPE: "BQuick",
+		},
+		{
+			servicE_OPTION_TYPE: 0,
+			servicE_OPTION_NAME: "Economy Seat (includes assistance animal space)",
+			availablE_QUANTITY: 2,
+			totalcapacity: 2,
+			adulT_PRICE_WITH_DISCOUNT: 66.3,
+			pricE_TYPE: "BQuick",
+		},
+		{
+			servicE_OPTION_TYPE: 2,
+			servicE_OPTION_NAME: "Bicycle",
+			availablE_QUANTITY: 2,
+			totalcapacity: 2,
+			adulT_PRICE_WITH_DISCOUNT: 15,
+			pricE_TYPE: "BQuick",
+		},
+	],
+};
+assert.equal(
+	selectQrtRailService(
+		[qrtRailService],
+		{ trip_number: "Q301", departureDate: "2026-09-01T11:00:00" },
+		qrtStations[0],
+		qrtStations[1],
+	),
+	qrtRailService,
+);
+assert.deepEqual(qrtRegularFareClasses(qrtRailService), [
+	{
+		code: "100:2",
+		label: "Economy Seat · BQuick",
+		minimumAvailability: 133,
+		price: 66.3,
+		isSleeper: false,
+		capacity: 251,
+		currency: "AUD",
+	},
+]);
+
+const qrtPublished = parseQrtPublishedFormations(
+	[
+		{
+			Title: "Tilt Train - Brisbane to Bundaberg / Rockhampton",
+			qrt_colour: "#d1d3d4",
+			qrt_trainLogo: '<img src="/MediaAssets/TrainLogos/Tilt_logo.png">',
+			qrt_HtmlContent: `
+		<h3>Train Consist</h3><p>The Tilt Train consists of six carriages.</p>
+		<h3>Carriage A</h3><p>Carriage A is at the front.</p><h4>Business Seats</h4>
+		<p>Carriage A contains 27 seats.</p><h4>Accessibility Information</h4>
+		<p>Three accessible spaces.</p><h5>Travelling with an Assistance Animal</h5><p>Seat 30.</p>
+		<h3>Carriage B</h3><h4>Economy Seats</h4><p>Carriage B contains 47 Economy Seats.</p>
+		<h4>Aisle, Corridor and Door Widths</h4><p>Aisle width: 440mm.</p>
+		<h3>Tour our train</h3><p>Virtual tour.</p>`,
+		},
+	],
+	"2026-08-26T00:00:00.000Z",
+);
+assert.equal(qrtPublished.length, 1);
+assert.equal(qrtPublished[0].units.length, 2);
+assert.equal(qrtPublished[0].units[0].seats, 27);
+assert.equal(
+	qrtPublished[0].units[0].publishedSections.some((section) => /accessib/i.test(section.title)),
+	false,
+);
+assert.equal(qrtPublished[0].units[1].seats, 47);
+assert.equal(matchQrtPublishedFormation({ line: "Tilt Train", serviceName: "Q301" }, qrtPublished), qrtPublished[0]);
 
 assert.deepEqual(
 	selectViaBookingFare({
@@ -702,6 +822,7 @@ assert.deepEqual(
 		observedAt: null,
 		bookingAvailability: null,
 		bookingAvailabilityStatus: "unavailable",
+		publishedProfile: null,
 	},
 );
 assert.equal(
