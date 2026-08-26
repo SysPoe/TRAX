@@ -15,6 +15,7 @@ import { getPluginState } from "../../../plugins/types.js";
 import { isConsideredTripId } from "../../../utils/considered.js";
 import { getModelFromId } from "./vehicleModel.js";
 import { mergeVehicleInfo } from "../../../utils/vehicleModel.js";
+import type { AugmentedStopTime } from "../../../utils/augmentedStopTime.js";
 import { propagateBlockHandoffs } from "./block-handoff.js";
 import { parse } from "node-html-parser";
 import { cacheFileExists, loadCacheFile, writeCacheFileAtomic } from "../../../utils/fs.js";
@@ -46,6 +47,8 @@ import {
 	isGthaOperatingScheduleForServiceDate,
 } from "./operating-schedule.js";
 import { normalizeGthaRealtimeServiceDate } from "./service-date.js";
+import { getGthaPlatformPredictionDiagnostics, updateGthaPlatformPredictionShadow } from "./platform-predictions.js";
+import type { PlatformPredictionDiagnostics } from "../../../utils/platformPredictionShadow.js";
 
 function fetchWithTimeout(ctx: CacheContext, input: string | URL, init: RequestInit = {}): Promise<Response> {
 	return fetch(input, {
@@ -59,13 +62,16 @@ type GthaRealtimeState = {
 	activeIds: Set<string>;
 	activeCars: Set<string>;
 	activePassengerCars: Set<number>;
-	prevs: Map<string, {
-		tripInstanceId: string;
-		stopId: string;
-		actualPlatform: string | null;
-		scheduledPlatform: string | null;
-		priority: number;
-	}>;
+	prevs: Map<
+		string,
+		{
+			tripInstanceId: string;
+			stopId: string;
+			actualPlatform: string | null;
+			scheduledPlatform: string | null;
+			priority: number;
+		}
+	>;
 	lastSourceEFetchMs: Record<string, number>;
 	lastSourceBFetchMs: number;
 	nextSourceBFetchMs: number;
@@ -107,6 +113,7 @@ export type GthaRealtimeDiagnostics = {
 	operatingScheduleOverrides: number;
 	operatingScheduleUnresolvedTrips: number;
 	operatingScheduleUnresolvedStops: number;
+	platformPrediction: PlatformPredictionDiagnostics;
 };
 
 function getState(ctx: CacheContext): GthaRealtimeState {
@@ -257,6 +264,7 @@ export function getGthaRealtimeDiagnostics(ctx: CacheContext): GthaRealtimeDiagn
 		operatingScheduleOverrides: state.operatingScheduleOverrides,
 		operatingScheduleUnresolvedTrips: state.operatingScheduleUnresolvedTrips,
 		operatingScheduleUnresolvedStops: state.operatingScheduleUnresolvedStops,
+		platformPrediction: getGthaPlatformPredictionDiagnostics(ctx),
 	};
 }
 
@@ -284,20 +292,14 @@ export function stopTimeMatchesStopId(
 	stopTime: { actual_stop_id?: string | null; scheduled_stop_id?: string | null },
 	stopId: string,
 ): boolean {
-	return stopTime.actual_stop_id === stopId ||
-		(stopTime.actual_stop_id == null && stopTime.scheduled_stop_id === stopId);
+	return (
+		stopTime.actual_stop_id === stopId || (stopTime.actual_stop_id == null && stopTime.scheduled_stop_id === stopId)
+	);
 }
 
 function applyPlatformUpdate(
 	ctx: CacheContext,
-	stopTime: {
-		instance_id: string;
-		actual_stop_id?: string | null;
-		scheduled_stop_id?: string | null;
-		actual_platform_code?: string | null;
-		scheduled_platform_code?: string | null;
-		rt_platform_code_updated?: boolean;
-	},
+	stopTime: AugmentedStopTime,
 	stopId: string,
 	platform: string | null,
 	scheduledPlatform: string | null,
@@ -326,6 +328,21 @@ function applyPlatformUpdate(
 	stopTime.rt_platform_code_updated = true;
 	(stopTime as any).platformSource = source;
 	(stopTime as any).platformPriority = priority;
+	if (platform && source !== "Propagation" && source !== "prevs") {
+		stopTime.actual_departure_boarding_locations = [
+			{
+				kind: "platform",
+				value: platform,
+				source,
+				observed_at: new Date().toISOString(),
+				confidence: "reported",
+			},
+			...stopTime.actual_departure_boarding_locations.filter(
+				(location) =>
+					location.source !== source || location.kind !== "platform" || location.confidence === "inferred",
+			),
+		];
+	}
 
 	// If this is the terminating stop, propagate platform to next trip in block if it starts here
 	const ti = getAugmentedTripInstance(ctx, stopTime.instance_id);
@@ -894,10 +911,8 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 		for (const departure of data.trainDepartures.items) {
 			await new Promise((resolve) => setImmediate(resolve));
 			const tripNumber = departure.tripNumber;
-			let platform = formatTrack(departure.platform);
-			let scheduledPlatform = formatTrack(departure.scheduledPlatform);
-
-			platform = platform ?? scheduledPlatform;
+			const platform = formatTrack(departure.platform);
+			const scheduledPlatform = formatTrack(departure.scheduledPlatform);
 
 			if (platform === null && scheduledPlatform === null) continue;
 
@@ -906,8 +921,9 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 				const instance = getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances.find(
 					(v) => {
 						if (v.serviceDate === departure.scheduledDateTime.slice(0, 10).replace(/-/g, "")) return true;
-						const offset = v.stopTimes.find((fst) => stopTimeMatchesStopId(fst, item.stop_id))
-							?.scheduled_departure_date_offset;
+						const offset = v.stopTimes.find((fst) =>
+							stopTimeMatchesStopId(fst, item.stop_id),
+						)?.scheduled_departure_date_offset;
 						if (!offset) return false;
 
 						const prevDate = new Date(departure.scheduledDateTime.slice(0, 10));
@@ -917,8 +933,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 				);
 
 				const ast = instance?.stopTimes.find((ast) => stopTimeMatchesStopId(ast, item.stop_id));
-				if (ast)
-					applyPlatformUpdate(ctx, ast, item.stop_id, platform, scheduledPlatform, "Source D", blockMap);
+				if (ast) applyPlatformUpdate(ctx, ast, item.stop_id, platform, scheduledPlatform, "Source D", blockMap);
 			}
 		}
 	}
@@ -1004,6 +1019,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	}
 
 	propagateBlockHandoffs(blockMap);
+	updateGthaPlatformPredictionShadow(ctx);
 
 	timer.stop("updateAllSources");
 }
@@ -1093,7 +1109,7 @@ export async function updateSourceB(
 								ctx,
 								targetStopTime,
 								targetStopTime.actual_stop_id ?? targetStopTime.scheduled_stop_id ?? "",
-								actTrack ?? schTrack,
+								actTrack,
 								schTrack,
 								"Source B",
 								targetServiceDate === serviceDateStr ? blockMap : undefined,
