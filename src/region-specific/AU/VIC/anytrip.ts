@@ -7,6 +7,7 @@ export type AnyTripPlatformCall = {
 	stopSequence: number | null;
 	arrivalEpoch: number | null;
 	departureEpoch: number | null;
+	event: "arrival" | "departure" | "both";
 	platform: string;
 	observedAt: string;
 	rawIdentifier: string;
@@ -74,6 +75,12 @@ function platformName(stop: JsonRecord): string | null {
 	return string(nested(stop, "disassembled", "platformName")) ?? string(nested(stop, "name", "platform_name"));
 }
 
+function eventForStopTime(stopTime: JsonRecord): AnyTripPlatformCall["event"] {
+	if (stopTime.firstStop === true) return "departure";
+	if (number(stopTime.pickUp) === 1 && number(stopTime.dropOff) !== 1) return "arrival";
+	return "both";
+}
+
 function parseCall(tripInstanceValue: unknown, stopTimeValue: unknown, observedAt: string): AnyTripPlatformCall | null {
 	const tripInstance = record(tripInstanceValue);
 	const stopTime = record(stopTimeValue);
@@ -94,6 +101,7 @@ function parseCall(tripInstanceValue: unknown, stopTimeValue: unknown, observedA
 		stopSequence: number(stopTime.stopSequence),
 		arrivalEpoch: number(nested(stopTime, "arrival", "time")),
 		departureEpoch: number(nested(stopTime, "departure", "time")),
+		event: eventForStopTime(stopTime),
 		platform,
 		observedAt,
 		rawIdentifier: string(stopTime._path) ?? string(tripInstance._path) ?? `${serviceDate}/${tdn}`,
@@ -196,6 +204,7 @@ export class AnyTripPlatformClient {
 					offset: "-100",
 					ts: String(nowEpoch),
 					useRedis: "true",
+					depArr: "deparr",
 				});
 				const response = await this.fetchImpl(
 					`${this.baseUrl}/departures/${encodeURIComponent(normalized)}?${query}`,

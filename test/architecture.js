@@ -1091,6 +1091,9 @@ const anyTripStopTime = {
 	stopSequence: 1,
 	arrival: { time: 1787346442 },
 	departure: { time: 1787346442 },
+	firstStop: true,
+	pickUp: 0,
+	dropOff: 0,
 	_path: "stopTime/20260822/au3:aa:8605/0/1",
 };
 const anyTripPayload = {
@@ -1107,6 +1110,7 @@ assert.deepEqual(anyTripCalls[0], {
 	stopSequence: 1,
 	arrivalEpoch: 1787346442,
 	departureEpoch: 1787346442,
+	event: "departure",
 	platform: "1",
 	observedAt: "2026-08-22T04:37:18.000Z",
 	rawIdentifier: "stopTime/20260822/au3:aa:8605/0/1",
@@ -1171,6 +1175,34 @@ assert.equal(
 	}).length,
 	1,
 );
+assert.equal(
+	anyTripTest.parseStationResponse({
+		header: anyTripPayload.header,
+		response: {
+			departures: [
+				{
+					tripInstance: anyTripInstance,
+					stopTimeInstance: { ...anyTripStopTime, firstStop: null, pickUp: 1, stopSequence: 14 },
+				},
+			],
+		},
+	})[0]?.event,
+	"arrival",
+);
+assert.equal(
+	anyTripTest.parseStationResponse({
+		header: anyTripPayload.header,
+		response: {
+			departures: [
+				{
+					tripInstance: anyTripInstance,
+					stopTimeInstance: { ...anyTripStopTime, firstStop: null, pickUp: 1, dropOff: 1 },
+				},
+			],
+		},
+	})[0]?.event,
+	"both",
+);
 let anyTripRequestCount = 0;
 const anyTripClient = new AnyTripPlatformClient({ tripCacheTtlMs: 60_000 }, async () => {
 	anyTripRequestCount++;
@@ -1186,6 +1218,25 @@ const [firstAnyTripRequest, secondAnyTripRequest] = await Promise.all([
 assert.equal(anyTripRequestCount, 1);
 assert.deepEqual(firstAnyTripRequest, secondAnyTripRequest);
 assert.equal(anyTripClient.diagnostics.tripCacheEntries, 1);
+let anyTripStationUrl = null;
+const anyTripStationClient = new AnyTripPlatformClient({ stationCacheTtlMs: 60_000 }, async (input) => {
+	anyTripStationUrl = String(input);
+	return new Response(
+		JSON.stringify({
+			header: anyTripPayload.header,
+			response: { departures: [{ tripInstance: anyTripInstance, stopTimeInstance: anyTripStopTime }] },
+		}),
+		{
+			status: 200,
+			headers: { "content-type": "application/json" },
+		},
+	);
+});
+assert.equal((await anyTripStationClient.getStationPlatforms("G1181", 1787373438)).length, 1);
+assert.equal(
+	anyTripStationUrl,
+	"https://api.anytrip.com.au/api/v3/region/au3/departures/au3%3AG1181?limit=200&modes=au3%3Avlinetrains&offset=-100&ts=1787373438&useRedis=true&depArr=deparr",
+);
 let missingAnyTripRequestCount = 0;
 const missingAnyTripClient = new AnyTripPlatformClient({ tripCacheTtlMs: 60_000 }, async () => {
 	missingAnyTripRequestCount++;

@@ -365,7 +365,7 @@ function anyTripObservation(
 		...observation(call.platform, "anytrip-v3", "reported", call.observedAt, call.rawIdentifier),
 		expiresAt: new Date(Date.parse(call.observedAt) + LIVE_TTL_MS).toISOString(),
 		stopId,
-		event: "both",
+		event: call.event,
 		kind: "platform",
 	};
 }
