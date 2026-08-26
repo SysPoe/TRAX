@@ -119,6 +119,17 @@ function unitKind(title: string, sections: readonly VehiclePublishedSection[]): 
 	return "coach";
 }
 
+function unitType(sections: readonly VehiclePublishedSection[]): string | null {
+	return (
+		sections.find(
+			(section) =>
+				section.title !== "Overview" &&
+				!/^General Carriage Facilities$/i.test(section.title) &&
+				!/^Aisle, Corridor and Door Widths$/i.test(section.title),
+		)?.title ?? null
+	);
+}
+
 function profileMatchName(title: string): string {
 	return title
 		.split(" - ")[0]
@@ -150,7 +161,7 @@ function parsePublishedItem(value: unknown, observedAt: string): PublishedFormat
 		units.push({
 			id: carriage?.[1]?.trim() ?? null,
 			diagramKind: unitKind(segment.heading, sections),
-			type: sections.find((section) => section.title !== "Overview")?.title ?? null,
+			type: unitType(sections),
 			manufacturer: null,
 			model: segment.heading,
 			seats: unitSeats(sections),

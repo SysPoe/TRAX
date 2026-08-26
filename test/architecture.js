@@ -195,19 +195,22 @@ const qrtPublished = parseQrtPublishedFormations(
 		<p>Three accessible spaces.</p><h5>Travelling with an Assistance Animal</h5><p>Seat 30.</p>
 		<h3>Carriage B</h3><h4>Economy Seats</h4><p>Carriage B contains 47 Economy Seats.</p>
 		<h4>Aisle, Corridor and Door Widths</h4><p>Aisle width: 440mm.</p>
+		<h3>Tilt Train Cafe</h3><p>Food and drinks are available.</p>
+		<h4>Aisle, Corridor and Door Widths</h4><p>Corridor width: 500mm.</p>
 		<h3>Tour our train</h3><p>Virtual tour.</p>`,
 		},
 	],
 	"2026-08-26T00:00:00.000Z",
 );
 assert.equal(qrtPublished.length, 1);
-assert.equal(qrtPublished[0].units.length, 2);
+assert.equal(qrtPublished[0].units.length, 3);
 assert.equal(qrtPublished[0].units[0].seats, 27);
 assert.equal(
 	qrtPublished[0].units[0].publishedSections.some((section) => /accessib/i.test(section.title)),
 	false,
 );
 assert.equal(qrtPublished[0].units[1].seats, 47);
+assert.equal(qrtPublished[0].units[2].type, null);
 assert.equal(matchQrtPublishedFormation({ line: "Tilt Train", serviceName: "Q301" }, qrtPublished), qrtPublished[0]);
 
 assert.deepEqual(
