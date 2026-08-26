@@ -652,6 +652,14 @@ export type {
 } from "./region-specific/AU/SEQ/qr-travel/types.js";
 
 export type { QRTSRTStop } from "./region-specific/AU/SEQ/qr-travel/srt.js";
+export type {
+	QrtBookingSeatMap,
+	QrtBookingSeatMapCarriage,
+	QrtBookingSeatMapCarriageInformation,
+	QrtBookingSeatMapFare,
+	QrtBookingSeatMapSeat,
+	QrtSeatMapDiagram,
+} from "./region-specific/AU/SEQ/qr-travel/seat-map.js";
 export { Logger as TraxLogger, LogLevel } from "./utils/logger.js";
 
 export type {

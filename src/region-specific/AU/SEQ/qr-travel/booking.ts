@@ -8,14 +8,16 @@ const BOOKING_PAGE_URL = "https://queenslandrailtravel-booking.opendestinations.
 const BOOKING_API_ROOT = "https://queenslandrailtravel-booking.opendestinations.com/bookingsiteapi/api";
 const SEARCH_INPUT_URL = `${BOOKING_API_ROOT}/rail/searchinput`;
 const SEARCH_URL = `${BOOKING_API_ROOT}/rail/search`;
+export const QRT_RAIL_SEARCH_URL = SEARCH_URL;
+export const QRT_BOOKING_PAGE_URL = BOOKING_PAGE_URL;
 const STATE_ID = "au-seq-qrt-booking";
 const DIRECTORY_CACHE_MS = 6 * 60 * 60 * 1000;
 const SIGNER_CACHE_MS = 6 * 60 * 60 * 1000;
 const INVENTORY_CACHE_MS = 5 * 60 * 1000;
 const MISSING_INVENTORY_CACHE_MS = 60 * 1000;
 
-type SignerBundle = { clientId: string; keys: [string, string, string, string] };
-type BookingStation = { id: number; code: string | null; name: string };
+export type SignerBundle = { clientId: string; keys: [string, string, string, string] };
+export type BookingStation = { id: number; code: string | null; name: string };
 type InventoryEntry = { availability: VehicleBookingAvailability | null; expiresAt: number };
 
 type BookingState = {
@@ -29,7 +31,7 @@ type BookingState = {
 	inFlight: Map<string, Promise<VehicleBookingAvailability | null>>;
 };
 
-type RailService = Record<string, unknown>;
+export type RailService = Record<string, unknown>;
 
 function record(value: unknown): Record<string, unknown> | null {
 	return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -90,7 +92,8 @@ async function discoverSigner(ctx: CacheContext): Promise<SignerBundle | null> {
 	return bundle;
 }
 
-function stateFor(ctx: CacheContext): BookingState {
+/** Shared per-runtime booking state: signer, station directory, and seat-map inventory. */
+export function qrtBookingState(ctx: CacheContext): BookingState {
 	return getPluginState(ctx, STATE_ID, () => ({
 		signer: null,
 		signerExpiresAt: 0,
@@ -118,7 +121,7 @@ async function signerFor(ctx: CacheContext, state: BookingState): Promise<Signer
 	return state.signerInFlight;
 }
 
-async function signedFetch(
+export async function signedQrtBookingFetch(
 	url: string,
 	ctx: CacheContext,
 	state: BookingState,
@@ -147,10 +150,10 @@ export function parseQrtBookingStations(payload: unknown): BookingStation[] {
 	return [...unique.values()];
 }
 
-async function stationsFor(ctx: CacheContext, state: BookingState): Promise<BookingStation[]> {
+export async function qrtBookingStationsFor(ctx: CacheContext, state: BookingState): Promise<BookingStation[]> {
 	if (state.stations && state.stationsExpiresAt > Date.now()) return state.stations;
 	if (!state.stationsInFlight) {
-		state.stationsInFlight = signedFetch(SEARCH_INPUT_URL, ctx, state)
+		state.stationsInFlight = signedQrtBookingFetch(SEARCH_INPUT_URL, ctx, state)
 			.then(async (response) => {
 				if (!response.ok) throw new Error(`QRT search input HTTP ${response.status}`);
 				return parseQrtBookingStations(await response.json());
@@ -194,7 +197,7 @@ export function matchQrtBookingStation(
 	return containing.length === 1 ? containing[0] : null;
 }
 
-function isoDate(value: string): string | null {
+export function isoDate(value: string): string | null {
 	return /^(\d{4}-\d{2}-\d{2})/.exec(value)?.[1] ?? null;
 }
 
@@ -202,7 +205,7 @@ function timeMinute(value: string): string | null {
 	return /T(\d{2}:\d{2})/.exec(value)?.[1] ?? null;
 }
 
-function bookingDate(value: string): string | null {
+export function bookingDate(value: string): string | null {
 	const date = isoDate(value);
 	if (!date) return null;
 	const [year, month, day] = date.split("-").map(Number);
@@ -220,7 +223,7 @@ function runToken(value: string): string {
 	);
 }
 
-function railServices(payload: unknown): RailService[] {
+export function qrtRailServices(payload: unknown): RailService[] {
 	const services = responseFields(payload)?.raiL_SERVICES;
 	return Array.isArray(services) ? services.map(record).filter((value): value is RailService => value !== null) : [];
 }
@@ -248,7 +251,7 @@ export function selectQrtRailService(
 	return matches.length === 1 ? matches[0] : null;
 }
 
-function regularProduct(name: string): boolean {
+export function regularProduct(name: string): boolean {
 	return /^(?:economy seats?|business seats?|railbeds?|single sleepers?|twin sleepers?)$/i.test(name.trim());
 }
 
@@ -286,7 +289,7 @@ export function qrtRegularFareClasses(service: RailService): VehicleBookingFareC
 		);
 }
 
-function searchRequest(origin: BookingStation, destination: BookingStation, travelDate: string): unknown {
+export function qrtSearchRequest(origin: BookingStation, destination: BookingStation, travelDate: string): unknown {
 	return {
 		RailServiceSearchRequest: [
 			{
@@ -345,13 +348,13 @@ async function queryAvailability(
 	destination: BookingStation,
 	travelDate: string,
 ): Promise<VehicleBookingAvailability | null> {
-	const response = await signedFetch(SEARCH_URL, ctx, state, {
+	const response = await signedQrtBookingFetch(SEARCH_URL, ctx, state, {
 		method: "POST",
 		headers: { "content-type": "application/json" },
-		body: JSON.stringify(searchRequest(origin, destination, travelDate)),
+		body: JSON.stringify(qrtSearchRequest(origin, destination, travelDate)),
 	});
 	if (!response.ok) throw new Error(`QRT rail search HTTP ${response.status}`);
-	const candidate = selectQrtRailService(railServices(await response.json()), service, origin, destination);
+	const candidate = selectQrtRailService(qrtRailServices(await response.json()), service, origin, destination);
 	if (!candidate) return null;
 	const fareClasses = qrtRegularFareClasses(candidate);
 	if (!fareClasses.length) return null;
@@ -378,8 +381,8 @@ export async function getQrtBookingAvailability(
 	const lastStop = service.stops.at(-1);
 	const travelDate = bookingDate(service.departureDate);
 	if (!firstStop || !lastStop || !travelDate) return null;
-	const state = stateFor(ctx);
-	const stations = await stationsFor(ctx, state);
+	const state = qrtBookingState(ctx);
+	const stations = await qrtBookingStationsFor(ctx, state);
 	const origin = matchQrtBookingStation(firstStop, stations);
 	const destination = matchQrtBookingStation(lastStop, stations);
 	if (!origin || !destination) return null;
