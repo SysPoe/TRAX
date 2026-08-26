@@ -73,6 +73,7 @@ import {
 	parseQrtBookingStations,
 	parseQrtSignerBundle,
 	qrtRegularFareClasses,
+	selectQrtBookingLeg,
 	selectQrtRailService,
 } from "../dist/region-specific/AU/SEQ/qr-travel/booking.js";
 import {
@@ -169,6 +170,65 @@ assert.equal(
 		qrtStations[1],
 	),
 	qrtRailService,
+);
+
+const qrtBookingStops = [
+	{
+		placeCode: "BNE",
+		placeName: "Brisbane (Roma St)",
+		trainPosition: "Departed",
+		plannedArrival: "2026-09-01T09:55:00",
+		plannedDeparture: "2026-09-01T10:00:00",
+		actualArrival: "2026-09-01T09:55:00",
+		actualDeparture: "2026-09-01T10:00:00",
+	},
+	{
+		placeCode: "MBJ",
+		placeName: "Maryborough West",
+		trainPosition: "NotArrived",
+		plannedArrival: "2026-09-01T12:25:00",
+		plannedDeparture: "2026-09-01T12:30:00",
+		actualArrival: "2026-09-01T12:25:00",
+		actualDeparture: "2026-09-01T12:30:00",
+	},
+	{
+		placeCode: "ROK",
+		placeName: "Rockhampton",
+		trainPosition: "NotArrived",
+		plannedArrival: "2026-09-01T14:00:00",
+		plannedDeparture: "2026-09-01T14:00:00",
+		actualArrival: "2026-09-01T14:00:00",
+		actualDeparture: "2026-09-01T14:00:00",
+	},
+];
+const qrtInProgressLeg = selectQrtBookingLeg(
+	{ stops: qrtBookingStops },
+	Date.parse("2026-09-01T09:00:00+10:00"),
+);
+assert.equal(qrtInProgressLeg?.origin.placeCode, "MBJ");
+assert.equal(qrtInProgressLeg?.destination.placeCode, "ROK");
+assert.equal(qrtInProgressLeg?.departureDate, "2026-09-01T12:30:00");
+assert.equal(
+	selectQrtBookingLeg({ stops: qrtBookingStops }, Date.parse("2026-09-01T13:30:00+10:00")),
+	null,
+);
+const rockhampton = { id: 6031, code: "ROK", name: "Rockhampton" };
+assert.equal(
+	selectQrtRailService(
+		[
+			{
+				...qrtRailService,
+				departurE_TIME: "9999-12-31T12:30:00",
+				startregioncode: "MBJ",
+				endregioncode: "ROK",
+			},
+		],
+		{ trip_number: "Q301", departureDate: "2026-09-01T10:00:00" },
+		qrtStations[1],
+		rockhampton,
+		"2026-09-01T12:30:00",
+	)?.startregioncode,
+	"MBJ",
 );
 assert.deepEqual(qrtRegularFareClasses(qrtRailService), [
 	{

@@ -2,6 +2,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import type { CacheContext } from "../../../../cache/types.js";
 import { getPluginState } from "../../../../plugins/types.js";
 import type { VehicleBookingAvailability, VehicleBookingFareClass } from "../../../../utils/vehicleModel.js";
+import { parseTimeWithConfig } from "../../../../utils/time.js";
 import type { QRTTravelStopTime, QRTTravelTrip } from "./types.js";
 
 const BOOKING_PAGE_URL = "https://queenslandrailtravel-booking.opendestinations.com/BookingSite/rail/search";
@@ -15,9 +16,16 @@ const DIRECTORY_CACHE_MS = 6 * 60 * 60 * 1000;
 const SIGNER_CACHE_MS = 6 * 60 * 60 * 1000;
 const INVENTORY_CACHE_MS = 5 * 60 * 1000;
 const MISSING_INVENTORY_CACHE_MS = 60 * 1000;
+/** QRT booking searches must begin far enough ahead for the website to accept the journey. */
+export const QRT_BOOKING_CUTOFF_MS = 60 * 60 * 1000;
 
 export type SignerBundle = { clientId: string; keys: [string, string, string, string] };
 export type BookingStation = { id: number; code: string | null; name: string };
+export type QrtBookingLeg = {
+	origin: QRTTravelStopTime;
+	destination: QRTTravelStopTime;
+	departureDate: string;
+};
 type InventoryEntry = { availability: VehicleBookingAvailability | null; expiresAt: number };
 
 type BookingState = {
@@ -205,6 +213,38 @@ function timeMinute(value: string): string | null {
 	return /T(\d{2}:\d{2})/.exec(value)?.[1] ?? null;
 }
 
+function stopHasPassed(stop: QRTTravelStopTime): boolean {
+	const position = stop.trainPosition.trim().toLowerCase();
+	return position === "passed" || position === "departed" || position.includes("passed");
+}
+
+/**
+ * Select the first bookable remaining leg. The provider search is for a journey
+ * beginning at a station that is still ahead of the train, not for a departed
+ * origin. Scheduled times are used because they are the times returned by the
+ * booking service for exact service matching.
+ */
+export function selectQrtBookingLeg(
+	service: Pick<QRTTravelTrip, "stops">,
+	now = Date.now(),
+	cutoffMs = QRT_BOOKING_CUTOFF_MS,
+): QrtBookingLeg | null {
+	const destination = service.stops.at(-1);
+	if (!destination) return null;
+	const earliestDeparture = now + cutoffMs;
+	const timeZone = "Australia/Brisbane";
+
+	for (const stop of service.stops.slice(0, -1)) {
+		if (stopHasPassed(stop)) continue;
+		const departureDate = stop.plannedDeparture;
+		if (!departureDate || departureDate === "0001-01-01T00:00:00") continue;
+		const departure = parseTimeWithConfig(departureDate, timeZone);
+		if (!Number.isFinite(departure) || departure < earliestDeparture) continue;
+		return { origin: stop, destination, departureDate };
+	}
+	return null;
+}
+
 export function bookingDate(value: string): string | null {
 	const date = isoDate(value);
 	if (!date) return null;
@@ -233,9 +273,10 @@ export function selectQrtRailService(
 	service: Pick<QRTTravelTrip, "trip_number" | "departureDate">,
 	origin: BookingStation,
 	destination: BookingStation,
+	departureDate = service.departureDate,
 ): RailService | null {
-	const date = isoDate(service.departureDate);
-	const minute = timeMinute(service.departureDate);
+	const date = isoDate(departureDate);
+	const minute = timeMinute(departureDate);
 	const expectedRun = runToken(service.trip_number);
 	const matches = services.filter((candidate) => {
 		const travelDate = stringValue(candidate.traveL_DATE);
@@ -342,6 +383,7 @@ export function qrtSearchRequest(origin: BookingStation, destination: BookingSta
 
 async function queryAvailability(
 	service: QRTTravelTrip,
+	leg: QrtBookingLeg,
 	ctx: CacheContext,
 	state: BookingState,
 	origin: BookingStation,
@@ -354,7 +396,13 @@ async function queryAvailability(
 		body: JSON.stringify(qrtSearchRequest(origin, destination, travelDate)),
 	});
 	if (!response.ok) throw new Error(`QRT rail search HTTP ${response.status}`);
-	const candidate = selectQrtRailService(qrtRailServices(await response.json()), service, origin, destination);
+	const candidate = selectQrtRailService(
+		qrtRailServices(await response.json()),
+		service,
+		origin,
+		destination,
+		leg.departureDate,
+	);
 	if (!candidate) return null;
 	const fareClasses = qrtRegularFareClasses(candidate);
 	if (!fareClasses.length) return null;
@@ -377,22 +425,21 @@ export async function getQrtBookingAvailability(
 	service: QRTTravelTrip,
 	ctx: CacheContext,
 ): Promise<VehicleBookingAvailability | null> {
-	const firstStop = service.stops[0];
-	const lastStop = service.stops.at(-1);
-	const travelDate = bookingDate(service.departureDate);
-	if (!firstStop || !lastStop || !travelDate) return null;
+	const leg = selectQrtBookingLeg(service);
+	const travelDate = leg ? bookingDate(leg.departureDate) : null;
+	if (!leg || !travelDate) return null;
 	const state = qrtBookingState(ctx);
 	const stations = await qrtBookingStationsFor(ctx, state);
-	const origin = matchQrtBookingStation(firstStop, stations);
-	const destination = matchQrtBookingStation(lastStop, stations);
+	const origin = matchQrtBookingStation(leg.origin, stations);
+	const destination = matchQrtBookingStation(leg.destination, stations);
 	if (!origin || !destination) return null;
-	const key = `${service.serviceId}\0${service.departureDate}\0${origin.id}\0${destination.id}`;
+	const key = `${service.serviceId}\0${leg.departureDate}\0${origin.id}\0${destination.id}`;
 	const now = Date.now();
 	const cached = state.inventory.get(key);
 	if (cached && cached.expiresAt > now) return cached.availability;
 	const active = state.inFlight.get(key);
 	if (active) return active;
-	const request = queryAvailability(service, ctx, state, origin, destination, travelDate)
+	const request = queryAvailability(service, leg, ctx, state, origin, destination, travelDate)
 		.catch(() => null)
 		.then((availability) => {
 			state.inventory.set(key, {

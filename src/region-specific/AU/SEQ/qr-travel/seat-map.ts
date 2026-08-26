@@ -11,6 +11,7 @@ import {
 	qrtRailServices,
 	qrtSearchRequest,
 	regularProduct,
+	selectQrtBookingLeg,
 	selectQrtRailService,
 	signedQrtBookingFetch,
 	type RailService,
@@ -315,20 +316,19 @@ async function fetchSeatMap(
 	ctx: CacheContext,
 	state: SeatMapState,
 ): Promise<QrtBookingSeatMap | null> {
-	const firstStop = service.stops[0];
-	const lastStop = service.stops.at(-1);
-	const travelDate = bookingDate(service.departureDate);
-	const isoTravelDate = isoDate(service.departureDate);
-	if (!firstStop || !lastStop || !travelDate || !isoTravelDate) return null;
+	const leg = selectQrtBookingLeg(service);
+	const travelDate = leg ? bookingDate(leg.departureDate) : null;
+	const isoTravelDate = leg ? isoDate(leg.departureDate) : null;
+	if (!leg || !travelDate || !isoTravelDate) return null;
 
-	const key = `${service.serviceId}\0${isoTravelDate}`;
+	const key = `${service.serviceId}\0${leg.departureDate}\0${leg.origin.placeCode}\0${leg.destination.placeCode}`;
 	const cachedCandidate = state.candidates.get(key);
 	let candidate: RailService | null = cachedCandidate === undefined ? null : (cachedCandidate?.service ?? null);
 	if (!cachedCandidate || cachedCandidate.expiresAt <= Date.now()) {
 		const booking = qrtBookingState(ctx);
 		const stations = await qrtBookingStationsFor(ctx, booking);
-		const origin = matchQrtBookingStation(firstStop, stations);
-		const destination = matchQrtBookingStation(lastStop, stations);
+		const origin = matchQrtBookingStation(leg.origin, stations);
+		const destination = matchQrtBookingStation(leg.destination, stations);
 		if (origin && destination) {
 			const response = await signedQrtBookingFetch(QRT_RAIL_SEARCH_URL, ctx, booking, {
 				method: "POST",
@@ -336,7 +336,13 @@ async function fetchSeatMap(
 				body: JSON.stringify(qrtSearchRequest(origin, destination, travelDate)),
 			});
 			if (response.ok) {
-				candidate = selectQrtRailService(qrtRailServices(await response.json()), service, origin, destination);
+				candidate = selectQrtRailService(
+					qrtRailServices(await response.json()),
+					service,
+					origin,
+					destination,
+					leg.departureDate,
+				);
 			}
 		}
 		state.candidates.set(key, {
@@ -379,11 +385,13 @@ export async function getQrtBookingSeatMap(
 	ctx: CacheContext,
 	deps: SeatMapDeps = {},
 ): Promise<QrtBookingSeatMap | null> {
-	const isoTravelDate = isoDate(service.departureDate);
+	const leg = selectQrtBookingLeg(service);
+	if (!leg) return null;
+	const isoTravelDate = isoDate(leg.departureDate);
 	if (!isoTravelDate) return null;
 	const state = stateFor(ctx);
 	const fetchMap = deps.fetchMap ?? ((trip, context, seatMapState) => fetchSeatMap(trip, context, seatMapState));
-	const key = `${service.serviceId}\0${isoTravelDate}`;
+	const key = `${service.serviceId}\0${leg.departureDate}\0${leg.origin.placeCode}\0${leg.destination.placeCode}`;
 
 	const cached = state.seatMaps.get(key);
 	if (cached && cached.expiresAt > Date.now()) return cached.map;

@@ -167,7 +167,20 @@ test("getQrtBookingSeatMap serves fresh, then stale-while-revalidate, results", 
 	const trip = {
 		serviceId: "PPS-123",
 		departureDate: "2026-08-31T07:05:00",
-		stops: [{ placeCode: "ROM", placeName: "Roma Street" }],
+		stops: [
+			{
+				placeCode: "ROM",
+				placeName: "Roma Street",
+				plannedDeparture: "2026-08-31T07:05:00",
+				trainPosition: "NotArrived",
+			},
+			{
+				placeCode: "BDB",
+				placeName: "Bundaberg",
+				plannedDeparture: "2026-08-31T13:00:00",
+				trainPosition: "NotArrived",
+			},
+		],
 	} as never;
 	const first: QrtBookingSeatMap = {
 		serviceId: "PPS-123",
@@ -213,7 +226,20 @@ test("getQrtBookingSeatMap keeps the last map when a refresh fails", async () =>
 	const trip = {
 		serviceId: "PPS-456",
 		departureDate: "2026-08-31T07:05:00",
-		stops: [{ placeCode: "ROM", placeName: "Roma Street" }],
+		stops: [
+			{
+				placeCode: "ROM",
+				placeName: "Roma Street",
+				plannedDeparture: "2026-08-31T07:05:00",
+				trainPosition: "NotArrived",
+			},
+			{
+				placeCode: "BDB",
+				placeName: "Bundaberg",
+				plannedDeparture: "2026-08-31T13:00:00",
+				trainPosition: "NotArrived",
+			},
+		],
 	} as never;
 	const map = {
 		serviceId: "PPS-456",
