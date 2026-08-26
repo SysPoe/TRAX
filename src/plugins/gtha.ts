@@ -15,6 +15,11 @@ import {
 import { getVehicleInfo } from "../region-specific/CA/GTHA/vehicleModel.js";
 import { entityKey } from "../identity.js";
 import { getGTHAVehicleDetails, GTHAVehicleDetails } from "../region-specific/CA/GTHA/vehicleDetails.js";
+import { GTHA_OPERATING_SCHEDULE_SOURCE_ID } from "../region-specific/CA/GTHA/operating-schedule.js";
+import {
+	normalizeGthaRealtimeTripUpdate,
+	normalizeGthaRealtimeVehiclePosition,
+} from "../region-specific/CA/GTHA/service-date.js";
 
 const goStop = (localId: string) => entityKey({ feedId: "go", localId });
 
@@ -23,6 +28,8 @@ export const gthaPlugin: TransitPlugin = {
 	feedIds: ["go", "up"],
 	capabilities: ["vehicles", "consist", "platform-changes", "supplemental-realtime"],
 	beforeRealtime: refreshGthaOperatingSchedule,
+	enrichRealtimeTripUpdate: (update, ctx) =>
+		update.source_id === GTHA_OPERATING_SCHEDULE_SOURCE_ID ? update : normalizeGthaRealtimeTripUpdate(update, ctx),
 	afterRealtime(ctx) {
 		if (!ctx.gtfs) return;
 		ctx.config.progressLog({
@@ -35,7 +42,9 @@ export const gthaPlugin: TransitPlugin = {
 		});
 		return updateAllSources(ctx, ctx.gtfs);
 	},
-	enrichVehiclePosition: enrichGthaVehiclePosition,
+	enrichVehiclePosition(vehicle, ctx) {
+		return enrichGthaVehiclePosition(normalizeGthaRealtimeVehiclePosition(vehicle, ctx), ctx);
+	},
 	vehicleInfoForTrip: getVehicleInfo,
 	vehicleFormationUnits: (trip, ctx) => {
 		const consist = trip.consist ?? (trip.vehicle_id ? getVehicleConsist(ctx, trip.vehicle_id) : null);

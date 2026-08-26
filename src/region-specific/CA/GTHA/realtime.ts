@@ -45,6 +45,7 @@ import {
 	GTHA_OPERATING_SCHEDULE_SOURCE_ID,
 	isGthaOperatingScheduleForServiceDate,
 } from "./operating-schedule.js";
+import { normalizeGthaRealtimeServiceDate } from "./service-date.js";
 
 function fetchWithTimeout(ctx: CacheContext, input: string | URL, init: RequestInit = {}): Promise<Response> {
 	return fetch(input, {
@@ -1038,7 +1039,22 @@ export async function updateSourceB(
 				const augmentedTrip = ctx.augmented.tripsRec.get(tripId);
 				if (!augmentedTrip) continue;
 
-				const instance = augmentedTrip.instances.find((v: any) => v.serviceDate === serviceDateStr);
+				const providerStartTime = trip.stop
+					.slice()
+					.sort((a, b) => a.order - b.order)
+					.find((stop) => stop.schDeparture || stop.schArrival);
+				const targetServiceDate = providerStartTime
+					? normalizeGthaRealtimeServiceDate(
+							{
+								feedId: augmentedTrip.feed_id,
+								tripId: augmentedTrip.trip_id,
+								startDate: serviceDateStr,
+								startTime: providerStartTime.schDeparture ?? providerStartTime.schArrival!,
+							},
+							ctx,
+						)
+					: serviceDateStr;
+				const instance = augmentedTrip.instances.find((v: any) => v.serviceDate === targetServiceDate);
 				if (!instance) continue;
 				if (trip.stop.some((stop) => stop.isOverride === "1")) {
 					const destination = trip.stop
@@ -1080,7 +1096,7 @@ export async function updateSourceB(
 								actTrack ?? schTrack,
 								schTrack,
 								"Source B",
-								blockMap,
+								targetServiceDate === serviceDateStr ? blockMap : undefined,
 							);
 							updateCount++;
 						}
@@ -1109,11 +1125,11 @@ export async function updateSourceB(
 
 					propagateVehicleInfoToBlock(
 						ctx,
-						serviceDateStr,
+						targetServiceDate,
 						instance.block_id,
 						instance.vehicle_id,
 						instance.passenger_cars,
-						blockMap,
+						targetServiceDate === serviceDateStr ? blockMap : undefined,
 						instance.consist,
 						instance.trip_id,
 					);
@@ -1216,7 +1232,18 @@ export async function updateSourceA(
 				const augmentedTrip = ctx.augmented.tripsRec.get(tripId);
 				if (!augmentedTrip) continue;
 
-				const instance = augmentedTrip.instances.find((v) => v.serviceDate === serviceDateStr);
+				const targetServiceDate = trip.startTime
+					? normalizeGthaRealtimeServiceDate(
+							{
+								feedId: augmentedTrip.feed_id,
+								tripId: augmentedTrip.trip_id,
+								startDate: serviceDateStr,
+								startTime: trip.startTime,
+							},
+							ctx,
+						)
+					: serviceDateStr;
+				const instance = augmentedTrip.instances.find((v) => v.serviceDate === targetServiceDate);
 				if (!instance) continue;
 
 				if (vehicleId) {
@@ -1233,11 +1260,11 @@ export async function updateSourceA(
 
 					propagateVehicleInfoToBlock(
 						ctx,
-						serviceDateStr,
+						targetServiceDate,
 						instance.block_id,
 						instance.vehicle_id,
 						instance.passenger_cars,
-						blockMap,
+						targetServiceDate === serviceDateStr ? blockMap : undefined,
 						instance.consist,
 						instance.trip_id,
 					);
@@ -1251,11 +1278,11 @@ export async function updateSourceA(
 
 					propagateVehicleInfoToBlock(
 						ctx,
-						serviceDateStr,
+						targetServiceDate,
 						instance.block_id,
 						instance.vehicle_id,
 						instance.passenger_cars,
-						blockMap,
+						targetServiceDate === serviceDateStr ? blockMap : undefined,
 						instance.consist,
 						instance.trip_id,
 					);
