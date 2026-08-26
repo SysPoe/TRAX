@@ -64,8 +64,9 @@ export function getDeparturesForInstantWindow(
 	const validStops = new Set<string>([stop.stop_id, stop.parent_stop_id, ...stop.child_stop_ids].filter(Boolean) as string[]);
 	const candidates: { stopTime: AugmentedStopTime; at: number }[] = [];
 
-	// The previous service date owns ordinary after-midnight GTFS times such as 25:30.
-	for (let offset = -1; offset <= dayCount + 1; offset++) {
+	// A service can remain active for several days, so the backward scan follows
+	// the longest scheduled trip in this static snapshot.
+	for (let offset = -ctx.runtimeState.maxTripLookbackDays; offset <= dayCount + 1; offset++) {
 		const serviceDate = addDaysToServiceDate(firstLocalDate, offset);
 		const dayStart = getServiceDayStart(serviceDate, timeZone);
 		for (const stopId of validStops) {

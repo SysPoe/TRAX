@@ -53,6 +53,8 @@ export interface SourceHealth {
 	transport: SourceReport["transport"] | null;
 }
 
+export type StaticRefreshCoordinator = <T>(task: () => Promise<T>) => Promise<T>;
+
 export class TRAX {
 	public config: TraxConfig;
 	public gtfs?: GTFS;
@@ -64,6 +66,7 @@ export class TRAX {
 	private staticRefreshInFlight: Promise<void> | null = null;
 	private realtimeRefreshInFlight: Promise<void> | null = null;
 	private sourceHealth = new Map<string, SourceHealth>();
+	private coordinateStaticRefresh: StaticRefreshCoordinator;
 
 	private hasRealtimeSources(): boolean {
 		return (
@@ -73,9 +76,14 @@ export class TRAX {
 		);
 	}
 
-	constructor(network: NetworkDefinition, options: RuntimeOptions = {}) {
+	constructor(
+		network: NetworkDefinition,
+		options: RuntimeOptions = {},
+		coordinateStaticRefresh: StaticRefreshCoordinator = (task) => task(),
+	) {
 		this.config = resolveConfig(network, options);
 		this.events = new EventEmitter();
+		this.coordinateStaticRefresh = coordinateStaticRefresh;
 
 		this.ctx = {
 			raw: cache.createEmptyRawCache(),
@@ -232,7 +240,12 @@ export class TRAX {
 	 */
 	private async ensureGtfs(): Promise<GTFS> {
 		if (this.gtfs) return this.gtfs;
+		await this.refreshStatic();
+		if (!this.gtfs) throw new Error("Static GTFS refresh completed without a snapshot");
+		return this.gtfs;
+	}
 
+	private async initializeGtfs(): Promise<void> {
 		const gtfs = await createGtfs(this.config, false, this.reportSource);
 		this.validateFeedTimeZones(gtfs);
 		this.ctx.augmented.timer.start("TRAX:initialCacheRefresh");
@@ -240,8 +253,6 @@ export class TRAX {
 		nextCtx.augmented.timer.stop("TRAX:initialCacheRefresh");
 		this.gtfs = gtfs;
 		this.ctx = nextCtx;
-
-		return this.gtfs;
 	}
 
 	/**
@@ -249,15 +260,18 @@ export class TRAX {
 	 */
 	public async refreshStatic(): Promise<void> {
 		if (this.staticRefreshInFlight) return this.staticRefreshInFlight;
-		this.staticRefreshInFlight = (async () => {
-			await this.ensureGtfs();
+		this.staticRefreshInFlight = this.coordinateStaticRefresh(async () => {
+			if (!this.gtfs) {
+				await this.initializeGtfs();
+				return;
+			}
 			const nextGtfs = await createGtfs(this.config, false, this.reportSource);
 			this.validateFeedTimeZones(nextGtfs);
 			const nextCtx = await cache.refreshStaticCache(nextGtfs, this.config, this.ctx);
 			// Readers use the prior immutable snapshot until both objects are ready.
 			this.gtfs = nextGtfs;
 			this.ctx = nextCtx;
-		})().finally(() => {
+		}).finally(() => {
 			this.staticRefreshInFlight = null;
 		});
 		return this.staticRefreshInFlight;

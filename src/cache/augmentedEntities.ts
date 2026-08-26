@@ -228,13 +228,23 @@ export function ensureStartServiceDateMaterialized(ctx: CacheContext, serviceDat
 		if (!scheduled && !hasRealtime) continue;
 
 		const existing = ctx.augmented.tripsRec.get(tripKey);
-		if (!existing) continue;
 		const dateTrip = augmentTrip(rawTrip, ctx, ctx.augmented.tripUpdatesCache, existing, {
 			serviceDates: scheduled ? [serviceDate] : [],
 			realtimeDates: [serviceDate],
 		});
 		const nextInstances = dateTrip.instances.filter((instance) => instance.serviceDate === serviceDate);
 		if (nextInstances.length === 0) continue;
+		if (!existing) {
+			dateTrip.instances = nextInstances;
+			ctx.augmented.tripsRec.set(tripKey, dateTrip);
+			ctx.augmented.trips.push(dateTrip);
+			registerAugmentedTrip(ctx, dateTrip);
+			indexInstances(ctx, tripKey, nextInstances);
+			refreshTripStopTimeRecords(ctx, tripKey, dateTrip);
+			patchSeqDiagramOntoAugmentedTrip(ctx, dateTrip);
+			affectedTripIds.add(dateTrip.trip_id);
+			continue;
+		}
 
 		for (const instance of existing.instances) {
 			if (instance.serviceDate === serviceDate) ctx.augmented.instancesRec.delete(instance.instance_id);
@@ -259,8 +269,9 @@ export function ensureStartServiceDateMaterialized(ctx: CacheContext, serviceDat
 
 /** Date-filter index. The previous start date is included for GTFS times beyond 24:00. */
 export function getTripIdsByServiceDate(ctx: CacheContext, serviceDate: string): string[] {
-	ensureStartServiceDateMaterialized(ctx, addDaysToServiceDate(serviceDate, -1));
-	ensureStartServiceDateMaterialized(ctx, serviceDate);
+	for (let offset = -ctx.runtimeState.maxTripLookbackDays; offset <= 0; offset++) {
+		ensureStartServiceDateMaterialized(ctx, addDaysToServiceDate(serviceDate, offset));
+	}
 	return ctx.augmented.serviceDateTrips.get(serviceDate) ?? [];
 }
 

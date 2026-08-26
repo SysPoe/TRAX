@@ -8,6 +8,7 @@ import type {
 	Stop,
 	StopTime,
 	Trip,
+	TripStopTimeBounds,
 	Transfer,
 	GTFS,
 } from "qdf-gtfs";
@@ -28,6 +29,8 @@ export type RawCache = {
 	tripsByKey: Map<string, Trip>;
 	/** Considered trips from the same static snapshot as {@link tripsByKey}. */
 	consideredTrips?: Trip[];
+	/** Compact native extents used to select eager trip instances without loading stop-time rows. */
+	tripStopTimeBoundsByKey: Map<string, TripStopTimeBounds>;
 	stopsByKey: Map<string, Stop>;
 	stopsByFeed: Map<string, Stop[]>;
 	injectedTripUpdates?: RealtimeTripUpdate[];
@@ -87,6 +90,7 @@ export type CacheContext = {
 		serviceDayStarts: Map<string, number>;
 		availableServiceDates: string[] | null;
 		operationalServiceDates: Set<string>;
+		maxTripLookbackDays: number;
 		lazyServiceDates: Map<string, true>;
 		dateOffsets: Map<string, string>;
 		serviceDateArrays: Map<string, string[]>;

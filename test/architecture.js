@@ -1439,6 +1439,32 @@ function crc32(buffer) {
 	for (const byte of buffer) crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
 	return (crc ^ 0xffffffff) >>> 0;
 }
+function protobufVarint(value) {
+	const bytes = [];
+	do {
+		let byte = value & 0x7f;
+		value >>>= 7;
+		if (value) byte |= 0x80;
+		bytes.push(byte);
+	} while (value);
+	return Buffer.from(bytes);
+}
+function protobufField(tag, body) {
+	const bytes = typeof body === "string" ? Buffer.from(body) : body;
+	return Buffer.concat([protobufVarint((tag << 3) | 2), protobufVarint(bytes.length), bytes]);
+}
+function makeScheduledTripUpdate(tripId, startDate, startTime = null) {
+	const header = protobufField(1, "2.0");
+	const descriptor = Buffer.concat([
+		protobufField(1, tripId),
+		...(startTime ? [protobufField(2, startTime)] : []),
+		protobufField(3, startDate),
+	]);
+	const tripUpdate = protobufField(1, descriptor);
+	const entity = Buffer.concat([protobufField(1, `update-${tripId}`), protobufField(3, tripUpdate)]);
+	return Buffer.concat([protobufField(1, header), protobufField(2, entity)]);
+}
+
 function createZip(files) {
 	const localParts = [],
 		centralParts = [];
@@ -1477,19 +1503,36 @@ function createZip(files) {
 	return Buffer.concat([...localParts, directory, end]);
 }
 
-function feed(name, timezone, includeIntermediate = false) {
+function feed(name, timezone, includeIntermediate = false, includeLongTrip = false) {
 	const middleStop = includeIntermediate ? `middle,${name} Middle,-27.45,153.05\n` : "";
 	const middleStopTime = includeIntermediate ? "shared,25:45:00,25:45:00,middle,2,0,0\n" : "";
 	const endSequence = includeIntermediate ? 3 : 2;
+	const longTrip = includeLongTrip ? "shared,shared,long-trip,End,0,shared\n" : "";
+	const seasonalTrip = includeLongTrip ? "shared,seasonal,seasonal-trip,End,0,shared\n" : "";
+	const lazySeasonalTrip = includeLongTrip ? "shared,seasonal,seasonal-lazy-trip,End,0,shared\n" : "";
+	const longStopTimes = includeLongTrip
+		? "long-trip,01:00:00,01:00:00,shared,1,0,1\nlong-trip,119:00:00,119:00:00,end,2,1,0\n"
+		: "";
+	const seasonalStopTimes = includeLongTrip
+		? "seasonal-trip,12:00:00,12:00:00,shared,1,0,1\nseasonal-trip,13:00:00,13:00:00,end,2,1,0\n" +
+			"seasonal-lazy-trip,14:00:00,14:00:00,shared,1,0,1\nseasonal-lazy-trip,15:00:00,15:00:00,end,2,1,0\n"
+		: "";
+	const seasonalCalendar = includeLongTrip
+		? "seasonal,1,1,1,1,1,1,1,20261201,20261231\n"
+		: "";
 	return createZip({
 		"agency.txt": `agency_id,agency_name,agency_url,agency_timezone\nagency,${name},https://example.test,${timezone}\n`,
 		"routes.txt": "route_id,agency_id,route_short_name,route_long_name,route_type\nshared,agency,R,Shared Rail,2\n",
 		"stops.txt": `stop_id,stop_name,stop_lat,stop_lon\nshared,${name} Station,-27.4,153.0\n${middleStop}end,${name} End,-27.5,153.1\n`,
 		"trips.txt":
-			"route_id,service_id,trip_id,trip_headsign,direction_id,shape_id\nshared,shared,shared,End,0,shared\n",
-		"stop_times.txt": `trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type\nshared,25:30:00,25:30:00,shared,1,0,1\n${middleStopTime}shared,26:00:00,26:00:00,end,${endSequence},1,0\n`,
+			"route_id,service_id,trip_id,trip_headsign,direction_id,shape_id\nshared,shared,shared,End,0,shared\n" +
+			longTrip +
+			seasonalTrip +
+			lazySeasonalTrip,
+		"stop_times.txt": `trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type\nshared,25:30:00,25:30:00,shared,1,0,1\n${middleStopTime}shared,26:00:00,26:00:00,end,${endSequence},1,0\n${longStopTimes}${seasonalStopTimes}`,
 		"calendar.txt":
-			"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nshared,1,1,1,1,1,1,1,20260101,20261231\n",
+			"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nshared,1,1,1,1,1,1,1,20260101,20261231\n" +
+			seasonalCalendar,
 		"shapes.txt":
 			"shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence\nshared,-27.4,153.0,1\nshared,-27.5,153.1,2\n",
 	});
@@ -1625,19 +1668,32 @@ function continuationFeed() {
 }
 
 const feeds = {
-	"/a.zip": feed("Alpha", "Australia/Brisbane"),
+	"/a.zip": feed("Alpha", "Australia/Brisbane", false, true),
 	"/b.zip": feed("Beta", "America/Toronto", true),
+	"/slow-a.zip": feed("Slow Alpha", "Australia/Brisbane"),
+	"/slow-b.zip": feed("Slow Beta", "Australia/Brisbane"),
+	"/future-rt.pb": makeScheduledTripUpdate("seasonal-trip", "20261215"),
 	"/orphan.zip": orphanTripFeed(),
 	"/continuations.zip": continuationFeed(),
 };
+let activeStaticDownloads = 0;
+let maxActiveStaticDownloads = 0;
 const server = http.createServer((request, response) => {
 	const body = feeds[request.url];
 	if (!body) {
 		response.writeHead(404).end();
 		return;
 	}
-	response.writeHead(200, { "content-type": "application/zip" });
-	response.end(body);
+	const delayed = request.url.startsWith("/slow-");
+	if (delayed) {
+		activeStaticDownloads++;
+		maxActiveStaticDownloads = Math.max(maxActiveStaticDownloads, activeStaticDownloads);
+	}
+	setTimeout(() => {
+		response.writeHead(200, { "content-type": "application/zip" });
+		response.end(body);
+		if (delayed) activeStaticDownloads--;
+	}, delayed ? 25 : 0);
 });
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
@@ -1658,7 +1714,18 @@ try {
 			},
 		],
 		feeds: [
-			{ id: "alpha", staticSource: { url: `${origin}/a.zip` }, realtimeSources: [] },
+			{
+				id: "alpha",
+				staticSource: { url: `${origin}/a.zip` },
+				realtimeSources: [
+					{
+						id: "alpha-future-trip-updates",
+						targetFeedId: "alpha",
+						kind: "trip-updates",
+						source: { url: `${origin}/future-rt.pb` },
+					},
+				],
+			},
 			{ id: "beta", staticSource: { url: `${origin}/b.zip` }, realtimeSources: [] },
 		],
 		places: [
@@ -1826,6 +1893,7 @@ try {
 		"healthy",
 	);
 	assert.equal(runtime.getRawTrips({ trip_id: "shared" }).length, 2);
+	assert.equal(runtime.getRawTrips().length, 5);
 	assert.equal(runtime.getTripIdsByNumber("ared").size, 2);
 	assert.equal(runtime.getAugmentedStops({ feedId: "alpha", localId: "shared" })[0].stop_name, "Alpha Station");
 	assert.equal(runtime.getAugmentedStops({ feedId: "beta", localId: "shared" })[0].stop_name, "Beta Station");
@@ -1857,13 +1925,47 @@ try {
 	assert.equal(crossFeedPassingStop?.feed_id, "beta");
 	assert.equal(crossFeedPassingStop?.scheduled_stop_id, "middle");
 	assert.equal(runtime.metadata.feeds.find((value) => value.id === "beta").timeZone, "America/Toronto");
+	const longTrip = runtime.getAugmentedTrips({ feedId: "alpha", localId: "long-trip" })[0];
+	const fourDaysAgo = runtime.utils.time.addDaysToServiceDate(runtime.today(), -4);
+	assert.ok(
+		longTrip.instances.some((instance) => instance.serviceDate === fourDaysAgo),
+		"a 119-hour trip which overlaps today must retain its service date from four days ago",
+	);
+	assert.equal(
+		runtime.getAugmentedTrips().some((trip) => trip.trip_id === "seasonal-trip"),
+		false,
+		"a far-future scheduled trip should stay raw until requested or reported by realtime",
+	);
+	await runtime.refreshRealtime();
+	const realtimeSeasonal = runtime.getAugmentedTrips({ feedId: "alpha", localId: "seasonal-trip" })[0];
+	assert.ok(
+		realtimeSeasonal.instances.some(
+			(instance) => instance.serviceDate === "20261215" && instance.realtime_update !== null,
+		),
+		"a realtime start_date outside the operational horizon must materialize",
+	);
+	assert.equal(
+		runtime.getAugmentedTrips().some((trip) => trip.trip_id === "seasonal-lazy-trip"),
+		false,
+	);
 
 	const eagerInstanceCount = alphaTrip.instances.length;
 	assert.ok(runtime.getAvailableServiceDates().includes("20261215"));
 	assert.equal(alphaTrip.instances.length, eagerInstanceCount, "listing calendar dates must not build instances");
-	assert.equal(runtime.getTripIdsByServiceDate("20261215").length, 2);
+	assert.equal(runtime.getTripIdsByServiceDate("20261215").length, 5);
+	assert.ok(
+		runtime
+			.getAugmentedTrips({ feedId: "alpha", localId: "seasonal-lazy-trip" })[0]
+			.instances.some((instance) => instance.serviceDate === "20261215"),
+		"a trip with no eager placeholder must materialize lazily",
+	);
 	const lazyAlpha = alphaTrip.instances.find((instance) => instance.serviceDate === "20261215");
 	assert.ok(lazyAlpha, "a far service date should materialize on demand");
+	runtime.getTripIdsByServiceDate("20260115");
+	assert.ok(
+		alphaTrip.instances.some((instance) => instance.serviceDate === "20260115"),
+		"a historical service date should materialize on demand",
+	);
 	const lazyAlphaId = lazyAlpha.instance_id;
 	for (let day = 16; day <= 25; day++) runtime.getTripIdsByServiceDate(`202612${day}`);
 	assert.equal(
@@ -1901,12 +2003,31 @@ try {
 		{ cacheDir: ".TRAXCACHE/test-other" },
 	);
 	await other.loadGTFS(false, false);
-	assert.equal(other.getRawTrips().length, 1);
-	assert.equal(runtime.getRawTrips().length, 2);
+	assert.equal(other.getRawTrips().length, 4);
+	assert.equal(runtime.getRawTrips().length, 5);
 	assert.notEqual(
 		other.getAugmentedTrips({ feedId: "alpha", localId: "shared" })[0].instances[0].instance_id,
 		alphaTrip.instances[0].instance_id,
 	);
+
+	const serialRegistry = new NetworkRuntimeRegistry();
+	serialRegistry.register({
+		...definition,
+		id: "serial-a",
+		plugins: [],
+		places: [],
+		feeds: [{ id: "slow-a", staticSource: { url: `${origin}/slow-a.zip` }, realtimeSources: [] }],
+	});
+	serialRegistry.register({
+		...definition,
+		id: "serial-b",
+		plugins: [],
+		places: [],
+		feeds: [{ id: "slow-b", staticSource: { url: `${origin}/slow-b.zip` }, realtimeSources: [] }],
+	});
+	await serialRegistry.loadAll();
+	assert.equal(maxActiveStaticDownloads, 1, "registry runtimes must serialize static snapshot construction");
+	serialRegistry.clear();
 
 	const winter = runtime.utils.time.parseTimeWithConfig("2026-01-15T12:00:00", "America/Toronto");
 	const summer = runtime.utils.time.parseTimeWithConfig("2026-07-15T12:00:00", "America/Toronto");
