@@ -11,7 +11,7 @@ import type { QRTTravelTrip } from "./types.js";
 
 const CONTENT_URL = "https://www.queenslandrailtravel.com.au/SPWebApp/api/ContentQuery/GetItems";
 const PROFILE_SOURCE_URL = "https://www.queenslandrailtravel.com.au/Railexperiences/ourtrains";
-const CACHE_FILE = "region-specific/seq/qrt-published-formations.json";
+const CACHE_FILE = "region-specific/seq/qrt-published-formations-v2.json";
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const STATE_ID = "au-seq-qrt-published-formations";
 
