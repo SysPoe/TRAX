@@ -1,7 +1,7 @@
 export interface QRTTrainMovementDTO {
 	PlaceCode: string;
 	PlaceName: string;
-	gtfsStopId: string | null;
+	sourceStopId: string | null;
 	stationDetails?: QRTStationDetails;
 	KStation: string | boolean; // Whether the train stops on request only at this station
 	Status: string;
@@ -131,7 +131,7 @@ export interface QRTServiceUpdate {
 export interface QRTTravelStopTime {
 	placeCode: string;
 	placeName: string;
-	gtfsStopId: string | null;
+	sourceStopId: string | null;
 	stationDetails?: QRTStationDetails;
 	kStation: string | boolean;
 	status: string;

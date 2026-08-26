@@ -339,14 +339,14 @@ function convertQRTServiceToTravelTrip(
 
 		type DelayClass = "on-time" | "scheduled" | "late" | "very-late" | "early";
 
-		let gtfsStopId: string | null = null;
+		let sourceStopId: string | null = null;
 		let findRes = gtfsStops.find(
 			(v) =>
 				v.stop_name?.toLowerCase().replace("station", "").trim() ===
 				movement.PlaceName.toLowerCase().replace("station", "").trim(),
 		);
-		if (findRes) gtfsStopId = findRes.stop_id;
-		if (movement.PlaceName.toLowerCase().includes("roma st")) gtfsStopId = "place_romsta";
+		if (findRes) sourceStopId = findRes.stop_id;
+		if (movement.PlaceName.toLowerCase().includes("roma st")) sourceStopId = "place_romsta";
 		const stationDetails =
 			qrtStationsByKey.get(movement.PlaceCode) ??
 			qrtStationsByKey.get(normalizeQRTStationLookupKey(movement.PlaceName)) ??
@@ -354,12 +354,12 @@ function convertQRTServiceToTravelTrip(
 				const place = qrtPlacesByCode.get(movement.PlaceCode);
 				return place ? qrtStationsByKey.get(normalizeQRTStationLookupKey(place.Title)) : undefined;
 			})();
-		if (!gtfsStopId && stationDetails?.stops?.length) gtfsStopId = stationDetails.stops[0] ?? null;
+		if (!sourceStopId && stationDetails?.stops?.length) sourceStopId = stationDetails.stops[0] ?? null;
 
 		let toRet: QRTTravelStopTime = {
 			placeCode: movement.PlaceCode,
 			placeName: movement.PlaceName,
-			gtfsStopId,
+			sourceStopId,
 			stationDetails,
 			kStation: movement.KStation,
 			status: movement.Status,
@@ -381,7 +381,7 @@ function convertQRTServiceToTravelTrip(
 		return toRet;
 	});
 
-	const unresolvedStops = stops.filter((stop) => !stop.gtfsStopId && !stop.stationDetails);
+	const unresolvedStops = stops.filter((stop) => !stop.sourceStopId && !stop.stationDetails);
 	if (unresolvedStops.length > 0) {
 		logger.warn(
 			`Unlinked QRT stops for service ${serviceMeta.ServiceId}: ${unresolvedStops
@@ -476,18 +476,18 @@ async function processService(
 				);
 
 				const trainMovements: QRTTrainMovementDTO[] = travelTrip.stops.map((s) => {
-					let gtfsStopId: string | null = null;
+					let sourceStopId: string | null = null;
 					let findRes = gtfsStops.find(
 						(v) =>
 							v.stop_name?.toLowerCase().replace("station", "").trim() ===
 							s.placeName.toLowerCase().replace("station", "").trim(),
 					);
-					if (findRes) gtfsStopId = findRes.stop_id;
-					if (s.placeName.toLowerCase().includes("roma st")) gtfsStopId = "place_romsta";
+					if (findRes) sourceStopId = findRes.stop_id;
+					if (s.placeName.toLowerCase().includes("roma st")) sourceStopId = "place_romsta";
 					return {
 						PlaceCode: s.placeCode,
 						PlaceName: s.placeName,
-						gtfsStopId,
+						sourceStopId,
 						stationDetails: s.stationDetails,
 						KStation: s.kStation,
 						Status: s.status,
