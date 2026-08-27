@@ -126,6 +126,20 @@ export function getActivePatterns(
 	});
 }
 
+/** Cache service-scoped patterns once for every qualified route/direction/date. */
+export function getCachedActivePatterns(
+	patterns: readonly RoutePattern[],
+	journey: JourneyContext,
+	ctx: CacheContext,
+): RoutePattern[] {
+	const cacheKey = `${qualifiedRouteDirectionKey(journey.feedId, journey.routeId, journey.direction)}\0${journey.serviceDate ?? "*"}`;
+	const cached = ctx.augmented.corridorActivePatternsCache.get(cacheKey);
+	if (cached) return cached;
+	const active = getActivePatterns(patterns, journey, ctx);
+	ctx.augmented.corridorActivePatternsCache.set(cacheKey, active);
+	return active;
+}
+
 export interface PatternGapPath {
 	stations: string[];
 	minutes: number[];

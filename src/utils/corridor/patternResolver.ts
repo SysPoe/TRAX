@@ -1,6 +1,6 @@
 import type { CacheContext } from "../../cache/types.js";
 import type { CorridorIndex } from "./shapeIndex.js";
-import { findPatternGapPaths, getActivePatterns } from "./patternIndex.js";
+import { findPatternGapPaths, getCachedActivePatterns } from "./patternIndex.js";
 import { qualifiedRouteDirectionKey } from "./keys.js";
 import type {
 	CorridorGapResolution,
@@ -35,7 +35,7 @@ export function resolvePatternGap(
 							pattern.routeId === journey.routeId &&
 							String(pattern.direction ?? "*") === String(journey.direction),
 					));
-	const patterns = getActivePatterns(scopedPatterns, journey, ctx);
+	const patterns = getCachedActivePatterns(scopedPatterns, journey, ctx);
 	const paths = findPatternGapPaths(patterns, from.stationId, to.stationId);
 	// A stopping pattern with only the two observed anchors proves order, not
 	// physical adjacency. Only a longer ordered supersequence can contribute

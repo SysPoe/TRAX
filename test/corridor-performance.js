@@ -303,11 +303,13 @@ const relevantPattern = {
 	stations: ["feed:A", "feed:B", "feed:C"],
 	tripIds: [qualifiedKey("feed", "active-trip")],
 };
-const inactivePattern = {
+const inactivePatterns = Array.from({ length: 100 }, (_, serviceIndex) => ({
 	...relevantPattern,
-	serviceId: "inactive-service",
-	tripIds: Array.from({ length: 50_000 }, (_, index) => qualifiedKey("feed", `inactive-trip-${index}`)),
-};
+	serviceId: `inactive-service-${serviceIndex}`,
+	tripIds: Array.from({ length: 500 }, (_, tripIndex) =>
+		qualifiedKey("feed", `inactive-trip-${serviceIndex}-${tripIndex}`),
+	),
+}));
 const irrelevantPatterns = Array.from({ length: 50_000 }, (_, index) => ({
 	...relevantPattern,
 	routeId: `irrelevant-${index}`,
@@ -331,7 +333,7 @@ const patternIndex = {
 	...index,
 	patterns: [...irrelevantPatterns, relevantPattern],
 	patternsByRouteDirection: new Map([
-		[qualifiedRouteDirectionKey("feed", "target-route", 0), [inactivePattern, relevantPattern]],
+		[qualifiedRouteDirectionKey("feed", "target-route", 0), [...inactivePatterns, relevantPattern]],
 	]),
 };
 let tripCalendarLookups = 0;
@@ -346,7 +348,7 @@ const patternCtx = {
 	},
 };
 const scopedPatternMeasurement = measure("route-scoped pattern gaps", () => {
-	for (let iteration = 0; iteration < 100; iteration++) {
+	for (let iteration = 0; iteration < 10_000; iteration++) {
 		const result = resolvePatternGap(
 			patternJourney.anchors[0],
 			patternJourney.anchors[1],
@@ -356,7 +358,7 @@ const scopedPatternMeasurement = measure("route-scoped pattern gaps", () => {
 		);
 		assert.equal(result?.nodes.length, 3);
 	}
-	return 100;
+	return 10_000;
 });
 
 // These bounds intentionally fail on the original full-scan implementation.
@@ -365,7 +367,7 @@ assert(gapMeasurement.elapsedMs < 150, `exact-shape gaps took ${gapMeasurement.e
 assert(journeyMeasurement.elapsedMs < 2_000, `unique journeys took ${journeyMeasurement.elapsedMs.toFixed(1)} ms`);
 assert(coldIndexMeasurement.elapsedMs < 500, `cold corridor index took ${coldIndexMeasurement.elapsedMs.toFixed(1)} ms`);
 assert(
-	scopedPatternMeasurement.elapsedMs < 10,
+	scopedPatternMeasurement.elapsedMs < 50,
 	`route-scoped pattern gaps took ${scopedPatternMeasurement.elapsedMs.toFixed(1)} ms`,
 );
 assert.equal(tripCalendarLookups, 0, "collapsed patterns must use their shared service calendar");

@@ -17,7 +17,7 @@ import type { AugmentedStopTime } from "../utils/augmentedStopTime.js";
 import type { Timer } from "../utils/timer.js";
 import type { ExpressInfo, PassingStop } from "../utils/SRT.js";
 import type { CorridorIndex } from "../utils/corridor/shapeIndex.js";
-import type { CorridorResolution } from "../utils/corridor/types.js";
+import type { CorridorResolution, RoutePattern } from "../utils/corridor/types.js";
 import type { ShapeAlignment } from "../utils/corridor/alignShape.js";
 import type { SeqDiagramTopology } from "../region-specific/AU/SEQ/seq-diagram.js";
 import type { TraxConfig } from "../config.js";
@@ -68,6 +68,8 @@ export type AugmentedCache = {
 	corridorPhysicalResolutionCache: LRUCache<string, CorridorResolution>;
 	/** Median pattern timings indexed once per route, direction, and service date. */
 	corridorPatternEdgeMinutesCache: Map<string, Map<string, number>>;
+	/** Active patterns shared by every gap on the same route, direction, and date. */
+	corridorActivePatternsCache: Map<string, RoutePattern[]>;
 
 	expressInfoCache: LRUCache<string, ExpressInfo[]>;
 	passingStopsCache: LRUCache<string, PassingStop[]>;

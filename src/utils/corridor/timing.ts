@@ -1,7 +1,7 @@
 import * as qdf from "qdf-gtfs";
 import { getSRT } from "../SRT.js";
 import type { CacheContext } from "../../cache/types.js";
-import { getActivePatterns } from "./patternIndex.js";
+import { getCachedActivePatterns } from "./patternIndex.js";
 import { manualEdgeMinutes } from "./manualNetwork.js";
 import type { CorridorGapResolution, CorridorNode, JourneyContext } from "./types.js";
 import type { CorridorIndex } from "./shapeIndex.js";
@@ -52,7 +52,7 @@ function patternEdgeMinutesIndex(
 			? index.patterns
 			: (index.patternsByRouteDirection.get(routeDirectionKey) ?? []);
 	const valuesByEdge = new Map<string, number[]>();
-	for (const pattern of getActivePatterns(scopedPatterns, journey, ctx)) {
+	for (const pattern of getCachedActivePatterns(scopedPatterns, journey, ctx)) {
 		for (let position = 1; position < pattern.stations.length; position++) {
 			const value = positive(pattern.edgeMinutes?.[position - 1]);
 			if (value == null) continue;
