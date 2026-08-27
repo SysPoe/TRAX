@@ -3,8 +3,9 @@ import { performance } from "node:perf_hooks";
 import { alignShapeAnchors } from "../dist/utils/corridor/alignShape.js";
 import { resolveShapeGap } from "../dist/utils/corridor/resolveShapeGap.js";
 import { buildCorridorIndex, finalizeShapeGeometryIndex } from "../dist/utils/corridor/shapeIndex.js";
-import { qualifiedKey } from "../dist/utils/corridor/keys.js";
+import { qualifiedKey, qualifiedRouteDirectionKey } from "../dist/utils/corridor/keys.js";
 import { resolveJourneyCorridor } from "../dist/utils/corridor/resolver.js";
+import { resolvePatternGap } from "../dist/utils/corridor/patternResolver.js";
 import { createEmptyAugmentedCache, createEmptyRawCache, createRuntimeState } from "../dist/cache/factories.js";
 import { resolveConfig } from "../dist/config.js";
 
@@ -293,9 +294,62 @@ const coldIndexMeasurement = measure("cold corridor index", () => {
 	return coldIndex.shapeCount;
 });
 
+const relevantPattern = {
+	feedId: "feed",
+	routeId: "target-route",
+	direction: 0,
+	serviceId: "service",
+	shapeId: null,
+	stations: ["feed:A", "feed:B", "feed:C"],
+	tripIds: [],
+};
+const irrelevantPatterns = Array.from({ length: 50_000 }, (_, index) => ({
+	...relevantPattern,
+	routeId: `irrelevant-${index}`,
+	stations: [`feed:X-${index}`, `feed:Y-${index}`, `feed:Z-${index}`],
+}));
+const patternJourney = {
+	sourceId: "benchmark",
+	feedId: "feed",
+	tripId: "pattern-trip",
+	routeId: "target-route",
+	direction: 0,
+	shapeId: null,
+	serviceDate: null,
+	anchors: [
+		{ id: "A", stationId: "feed:A", sequence: 1, scheduled: true },
+		{ id: "C", stationId: "feed:C", sequence: 2, scheduled: true },
+	],
+	geometryFeedIds: ["feed"],
+};
+const patternIndex = {
+	...index,
+	patterns: [...irrelevantPatterns, relevantPattern],
+	patternsByRouteDirection: new Map([
+		[qualifiedRouteDirectionKey("feed", "target-route", 0), [relevantPattern]],
+	]),
+};
+const scopedPatternMeasurement = measure("route-scoped pattern gaps", () => {
+	for (let iteration = 0; iteration < 100; iteration++) {
+		const result = resolvePatternGap(
+			patternJourney.anchors[0],
+			patternJourney.anchors[1],
+			patternJourney,
+			patternIndex,
+			ctx,
+		);
+		assert.equal(result?.nodes.length, 3);
+	}
+	return 100;
+});
+
 // These bounds intentionally fail on the original full-scan implementation.
 assert(alignmentMeasurement.elapsedMs < 250, `native alignment took ${alignmentMeasurement.elapsedMs.toFixed(1)} ms`);
 assert(gapMeasurement.elapsedMs < 150, `exact-shape gaps took ${gapMeasurement.elapsedMs.toFixed(1)} ms`);
 assert(journeyMeasurement.elapsedMs < 2_000, `unique journeys took ${journeyMeasurement.elapsedMs.toFixed(1)} ms`);
 assert(coldIndexMeasurement.elapsedMs < 500, `cold corridor index took ${coldIndexMeasurement.elapsedMs.toFixed(1)} ms`);
+assert(
+	scopedPatternMeasurement.elapsedMs < 10,
+	`route-scoped pattern gaps took ${scopedPatternMeasurement.elapsedMs.toFixed(1)} ms`,
+);
 console.log("Corridor performance benchmark passed.");
