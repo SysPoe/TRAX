@@ -44,15 +44,22 @@ function loadSrtEntries(): SRTEntry[] {
 	}
 }
 
-export function manualNodeKind(name: string, passengerNames: ReadonlySet<string>): "station" | "waypoint" {
+function manualNodeClassification(
+	name: string,
+	passengerNames: ReadonlySet<string>,
+): { kind: "station" | "waypoint"; classification: "passenger" | "operational" | "unknown" } {
 	const normalized = normalizeStationName(name);
-	if (passengerNames.has(normalized)) return "station";
+	if (passengerNames.has(normalized)) return { kind: "station", classification: "passenger" };
 	if (
 		OPERATIONAL_POINT_NAMES.has(normalized) ||
 		/yard|siding|fork points|depot|new leg|old leg|marshall|coal siding|^qnip|qr.?x|^off$|^wyr$/i.test(name)
 	)
-		return "waypoint";
-	return "station";
+		return { kind: "waypoint", classification: "operational" };
+	return { kind: "waypoint", classification: "unknown" };
+}
+
+export function manualNodeKind(name: string, passengerNames: ReadonlySet<string>): "station" | "waypoint" {
+	return manualNodeClassification(name, passengerNames).kind;
 }
 
 function qrtPassengerNames(): Set<string> {
@@ -89,15 +96,15 @@ export function getQrtManualNetwork(): ManualNetwork {
 			if (normalized && !names.has(normalized)) names.set(normalized, name);
 		}
 	}
-	const nodes = [...names.entries()].map(
-		([, name]) =>
-			({
-				id: nodeId(name),
-				name,
-				aliases: [normalizeStationName(name)],
-				kind: manualNodeKind(name, passengerNames),
-			}) satisfies ManualNetwork["nodes"][number],
-	);
+	const nodes = [...names.entries()].map(([, name]) => {
+		const classification = manualNodeClassification(name, passengerNames);
+		return {
+			id: nodeId(name),
+			name,
+			aliases: [normalizeStationName(name)],
+			...classification,
+		} satisfies ManualNetwork["nodes"][number];
+	});
 	const nodeIdByName = new Map([...names.keys()].map((normalized) => [normalized, nodeId(names.get(normalized)!)]));
 	const edgeMap = new Map<string, SRTEntry>();
 	for (const entry of entries) {

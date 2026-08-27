@@ -43,6 +43,28 @@ function manualStationId(network: ManualNetwork, node: ManualCorridorNode): stri
 	}
 }
 
+function nodeStationId(network: ManualNetwork, node: ManualCorridorNode, index: CorridorIndex): string | null {
+	const configuredStationId = manualStationId(network, node);
+	if (configuredStationId) return configuredStationId;
+	const nodeNames = [node.name, ...(node.aliases ?? [])]
+		.filter((name): name is string => Boolean(name))
+		.map(normalizeStationName);
+	return (
+		[...index.stationGeometry.entries()].find(([, geometry]) =>
+			geometry.names.some((name) => nodeNames.includes(normalizeStationName(name))),
+		)?.[0] ?? null
+	);
+}
+
+function resolvedNodeKind(
+	network: ManualNetwork,
+	node: ManualCorridorNode,
+	index: CorridorIndex,
+): "station" | "waypoint" {
+	if (node.classification !== "unknown") return node.kind;
+	return nodeStationId(network, node, index) ? "station" : "waypoint";
+}
+
 function scopeMatches(
 	routeId: string | null,
 	direction: string | number | null,
@@ -112,16 +134,10 @@ function pathStationSignature(
 	const stationIds = nodes
 		.map((key) => {
 			const node = byId.get(key)!;
-			if (node.kind === "waypoint") return null;
-			const stationId = manualStationId(network, node);
+			if (resolvedNodeKind(network, node, index) === "waypoint") return null;
+			const stationId = nodeStationId(network, node, index);
 			if (stationId) return stationId;
-			const nodeNames = [node.name, ...(node.aliases ?? [])]
-				.filter((name): name is string => Boolean(name))
-				.map(normalizeStationName);
-			const match = [...index.stationGeometry.entries()].find(([, geometry]) =>
-				geometry.names.some((name) => nodeNames.includes(normalizeStationName(name))),
-			);
-			return match?.[0] ?? key;
+			return key;
 		})
 		.filter((stationId): stationId is string => stationId !== null);
 	const uniqueStationIds = stationIds.filter(
@@ -247,20 +263,15 @@ function toNode(
 ): CorridorNode {
 	const configuredStationId = manualStationId(network, node);
 	const geometryStation = configuredStationId ? index.stationGeometry.get(configuredStationId) : undefined;
-	const nodeNames = [node.name, ...(node.aliases ?? [])]
-		.filter((name): name is string => Boolean(name))
-		.map(normalizeStationName);
-	const nameMatch = [...index.stationGeometry.entries()].find(([, geometry]) =>
-		geometry.names.some((name) => nodeNames.includes(normalizeStationName(name))),
-	);
-	const stationId = anchor?.stationId ?? configuredStationId ?? nameMatch?.[0] ?? null;
+	const stationId = anchor?.stationId ?? nodeStationId(network, node, index);
+	const kind = anchor ? "station" : resolvedNodeKind(network, node, index);
 	return {
 		id: nodeKey(network, node.id),
 		stationId,
 		name: node.name ?? geometryStation?.names[0],
-		kind: node.kind,
+		kind,
 		scheduled: Boolean(anchor),
-		passing: !anchor && node.kind === "station",
+		passing: !anchor && kind === "station",
 		evidence,
 		confidence,
 	};
@@ -291,51 +302,86 @@ function resolveNetworkGap(
 }
 
 /** Resolve one gap through configured ordered corridors or unique topology. */
+type ManualGapResult = { resolution: CorridorGapResolution; path: ManualPath } | { ambiguous: true };
+
+function resolveManualGapAtPriority(
+	from: JourneyAnchor,
+	to: JourneyAnchor,
+	journey: JourneyContext,
+	index: CorridorIndex,
+	config: CorridorResolutionConfig,
+	priority: "authoritative" | "fallback",
+): ManualGapResult | null {
+	const networks = config.manualNetworks.filter(
+		(network) =>
+			network.feedId === journey.feedId &&
+			(!network.sourceIds || network.sourceIds.length === 0 || network.sourceIds.includes(journey.sourceId)),
+	);
+	const priorityNetworks = networks
+		.filter((network) => (network.priority ?? "fallback") === priority)
+		.sort((a, b) => a.id.localeCompare(b.id));
+	let selected: { path: ManualPath; nodes: CorridorNode[] } | null = null;
+	let selectedSignature: string | null = null;
+	for (const network of priorityNetworks) {
+		const result = resolveNetworkGap(network, from, to, index, journey);
+		if (result === "ambiguous") return { ambiguous: true };
+		if (!result) continue;
+		const signature = result.nodes
+			.filter((node) => node.kind === "station")
+			.map((node) => node.stationId ?? node.id)
+			.join("|");
+		if (selectedSignature !== null && selectedSignature !== signature) return { ambiguous: true };
+		selectedSignature = signature;
+		selected ??= result;
+	}
+	if (selected) {
+		return {
+			path: selected.path,
+			resolution: {
+				status: "resolved",
+				from,
+				to,
+				nodes: selected.nodes,
+				evidence: selected.path.evidence,
+				confidence: selected.nodes[0]?.confidence ?? "medium",
+			},
+		};
+	}
+	return null;
+}
+
+/** Resolve only explicitly authoritative manual data, before compatible shapes. */
+export function resolveAuthoritativeManualGap(
+	from: JourneyAnchor,
+	to: JourneyAnchor,
+	journey: JourneyContext,
+	index: CorridorIndex,
+	config: CorridorResolutionConfig,
+): ManualGapResult | null {
+	return resolveManualGapAtPriority(from, to, journey, index, config, "authoritative");
+}
+
+/** Resolve only fallback manual data, after compatible and borrowed shapes. */
+export function resolveFallbackManualGap(
+	from: JourneyAnchor,
+	to: JourneyAnchor,
+	journey: JourneyContext,
+	index: CorridorIndex,
+	config: CorridorResolutionConfig,
+): ManualGapResult | null {
+	return resolveManualGapAtPriority(from, to, journey, index, config, "fallback");
+}
+
+/** Backwards-compatible full manual lookup. New routing code should use the explicit priorities. */
 export function resolveManualGap(
 	from: JourneyAnchor,
 	to: JourneyAnchor,
 	journey: JourneyContext,
 	index: CorridorIndex,
 	config: CorridorResolutionConfig,
-): { resolution: CorridorGapResolution; path: ManualPath } | { ambiguous: true } | null {
-	const networks = config.manualNetworks.filter(
-		(network) =>
-			network.feedId === journey.feedId &&
-			(!network.sourceIds || network.sourceIds.length === 0 || network.sourceIds.includes(journey.sourceId)),
-	);
-	for (const priority of ["authoritative", "fallback"] as const) {
-		const priorityNetworks = networks
-			.filter((network) => (network.priority ?? "fallback") === priority)
-			.sort((a, b) => a.id.localeCompare(b.id));
-		let selected: { path: ManualPath; nodes: CorridorNode[] } | null = null;
-		let selectedSignature: string | null = null;
-		for (const network of priorityNetworks) {
-			const result = resolveNetworkGap(network, from, to, index, journey);
-			if (result === "ambiguous") return { ambiguous: true };
-			if (!result) continue;
-			const signature = result.nodes
-				.filter((node) => node.kind === "station")
-				.map((node) => node.stationId ?? node.id)
-				.join("|");
-			if (selectedSignature !== null && selectedSignature !== signature) return { ambiguous: true };
-			selectedSignature = signature;
-			selected ??= result;
-		}
-		if (selected) {
-			return {
-				path: selected.path,
-				resolution: {
-					status: "resolved",
-					from,
-					to,
-					nodes: selected.nodes,
-					evidence: selected.path.evidence,
-					confidence: selected.nodes[0]?.confidence ?? "medium",
-				},
-			};
-		}
-	}
-	return null;
+): ManualGapResult | null {
+	const authoritative = resolveAuthoritativeManualGap(from, to, journey, index, config);
+	return authoritative ?? resolveFallbackManualGap(from, to, journey, index, config);
 }
 
 /** Return a configured manual edge duration for timing interpolation. */

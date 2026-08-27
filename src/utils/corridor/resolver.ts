@@ -6,7 +6,7 @@ import { entityKey } from "../../identity.js";
 import { corridorJourneyKey, qualifiedKey } from "./keys.js";
 import { alignShapeAnchors, type ShapeAlignment } from "./alignShape.js";
 import { findCompatibleShapes } from "./compatibleShapes.js";
-import { resolveManualGap } from "./manualNetwork.js";
+import { resolveAuthoritativeManualGap, resolveFallbackManualGap } from "./manualNetwork.js";
 import { resolvePatternGap } from "./patternResolver.js";
 import { buildCorridorIndex, type CorridorIndex, type IndexedShape } from "./shapeIndex.js";
 import { resolveShapeGap } from "./resolveShapeGap.js";
@@ -205,11 +205,14 @@ function resolveCompatibleGap(
 		// aligned locally. An unmatched anchor before this gap can otherwise
 		// consume an early projection and move the seam anchor to a later loop
 		// position, hiding valid interior stations from this gap.
-		const localAlignment = alignShapeAnchors([from, to], candidate.shape, ctx.config.corridor);
+		const localAlignment = alignShapeAnchors([from, to], candidate.shape, ctx.config.corridor, {
+			useNativeShapeDistance: false,
+		});
 		const suffixAlignment = alignShapeAnchors(
 			journey.anchors.slice(fromIndex),
 			candidate.shape,
 			ctx.config.corridor,
+			{ useNativeShapeDistance: false },
 		);
 		const contextAlignment =
 			suffixAlignment &&
@@ -281,20 +284,32 @@ function resolveOneGap(
 		: null;
 	if (exact) return exact;
 
+	const authoritativeManual = resolveAuthoritativeManualGap(from, to, journey, index, ctx.config.corridor);
+	if (authoritativeManual && "ambiguous" in authoritativeManual)
+		return emptyGap(from, to, "Authoritative manual topology has multiple plausible station paths.");
+	if (authoritativeManual && "resolution" in authoritativeManual) {
+		const validation = validateCorridorGap(authoritativeManual.resolution, journey);
+		if (
+			validation.valid &&
+			meetsMinimumConfidence(authoritativeManual.resolution, ctx.config.corridor.minimumOutputConfidence)
+		)
+			return authoritativeManual.resolution;
+	}
+
 	const compatible = resolveCompatibleGap(from, to, fromIndex, journey, index, ctx);
 	if (compatible) return compatible;
 
-	const manual = resolveManualGap(from, to, journey, index, ctx.config.corridor);
-	if (manual && "resolution" in manual) {
-		const validation = validateCorridorGap(manual.resolution, journey);
+	const fallbackManual = resolveFallbackManualGap(from, to, journey, index, ctx.config.corridor);
+	if (fallbackManual && "resolution" in fallbackManual) {
+		const validation = validateCorridorGap(fallbackManual.resolution, journey);
 		if (
 			validation.valid &&
-			meetsMinimumConfidence(manual.resolution, ctx.config.corridor.minimumOutputConfidence)
+			meetsMinimumConfidence(fallbackManual.resolution, ctx.config.corridor.minimumOutputConfidence)
 		) {
-			return manual.resolution;
+			return fallbackManual.resolution;
 		}
 	}
-	if (manual && "ambiguous" in manual)
+	if (fallbackManual && "ambiguous" in fallbackManual)
 		return emptyGap(from, to, "Manual topology has multiple plausible station paths.");
 
 	const pattern = resolvePatternGap(from, to, journey, index, ctx);
@@ -338,7 +353,11 @@ export function resolveJourneyCorridor(journey: JourneyContext, ctx: CacheContex
 	const exactShape = journey.shapeId
 		? (index.shapes.get(qualifiedKey(journey.feedId, journey.shapeId)) ?? null)
 		: null;
-	const exactAlignment = exactShape ? alignShapeAnchors(journey.anchors, exactShape, ctx.config.corridor) : null;
+	const exactAlignment = exactShape
+		? alignShapeAnchors(journey.anchors, exactShape, ctx.config.corridor, {
+				useNativeShapeDistance: true,
+			})
+		: null;
 	const gaps: CorridorGapResolution[] = [];
 	for (let anchorIndex = 0; anchorIndex < journey.anchors.length - 1; anchorIndex++) {
 		gaps.push(

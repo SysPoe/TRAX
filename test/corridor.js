@@ -5,7 +5,11 @@ import { resolveConfig } from "../dist/config.js";
 import { qualifiedKey, qualifiedRouteDirectionKey } from "../dist/utils/corridor/keys.js";
 import { cumulativePolylineDistance } from "../dist/utils/corridor/geometry.js";
 import { projectPointOnPolyline } from "../dist/utils/corridor/projection.js";
-import { buildCorridorIndex, createEmptyCorridorIndex } from "../dist/utils/corridor/shapeIndex.js";
+import {
+	buildCorridorIndex,
+	createEmptyCorridorIndex,
+	_test as shapeIndexTest,
+} from "../dist/utils/corridor/shapeIndex.js";
 import { createRealtimeJourneyContext, resolveJourneyCorridor } from "../dist/utils/corridor/resolver.js";
 import {
 	expandStopTimesWithCorridor,
@@ -354,6 +358,47 @@ function testNativeDistanceLoop() {
 	assert.equal(result.gaps[0].nodes.at(-1)?.distanceAlongMeters > result.gaps[0].nodes[0].distanceAlongMeters, true);
 }
 
+function testCompatibleShapesDoNotReuseNativeDistances() {
+	const coordinates = {
+		a: { lat: -27, lon: 153 },
+		b: { lat: -27, lon: 153.001 },
+		c: { lat: -27, lon: 153.002 },
+		d: { lat: -27, lon: 153.003 },
+		x: { lat: -27.01, lon: 153 },
+		y: { lat: -27.01, lon: 153.001 },
+		z: { lat: -27.01, lon: 153.002 },
+		w: { lat: -27.01, lon: 153.003 },
+	};
+	const index = createEmptyCorridorIndex("test");
+	index.stationGeometry = stationGeometry("feed", Object.keys(coordinates), coordinates);
+	addShapes(index, [
+		indexedShape("feed", "main", ["a", "b", "c", "d"], coordinates, {
+			scheduledStations: ["a", "d"],
+			routeId: "r",
+			nativeDistances: [0, 2000, 4000, 6000],
+		}),
+		indexedShape("feed", "unrelated", ["x", "y", "z", "w"], coordinates, {
+			scheduledStations: ["x", "w"],
+			routeId: "r",
+			nativeDistances: [0, 2000, 4000, 6000],
+		}),
+	]);
+	const result = resolveJourneyCorridor(
+		journey("feed", ["a", "d"], coordinates, {
+			routeId: "r",
+			direction: 0,
+			shapeDistances: [1000, 5000],
+		}),
+		context({ index }),
+	);
+	assert.equal(result.gaps[0].status, "resolved");
+	assert.equal(result.gaps[0].evidence, "compatible-shape");
+	assert.deepEqual(
+		result.gaps[0].nodes.map((node) => node.stationId),
+		[q("feed", "a"), q("feed", "b"), q("feed", "c"), q("feed", "d")],
+	);
+}
+
 function testLoopWithoutNativeDistanceStaysAmbiguous() {
 	const coordinates = {
 		a: { lat: -27, lon: 153 },
@@ -395,6 +440,32 @@ function testSelfCrossingProjection() {
 		projections.some((projection) => projection.distanceAlongMeters - projections[0].distanceAlongMeters > 100),
 		true,
 	);
+}
+
+function testNearVertexProjectionKeepsBetterLaterSegment() {
+	const stationId = q("feed", "a");
+	const projections = new Map();
+	const first = {
+		stationId,
+		segmentIndex: 0,
+		segmentFraction: 0.99,
+		distanceAlongMeters: 100,
+		lateralDistanceMeters: 20,
+		coordinateSource: "parent",
+		nativeShapeDistance: null,
+	};
+	const better = {
+		...first,
+		segmentIndex: 1,
+		segmentFraction: 0.01,
+		distanceAlongMeters: 103,
+		lateralDistanceMeters: 2,
+	};
+	shapeIndexTest.appendProjection(projections, stationId, first, 3);
+	shapeIndexTest.appendProjection(projections, stationId, better, 3);
+	assert.equal(projections.get(stationId).length, 1);
+	assert.equal(projections.get(stationId)[0].segmentIndex, 1);
+	assert.equal(projections.get(stationId)[0].lateralDistanceMeters, 2);
 }
 
 function testDisplacedParent() {
@@ -722,6 +793,39 @@ function testAuthoritativeManualNetwork() {
 	);
 }
 
+function testAuthoritativeManualOverridesCompatibleShape() {
+	const coordinates = simpleCoordinates(["a", "b", "c", "d"]);
+	const index = createEmptyCorridorIndex("test");
+	index.stationGeometry = stationGeometry("feed", ["a", "b", "c", "d"], coordinates);
+	addShapes(index, [
+		indexedShape("feed", "compatible", ["a", "b", "d"], coordinates, {
+			scheduledStations: ["a", "d"],
+			routeId: "r",
+		}),
+	]);
+	const authoritative = {
+		id: "authoritative-route",
+		feedId: "feed",
+		nodes: ["a", "b", "c", "d"].map((id) => ({
+			id,
+			stationId: q("feed", id),
+			name: id,
+			kind: "station",
+		})),
+		corridors: [{ id: "curated", nodes: ["a", "c", "d"], bidirectional: true }],
+		priority: "authoritative",
+	};
+	const result = resolveJourneyCorridor(
+		journey("feed", ["a", "d"], coordinates, { routeId: "r", direction: 0 }),
+		context({ index, manualNetworks: [authoritative] }),
+	);
+	assert.equal(result.gaps[0].evidence, "manual-corridor");
+	assert.deepEqual(
+		result.gaps[0].nodes.map((node) => node.stationId),
+		[q("feed", "a"), q("feed", "c"), q("feed", "d")],
+	);
+}
+
 function testAmbiguousManualTopology() {
 	const coordinates = simpleCoordinates(["a", "b", "c", "d"]);
 	const index = createEmptyCorridorIndex("test");
@@ -795,6 +899,29 @@ function testPatternFallback() {
 		result.gaps[0].nodes.map((node) => node.stationId),
 		[q("feed", "a"), q("feed", "b"), q("feed", "c"), q("feed", "d")],
 	);
+}
+
+function testTwoAnchorPatternDoesNotProveAdjacency() {
+	const coordinates = simpleCoordinates(["a", "d"]);
+	const index = createEmptyCorridorIndex("test");
+	index.stationGeometry = stationGeometry("feed", ["a", "d"], coordinates);
+	index.patterns = [
+		{
+			feedId: "feed",
+			routeId: "r",
+			direction: 0,
+			serviceId: "express-only",
+			shapeId: null,
+			stations: [q("feed", "a"), q("feed", "d")],
+			tripIds: [],
+		},
+	];
+	const result = resolveJourneyCorridor(
+		journey("feed", ["a", "d"], coordinates, { routeId: "r", direction: 0 }),
+		context({ index }),
+	);
+	assert.equal(result.gaps[0].status, "unresolved");
+	assert.equal(result.gaps[0].nodes.length, 0);
 }
 
 function testRouteLessPatternFallback() {
@@ -1173,11 +1300,73 @@ function testSkippedOverlay() {
 }
 
 function testQrtWaypointClassification() {
-	assert.equal(manualNodeKind("Eagle Junction", new Set()), "station");
+	assert.equal(manualNodeKind("Eagle Junction", new Set()), "waypoint");
+	assert.equal(manualNodeKind("Eagle Junction", new Set(["eagle junction"])), "station");
 	assert.equal(manualNodeKind("Airport Junction", new Set()), "waypoint");
 	assert.equal(manualNodeKind("Mayne Junction", new Set()), "waypoint");
+	assert.equal(manualNodeKind("Unknown operational location", new Set()), "waypoint");
 	assert.equal(qrtSrtTest.qrtDate("7/4/2025 12:00:00 AM"), "20250704");
 	assert.equal(qrtSrtTest.qrtDate("2025-07-04T00:00:00"), "20250704");
+}
+
+function testUnknownQrtNodePromotesFromGtfsStationGeometry() {
+	const index = createEmptyCorridorIndex("test");
+	const station = (id, name) => ({
+		stationId: q("seq", id),
+		coordinates: [],
+		names: [name],
+	});
+	index.stationGeometry = new Map([
+		[q("seq", "start"), station("start", "Start")],
+		[q("seq", "eagle"), station("eagle", "Eagle Junction")],
+		[q("seq", "end"), station("end", "End")],
+	]);
+	const network = {
+		id: "qrt-classification",
+		feedId: "QRT",
+		nodes: [
+			{ id: "start", stationId: q("seq", "start"), name: "Start", kind: "station" },
+			{ id: "eagle", name: "Eagle Junction", kind: "waypoint", classification: "unknown" },
+			{ id: "end", stationId: q("seq", "end"), name: "End", kind: "station" },
+		],
+		corridors: [{ id: "line", nodes: ["start", "eagle", "end"] }],
+		priority: "fallback",
+		sourceIds: ["qrt"],
+	};
+	const journeyContext = {
+		sourceId: "qrt",
+		feedId: "QRT",
+		tripId: "trip",
+		routeId: null,
+		direction: null,
+		shapeId: null,
+		serviceDate: null,
+		anchors: [
+			{
+				id: "start-anchor",
+				stationId: q("seq", "start"),
+				name: "Start",
+				sequence: 0,
+				scheduled: true,
+			},
+			{
+				id: "end-anchor",
+				stationId: q("seq", "end"),
+				name: "End",
+				sequence: 1,
+				scheduled: true,
+			},
+		],
+		geometryFeedIds: ["seq"],
+	};
+	const result = resolveJourneyCorridor(
+		journeyContext,
+		context({ feedIds: ["QRT", "seq"], index, manualNetworks: [network] }),
+	);
+	assert.equal(result.gaps[0].status, "resolved");
+	assert.equal(result.gaps[0].nodes[1].stationId, q("seq", "eagle"));
+	assert.equal(result.gaps[0].nodes[1].kind, "station");
+	assert.equal(result.gaps[0].nodes[1].passing, true);
 }
 
 function testTimingCannotChangeCorridor() {
@@ -1231,8 +1420,10 @@ for (const testCase of [
 	["reverse trips use the reverse interpretation", testReverseShape],
 	["normal and Milton-running shapes stay physically distinct", testMiltonShapeFamilies],
 	["native shape distance selects a loop occurrence", testNativeDistanceLoop],
+	["compatible shapes do not reuse native distances", testCompatibleShapesDoNotReuseNativeDistances],
 	["loop without native distance stays ambiguous", testLoopWithoutNativeDistanceStaysAmbiguous],
 	["projection retains self-crossing positions", testSelfCrossingProjection],
+	["near-vertex projection keeps the better segment", testNearVertexProjectionKeepsBetterLaterSegment],
 	["station indexing keeps displaced parent and platform", testDisplacedParent],
 	["partial shapes fall back only for the suffix", testPartialShape],
 	["disagreeing compatible shapes stay unresolved", testAmbiguousCompatibleShapes],
@@ -1243,17 +1434,20 @@ for (const testCase of [
 	["unique manual topology resolves without shapes", testManualTopology],
 	["journey validation rejects repeated synthetic stations", testSyntheticStationNotRepeatedAcrossGaps],
 	["authoritative manual data wins over fallback data", testAuthoritativeManualNetwork],
+	["authoritative manual data overrides compatible geometry", testAuthoritativeManualOverridesCompatibleShape],
 	["ambiguous manual topology stays unresolved", testAmbiguousManualTopology],
 	["longer manual topology branches stay unresolved", testLongerManualTopologyBranchIsAmbiguous],
 	["shape paths cannot cross later scheduled anchors", testShapeCannotCrossLaterScheduledAnchor],
 	["active patterns are a scoped fallback", testPatternFallback],
+	["two-anchor patterns do not prove adjacency", testTwoAnchorPatternDoesNotProveAdjacency],
 	["route-less pattern fallback remains consensus scoped", testRouteLessPatternFallback],
 	["active patterns respect the service date", testPatternServiceDateScope],
 	["realtime-only relationships align their anchors", testRealtimeOnlyJourneyAnchors],
 	["replacement relationships use their realtime stop sequence", testReplacementUsesRealtimeStopSequence],
 	["identical shape IDs stay isolated by feed", testFeedIsolation],
 	["skipped anchors remain in the physical overlay", testSkippedOverlay],
-	["QRT junction stations are not treated as waypoints", testQrtWaypointClassification],
+	["QRT unknown nodes stay waypoints without station evidence", testQrtWaypointClassification],
+	["unknown QRT nodes promote from GTFS station geometry", testUnknownQrtNodePromotesFromGtfsStationGeometry],
 	["timing records stay attached after filtering", testTimingRecordsStayAttachedAfterFiltering],
 	["contextual findExpress uses the journey shape", testContextualFindExpressUsesJourneyShape],
 	["QRT uses the operating service date", testQrtUsesOperatingServiceDate],

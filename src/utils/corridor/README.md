@@ -7,7 +7,7 @@ The corridor resolver chooses the physical path for one journey. It is shape-fir
 ## Invariants
 
 1. An exact shape owns physical routing when it covers a gap with confidence.
-2. A valid `shape_dist_traveled` value outranks coordinate projection.
+2. A valid `shape_dist_traveled` value outranks coordinate projection only on the journey's exact qualified shape; it is not transferable to compatible or borrowed shapes.
 3. The resolver handles each pair of consecutive anchors independently.
 4. Fallback shapes and patterns stay scoped to feed, route, direction, and service date when those values exist.
 5. The resolver borrows geometry only through `geometrySources` configuration.
@@ -26,10 +26,10 @@ The corridor resolver chooses the physical path for one journey. It is shape-fir
 For each gap, the resolver tries the following evidence in order:
 
 1. exact shape;
-2. compatible or explicitly borrowed shape consensus;
-3. a matching declarative corridor;
-4. unique declarative topology;
-5. active route and direction pattern consensus;
+2. authoritative declarative corridor or topology;
+3. compatible or explicitly borrowed shape consensus;
+4. fallback declarative corridor or topology;
+5. active route and direction pattern consensus with a unique longer ordered supersequence;
 6. unresolved.
 
 A weaker result never replaces a resolved stronger result for the same gap.

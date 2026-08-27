@@ -109,10 +109,20 @@ function appendProjection(
 	maxProjections: number,
 ): void {
 	const current = projections.get(stationId) ?? [];
-	if (current.some((candidate) => Math.abs(candidate.distanceAlongMeters - projection.distanceAlongMeters) < 5)) {
-		return;
+	const nearbyIndex = current.reduce((bestIndex, candidate, index) => {
+		if (Math.abs(candidate.distanceAlongMeters - projection.distanceAlongMeters) >= 5) return bestIndex;
+		if (bestIndex < 0) return index;
+		return Math.abs(current[bestIndex].distanceAlongMeters - projection.distanceAlongMeters) >
+			Math.abs(candidate.distanceAlongMeters - projection.distanceAlongMeters)
+			? index
+			: bestIndex;
+	}, -1);
+	if (nearbyIndex >= 0) {
+		if (projection.lateralDistanceMeters >= current[nearbyIndex].lateralDistanceMeters) return;
+		current[nearbyIndex] = projection;
+	} else {
+		current.push(projection);
 	}
-	current.push(projection);
 	current.sort((a, b) => a.lateralDistanceMeters - b.lateralDistanceMeters);
 	const retained = current.slice(0, Math.max(maxProjections, 1));
 	retained.sort((a, b) => a.distanceAlongMeters - b.distanceAlongMeters);
@@ -256,3 +266,5 @@ export function createEmptyCorridorIndex(version = "1"): CorridorIndex {
 		built: false,
 	};
 }
+
+export const _test = { appendProjection };

@@ -20,11 +20,15 @@ export function resolvePatternGap(
 	if (!from.stationId || !to.stationId) return null;
 	const patterns = getActivePatterns(index.patterns, journey, ctx);
 	const paths = findPatternGapPaths(patterns, from.stationId, to.stationId);
-	if (paths.length === 0) return null;
-	const signatures = new Set(paths.map((path) => path.stations.join("|")));
+	// A stopping pattern with only the two observed anchors proves order, not
+	// physical adjacency. Only a longer ordered supersequence can contribute
+	// passing stations to a gap.
+	const longerPaths = paths.filter((path) => path.stations.length > 2);
+	if (longerPaths.length === 0) return null;
+	const signatures = new Set(longerPaths.map((path) => path.stations.join("|")));
 	if (signatures.size > 1) return null;
 
-	const selected = paths[0];
+	const selected = longerPaths[0];
 	const scheduledIds = new Set(
 		journey.anchors
 			.map((anchor) => anchor.stationId)
