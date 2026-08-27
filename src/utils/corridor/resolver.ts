@@ -173,8 +173,6 @@ function alignmentCacheKey(
 		ctx.config.corridor.geometry,
 		anchors.map((anchor) => [
 			anchor.stationId,
-			anchor.lat ?? null,
-			anchor.lon ?? null,
 			useNativeShapeDistance ? (anchor.shapeDistTraveled ?? null) : null,
 		]),
 	]);

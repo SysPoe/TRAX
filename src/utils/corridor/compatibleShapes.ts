@@ -29,6 +29,14 @@ function overlapScore(shape: IndexedShape, journey: JourneyContext): number {
 	}, 0);
 }
 
+function overlapCount(shape: IndexedShape, journey: JourneyContext): number {
+	let count = 0;
+	for (const anchor of journey.anchors) {
+		if (anchor.stationId && shape.scheduledStations.has(anchor.stationId)) count++;
+	}
+	return count;
+}
+
 /** Find scoped same-route shapes and explicitly configured borrowed-feed shapes. */
 export function findCompatibleShapes(
 	journey: JourneyContext,
@@ -56,7 +64,7 @@ export function findCompatibleShapes(
 			// A same-route label alone is not physical evidence. Besides avoiding
 			// cross-branch guesses, this keeps unrelated route variants out of the
 			// calendar and alignment hot path.
-			if (score === 0 || !isActiveShape(shape, journey, ctx)) continue;
+			if (overlapCount(shape, journey) < 2 || !isActiveShape(shape, journey, ctx)) continue;
 			candidates.push({ shape, evidence: "compatible-shape", score });
 		}
 	}
@@ -65,9 +73,9 @@ export function findCompatibleShapes(
 		(feedId) => feedId !== journey.feedId && configuredSource?.borrowFromFeedIds.includes(feedId),
 	);
 	for (const shape of index.shapes.values()) {
-		if (!borrowedFeeds.includes(shape.feedId) || !isActiveShape(shape, journey, ctx)) continue;
+		if (!borrowedFeeds.includes(shape.feedId) || overlapCount(shape, journey) < 2) continue;
 		const score = overlapScore(shape, journey);
-		if (score < 4) continue;
+		if (!isActiveShape(shape, journey, ctx)) continue;
 		candidates.push({ shape, evidence: "borrowed-shape", score });
 	}
 	candidates.sort((a, b) => b.score - a.score || a.shape.key.localeCompare(b.shape.key));

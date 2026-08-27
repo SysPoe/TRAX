@@ -1434,8 +1434,18 @@ function testPhysicalPlanCacheRebindsCurrentAnchors() {
 	const secondJourney = journey("feed", ["a", "d"], coordinates, { shapeId: "shape" });
 	secondJourney.tripId = "second-trip";
 	secondJourney.serviceDate = "20260828";
-	secondJourney.anchors[0] = { ...secondJourney.anchors[0], id: "second-a", name: "Current A" };
-	secondJourney.anchors[1] = { ...secondJourney.anchors[1], id: "second-d", name: "Current D" };
+	secondJourney.anchors[0] = {
+		...secondJourney.anchors[0],
+		id: "second-a",
+		name: "Current A",
+		lat: secondJourney.anchors[0].lat + 0.001,
+	};
+	secondJourney.anchors[1] = {
+		...secondJourney.anchors[1],
+		id: "second-d",
+		name: "Current D",
+		lon: secondJourney.anchors[1].lon + 0.001,
+	};
 	const second = resolveJourneyCorridor(secondJourney, ctx);
 	assert.notEqual(second, first);
 	assert.equal(second.gaps[0].from.id, "second-a");
