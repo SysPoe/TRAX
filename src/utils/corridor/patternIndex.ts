@@ -57,6 +57,7 @@ export function buildPatternIndex(
 } {
 	const patterns: RoutePattern[] = [];
 	const byRouteDirection = new Map<string, RoutePattern[]>();
+	const bySignature = new Map<string, RoutePattern>();
 	for (const trip of trips) {
 		const stopTimes = [...getRawStopTimes(ctx, { feedId: trip.feed_id, localId: trip.trip_id })].sort(
 			(a, b) => a.stop_sequence - b.stop_sequence,
@@ -70,6 +71,19 @@ export function buildPatternIndex(
 			);
 		});
 		const metrics = edgeMetrics(stopTimes);
+		const routeDirectionKey = qualifiedRouteDirectionKey(trip.feed_id, trip.route_id, trip.direction_id);
+		const signature = JSON.stringify([
+			routeDirectionKey,
+			trip.service_id,
+			trip.shape_id,
+			stations,
+		]);
+		const tripId = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
+		const existing = bySignature.get(signature);
+		if (existing) {
+			existing.tripIds.push(tripId);
+			continue;
+		}
 		const pattern: RoutePattern = {
 			feedId: trip.feed_id,
 			routeId: trip.route_id,
@@ -77,15 +91,15 @@ export function buildPatternIndex(
 			serviceId: trip.service_id,
 			shapeId: trip.shape_id,
 			stations,
-			tripIds: [entityKey({ feedId: trip.feed_id, localId: trip.trip_id })],
+			tripIds: [tripId],
 			edgeMinutes: metrics.minutes,
 			edgeDistances: metrics.distances,
 		};
+		bySignature.set(signature, pattern);
 		patterns.push(pattern);
-		const key = qualifiedRouteDirectionKey(trip.feed_id, trip.route_id, trip.direction_id);
-		const group = byRouteDirection.get(key) ?? [];
+		const group = byRouteDirection.get(routeDirectionKey) ?? [];
 		group.push(pattern);
-		byRouteDirection.set(key, group);
+		byRouteDirection.set(routeDirectionKey, group);
 	}
 	return { patterns, byRouteDirection };
 }

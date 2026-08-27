@@ -12,6 +12,8 @@ import {
 	_test as shapeIndexTest,
 } from "../dist/utils/corridor/shapeIndex.js";
 import { createRealtimeJourneyContext, resolveJourneyCorridor } from "../dist/utils/corridor/resolver.js";
+import { findCompatibleShapes } from "../dist/utils/corridor/compatibleShapes.js";
+import { buildPatternIndex } from "../dist/utils/corridor/patternIndex.js";
 import {
 	expandStopTimesWithCorridor,
 	getCorridorTimingWeights,
@@ -1444,6 +1446,164 @@ function testPhysicalPlanCacheRebindsCurrentAnchors() {
 	assert.equal(ctx.augmented.corridorPhysicalResolutionCache.size, 1);
 }
 
+function testExactStaticCorridorIsReusedAcrossServiceDates() {
+	const coordinates = simpleCoordinates(["a", "b", "d"]);
+	const index = createEmptyCorridorIndex("test");
+	index.stationGeometry = stationGeometry("feed", ["a", "b", "d"], coordinates);
+	addShapes(index, [
+		indexedShape("feed", "shape", ["a", "b", "d"], coordinates, {
+			scheduledStations: ["a", "d"],
+			routeId: "r",
+			nativeDistances: [0, 50, 100],
+		}),
+	]);
+	const ctx = context({ index });
+	ctx.config.feedTimeZones.set("feed", "Australia/Brisbane");
+	const stops = ["a", "b", "d"].map((stopId) => ({
+		feed_id: "feed",
+		stop_id: stopId,
+		stop_name: stopId.toUpperCase(),
+		stop_lat: coordinates[stopId].lat,
+		stop_lon: coordinates[stopId].lon,
+		parent_station: null,
+	}));
+	for (const stop of stops) ctx.raw.stopsByKey.set(q("feed", stop.stop_id), stop);
+	ctx.raw.routesByKey.set(q("feed", "r"), {
+		feed_id: "feed",
+		route_id: "r",
+		route_type: RouteType.Rail,
+		route_short_name: "R",
+		route_long_name: "Rail",
+	});
+	ctx.augmented.rawStopTimesCache.set(q("feed", "trip"), [
+		{
+			feed_id: "feed",
+			trip_id: "trip",
+			stop_id: "a",
+			stop_sequence: 1,
+			arrival_time: 3_600,
+			departure_time: 3_600,
+			shape_dist_traveled: 0,
+		},
+		{
+			feed_id: "feed",
+			trip_id: "trip",
+			stop_id: "d",
+			stop_sequence: 2,
+			arrival_time: 4_200,
+			departure_time: 4_200,
+			shape_dist_traveled: 100,
+		},
+	]);
+	ctx.gtfs = {
+		getStops: (filter = {}) =>
+			stops.filter(
+				(stop) =>
+					(!filter.feed_id || filter.feed_id === stop.feed_id) &&
+					(!filter.stop_id || filter.stop_id === stop.stop_id),
+			),
+		getStaticOccupancies: () => [],
+	};
+	ctx.runtimeState.srtNetworkData = { matrix: {}, adjacency: {}, lastUpdated: Date.now() };
+	const result = augmentTrip(
+		{
+			feed_id: "feed",
+			trip_id: "trip",
+			route_id: "r",
+			service_id: "daily",
+			direction_id: 0,
+			shape_id: "shape",
+			trip_headsign: null,
+			trip_short_name: null,
+			block_id: null,
+			wheelchair_accessible: null,
+			bikes_allowed: null,
+		},
+		ctx,
+		new Map(),
+		undefined,
+		{ serviceDates: ["20260827", "20260828"] },
+	);
+	assert.equal(result.instances.length, 2);
+	assert.equal(ctx.augmented.corridorResolutionCache.size, 1);
+}
+
+function testCompatibleSearchSkipsShapesWithoutAnchorOverlap() {
+	const coordinates = simpleCoordinates(["a", "d", "x", "y"]);
+	const index = createEmptyCorridorIndex("test");
+	index.stationGeometry = stationGeometry("feed", ["a", "d", "x", "y"], coordinates);
+	addShapes(index, [
+		indexedShape("feed", "exact", ["a", "d"], coordinates, {
+			scheduledStations: ["a", "d"],
+			routeId: "r",
+		}),
+		indexedShape("feed", "unrelated", ["x", "y"], coordinates, {
+			scheduledStations: ["x", "y"],
+			routeId: "r",
+			tripIds: ["unrelated-trip"],
+		}),
+	]);
+	const ctx = context({ index });
+	let calendarReads = 0;
+	ctx.gtfs = {
+		getServiceDatesByTrip: () => {
+			calendarReads++;
+			return ["20260827"];
+		},
+	};
+	const candidates = findCompatibleShapes(
+		journey("feed", ["a", "d"], coordinates, {
+			routeId: "r",
+			direction: 0,
+			shapeId: "exact",
+			serviceDate: "20260827",
+		}),
+		index,
+		ctx,
+	);
+	assert.deepEqual(candidates, []);
+	assert.equal(calendarReads, 0);
+}
+
+function testPatternIndexCollapsesEquivalentTrips() {
+	const coordinates = simpleCoordinates(["a", "b", "d"]);
+	const ctx = context();
+	const stops = ["a", "b", "d"].map((stopId) => ({
+		feed_id: "feed",
+		stop_id: stopId,
+		stop_name: stopId,
+		stop_lat: coordinates[stopId].lat,
+		stop_lon: coordinates[stopId].lon,
+		parent_station: null,
+	}));
+	for (const stop of stops) ctx.raw.stopsByKey.set(q("feed", stop.stop_id), stop);
+	const trips = Array.from({ length: 100 }, (_, index) => ({
+		feed_id: "feed",
+		trip_id: `trip-${index}`,
+		route_id: "r",
+		service_id: "weekday",
+		direction_id: 0,
+		shape_id: "shape",
+	}));
+	for (const trip of trips) {
+		ctx.augmented.rawStopTimesCache.set(
+			q("feed", trip.trip_id),
+			["a", "b", "d"].map((stopId, index) => ({
+				feed_id: "feed",
+				trip_id: trip.trip_id,
+				stop_id: stopId,
+				stop_sequence: index + 1,
+				arrival_time: index * 60,
+				departure_time: index * 60,
+				shape_dist_traveled: index * 100,
+			})),
+		);
+	}
+	const result = buildPatternIndex(ctx, trips);
+	assert.equal(result.patterns.length, 1);
+	assert.equal(result.patterns[0].tripIds.length, trips.length);
+}
+
 for (const testCase of [
 	["qualified keys isolate identical local entities", testQualifiedKeys],
 	["exact shape expands a physical corridor", testExactShape],
@@ -1484,6 +1644,9 @@ for (const testCase of [
 	["QRT uses the operating service date", testQrtUsesOperatingServiceDate],
 	["SRT timing cannot change the resolved corridor", testTimingCannotChangeCorridor],
 	["physical plan cache rebinds current journey anchors", testPhysicalPlanCacheRebindsCurrentAnchors],
+	["exact static corridors are reused across service dates", testExactStaticCorridorIsReusedAcrossServiceDates],
+	["compatible search skips shapes without anchor overlap", testCompatibleSearchSkipsShapesWithoutAnchorOverlap],
+	["pattern index collapses equivalent trips", testPatternIndexCollapsesEquivalentTrips],
 ]) {
 	try {
 		testCase[1]();

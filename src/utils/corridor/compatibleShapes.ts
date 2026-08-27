@@ -51,9 +51,13 @@ export function findCompatibleShapes(
 		for (const shapeKey of shapeKeys) {
 			if (shapeKey === exactKey) continue;
 			const shape = index.shapes.get(shapeKey);
-			if (shape && isActiveShape(shape, journey, ctx)) {
-				candidates.push({ shape, evidence: "compatible-shape", score: overlapScore(shape, journey) });
-			}
+			if (!shape) continue;
+			const score = overlapScore(shape, journey);
+			// A same-route label alone is not physical evidence. Besides avoiding
+			// cross-branch guesses, this keeps unrelated route variants out of the
+			// calendar and alignment hot path.
+			if (score === 0 || !isActiveShape(shape, journey, ctx)) continue;
+			candidates.push({ shape, evidence: "compatible-shape", score });
 		}
 	}
 	const configuredSource = ctx.config.corridor.geometrySources.find((source) => source.feedId === journey.feedId);

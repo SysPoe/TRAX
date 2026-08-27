@@ -177,6 +177,7 @@ export function augmentTrip(
 			})
 		: allUpdates;
 	ctx.augmented.timer.stop("augmentTrip:getTripUpdates");
+	let reusableStaticCorridor: CorridorResolution | null = null;
 
 	const createInstance = (
 		serviceDate: string,
@@ -206,8 +207,21 @@ export function augmentTrip(
 			staticStopTimesForInstance === null && update
 				? createRealtimeJourneyContext(update, ctx)
 				: { ...journey, serviceDate };
-		const corridor: CorridorResolution =
-			journeyForDate.anchors.length > 1 ? resolveJourneyCorridor(journeyForDate, ctx) : { gaps: [], nodes: [] };
+		let corridor: CorridorResolution;
+		if (journeyForDate.anchors.length < 2) {
+			corridor = { gaps: [], nodes: [] };
+		} else if (staticStopTimesForInstance !== null && reusableStaticCorridor) {
+			corridor = reusableStaticCorridor;
+		} else {
+			corridor = resolveJourneyCorridor(journeyForDate, ctx);
+			if (
+				staticStopTimesForInstance !== null &&
+				corridor.gaps.length === journeyForDate.anchors.length - 1 &&
+				corridor.gaps.every((gap) => gap.status === "resolved" && gap.evidence === "exact-shape")
+			) {
+				reusableStaticCorridor = corridor;
+			}
+		}
 		const expressInfo = expressInfoFromCorridor(corridor);
 
 		ctx.augmented.timer.start("createInstance:augmentStopTimes");

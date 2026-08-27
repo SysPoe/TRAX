@@ -134,34 +134,41 @@ function appendProjection(
 	projections.set(stationId, retained);
 }
 
-function indexShapeProjections(
-	shape: IndexedShape,
+interface ProjectionCoordinate {
+	stationId: string;
+	stopId: string;
+	source: "parent" | "platform";
+}
+
+function buildProjectionGrid(
 	stationGeometry: ReadonlyMap<string, StationGeometry>,
-	config: CorridorResolutionConfig,
-): void {
-	const grid = new CoordinateGridIndex<string>(config.geometry.endpointSnapMaxMeters);
+	cellSizeMeters: number,
+): CoordinateGridIndex<ProjectionCoordinate> {
+	const grid = new CoordinateGridIndex<ProjectionCoordinate>(cellSizeMeters);
 	for (const [stationId, geometry] of stationGeometry) {
 		for (const coordinate of geometry.coordinates) {
 			grid.add({
-				id: `${stationId}\0${coordinate.stopId}`,
+				id: { stationId, stopId: coordinate.stopId, source: coordinate.source },
 				lat: coordinate.lat,
 				lon: coordinate.lon,
 			});
 		}
 	}
+	return grid;
+}
+
+function indexShapeProjections(
+	shape: IndexedShape,
+	grid: CoordinateGridIndex<ProjectionCoordinate>,
+	config: CorridorResolutionConfig,
+): void {
 	for (let index = 0; index < shape.points.length - 1; index++) {
 		const from = shape.points[index];
 		const to = shape.points[index + 1];
 		const candidates = grid.querySegment(from, to, config.geometry.endpointSnapMaxMeters);
 		const segmentLength = to.geometricDistanceMeters - from.geometricDistanceMeters;
 		for (const candidate of candidates) {
-			const stationId = candidate.id.slice(0, candidate.id.indexOf("\0"));
-			const coordinateSource = stationGeometry
-				.get(stationId)
-				?.coordinates.find(
-					(coordinate) => coordinate.stopId === candidate.id.slice(candidate.id.indexOf("\0") + 1),
-				)?.source;
-			if (!coordinateSource) continue;
+			const { stationId, source: coordinateSource } = candidate.id;
 			const projected = projectPointOnSegment(candidate, from, to);
 			const nativeStart = from.nativeShapeDistance;
 			const nativeEnd = to.nativeShapeDistance;
@@ -277,8 +284,13 @@ export function buildCorridorIndex(ctx: CacheContext): CorridorIndex {
 			group.add(shapeKey);
 			shapesByRouteDirection.set(routeDirectionKey, group);
 		}
+		let projectionGrid: CoordinateGridIndex<ProjectionCoordinate> | null = null;
 		for (const shape of shapes.values()) {
-			indexShapeProjections(shape, stationGeometry, config);
+			const grid = projectionGrid ??= buildProjectionGrid(
+				stationGeometry,
+				config.geometry.endpointSnapMaxMeters,
+			);
+			indexShapeProjections(shape, grid, config);
 			finalizeShapeGeometryIndex(shape);
 		}
 	}
