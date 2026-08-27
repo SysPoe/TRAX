@@ -210,6 +210,23 @@ function physicalResolutionCacheKey(journey: JourneyContext, shape: IndexedShape
 	]);
 }
 
+function scopedResolutionCacheKey(journey: JourneyContext, ctx: CacheContext): string {
+	return JSON.stringify([
+		"scoped-resolution",
+		qualifiedKey(journey.feedId, journey.sourceId),
+		qualifiedKey(journey.feedId, journey.shapeId ?? "*"),
+		qualifiedKey(journey.feedId, `${journey.routeId ?? "*"}\0${journey.direction ?? "*"}`),
+		journey.serviceDate,
+		journey.geometryFeedIds,
+		configVersion(ctx),
+		journey.anchors.map((anchor) => [
+			anchor.stationId,
+			anchor.shapeDistTraveled ?? null,
+			anchor.scheduled,
+		]),
+	]);
+}
+
 function nodesFromGaps(gaps: readonly CorridorGapResolution[]): CorridorNode[] {
 	const nodes: CorridorNode[] = [];
 	for (const gap of gaps) {
@@ -515,6 +532,13 @@ export function resolveJourneyCorridor(journey: JourneyContext, ctx: CacheContex
 			return rebound;
 		}
 	}
+	const scopedCacheKey = scopedResolutionCacheKey(journey, ctx);
+	const scopedCached = ctx.augmented.corridorPhysicalResolutionCache.get(scopedCacheKey);
+	if (scopedCached) {
+		const rebound = rebindPhysicalResolution(scopedCached, journey);
+		ctx.augmented.corridorResolutionCache.set(cacheKey, rebound);
+		return rebound;
+	}
 	const exactAlignment = exactShape ? alignShapeAnchorsCached(journey.anchors, exactShape, true, ctx) : null;
 	const exactGapContext = exactAlignment ? createShapeGapContext(journey, exactAlignment) : undefined;
 	const validationContext = createCorridorValidationContext(journey);
@@ -549,6 +573,8 @@ export function resolveJourneyCorridor(journey: JourneyContext, ctx: CacheContex
 		validatedGaps.every((gap) => gap.status === "resolved" && gap.evidence === "exact-shape")
 	) {
 		ctx.augmented.corridorPhysicalResolutionCache.set(physicalCacheKey, result);
+	} else {
+		ctx.augmented.corridorPhysicalResolutionCache.set(scopedCacheKey, result);
 	}
 	logCorridorResolution(journey, result, ctx);
 	return result;
@@ -586,5 +612,6 @@ export const _test = {
 	resolveCompatibleGap,
 	alignmentCacheKey,
 	physicalResolutionCacheKey,
+	scopedResolutionCacheKey,
 	rebindPhysicalResolution,
 };

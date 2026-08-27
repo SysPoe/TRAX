@@ -121,6 +121,7 @@ function indexedShape(feedId, shapeId, localIds, coordinates, options = {}) {
 		routeDirections: new Set([qualifiedRouteDirectionKey(feedId, routeId, direction)]),
 		scheduledStations: new Set((options.scheduledStations ?? localIds).map((localId) => q(feedId, localId))),
 		tripIds: new Set((options.tripIds ?? []).map((tripId) => q(feedId, tripId))),
+		serviceIds: new Set(options.serviceIds ?? []),
 		projections,
 		nativeDistancePoints: [],
 		nativeDistanceScale: 1,
@@ -1456,6 +1457,42 @@ function testPhysicalPlanCacheRebindsCurrentAnchors() {
 	assert.equal(ctx.augmented.corridorPhysicalResolutionCache.size, 1);
 }
 
+function testCompatiblePlanCacheReusesPhysicalPatterns() {
+	const coordinates = simpleCoordinates(["a", "b", "d"]);
+	const index = createEmptyCorridorIndex("test");
+	index.stationGeometry = stationGeometry("feed", ["a", "b", "d"], coordinates);
+	addShapes(index, [
+		indexedShape("feed", "compatible", ["a", "b", "d"], coordinates, {
+			scheduledStations: ["a", "d"],
+			routeId: "route",
+		}),
+	]);
+	const ctx = context({ index });
+	const firstJourney = journey("feed", ["a", "d"], coordinates, {
+		shapeId: "missing",
+		routeId: "route",
+		direction: 0,
+		serviceDate: "20260827",
+	});
+	firstJourney.tripId = "first-trip";
+	const first = resolveJourneyCorridor(firstJourney, ctx);
+	assert.equal(first.gaps[0].evidence, "compatible-shape");
+
+	const secondJourney = journey("feed", ["a", "d"], coordinates, {
+		shapeId: "missing",
+		routeId: "route",
+		direction: 0,
+		serviceDate: "20260827",
+	});
+	secondJourney.tripId = "second-trip";
+	secondJourney.anchors[0] = { ...secondJourney.anchors[0], id: "current-a", name: "Current A" };
+	const second = resolveJourneyCorridor(secondJourney, ctx);
+	assert.equal(second.gaps[0].from.id, "current-a");
+	assert.equal(second.gaps[0].nodes[0].name, "Current A");
+	assert.equal(ctx.augmented.corridorResolutionCache.size, 2);
+	assert.equal(ctx.augmented.corridorPhysicalResolutionCache.size, 1);
+}
+
 function testExactStaticCorridorIsReusedAcrossServiceDates() {
 	const coordinates = simpleCoordinates(["a", "b", "d"]);
 	const index = createEmptyCorridorIndex("test");
@@ -1716,6 +1753,7 @@ for (const testCase of [
 	["QRT uses the operating service date", testQrtUsesOperatingServiceDate],
 	["SRT timing cannot change the resolved corridor", testTimingCannotChangeCorridor],
 	["physical plan cache rebinds current journey anchors", testPhysicalPlanCacheRebindsCurrentAnchors],
+	["compatible plans reuse qualified physical patterns", testCompatiblePlanCacheReusesPhysicalPatterns],
 	["exact static corridors are reused across service dates", testExactStaticCorridorIsReusedAcrossServiceDates],
 	["compatible search skips shapes without anchor overlap", testCompatibleSearchSkipsShapesWithoutAnchorOverlap],
 	["pattern index collapses equivalent trips", testPatternIndexCollapsesEquivalentTrips],
