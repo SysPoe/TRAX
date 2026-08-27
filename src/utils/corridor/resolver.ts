@@ -289,21 +289,24 @@ function resolveCompatibleGap(
 		gap: CorridorGapResolution;
 		contextAlignment: ShapeAlignment | null;
 		candidateScore: number;
+		candidate: CompatibleShapeCandidate;
 	}> = [];
+	const suffixAlignmentFor = (candidate: CompatibleShapeCandidate): ShapeAlignment | null => {
+		const suffixAlignment = alignShapeAnchorsCached(journey.anchors.slice(fromIndex), candidate.shape, false, ctx);
+		return suffixAlignment &&
+			!suffixAlignment.ambiguous &&
+			suffixAlignment.anchors.has(0) &&
+			suffixAlignment.anchors.has(1)
+			? suffixAlignment
+			: null;
+	};
 	for (const candidate of candidates) {
 		// Candidate ranking uses the whole journey, but a partial shape must be
 		// aligned locally. An unmatched anchor before this gap can otherwise
 		// consume an early projection and move the seam anchor to a later loop
 		// position, hiding valid interior stations from this gap.
 		const localAlignment = alignShapeAnchorsCached([from, to], candidate.shape, false, ctx);
-		const suffixAlignment = alignShapeAnchorsCached(journey.anchors.slice(fromIndex), candidate.shape, false, ctx);
-		const contextAlignment =
-			suffixAlignment &&
-			!suffixAlignment.ambiguous &&
-			suffixAlignment.anchors.has(0) &&
-			suffixAlignment.anchors.has(1)
-				? suffixAlignment
-				: null;
+		const contextAlignment = !localAlignment || localAlignment.ambiguous ? suffixAlignmentFor(candidate) : null;
 		const alignment = contextAlignment ?? localAlignment;
 		const gap = shapeGap(
 			from,
@@ -319,13 +322,42 @@ function resolveCompatibleGap(
 			undefined,
 			validationContext,
 		);
-		if (gap) resolved.push({ gap, contextAlignment, candidateScore: candidate.score });
+		if (gap) resolved.push({ gap, contextAlignment, candidateScore: candidate.score, candidate });
 	}
 	if (resolved.length === 0) return null;
 	const signatures = new Set(
 		resolved.map((candidate) => candidate.gap.nodes.map((node) => node.stationId ?? node.id).join("|")),
 	);
 	if (signatures.size === 1) return resolved[0].gap;
+
+	// Only competing paths need whole-suffix context. Most compatible gaps have
+	// one candidate or unanimous local evidence, so avoid allocating and solving
+	// a dynamic-programming suffix for every candidate on every gap.
+	for (const entry of resolved) {
+		if (entry.contextAlignment) continue;
+		const contextAlignment = suffixAlignmentFor(entry.candidate);
+		if (!contextAlignment) continue;
+		const contextualGap = shapeGap(
+			from,
+			to,
+			0,
+			1,
+			entry.candidate.shape,
+			contextAlignment,
+			journey,
+			index,
+			ctx,
+			entry.candidate.evidence,
+			undefined,
+			validationContext,
+		);
+		if (contextualGap) entry.gap = contextualGap;
+		entry.contextAlignment = contextAlignment;
+	}
+	const contextualSignatures = new Set(
+		resolved.map((candidate) => candidate.gap.nodes.map((node) => node.stationId ?? node.id).join("|")),
+	);
+	if (contextualSignatures.size === 1) return resolved[0].gap;
 
 	// A later anchor can disambiguate two branch shapes, but only when one
 	// candidate explains materially more of the ordered suffix (or does so at a

@@ -28,6 +28,7 @@ export interface IndexedShape {
 	routeDirections: Set<string>;
 	scheduledStations: Set<string>;
 	tripIds: Set<string>;
+	serviceIds: Set<string>;
 	projections: Map<string, StationProjection[]>;
 	/** Native chainage samples, sorted once for binary anchor lookup. */
 	nativeDistancePoints: Array<{ nativeShapeDistance: number; geometricDistanceMeters: number }>;
@@ -261,6 +262,7 @@ export function buildCorridorIndex(ctx: CacheContext): CorridorIndex {
 					routeDirections: new Set(),
 					scheduledStations: new Set(),
 					tripIds: new Set(),
+					serviceIds: new Set(),
 					projections: new Map(),
 					nativeDistancePoints: [],
 					nativeDistanceScale: 1,
@@ -270,6 +272,7 @@ export function buildCorridorIndex(ctx: CacheContext): CorridorIndex {
 			}
 			shape.routeDirections.add(qualifiedRouteDirectionKey(trip.feed_id, trip.route_id, trip.direction_id));
 			shape.tripIds.add(entityKey({ feedId: trip.feed_id, localId: trip.trip_id }));
+			shape.serviceIds.add(trip.service_id);
 			for (const stopTime of getRawStopTimes(ctx, { feedId: trip.feed_id, localId: trip.trip_id })) {
 				const stop = getStop(ctx, stopTime.feed_id, stopTime.stop_id);
 				shape.scheduledStations.add(

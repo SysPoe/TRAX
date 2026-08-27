@@ -1,4 +1,4 @@
-import { getServiceDatesByTrip } from "../calendar.js";
+import { getServiceDatesByService, getServiceDatesByTrip } from "../calendar.js";
 import { parseEntityKey } from "../../identity.js";
 import { qualifiedKey, qualifiedRouteDirectionKey } from "./keys.js";
 import type { CorridorIndex, IndexedShape } from "./shapeIndex.js";
@@ -17,6 +17,16 @@ function isActiveShape(shape: IndexedShape, journey: JourneyContext, ctx: CacheC
 	// that a shape is inactive. Keep that geometry available and let the gap
 	// consensus decide whether it is safe to use.
 	if (shape.tripIds.size === 0) return true;
+	if (shape.serviceIds?.size) {
+		const firstTripId = shape.tripIds.values().next().value as string | undefined;
+		return [...shape.serviceIds].some((serviceId) =>
+			getServiceDatesByService(
+				{ feedId: shape.feedId, localId: serviceId },
+				ctx,
+				firstTripId ? parseEntityKey(firstTripId) : undefined,
+			).includes(journey.serviceDate!),
+		);
+	}
 	return [...shape.tripIds].some((tripId) =>
 		getServiceDatesByTrip(parseEntityKey(tripId), ctx).includes(journey.serviceDate!),
 	);
