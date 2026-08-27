@@ -3,7 +3,7 @@ import type { CacheContext } from "../../cache/types.js";
 import { getRawStopTimes } from "../../cache/gtfsReads.js";
 import { canonicalStationIdentity } from "../../config.js";
 import { entityKey, parseEntityKey } from "../../identity.js";
-import { getServiceDatesByTrip } from "../calendar.js";
+import { getServiceDatesByService } from "../calendar.js";
 import { qualifiedRouteDirectionKey } from "./keys.js";
 import type { JourneyContext, RoutePattern } from "./types.js";
 
@@ -118,15 +118,11 @@ export function getActivePatterns(
 		if (journey.routeId !== null && pattern.routeId !== journey.routeId) return false;
 		if (journey.direction !== null && String(pattern.direction ?? "*") !== String(journey.direction)) return false;
 		if (!journey.serviceDate || !ctx.gtfs) return true;
-		if (pattern.tripIds.length > 0)
-			return pattern.tripIds.some((tripId) =>
-				getServiceDatesByTrip(parseEntityKey(tripId), ctx).includes(journey.serviceDate!),
-			);
-		return (
-			ctx.gtfs
-				.getServiceDates?.({ feedId: pattern.feedId, localId: pattern.serviceId })
-				?.includes(journey.serviceDate!) ?? true
-		);
+		return getServiceDatesByService(
+			{ feedId: pattern.feedId, localId: pattern.serviceId },
+			ctx,
+			pattern.tripIds[0] ? parseEntityKey(pattern.tripIds[0]) : undefined,
+		).includes(journey.serviceDate!);
 	});
 }
 

@@ -298,10 +298,15 @@ const relevantPattern = {
 	feedId: "feed",
 	routeId: "target-route",
 	direction: 0,
-	serviceId: "service",
+	serviceId: "active-service",
 	shapeId: null,
 	stations: ["feed:A", "feed:B", "feed:C"],
-	tripIds: [],
+	tripIds: [qualifiedKey("feed", "active-trip")],
+};
+const inactivePattern = {
+	...relevantPattern,
+	serviceId: "inactive-service",
+	tripIds: Array.from({ length: 50_000 }, (_, index) => qualifiedKey("feed", `inactive-trip-${index}`)),
 };
 const irrelevantPatterns = Array.from({ length: 50_000 }, (_, index) => ({
 	...relevantPattern,
@@ -315,7 +320,7 @@ const patternJourney = {
 	routeId: "target-route",
 	direction: 0,
 	shapeId: null,
-	serviceDate: null,
+	serviceDate: "20260827",
 	anchors: [
 		{ id: "A", stationId: "feed:A", sequence: 1, scheduled: true },
 		{ id: "C", stationId: "feed:C", sequence: 2, scheduled: true },
@@ -326,8 +331,19 @@ const patternIndex = {
 	...index,
 	patterns: [...irrelevantPatterns, relevantPattern],
 	patternsByRouteDirection: new Map([
-		[qualifiedRouteDirectionKey("feed", "target-route", 0), [relevantPattern]],
+		[qualifiedRouteDirectionKey("feed", "target-route", 0), [inactivePattern, relevantPattern]],
 	]),
+};
+let tripCalendarLookups = 0;
+const patternCtx = {
+	...ctx,
+	gtfs: {
+		getServiceDatesByTrip: ({ localId }) => {
+			tripCalendarLookups++;
+			return localId === "active-trip" ? ["20260827"] : [];
+		},
+		getServiceDates: ({ localId }) => (localId === "active-service" ? ["20260827"] : []),
+	},
 };
 const scopedPatternMeasurement = measure("route-scoped pattern gaps", () => {
 	for (let iteration = 0; iteration < 100; iteration++) {
@@ -336,7 +352,7 @@ const scopedPatternMeasurement = measure("route-scoped pattern gaps", () => {
 			patternJourney.anchors[1],
 			patternJourney,
 			patternIndex,
-			ctx,
+			patternCtx,
 		);
 		assert.equal(result?.nodes.length, 3);
 	}
@@ -352,4 +368,5 @@ assert(
 	scopedPatternMeasurement.elapsedMs < 10,
 	`route-scoped pattern gaps took ${scopedPatternMeasurement.elapsedMs.toFixed(1)} ms`,
 );
+assert.equal(tripCalendarLookups, 0, "collapsed patterns must use their shared service calendar");
 console.log("Corridor performance benchmark passed.");

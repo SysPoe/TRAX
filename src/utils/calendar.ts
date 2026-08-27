@@ -25,6 +25,26 @@ export function getServiceDatesByTrip(
 	return result;
 }
 
+/** Return one feed-qualified service calendar without repeating it per trip. */
+export function getServiceDatesByService(
+	service: QualifiedEntityId,
+	ctx: CacheContext,
+	fallbackTrip?: QualifiedEntityId,
+): string[] {
+	if (!ctx.gtfs) return [];
+	const cacheKey = `service|${entityKey(service)}`;
+	const cached = ctx.runtimeState.serviceDates.get(cacheKey);
+	if (cached) return cached;
+	const result =
+		typeof ctx.gtfs.getServiceDates === "function"
+			? ctx.gtfs.getServiceDates(service)
+			: fallbackTrip
+				? ctx.gtfs.getServiceDatesByTrip(fallbackTrip)
+				: [];
+	ctx.runtimeState.serviceDates.set(cacheKey, result);
+	return result;
+}
+
 /** QDF owns the feed-qualified calendar snapshot; only runtime memoization is reset here. */
 export function syncCalendarsToWasm(ctx: CacheContext): void {
 	ctx.runtimeState.serviceDates.clear();
