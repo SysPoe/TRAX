@@ -27,8 +27,8 @@ importers:
         specifier: ^7.0.2
         version: 7.1.0
       qdf-gtfs:
-        specifier: file:../QDF-GTFS
-        version: file:../QDF-GTFS
+        specifier: github:SysPoe/QDF-GTFS#master
+        version: https://codeload.github.com/SysPoe/QDF-GTFS/tar.gz/b510071e513f4767305bce2b6eeee22e9278f5b4
       strip-ansi:
         specifier: ^7.1.2
         version: 7.2.0
@@ -199,8 +199,8 @@ packages:
     resolution: {integrity: sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ==}
     engines: {node: '>=8'}
 
-  ansi-regex@6.2.2:
-    resolution: {integrity: sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg==}
+  ansi-regex@6.3.0:
+    resolution: {integrity: sha512-WpDfL7NO6j7tH88IDBNVdUJxDh9nmCteAVW9dsep846XdwF4naCBK+/tGLX3KJgcpgMRXCFlTM2hKGoK9FsdrQ==}
     engines: {node: '>=12'}
 
   assemblyscript@0.28.20:
@@ -228,6 +228,7 @@ packages:
 
   crypto-js@4.2.0:
     resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
+    deprecated: Active development of CryptoJS has been discontinued. This library is no longer maintained.
 
   css-select@5.2.2:
     resolution: {integrity: sha512-TizTzUddG/xYLA3NXodFM0fSbNizXjOKhqiQQwvhlspadZokn1KDy0NZFS0wuEubIYAV5/c1/lAr0TaaFXEXzw==}
@@ -270,8 +271,8 @@ packages:
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
 
-  get-tsconfig@4.14.0:
-    resolution: {integrity: sha512-yTb+8DXzDREzgvYmh6s9vHsSVCHeC0G3PI5bEXNBHtmshPnO+S5O7qgLEOn0I5QvMy6kpZN8K1NKGyilLb93wA==}
+  get-tsconfig@4.14.3:
+    resolution: {integrity: sha512-++QEw4DIY7WGoukz+/+A/8dGYPT9l9yIadnmSgZ8Rjr3YVSVDipQSO9CdnJo9ePqFqUUqh+wk9uIaoiAwsiPkA==}
 
   he@1.2.0:
     resolution: {integrity: sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==}
@@ -284,8 +285,8 @@ packages:
   long@5.3.2:
     resolution: {integrity: sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA==}
 
-  node-addon-api@8.9.0:
-    resolution: {integrity: sha512-ekZMeaaIzSQTSpr7X2X3iJM7lTzgnx8ahAG9pJfT/7+14mlEM8ZYQ9cgCDvSSRbReFK0oHli3WrZdCiRsgAT9Q==}
+  node-addon-api@8.9.2:
+    resolution: {integrity: sha512-VijLXbi3UACN69I0JVXJsX4tjACjNoQDgv2gTF6sx2wWEi8tkSg2eX8p5gSIFi8z2+DL3oHmY6OyKce38SDolg==}
     engines: {node: ^18 || ^20 || >= 21}
 
   node-html-parser@7.1.0:
@@ -299,8 +300,9 @@ packages:
     engines: {node: '>=14'}
     hasBin: true
 
-  qdf-gtfs@file:../QDF-GTFS:
-    resolution: {directory: ../QDF-GTFS, type: directory}
+  qdf-gtfs@https://codeload.github.com/SysPoe/QDF-GTFS/tar.gz/b510071e513f4767305bce2b6eeee22e9278f5b4:
+    resolution: {gitHosted: true, integrity: sha512-03vU8IN50Stp9LmjXVkNRGOGSsCroAEceoQ8YesiYFS2Vxql2SbxghtJcp/nBuRUd43BOENhsPbOndojNMr0zA==, tarball: https://codeload.github.com/SysPoe/QDF-GTFS/tar.gz/b510071e513f4767305bce2b6eeee22e9278f5b4}
+    version: 1.0.0
 
   resolve-pkg-maps@1.0.0:
     resolution: {integrity: sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==}
@@ -416,7 +418,7 @@ snapshots:
 
   ansi-regex@5.0.1: {}
 
-  ansi-regex@6.2.2: {}
+  ansi-regex@6.3.0: {}
 
   assemblyscript@0.28.20:
     dependencies:
@@ -499,7 +501,7 @@ snapshots:
   fsevents@2.3.3:
     optional: true
 
-  get-tsconfig@4.14.0:
+  get-tsconfig@4.14.3:
     dependencies:
       resolve-pkg-maps: 1.0.0
 
@@ -509,7 +511,7 @@ snapshots:
 
   long@5.3.2: {}
 
-  node-addon-api@8.9.0: {}
+  node-addon-api@8.9.2: {}
 
   node-html-parser@7.1.0:
     dependencies:
@@ -522,9 +524,9 @@ snapshots:
 
   prettier@3.9.6: {}
 
-  qdf-gtfs@file:../QDF-GTFS:
+  qdf-gtfs@https://codeload.github.com/SysPoe/QDF-GTFS/tar.gz/b510071e513f4767305bce2b6eeee22e9278f5b4:
     dependencies:
-      node-addon-api: 8.9.0
+      node-addon-api: 8.9.2
 
   resolve-pkg-maps@1.0.0: {}
 
@@ -547,12 +549,12 @@ snapshots:
 
   strip-ansi@7.2.0:
     dependencies:
-      ansi-regex: 6.2.2
+      ansi-regex: 6.3.0
 
   tsx@3.14.0:
     dependencies:
       esbuild: 0.18.20
-      get-tsconfig: 4.14.0
+      get-tsconfig: 4.14.3
       source-map-support: 0.5.21
     optionalDependencies:
       fsevents: 2.3.3
