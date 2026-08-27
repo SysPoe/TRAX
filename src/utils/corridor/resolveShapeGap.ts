@@ -10,6 +10,27 @@ import type {
 	CorridorResolutionConfig,
 } from "./types.js";
 
+export interface ShapeGapContext {
+	scheduledIds: ReadonlySet<string>;
+	alignedPositionsByStation: ReadonlyMap<string, readonly number[]>;
+}
+
+export function createShapeGapContext(journey: JourneyContext, alignment: ShapeAlignment): ShapeGapContext {
+	const scheduledIds = new Set(
+		journey.anchors
+			.map((anchor) => anchor.stationId)
+			.filter((stationId): stationId is string => stationId !== null),
+	);
+	const alignedPositionsByStation = new Map<string, number[]>();
+	for (const aligned of alignment.anchors.values()) {
+		if (!aligned.anchor.stationId) continue;
+		const positions = alignedPositionsByStation.get(aligned.anchor.stationId) ?? [];
+		positions.push(aligned.distanceAlongMeters);
+		alignedPositionsByStation.set(aligned.anchor.stationId, positions);
+	}
+	return { scheduledIds, alignedPositionsByStation };
+}
+
 function confidenceForShape(
 	evidence: CorridorEvidence,
 	from: JourneyAnchor,
@@ -73,6 +94,7 @@ export function resolveShapeGap(
 	index: CorridorIndex,
 	config: CorridorResolutionConfig,
 	evidence: Extract<CorridorEvidence, "exact-shape" | "compatible-shape" | "borrowed-shape">,
+	gapContext: ShapeGapContext = createShapeGapContext(journey, alignment),
 ): CorridorGapResolution | null {
 	if (alignment.ambiguous) return null;
 	const fromPosition = alignment.anchors.get(fromIndex);
@@ -81,69 +103,73 @@ export function resolveShapeGap(
 		return null;
 
 	let confidence = confidenceForShape(evidence, from, to, alignment, fromIndex, toIndex, config);
-	const scheduledIds = new Set(
-		journey.anchors
-			.map((anchor) => anchor.stationId)
-			.filter((stationId): stationId is string => stationId !== null),
-	);
-	const alignedPositionsByStation = new Map<string, number[]>();
-	for (const aligned of alignment.anchors.values()) {
-		if (!aligned.anchor.stationId) continue;
-		const positions = alignedPositionsByStation.get(aligned.anchor.stationId) ?? [];
-		positions.push(aligned.distanceAlongMeters);
-		alignedPositionsByStation.set(aligned.anchor.stationId, positions);
-	}
+	const { scheduledIds, alignedPositionsByStation } = gapContext;
 	const passing: Array<{ node: CorridorNode; progress: number; lateralDistanceMeters: number }> = [];
 	const seenStations = new Set<string>();
-	for (const [stationId, projections] of shape.projections) {
+	const geometricStart =
+		alignment.orientation === "forward"
+			? fromPosition.distanceAlongMeters
+			: shape.lengthMeters - toPosition.distanceAlongMeters;
+	const geometricEnd =
+		alignment.orientation === "forward"
+			? toPosition.distanceAlongMeters
+			: shape.lengthMeters - fromPosition.distanceAlongMeters;
+	let low = 0;
+	let high = shape.orderedProjections.length;
+	while (low < high) {
+		const middle = Math.floor((low + high) / 2);
+		if (shape.orderedProjections[middle].projection.distanceAlongMeters <= geometricStart + 2) low = middle + 1;
+		else high = middle;
+	}
+	for (let projectionIndex = low; projectionIndex < shape.orderedProjections.length; projectionIndex++) {
+		const { stationId, projection } = shape.orderedProjections[projectionIndex];
+		if (projection.distanceAlongMeters >= geometricEnd - 2) break;
 		if (stationId === from.stationId || stationId === to.stationId) continue;
 		const geometryStation = index.stationGeometry.get(stationId);
-		for (const projection of projections) {
-			const progress =
-				alignment.orientation === "forward"
-					? projection.distanceAlongMeters
-					: shape.lengthMeters - projection.distanceAlongMeters;
-			if (progress <= fromPosition.distanceAlongMeters + 2 || progress >= toPosition.distanceAlongMeters - 2)
-				continue;
-			const maxDistance = shape.scheduledStations.has(stationId)
-				? evidence === "exact-shape"
-					? config.geometry.exactShapeMembershipMaxMeters
-					: config.geometry.compatibleShapeMaxMeters
-				: config.geometry.geometryOnlyMaxMeters;
-			if (projection.lateralDistanceMeters > maxDistance) continue;
-			if (scheduledIds.has(stationId)) {
-				if (!shape.scheduledStations.has(stationId)) continue;
-				const alignedPositions = alignedPositionsByStation.get(stationId);
-				if (
-					alignedPositions?.some(
-						(position) =>
-							position > fromPosition.distanceAlongMeters + 2 &&
-							position < toPosition.distanceAlongMeters - 2,
-					)
-				) {
-					return null;
-				}
-				if (!alignedPositions?.length) return null;
-				continue;
+		const progress =
+			alignment.orientation === "forward"
+				? projection.distanceAlongMeters
+				: shape.lengthMeters - projection.distanceAlongMeters;
+		if (progress <= fromPosition.distanceAlongMeters + 2 || progress >= toPosition.distanceAlongMeters - 2)
+			continue;
+		const maxDistance = shape.scheduledStations.has(stationId)
+			? evidence === "exact-shape"
+				? config.geometry.exactShapeMembershipMaxMeters
+				: config.geometry.compatibleShapeMaxMeters
+			: config.geometry.geometryOnlyMaxMeters;
+		if (projection.lateralDistanceMeters > maxDistance) continue;
+		if (scheduledIds.has(stationId)) {
+			if (!shape.scheduledStations.has(stationId)) continue;
+			const alignedPositions = alignedPositionsByStation.get(stationId);
+			if (
+				alignedPositions?.some(
+					(position) =>
+						position > fromPosition.distanceAlongMeters + 2 &&
+						position < toPosition.distanceAlongMeters - 2,
+				)
+			) {
+				return null;
 			}
-			if (seenStations.has(stationId)) continue;
-			seenStations.add(stationId);
-			passing.push({
-				progress,
-				lateralDistanceMeters: projection.lateralDistanceMeters,
-				node: {
-					id: stationId,
-					stationId,
-					name: geometryStation?.names[0],
-					kind: "station",
-					scheduled: false,
-					passing: true,
-					distanceAlongMeters: progress,
-					evidence,
-					confidence,
-				},
-			});
+			if (!alignedPositions?.length) return null;
+			continue;
 		}
+		if (seenStations.has(stationId)) continue;
+		seenStations.add(stationId);
+		passing.push({
+			progress,
+			lateralDistanceMeters: projection.lateralDistanceMeters,
+			node: {
+				id: stationId,
+				stationId,
+				name: geometryStation?.names[0],
+				kind: "station",
+				scheduled: false,
+				passing: true,
+				distanceAlongMeters: progress,
+				evidence,
+				confidence,
+			},
+		});
 	}
 	passing.sort((a, b) => a.progress - b.progress);
 	if (

@@ -46,12 +46,39 @@ function nativePosition(
 	distanceAlongMeters: number;
 	nativeShapeDistance: number;
 } | null {
-	for (let index = 0; index < shape.points.length - 1; index++) {
-		const from = shape.points[index];
-		const to = shape.points[index + 1];
+	const points = shape.nativeDistancePoints;
+	if (points.length < 2) {
+		for (let index = 0; index < shape.points.length - 1; index++) {
+			const from = shape.points[index];
+			const to = shape.points[index + 1];
+			const fromNative = from.nativeShapeDistance;
+			const toNative = to.nativeShapeDistance;
+			if (fromNative == null || toNative == null || toNative <= fromNative) continue;
+			const fraction = (target - fromNative) / (toNative - fromNative);
+			if (fraction < -1e-6 || fraction > 1 + 1e-6) continue;
+			const clamped = Math.max(0, Math.min(1, fraction));
+			return {
+				distanceAlongMeters:
+					from.geometricDistanceMeters +
+					clamped * (to.geometricDistanceMeters - from.geometricDistanceMeters),
+				nativeShapeDistance: fromNative + clamped * (toNative - fromNative),
+			};
+		}
+		return null;
+	}
+	let low = 0;
+	let high = points.length - 1;
+	while (low < high) {
+		const middle = Math.floor((low + high + 1) / 2);
+		if (points[middle].nativeShapeDistance <= target) low = middle;
+		else high = middle - 1;
+	}
+	for (let index = Math.max(0, low - 1); index < Math.min(points.length - 1, low + 1); index++) {
+		const from = points[index];
+		const to = points[index + 1];
 		const fromNative = from.nativeShapeDistance;
 		const toNative = to.nativeShapeDistance;
-		if (fromNative == null || toNative == null || toNative <= fromNative) continue;
+		if (toNative <= fromNative) continue;
 		const fraction = (target - fromNative) / (toNative - fromNative);
 		if (fraction < -1e-6 || fraction > 1 + 1e-6) continue;
 		const clamped = Math.max(0, Math.min(1, fraction));
@@ -65,11 +92,11 @@ function nativePosition(
 }
 
 function nearestProjection(shape: IndexedShape, stationId: string): StationProjection | null {
-	return (
-		[...(shape.projections.get(stationId) ?? [])].sort(
-			(a, b) => a.lateralDistanceMeters - b.lateralDistanceMeters,
-		)[0] ?? null
-	);
+	let nearest: StationProjection | null = null;
+	for (const projection of shape.projections.get(stationId) ?? []) {
+		if (!nearest || projection.lateralDistanceMeters < nearest.lateralDistanceMeters) nearest = projection;
+	}
+	return nearest;
 }
 
 function candidateCost(
@@ -85,11 +112,7 @@ function candidateCost(
 	let cost = lateralDistanceMeters + (lateralDistanceMeters * lateralDistanceMeters) / 100;
 	const anchorNative = options.useNativeShapeDistance ? validDistance(anchor.shapeDistTraveled) : null;
 	if (anchorNative != null && nativeDistance != null) {
-		const nativeValues = shape.points
-			.map((point) => point.nativeShapeDistance)
-			.filter((value): value is number => value != null);
-		const nativeScale = Math.max(1, (Math.max(...nativeValues) - Math.min(...nativeValues)) / 100);
-		cost += Math.abs(anchorNative - nativeDistance) / nativeScale;
+		cost += Math.abs(anchorNative - nativeDistance) / shape.nativeDistanceScale;
 	}
 	return cost;
 }

@@ -29,6 +29,11 @@ export interface IndexedShape {
 	scheduledStations: Set<string>;
 	tripIds: Set<string>;
 	projections: Map<string, StationProjection[]>;
+	/** Native chainage samples, sorted once for binary anchor lookup. */
+	nativeDistancePoints: Array<{ nativeShapeDistance: number; geometricDistanceMeters: number }>;
+	nativeDistanceScale: number;
+	/** Every retained station projection in geometric chainage order. */
+	orderedProjections: Array<{ stationId: string; projection: StationProjection }>;
 }
 
 export interface CorridorIndex {
@@ -182,6 +187,35 @@ function indexShapeProjections(
 	}
 }
 
+/** Finalize read-heavy per-shape indexes after points and projections are populated. */
+export function finalizeShapeGeometryIndex(shape: IndexedShape): void {
+	const nativeDistancePoints = shape.points
+		.filter((point) => point.nativeShapeDistance != null)
+		.map((point) => ({
+			nativeShapeDistance: point.nativeShapeDistance!,
+			geometricDistanceMeters: point.geometricDistanceMeters,
+		}));
+	let monotonic = true;
+	for (let index = 1; index < nativeDistancePoints.length; index++) {
+		if (nativeDistancePoints[index].nativeShapeDistance < nativeDistancePoints[index - 1].nativeShapeDistance) {
+			monotonic = false;
+			break;
+		}
+	}
+	shape.nativeDistancePoints = monotonic ? nativeDistancePoints : [];
+	if (nativeDistancePoints.length > 1) {
+		const values = nativeDistancePoints.map((point) => point.nativeShapeDistance);
+		shape.nativeDistanceScale = Math.max(1, (Math.max(...values) - Math.min(...values)) / 100);
+	} else {
+		shape.nativeDistanceScale = 1;
+	}
+	shape.orderedProjections = [];
+	for (const [stationId, projections] of shape.projections) {
+		for (const projection of projections) shape.orderedProjections.push({ stationId, projection });
+	}
+	shape.orderedProjections.sort((a, b) => a.projection.distanceAlongMeters - b.projection.distanceAlongMeters);
+}
+
 /** Build all feed-qualified station, shape, and route-pattern indexes for one static snapshot. */
 export function buildCorridorIndex(ctx: CacheContext): CorridorIndex {
 	const config = ctx.config.corridor;
@@ -221,6 +255,9 @@ export function buildCorridorIndex(ctx: CacheContext): CorridorIndex {
 					scheduledStations: new Set(),
 					tripIds: new Set(),
 					projections: new Map(),
+					nativeDistancePoints: [],
+					nativeDistanceScale: 1,
+					orderedProjections: [],
 				};
 				shapes.set(shapeKey, shape);
 			}
@@ -240,7 +277,10 @@ export function buildCorridorIndex(ctx: CacheContext): CorridorIndex {
 			group.add(shapeKey);
 			shapesByRouteDirection.set(routeDirectionKey, group);
 		}
-		for (const shape of shapes.values()) indexShapeProjections(shape, stationGeometry, config);
+		for (const shape of shapes.values()) {
+			indexShapeProjections(shape, stationGeometry, config);
+			finalizeShapeGeometryIndex(shape);
+		}
 	}
 
 	const patternData = buildPatternIndex(ctx, trips);

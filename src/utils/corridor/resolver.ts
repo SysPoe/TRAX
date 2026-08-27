@@ -5,12 +5,17 @@ import { canonicalStationIdentity } from "../../config.js";
 import { entityKey } from "../../identity.js";
 import { corridorJourneyKey, qualifiedKey } from "./keys.js";
 import { alignShapeAnchors, type ShapeAlignment } from "./alignShape.js";
-import { findCompatibleShapes } from "./compatibleShapes.js";
+import { findCompatibleShapes, type CompatibleShapeCandidate } from "./compatibleShapes.js";
 import { resolveAuthoritativeManualGap, resolveFallbackManualGap } from "./manualNetwork.js";
 import { resolvePatternGap } from "./patternResolver.js";
 import { buildCorridorIndex, type CorridorIndex, type IndexedShape } from "./shapeIndex.js";
-import { resolveShapeGap } from "./resolveShapeGap.js";
-import { validateCorridorGap, validateCorridorResolution } from "./validate.js";
+import { createShapeGapContext, resolveShapeGap, type ShapeGapContext } from "./resolveShapeGap.js";
+import {
+	createCorridorValidationContext,
+	validateCorridorGap,
+	validateCorridorResolution,
+	type CorridorValidationContext,
+} from "./validate.js";
 import { logCorridorResolution } from "./diagnostics.js";
 import type {
 	CorridorConfidence,
@@ -156,6 +161,89 @@ function meetsMinimumConfidence(gap: CorridorGapResolution, minimum: CorridorCon
 	return gap.status === "resolved" && confidenceRank(gap.confidence ?? "low") >= confidenceRank(minimum);
 }
 
+function alignmentCacheKey(
+	anchors: readonly JourneyAnchor[],
+	shape: IndexedShape,
+	useNativeShapeDistance: boolean,
+	ctx: CacheContext,
+): string {
+	return JSON.stringify([
+		shape.key,
+		useNativeShapeDistance,
+		ctx.config.corridor.geometry,
+		anchors.map((anchor) => [
+			anchor.stationId,
+			anchor.lat ?? null,
+			anchor.lon ?? null,
+			useNativeShapeDistance ? (anchor.shapeDistTraveled ?? null) : null,
+		]),
+	]);
+}
+
+function rebindAlignment(alignment: ShapeAlignment, anchors: readonly JourneyAnchor[]): ShapeAlignment {
+	return {
+		...alignment,
+		anchors: new Map(
+			[...alignment.anchors].map(([index, aligned]) => [index, { ...aligned, anchor: anchors[index] }]),
+		),
+	};
+}
+
+function alignShapeAnchorsCached(
+	anchors: readonly JourneyAnchor[],
+	shape: IndexedShape,
+	useNativeShapeDistance: boolean,
+	ctx: CacheContext,
+): ShapeAlignment | null {
+	const key = alignmentCacheKey(anchors, shape, useNativeShapeDistance, ctx);
+	const cached = ctx.augmented.corridorAlignmentCache.get(key);
+	if (cached) return rebindAlignment(cached, anchors);
+	const alignment = alignShapeAnchors(anchors, shape, ctx.config.corridor, { useNativeShapeDistance });
+	if (alignment) ctx.augmented.corridorAlignmentCache.set(key, alignment);
+	return alignment;
+}
+
+function physicalResolutionCacheKey(journey: JourneyContext, shape: IndexedShape, ctx: CacheContext): string {
+	return JSON.stringify([
+		"exact-resolution",
+		alignmentCacheKey(journey.anchors, shape, true, ctx),
+		ctx.config.corridor.minimumOutputConfidence,
+		ctx.config.corridor.version,
+	]);
+}
+
+function nodesFromGaps(gaps: readonly CorridorGapResolution[]): CorridorNode[] {
+	const nodes: CorridorNode[] = [];
+	for (const gap of gaps) {
+		if (gap.status !== "resolved") continue;
+		for (const node of gap.nodes) {
+			if (nodes.at(-1)?.id === node.id && nodes.at(-1)?.passing === node.passing) continue;
+			nodes.push(node);
+		}
+	}
+	return nodes;
+}
+
+function rebindPhysicalResolution(resolution: CorridorResolution, journey: JourneyContext): CorridorResolution {
+	const gaps = resolution.gaps.map((gap, index) => {
+		const from = journey.anchors[index];
+		const to = journey.anchors[index + 1];
+		if (!from || !to || gap.status !== "resolved") return { ...gap, from: from ?? gap.from, to: to ?? gap.to };
+		const nodes = [...gap.nodes];
+		if (nodes.length > 0) {
+			nodes[0] = { ...nodes[0], id: from.stationId ?? from.id, stationId: from.stationId, name: from.name };
+			nodes[nodes.length - 1] = {
+				...nodes[nodes.length - 1],
+				id: to.stationId ?? to.id,
+				stationId: to.stationId,
+				name: to.name,
+			};
+		}
+		return { ...gap, from, to, nodes };
+	});
+	return { gaps, nodes: nodesFromGaps(gaps) };
+}
+
 function shapeGap(
 	from: JourneyAnchor,
 	to: JourneyAnchor,
@@ -167,6 +255,8 @@ function shapeGap(
 	index: CorridorIndex,
 	ctx: CacheContext,
 	evidence: Extract<CorridorEvidence, "exact-shape" | "compatible-shape" | "borrowed-shape">,
+	gapContext: ShapeGapContext | undefined,
+	validationContext: CorridorValidationContext,
 ): CorridorGapResolution | null {
 	if (!alignment) return null;
 	const gap = resolveShapeGap(
@@ -180,9 +270,10 @@ function shapeGap(
 		index,
 		ctx.config.corridor,
 		evidence,
+		gapContext,
 	);
 	if (!gap || !meetsMinimumConfidence(gap, ctx.config.corridor.minimumOutputConfidence)) return null;
-	const validation = validateCorridorGap(gap, journey);
+	const validation = validateCorridorGap(gap, journey, validationContext);
 	return validation.valid ? gap : null;
 }
 
@@ -193,8 +284,9 @@ function resolveCompatibleGap(
 	journey: JourneyContext,
 	index: CorridorIndex,
 	ctx: CacheContext,
+	candidates: readonly CompatibleShapeCandidate[],
+	validationContext: CorridorValidationContext,
 ): CorridorGapResolution | null {
-	const candidates = findCompatibleShapes(journey, index, ctx);
 	const resolved: Array<{
 		gap: CorridorGapResolution;
 		contextAlignment: ShapeAlignment | null;
@@ -205,15 +297,8 @@ function resolveCompatibleGap(
 		// aligned locally. An unmatched anchor before this gap can otherwise
 		// consume an early projection and move the seam anchor to a later loop
 		// position, hiding valid interior stations from this gap.
-		const localAlignment = alignShapeAnchors([from, to], candidate.shape, ctx.config.corridor, {
-			useNativeShapeDistance: false,
-		});
-		const suffixAlignment = alignShapeAnchors(
-			journey.anchors.slice(fromIndex),
-			candidate.shape,
-			ctx.config.corridor,
-			{ useNativeShapeDistance: false },
-		);
+		const localAlignment = alignShapeAnchorsCached([from, to], candidate.shape, false, ctx);
+		const suffixAlignment = alignShapeAnchorsCached(journey.anchors.slice(fromIndex), candidate.shape, false, ctx);
 		const contextAlignment =
 			suffixAlignment &&
 			!suffixAlignment.ambiguous &&
@@ -222,7 +307,20 @@ function resolveCompatibleGap(
 				? suffixAlignment
 				: null;
 		const alignment = contextAlignment ?? localAlignment;
-		const gap = shapeGap(from, to, 0, 1, candidate.shape, alignment, journey, index, ctx, candidate.evidence);
+		const gap = shapeGap(
+			from,
+			to,
+			0,
+			1,
+			candidate.shape,
+			alignment,
+			journey,
+			index,
+			ctx,
+			candidate.evidence,
+			undefined,
+			validationContext,
+		);
 		if (gap) resolved.push({ gap, contextAlignment, candidateScore: candidate.score });
 	}
 	if (resolved.length === 0) return null;
@@ -278,9 +376,25 @@ function resolveOneGap(
 	ctx: CacheContext,
 	exactShape: IndexedShape | null,
 	exactAlignment: ShapeAlignment | null,
+	exactGapContext: ShapeGapContext | undefined,
+	compatibleCandidates: () => readonly CompatibleShapeCandidate[],
+	validationContext: CorridorValidationContext,
 ): CorridorGapResolution {
 	const exact = exactShape
-		? shapeGap(from, to, fromIndex, toIndex, exactShape, exactAlignment, journey, index, ctx, "exact-shape")
+		? shapeGap(
+				from,
+				to,
+				fromIndex,
+				toIndex,
+				exactShape,
+				exactAlignment,
+				journey,
+				index,
+				ctx,
+				"exact-shape",
+				exactGapContext,
+				validationContext,
+			)
 		: null;
 	if (exact) return exact;
 
@@ -288,7 +402,7 @@ function resolveOneGap(
 	if (authoritativeManual && "ambiguous" in authoritativeManual)
 		return emptyGap(from, to, "Authoritative manual topology has multiple plausible station paths.");
 	if (authoritativeManual && "resolution" in authoritativeManual) {
-		const validation = validateCorridorGap(authoritativeManual.resolution, journey);
+		const validation = validateCorridorGap(authoritativeManual.resolution, journey, validationContext);
 		if (
 			validation.valid &&
 			meetsMinimumConfidence(authoritativeManual.resolution, ctx.config.corridor.minimumOutputConfidence)
@@ -296,12 +410,21 @@ function resolveOneGap(
 			return authoritativeManual.resolution;
 	}
 
-	const compatible = resolveCompatibleGap(from, to, fromIndex, journey, index, ctx);
+	const compatible = resolveCompatibleGap(
+		from,
+		to,
+		fromIndex,
+		journey,
+		index,
+		ctx,
+		compatibleCandidates(),
+		validationContext,
+	);
 	if (compatible) return compatible;
 
 	const fallbackManual = resolveFallbackManualGap(from, to, journey, index, ctx.config.corridor);
 	if (fallbackManual && "resolution" in fallbackManual) {
-		const validation = validateCorridorGap(fallbackManual.resolution, journey);
+		const validation = validateCorridorGap(fallbackManual.resolution, journey, validationContext);
 		if (
 			validation.valid &&
 			meetsMinimumConfidence(fallbackManual.resolution, ctx.config.corridor.minimumOutputConfidence)
@@ -314,7 +437,7 @@ function resolveOneGap(
 
 	const pattern = resolvePatternGap(from, to, journey, index, ctx);
 	if (pattern) {
-		const validation = validateCorridorGap(pattern, journey);
+		const validation = validateCorridorGap(pattern, journey, validationContext);
 		if (validation.valid && meetsMinimumConfidence(pattern, ctx.config.corridor.minimumOutputConfidence))
 			return pattern;
 	}
@@ -353,11 +476,20 @@ export function resolveJourneyCorridor(journey: JourneyContext, ctx: CacheContex
 	const exactShape = journey.shapeId
 		? (index.shapes.get(qualifiedKey(journey.feedId, journey.shapeId)) ?? null)
 		: null;
-	const exactAlignment = exactShape
-		? alignShapeAnchors(journey.anchors, exactShape, ctx.config.corridor, {
-				useNativeShapeDistance: true,
-			})
-		: null;
+	const physicalCacheKey = exactShape ? physicalResolutionCacheKey(journey, exactShape, ctx) : null;
+	if (physicalCacheKey) {
+		const physicalCached = ctx.augmented.corridorPhysicalResolutionCache.get(physicalCacheKey);
+		if (physicalCached) {
+			const rebound = rebindPhysicalResolution(physicalCached, journey);
+			ctx.augmented.corridorResolutionCache.set(cacheKey, rebound);
+			return rebound;
+		}
+	}
+	const exactAlignment = exactShape ? alignShapeAnchorsCached(journey.anchors, exactShape, true, ctx) : null;
+	const exactGapContext = exactAlignment ? createShapeGapContext(journey, exactAlignment) : undefined;
+	const validationContext = createCorridorValidationContext(journey);
+	let compatibleCandidates: CompatibleShapeCandidate[] | null = null;
+	const getCompatibleCandidates = () => (compatibleCandidates ??= findCompatibleShapes(journey, index, ctx));
 	const gaps: CorridorGapResolution[] = [];
 	for (let anchorIndex = 0; anchorIndex < journey.anchors.length - 1; anchorIndex++) {
 		gaps.push(
@@ -371,20 +503,23 @@ export function resolveJourneyCorridor(journey: JourneyContext, ctx: CacheContex
 				ctx,
 				exactShape,
 				exactAlignment,
+				exactGapContext,
+				getCompatibleCandidates,
+				validationContext,
 			),
 		);
 	}
-	const validatedGaps = validateCorridorResolution({ gaps, nodes: [] }, journey).gaps;
-	const nodes: CorridorNode[] = [];
-	for (const gap of validatedGaps) {
-		if (gap.status !== "resolved") continue;
-		for (const node of gap.nodes) {
-			if (nodes.at(-1)?.id === node.id && nodes.at(-1)?.passing === node.passing) continue;
-			nodes.push(node);
-		}
-	}
+	const validatedGaps = validateCorridorResolution({ gaps, nodes: [] }, journey, validationContext).gaps;
+	const nodes = nodesFromGaps(validatedGaps);
 	const result = { gaps: validatedGaps, nodes };
 	ctx.augmented.corridorResolutionCache.set(cacheKey, result);
+	if (
+		physicalCacheKey &&
+		validatedGaps.length === journey.anchors.length - 1 &&
+		validatedGaps.every((gap) => gap.status === "resolved" && gap.evidence === "exact-shape")
+	) {
+		ctx.augmented.corridorPhysicalResolutionCache.set(physicalCacheKey, result);
+	}
 	logCorridorResolution(journey, result, ctx);
 	return result;
 }
@@ -415,4 +550,11 @@ export function expressInfoFromCorridor(resolution: CorridorResolution): Array<{
 	});
 }
 
-export const _test = { configVersion, confidenceRank, resolveCompatibleGap };
+export const _test = {
+	configVersion,
+	confidenceRank,
+	resolveCompatibleGap,
+	alignmentCacheKey,
+	physicalResolutionCacheKey,
+	rebindPhysicalResolution,
+};

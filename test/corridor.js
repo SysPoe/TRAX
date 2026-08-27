@@ -8,6 +8,7 @@ import { projectPointOnPolyline } from "../dist/utils/corridor/projection.js";
 import {
 	buildCorridorIndex,
 	createEmptyCorridorIndex,
+	finalizeShapeGeometryIndex,
 	_test as shapeIndexTest,
 } from "../dist/utils/corridor/shapeIndex.js";
 import { createRealtimeJourneyContext, resolveJourneyCorridor } from "../dist/utils/corridor/resolver.js";
@@ -109,7 +110,7 @@ function indexedShape(feedId, shapeId, localIds, coordinates, options = {}) {
 	}
 	const routeId = options.routeId ?? "route";
 	const direction = options.direction ?? 0;
-	return {
+	const shape = {
 		key: q(feedId, shapeId),
 		feedId,
 		shapeId,
@@ -119,7 +120,12 @@ function indexedShape(feedId, shapeId, localIds, coordinates, options = {}) {
 		scheduledStations: new Set((options.scheduledStations ?? localIds).map((localId) => q(feedId, localId))),
 		tripIds: new Set((options.tripIds ?? []).map((tripId) => q(feedId, tripId))),
 		projections,
+		nativeDistancePoints: [],
+		nativeDistanceScale: 1,
+		orderedProjections: [],
 	};
+	finalizeShapeGeometryIndex(shape);
+	return shape;
 }
 
 function addShapes(index, shapes) {
@@ -1413,6 +1419,31 @@ function testTimingCannotChangeCorridor() {
 	);
 }
 
+function testPhysicalPlanCacheRebindsCurrentAnchors() {
+	const coordinates = simpleCoordinates(["a", "b", "d"]);
+	const index = createEmptyCorridorIndex("test");
+	index.stationGeometry = stationGeometry("feed", ["a", "b", "d"], coordinates);
+	addShapes(index, [indexedShape("feed", "shape", ["a", "b", "d"], coordinates, { scheduledStations: ["a", "d"] })]);
+	const ctx = context({ index });
+	const firstJourney = journey("feed", ["a", "d"], coordinates, { shapeId: "shape" });
+	firstJourney.tripId = "first-trip";
+	firstJourney.serviceDate = "20260827";
+	const first = resolveJourneyCorridor(firstJourney, ctx);
+	const secondJourney = journey("feed", ["a", "d"], coordinates, { shapeId: "shape" });
+	secondJourney.tripId = "second-trip";
+	secondJourney.serviceDate = "20260828";
+	secondJourney.anchors[0] = { ...secondJourney.anchors[0], id: "second-a", name: "Current A" };
+	secondJourney.anchors[1] = { ...secondJourney.anchors[1], id: "second-d", name: "Current D" };
+	const second = resolveJourneyCorridor(secondJourney, ctx);
+	assert.notEqual(second, first);
+	assert.equal(second.gaps[0].from.id, "second-a");
+	assert.equal(second.gaps[0].to.id, "second-d");
+	assert.equal(second.gaps[0].nodes[0].name, "Current A");
+	assert.equal(second.gaps[0].nodes.at(-1).name, "Current D");
+	assert.equal(ctx.augmented.corridorResolutionCache.size, 2);
+	assert.equal(ctx.augmented.corridorPhysicalResolutionCache.size, 1);
+}
+
 for (const testCase of [
 	["qualified keys isolate identical local entities", testQualifiedKeys],
 	["exact shape expands a physical corridor", testExactShape],
@@ -1452,6 +1483,7 @@ for (const testCase of [
 	["contextual findExpress uses the journey shape", testContextualFindExpressUsesJourneyShape],
 	["QRT uses the operating service date", testQrtUsesOperatingServiceDate],
 	["SRT timing cannot change the resolved corridor", testTimingCannotChangeCorridor],
+	["physical plan cache rebinds current journey anchors", testPhysicalPlanCacheRebindsCurrentAnchors],
 ]) {
 	try {
 		testCase[1]();

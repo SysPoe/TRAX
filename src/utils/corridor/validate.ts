@@ -1,9 +1,24 @@
 import type { CorridorGapResolution, CorridorResolution, JourneyContext } from "./types.js";
 
+export interface CorridorValidationContext {
+	scheduledIds: ReadonlySet<string>;
+}
+
+export function createCorridorValidationContext(journey: JourneyContext): CorridorValidationContext {
+	return {
+		scheduledIds: new Set(
+			journey.anchors
+				.map((anchor) => anchor.stationId)
+				.filter((stationId): stationId is string => stationId !== null),
+		),
+	};
+}
+
 /** Validate every candidate path before it can add a synthetic station. */
 export function validateCorridorGap(
 	gap: CorridorGapResolution,
 	journey: JourneyContext,
+	context: CorridorValidationContext = createCorridorValidationContext(journey),
 ): { valid: true } | { valid: false; diagnostic: string } {
 	if (gap.status !== "resolved") return { valid: true };
 	if (gap.nodes.length < 2) return { valid: false, diagnostic: "Resolved gap has no endpoint pair." };
@@ -12,12 +27,7 @@ export function validateCorridorGap(
 	if (first.stationId !== gap.from.stationId || last.stationId !== gap.to.stationId) {
 		return { valid: false, diagnostic: "Resolved gap endpoints do not match its anchors." };
 	}
-	const scheduledIds = new Set(
-		journey.anchors
-			.filter((anchor) => anchor.id !== gap.from.id && anchor.id !== gap.to.id)
-			.map((anchor) => anchor.stationId)
-			.filter((stationId): stationId is string => stationId !== null),
-	);
+	const { scheduledIds } = context;
 	const seen = new Set<string>();
 	let previousDistance = -Infinity;
 	for (const [index, node] of gap.nodes.entries()) {
@@ -50,11 +60,12 @@ export function validateCorridorGap(
 export function validateCorridorResolution(
 	resolution: CorridorResolution,
 	journey: JourneyContext,
+	context: CorridorValidationContext = createCorridorValidationContext(journey),
 ): CorridorResolution {
 	const seenSyntheticStations = new Set<string>();
 	const gaps = resolution.gaps.map((gap) => {
 		if (gap.status !== "resolved") return gap;
-		const validation = validateCorridorGap(gap, journey);
+		const validation = validateCorridorGap(gap, journey, context);
 		if (!validation.valid) {
 			return {
 				status: "unresolved" as const,

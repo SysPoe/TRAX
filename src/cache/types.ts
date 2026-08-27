@@ -18,6 +18,7 @@ import type { Timer } from "../utils/timer.js";
 import type { ExpressInfo, PassingStop } from "../utils/SRT.js";
 import type { CorridorIndex } from "../utils/corridor/shapeIndex.js";
 import type { CorridorResolution } from "../utils/corridor/types.js";
+import type { ShapeAlignment } from "../utils/corridor/alignShape.js";
 import type { SeqDiagramTopology } from "../region-specific/AU/SEQ/seq-diagram.js";
 import type { TraxConfig } from "../config.js";
 import { LRUCache } from "./lruCache.js";
@@ -61,6 +62,10 @@ export type AugmentedCache = {
 	corridorIndex: CorridorIndex;
 	/** Physical-route decisions keyed by the complete qualified journey context. */
 	corridorResolutionCache: LRUCache<string, CorridorResolution>;
+	/** Shape alignments shared by trips with the same qualified physical pattern. */
+	corridorAlignmentCache: LRUCache<string, ShapeAlignment>;
+	/** Fully exact physical plans shared across qualified trip/date instances. */
+	corridorPhysicalResolutionCache: LRUCache<string, CorridorResolution>;
 
 	expressInfoCache: LRUCache<string, ExpressInfo[]>;
 	passingStopsCache: LRUCache<string, PassingStop[]>;

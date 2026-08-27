@@ -33,6 +33,7 @@
     "asbuild": "nub run asbuild:debug && nub run asbuild:release",
     "test": "nub run build && node test/corridor.js && node test/realtime-cache.js && node test/architecture.js",
     "test:performance-regressions": "nub run build && node test/performance-regressions.js",
+    "test:corridor-performance": "nub run build && node test/corridor-performance.js",
     "test:seq-diagram": "nub run build && node test/seq-diagram-benchmark.js"
   },
   "files": [
