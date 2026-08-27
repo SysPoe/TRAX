@@ -1604,6 +1604,68 @@ function testPatternIndexCollapsesEquivalentTrips() {
 	assert.equal(result.patterns[0].tripIds.length, trips.length);
 }
 
+function testLocalGapsSkipPatternTimingWork() {
+	const index = createEmptyCorridorIndex("test");
+	index.patterns = [
+		{
+			feedId: "feed",
+			routeId: "r",
+			direction: 0,
+			serviceId: "weekday",
+			shapeId: "shape",
+			stations: [q("feed", "a"), q("feed", "d")],
+			tripIds: [q("feed", "pattern-trip")],
+			edgeMinutes: [10],
+			edgeDistances: [100],
+		},
+	];
+	index.patternsByRouteDirection.set(qualifiedRouteDirectionKey("feed", "r", 0), index.patterns);
+	const ctx = context({ index });
+	let calendarReads = 0;
+	ctx.gtfs = {
+		getServiceDatesByTrip: () => {
+			calendarReads++;
+			return ["20260827"];
+		},
+	};
+	const journeyContext = journey("feed", ["a", "d"], simpleCoordinates(["a", "d"]), {
+		routeId: "r",
+		direction: 0,
+		serviceDate: "20260827",
+	});
+	const corridor = {
+		gaps: [
+			{
+				status: "resolved",
+				from: journeyContext.anchors[0],
+				to: journeyContext.anchors[1],
+				evidence: "exact-shape",
+				confidence: "high",
+				nodes: journeyContext.anchors.map((item) => ({
+					id: item.stationId,
+					stationId: item.stationId,
+					kind: "station",
+					scheduled: true,
+					passing: false,
+					evidence: "exact-shape",
+					confidence: "high",
+				})),
+			},
+		],
+	};
+	expandStopTimesWithCorridor(
+		[
+			{ feed_id: "feed", trip_id: "trip", stop_id: "a", stop_sequence: 1, arrival_time: 0, departure_time: 0 },
+			{ feed_id: "feed", trip_id: "trip", stop_id: "d", stop_sequence: 2, arrival_time: 600, departure_time: 600 },
+		],
+		journeyContext,
+		corridor,
+		ctx,
+	);
+	assert.equal(calendarReads, 0);
+	assert.equal(ctx.augmented.corridorPatternEdgeMinutesCache.size, 0);
+}
+
 for (const testCase of [
 	["qualified keys isolate identical local entities", testQualifiedKeys],
 	["exact shape expands a physical corridor", testExactShape],
@@ -1647,6 +1709,7 @@ for (const testCase of [
 	["exact static corridors are reused across service dates", testExactStaticCorridorIsReusedAcrossServiceDates],
 	["compatible search skips shapes without anchor overlap", testCompatibleSearchSkipsShapesWithoutAnchorOverlap],
 	["pattern index collapses equivalent trips", testPatternIndexCollapsesEquivalentTrips],
+	["local gaps skip pattern timing work", testLocalGapsSkipPatternTimingWork],
 ]) {
 	try {
 		testCase[1]();

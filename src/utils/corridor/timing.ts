@@ -6,6 +6,7 @@ import { manualEdgeMinutes } from "./manualNetwork.js";
 import type { CorridorGapResolution, CorridorNode, JourneyContext } from "./types.js";
 import type { CorridorIndex } from "./shapeIndex.js";
 import { parseEntityKey } from "../../identity.js";
+import { qualifiedRouteDirectionKey } from "./keys.js";
 import { interpolateTimes as wasmInterpolateTimes } from "../../../build/release.js";
 
 export type StopTimeWithPassingMeta = qdf.StopTime & {
@@ -33,27 +34,50 @@ function positive(value: number | null | undefined): number | null {
 	return value != null && Number.isFinite(value) && value > 0 ? value : null;
 }
 
-function patternEdgeMinutes(
-	from: CorridorNode,
-	to: CorridorNode,
+function patternEdgeKey(fromStationId: string, toStationId: string): string {
+	return `${fromStationId}\0${toStationId}`;
+}
+
+function patternEdgeMinutesIndex(
 	journey: JourneyContext,
 	index: CorridorIndex,
 	ctx: CacheContext,
-): number | null {
-	if (!from.stationId || !to.stationId) return null;
-	const patterns = getActivePatterns(index.patterns, journey, ctx);
-	const values: number[] = [];
-	for (const pattern of patterns) {
+): ReadonlyMap<string, number> {
+	const routeDirectionKey = qualifiedRouteDirectionKey(journey.feedId, journey.routeId, journey.direction);
+	const cacheKey = `${routeDirectionKey}\0${journey.serviceDate ?? "*"}`;
+	const cached = ctx.augmented.corridorPatternEdgeMinutesCache.get(cacheKey);
+	if (cached) return cached;
+	const scopedPatterns =
+		journey.routeId === null
+			? index.patterns
+			: (index.patternsByRouteDirection.get(routeDirectionKey) ?? []);
+	const valuesByEdge = new Map<string, number[]>();
+	for (const pattern of getActivePatterns(scopedPatterns, journey, ctx)) {
 		for (let position = 1; position < pattern.stations.length; position++) {
-			if (pattern.stations[position - 1] !== from.stationId || pattern.stations[position] !== to.stationId)
-				continue;
 			const value = positive(pattern.edgeMinutes?.[position - 1]);
-			if (value != null) values.push(value);
+			if (value == null) continue;
+			const key = patternEdgeKey(pattern.stations[position - 1], pattern.stations[position]);
+			const values = valuesByEdge.get(key) ?? [];
+			values.push(value);
+			valuesByEdge.set(key, values);
 		}
 	}
-	if (values.length === 0) return null;
-	values.sort((a, b) => a - b);
-	return values[Math.floor(values.length / 2)];
+	const result = new Map<string, number>();
+	for (const [key, values] of valuesByEdge) {
+		values.sort((a, b) => a - b);
+		result.set(key, values[Math.floor(values.length / 2)]);
+	}
+	ctx.augmented.corridorPatternEdgeMinutesCache.set(cacheKey, result);
+	return result;
+}
+
+function patternEdgeMinutes(
+	from: CorridorNode,
+	to: CorridorNode,
+	patternMinutes: ReadonlyMap<string, number>,
+): number | null {
+	if (!from.stationId || !to.stationId) return null;
+	return patternMinutes.get(patternEdgeKey(from.stationId, to.stationId)) ?? null;
 }
 
 interface LegTiming {
@@ -65,12 +89,12 @@ function legTiming(
 	from: CorridorNode,
 	to: CorridorNode,
 	journey: JourneyContext,
-	index: CorridorIndex,
 	ctx: CacheContext,
+	patternMinutes: ReadonlyMap<string, number>,
 ): LegTiming {
 	const manual = positive(manualEdgeMinutes(from.id, to.id, ctx.config.corridor, journey));
 	if (manual != null) return { weight: manual, minutes: manual };
-	const pattern = patternEdgeMinutes(from, to, journey, index, ctx);
+	const pattern = patternEdgeMinutes(from, to, patternMinutes);
 	if (pattern != null) return { weight: pattern, minutes: pattern };
 	// The generated SRT matrix is feed-wide physical-edge evidence. Scoped
 	// pattern observations above it keep another route's runtime from changing
@@ -93,12 +117,13 @@ function visiblePathWeights(
 	const visible: CorridorNode[] = [];
 	const weights: number[] = [];
 	const minutes: Array<number | null> = [];
+	const patternMinutes = patternEdgeMinutesIndex(journey, index, ctx);
 	let accumulated = 0;
 	let accumulatedMinutes: number | null = 0;
 	let previous: CorridorNode | null = null;
 	for (const node of nodes) {
 		if (previous) {
-			const leg = legTiming(previous, node, journey, index, ctx);
+			const leg = legTiming(previous, node, journey, ctx, patternMinutes);
 			accumulated += leg.weight;
 			if (leg.minutes == null) accumulatedMinutes = null;
 			else if (accumulatedMinutes != null) accumulatedMinutes += leg.minutes;
@@ -230,7 +255,10 @@ export function expandStopTimesWithCorridor(
 	result.push({ ...sorted[0], _passing: Boolean(sorted[0]._passing) });
 	for (let gapIndex = 0; gapIndex < sorted.length - 1; gapIndex++) {
 		const gap = corridor.gaps[gapIndex];
-		if (gap?.status === "resolved") {
+		if (
+			gap?.status === "resolved" &&
+			gap.nodes.some((node) => node.passing && node.kind === "station" && node.stationId)
+		) {
 			const timing = visiblePathWeights(gap.nodes, journey, index, ctx);
 			const timed = withCorridorTimingInstants(
 				timing,
@@ -258,4 +286,10 @@ export function expandStopTimesWithCorridor(
 	return result;
 }
 
-export const _test = { patternEdgeMinutes, visiblePathWeights, interpolatedTimes, withCorridorTimingInstants };
+export const _test = {
+	patternEdgeMinutes,
+	patternEdgeMinutesIndex,
+	visiblePathWeights,
+	interpolatedTimes,
+	withCorridorTimingInstants,
+};

@@ -66,6 +66,8 @@ export type AugmentedCache = {
 	corridorAlignmentCache: LRUCache<string, ShapeAlignment>;
 	/** Fully exact physical plans shared across qualified trip/date instances. */
 	corridorPhysicalResolutionCache: LRUCache<string, CorridorResolution>;
+	/** Median pattern timings indexed once per route, direction, and service date. */
+	corridorPatternEdgeMinutesCache: Map<string, Map<string, number>>;
 
 	expressInfoCache: LRUCache<string, ExpressInfo[]>;
 	passingStopsCache: LRUCache<string, PassingStop[]>;

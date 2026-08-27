@@ -38,6 +38,7 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 		corridorResolutionCache: new LRUCache(5000),
 		corridorAlignmentCache: new LRUCache(20000),
 		corridorPhysicalResolutionCache: new LRUCache(20000),
+		corridorPatternEdgeMinutesCache: new Map(),
 		expressInfoCache: new LRUCache<string, ExpressInfo[]>(1000),
 		passingStopsCache: new LRUCache<string, PassingStop[]>(5000),
 		runSeriesCache: new Map(),
