@@ -627,6 +627,32 @@ export {
 } from "./region-specific/AU/VIC/journey-planner.js";
 export { parseVLineScsBoard } from "./region-specific/AU/VIC/scs-board.js";
 export type { AugmentedStop } from "./utils/augmentedStop.js";
+export type {
+	CorridorConfidence,
+	CorridorEvidence,
+	CorridorGapResolution,
+	CorridorGeometryConfig,
+	CorridorNode,
+	CorridorResolution,
+	CorridorResolutionConfig,
+	CorridorResolutionOverrides,
+	GeometrySourceConfig,
+	JourneyAnchor,
+	JourneyContext,
+	ManualCorridor,
+	ManualCorridorEdge,
+	ManualCorridorNode,
+	ManualNetwork,
+	RoutePattern,
+	StationGeometry,
+	StationGeometryCoordinate,
+	StationProjection,
+} from "./utils/corridor/types.js";
+export { createJourneyContext, expressInfoFromCorridor, resolveJourneyCorridor } from "./utils/corridor/resolver.js";
+export { findExpressForJourney } from "./utils/SRT.js";
+export { buildCorridorIndex } from "./utils/corridor/shapeIndex.js";
+export { qualifiedRouteDirectionKey } from "./utils/corridor/keys.js";
+export { describeCorridorResolution, compareLegacyCorridor } from "./utils/corridor/diagnostics.js";
 export {
 	attachDeparturesHelpers,
 	getDeparturesForInstantWindow,

@@ -2,6 +2,7 @@ import type { ProgressInfo, QualifiedEntityId, Stop, Trip } from "qdf-gtfs";
 import logger from "./utils/logger.js";
 import type { TransitPlugin } from "./plugins/types.js";
 import { entityKey } from "./identity.js";
+import type { CorridorResolutionConfig, CorridorResolutionOverrides } from "./utils/corridor/types.js";
 
 export interface FeedSource {
 	url: string;
@@ -48,6 +49,8 @@ export interface NetworkDefinition {
 	plugins: TransitPlugin[];
 	/** Client-facing places that group equivalent stations across static feeds. */
 	places?: PlaceDefinition[];
+	/** Provider-neutral physical corridor data and resolver thresholds. */
+	corridor?: CorridorResolutionOverrides;
 }
 
 export type MergeAction = { to: string; from: string[]; feedId: string };
@@ -63,6 +66,7 @@ export interface RuntimeOptions {
 	updateStopActions?: { feedId: string; stop_id: string; new: Partial<Stop> }[];
 	cacheMaxAgeMs?: number;
 	requestTimeoutMs?: number;
+	corridor?: CorridorResolutionOverrides;
 }
 
 export interface TraxConfig {
@@ -81,6 +85,42 @@ export interface TraxConfig {
 	feedTimeZones: Map<string, string>;
 	/** O(1) lookup for the cross-feed place containing a station member. */
 	placeByMember: Map<string, PlaceDefinition>;
+	corridor: CorridorResolutionConfig;
+}
+
+const DEFAULT_CORRIDOR_GEOMETRY = {
+	exactShapeMembershipMaxMeters: 250,
+	compatibleShapeMaxMeters: 150,
+	geometryOnlyMaxMeters: 80,
+	endpointSnapMaxMeters: 300,
+	maxProjectionsPerStation: 3,
+} as const;
+
+function resolveCorridorConfig(network: NetworkDefinition, options: RuntimeOptions): CorridorResolutionConfig {
+	const networkOverrides = network.corridor ?? {};
+	const optionOverrides = options.corridor ?? {};
+	const geometry = {
+		...DEFAULT_CORRIDOR_GEOMETRY,
+		...(networkOverrides.geometry ?? {}),
+		...(optionOverrides.geometry ?? {}),
+	};
+	if (Object.values(geometry).some((value) => !Number.isFinite(value) || value <= 0)) {
+		throw new Error(`Network '${network.id}' contains invalid corridor geometry thresholds`);
+	}
+	if (!Number.isInteger(geometry.maxProjectionsPerStation) || geometry.maxProjectionsPerStation < 1) {
+		throw new Error(`Network '${network.id}' requires at least one corridor projection per station`);
+	}
+
+	return {
+		enabled: optionOverrides.enabled ?? networkOverrides.enabled ?? true,
+		minimumOutputConfidence:
+			optionOverrides.minimumOutputConfidence ?? networkOverrides.minimumOutputConfidence ?? "medium",
+		geometry,
+		geometrySources: optionOverrides.geometrySources ?? networkOverrides.geometrySources ?? [],
+		manualNetworks: optionOverrides.manualNetworks ?? networkOverrides.manualNetworks ?? [],
+		diagnostics: optionOverrides.diagnostics ?? networkOverrides.diagnostics ?? false,
+		version: optionOverrides.version ?? networkOverrides.version ?? "1",
+	};
 }
 
 export function resolveConfig(network: NetworkDefinition, options: RuntimeOptions = {}): TraxConfig {
@@ -137,6 +177,7 @@ export function resolveConfig(network: NetworkDefinition, options: RuntimeOption
 		requestTimeoutMs: options.requestTimeoutMs ?? 30_000,
 		feedTimeZones: new Map(),
 		placeByMember,
+		corridor: resolveCorridorConfig(network, options),
 	};
 }
 
@@ -166,8 +207,14 @@ export function getDefaultTimeZone(config: TraxConfig): string {
 }
 
 /** Resolve a trip's run number using its feed rule, or TRAX's shared default. */
-export function resolveTripNumber(network: NetworkDefinition, trip: Pick<Trip, "feed_id" | "trip_id" | "trip_short_name">): string {
-	const configured = network.feeds.find((feed) => feed.id === trip.feed_id)?.tripNumber?.(trip)?.trim();
+export function resolveTripNumber(
+	network: NetworkDefinition,
+	trip: Pick<Trip, "feed_id" | "trip_id" | "trip_short_name">,
+): string {
+	const configured = network.feeds
+		.find((feed) => feed.id === trip.feed_id)
+		?.tripNumber?.(trip)
+		?.trim();
 	if (configured) return configured;
 	return trip.trip_short_name && /^\d{1,3}$/.test(trip.trip_short_name)
 		? trip.trip_short_name

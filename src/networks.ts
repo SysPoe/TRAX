@@ -10,6 +10,7 @@ import {
 	type TfnswRailPluginOptions,
 } from "./plugins/tfnsw-rail.js";
 import type { VLinePluginOptions } from "./region-specific/AU/VIC/types.js";
+import { getQrtManualNetwork } from "./region-specific/AU/SEQ/qr-travel/manual-network.js";
 
 export const AU_SEQ_NETWORK: NetworkDefinition = {
 	id: "au-seq",
@@ -42,6 +43,11 @@ export const AU_SEQ_NETWORK: NetworkDefinition = {
 	],
 	modes: ["rail"],
 	plugins: [seqPlugin],
+	corridor: {
+		geometrySources: [{ feedId: "QRT", borrowFromFeedIds: ["translink-seq"] }],
+		manualNetworks: [getQrtManualNetwork()],
+		version: "qrt-1",
+	},
 	places: [
 		{
 			id: "brisbane-central",
@@ -77,7 +83,12 @@ const SHARED_VICTORIA_RAIL_STATIONS = [
 
 export function createAuVicVlineNetwork(options: AuVicVlineNetworkOptions = {}): NetworkDefinition {
 	const key = options.gtfsRtKey?.trim();
-	const realtime = (feedId: "vic-vline" | "vic-metro", operator: "vline" | "metro", kind: "trip-updates" | "vehicles", endpoint: string) => ({
+	const realtime = (
+		feedId: "vic-vline" | "vic-metro",
+		operator: "vline" | "metro",
+		kind: "trip-updates" | "vehicles",
+		endpoint: string,
+	) => ({
 		id: `${feedId}-${endpoint}`,
 		targetFeedId: feedId,
 		kind,
@@ -86,7 +97,8 @@ export function createAuVicVlineNetwork(options: AuVicVlineNetworkOptions = {}):
 			headers: { KeyId: key! },
 		},
 	});
-	const staticUrl = "https://opendata.transport.vic.gov.au/dataset/3f4e292e-7f8a-4ffe-831f-1953be0fe448/resource/fb152201-859f-4882-9206-b768060b50ad/download/gtfs.zip";
+	const staticUrl =
+		"https://opendata.transport.vic.gov.au/dataset/3f4e292e-7f8a-4ffe-831f-1953be0fe448/resource/fb152201-859f-4882-9206-b768060b50ad/download/gtfs.zip";
 	return {
 		id: "au-vic-vline",
 		name: "Victoria Rail",
@@ -96,9 +108,9 @@ export function createAuVicVlineNetwork(options: AuVicVlineNetworkOptions = {}):
 				staticSource: { url: staticUrl, archiveEntry: "1/google_transit.zip" },
 				realtimeSources: key
 					? [
-						realtime("vic-vline", "vline", "trip-updates", "trip-updates"),
-						realtime("vic-vline", "vline", "vehicles", "vehicle-positions"),
-					]
+							realtime("vic-vline", "vline", "trip-updates", "trip-updates"),
+							realtime("vic-vline", "vline", "vehicles", "vehicle-positions"),
+						]
 					: [],
 			},
 			{
@@ -106,9 +118,9 @@ export function createAuVicVlineNetwork(options: AuVicVlineNetworkOptions = {}):
 				staticSource: { url: staticUrl, archiveEntry: "2/google_transit.zip" },
 				realtimeSources: key
 					? [
-						realtime("vic-metro", "metro", "trip-updates", "trip-updates"),
-						realtime("vic-metro", "metro", "vehicles", "vehicle-positions"),
-					]
+							realtime("vic-metro", "metro", "trip-updates", "trip-updates"),
+							realtime("vic-metro", "metro", "vehicles", "vehicle-positions"),
+						]
 					: [],
 			},
 		],
@@ -212,8 +224,7 @@ export function createAuRailNetwork(options: AuRailNetworkOptions = {}): Network
 		: [];
 
 	const victoriaPlaces = (victoria.places ?? []).map((place) => {
-		const trainLinkId =
-			place.id === "broadmeadows" ? "20030" : place.id === "southern-cross" ? "22180" : null;
+		const trainLinkId = place.id === "broadmeadows" ? "20030" : place.id === "southern-cross" ? "22180" : null;
 		return trainLinkId && tfnswKey
 			? { ...place, members: [...place.members, { feedId: "nsw-trainlink", localId: trainLinkId }] }
 			: place;
@@ -255,8 +266,11 @@ export function createAuRailNetwork(options: AuRailNetworkOptions = {}): Network
 		plugins: [
 			...AU_SEQ_NETWORK.plugins,
 			...victoria.plugins,
-			...(tfnswKey ? [createTfnswRailPlugin(options), createTfnswRegionalBookingPlugin(options.regionalBooking)] : []),
+			...(tfnswKey
+				? [createTfnswRailPlugin(options), createTfnswRegionalBookingPlugin(options.regionalBooking)]
+				: []),
 		],
+		corridor: AU_SEQ_NETWORK.corridor,
 		places: [...(AU_SEQ_NETWORK.places ?? []), ...victoriaPlaces, ...tfnswPlaces],
 	};
 }
@@ -291,52 +305,58 @@ export function createCaGthaNetwork(apiKeys: string | readonly string[] = []): N
 				staticSource: {
 					url: "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/UP-GTFS.zip",
 				},
-				realtimeSources: keys.length > 0 ? [
-					source(
-						"up-alerts",
-						"up",
-						"alerts",
-						"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/Alerts",
-					),
-					source(
-						"up-trip-updates",
-						"up",
-						"trip-updates",
-						"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/TripUpdates",
-					),
-					source(
-						"up-vehicles",
-						"up",
-						"vehicles",
-						"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/VehiclePosition",
-					),
-				] : [],
+				realtimeSources:
+					keys.length > 0
+						? [
+								source(
+									"up-alerts",
+									"up",
+									"alerts",
+									"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/Alerts",
+								),
+								source(
+									"up-trip-updates",
+									"up",
+									"trip-updates",
+									"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/TripUpdates",
+								),
+								source(
+									"up-vehicles",
+									"up",
+									"vehicles",
+									"https://api.openmetrolinx.com/OpenDataAPI/api/V1/UP/Gtfs.proto/Feed/VehiclePosition",
+								),
+							]
+						: [],
 			},
 			{
 				id: "go",
 				staticSource: {
 					url: "https://assets.metrolinx.com/raw/upload/Documents/Metrolinx/Open%20Data/GO-GTFS.zip",
 				},
-				realtimeSources: keys.length > 0 ? [
-					source(
-						"go-alerts",
-						"go",
-						"alerts",
-						"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/Alerts",
-					),
-					source(
-						"go-trip-updates",
-						"go",
-						"trip-updates",
-						"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/TripUpdates",
-					),
-					source(
-						"go-vehicles",
-						"go",
-						"vehicles",
-						"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/VehiclePosition",
-					),
-				] : [],
+				realtimeSources:
+					keys.length > 0
+						? [
+								source(
+									"go-alerts",
+									"go",
+									"alerts",
+									"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/Alerts",
+								),
+								source(
+									"go-trip-updates",
+									"go",
+									"trip-updates",
+									"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/TripUpdates",
+								),
+								source(
+									"go-vehicles",
+									"go",
+									"vehicles",
+									"https://api.openmetrolinx.com/OpenDataAPI/api/V1/Gtfs.proto/Feed/VehiclePosition",
+								),
+							]
+						: [],
 			},
 			{
 				id: "via",

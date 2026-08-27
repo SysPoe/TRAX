@@ -6,10 +6,11 @@ import { canonicalStationIdentity, type TraxConfig } from "../config.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { entityKey, parseEntityKey } from "../identity.js";
+import { entityKey, parseEntityKey, qualifiedKey } from "../identity.js";
 import type { QualifiedEntityId } from "qdf-gtfs";
-import { interpolateTimes as wasmInterpolateTimes } from "../../build/release.js";
 import { isConsideredRoute } from "./considered.js";
+import { expressInfoFromCorridor, resolveJourneyCorridor } from "./corridor/resolver.js";
+import type { JourneyContext } from "./corridor/types.js";
 
 export type SRTMatrix = {
 	[from: string]: {
@@ -374,77 +375,57 @@ export function getSRT(from: string, to: string, ctx: cache.CacheContext): numbe
 	return networkData.matrix[from]?.[to] ?? networkData.matrix[to]?.[from];
 }
 
-function getGraph(ctx: cache.CacheContext): Record<string, string[]> {
-	ensureDataLoaded(ctx);
-	return (ctx.runtimeState.srtNetworkData as NetworkData).adjacency;
+/** Resolve express information when the caller has the complete journey context. */
+export function findExpressForJourney(journey: JourneyContext, ctx: cache.CacheContext): ExpressInfo[] {
+	const timer = ctx.augmented.timer;
+	timer.start("SRT:findExpressForJourney");
+	try {
+		return expressInfoFromCorridor(resolveJourneyCorridor(journey, ctx)) as ExpressInfo[];
+	} finally {
+		timer.stop("SRT:findExpressForJourney");
+	}
 }
 
-function findPathBFS(start: string, end: string, ctx: cache.CacheContext): string[] | null {
-	const cacheKey = `${start}|${end}`;
-	if (ctx.runtimeState.srtBfs.has(cacheKey)) {
-		return ctx.runtimeState.srtBfs.get(cacheKey)!;
-	}
+/**
+ * @deprecated A stop list has no route, direction, shape, or service-date
+ * context. Pass a JourneyContext to findExpressForJourney, or use the
+ * JourneyContext overload of this function.
+ */
+export function findExpress(givenStops: string[], ctx: cache.CacheContext): ExpressInfo[];
+export function findExpress(journey: JourneyContext, ctx: cache.CacheContext): ExpressInfo[];
+export function findExpress(input: string[] | JourneyContext, ctx: cache.CacheContext): ExpressInfo[] {
+	if (!Array.isArray(input)) return findExpressForJourney(input, ctx);
 
-	const graph = getGraph(ctx);
-	const queue: string[][] = [[start]];
-	const visited = new Set([start]);
-	let path: string[] | null = null;
-	while (queue.length > 0) {
-		const candidate = queue.shift()!;
-		const node = candidate[candidate.length - 1];
-		if (node === end) {
-			path = candidate;
-			break;
-		}
-		for (const neighbor of graph[node] ?? []) {
-			if (visited.has(neighbor)) continue;
-			visited.add(neighbor);
-			queue.push([...candidate, neighbor]);
-		}
-	}
-	ctx.runtimeState.srtBfs.set(cacheKey, path);
-	return path;
-}
-
-export function findExpress(givenStops: string[], ctx: cache.CacheContext): ExpressInfo[] {
 	const timer = ctx.augmented.timer;
 	timer.start("SRT:findExpress");
-	const result: ExpressInfo[] = [];
-
-	const canonicalStops = givenStops.map((stop) => canonicalStationKey(ctx.config, parseEntityKey(stop)));
-	for (let i = 0; i < canonicalStops.length - 1; i++) {
-		const startStop = canonicalStops[i];
-		const endStop = canonicalStops[i + 1];
-
-		const physicalPath = findPathBFS(startStop, endStop, ctx);
-
-		if (physicalPath) {
-			if (physicalPath.length === 2) {
-				result.push({
-					type: "local",
-					from: startStop,
-					to: endStop,
-				});
-			} else if (physicalPath.length > 2) {
-				const skippedStops = physicalPath.slice(1, physicalPath.length - 1);
-				result.push({
-					type: "express",
-					from: startStop,
-					to: endStop,
-					skipping: skippedStops,
-				});
-			}
-		} else {
-			result.push({
-				type: "unknown_segment",
-				from: startStop,
-				to: endStop,
-				message: "No physical track connection found.",
-			});
-		}
+	const givenStops = input;
+	if (givenStops.length === 0) {
+		timer.stop("SRT:findExpress");
+		return [];
 	}
-	timer.stop("SRT:findExpress");
-	return result;
+	const canonicalStops = givenStops.map((stop) => canonicalStationKey(ctx.config, parseEntityKey(stop)));
+	const first = parseEntityKey(canonicalStops[0]);
+	const journey: JourneyContext = {
+		sourceId: "gtfs",
+		feedId: first.feedId,
+		tripId: "express",
+		routeId: null,
+		direction: null,
+		shapeId: null,
+		serviceDate: null,
+		anchors: canonicalStops.map((stationId, index) => ({
+			id: qualifiedKey(first.feedId, `express\0${index}`),
+			stationId,
+			sequence: index,
+			scheduled: true,
+		})),
+		geometryFeedIds: [first.feedId],
+	};
+	try {
+		return findExpressForJourney(journey, ctx);
+	} finally {
+		timer.stop("SRT:findExpress");
+	}
 }
 
 export function findExpressString(
@@ -486,15 +467,18 @@ export function findExpressString(
 				const startRef = parseEntityKey(run.from);
 				const endRef = parseEntityKey(run.to);
 				const startName = (
-					ctx.augmented.stopsRec.get(run.from)?.stop_name ?? cache.getRawStops(ctx, { feed_id: startRef.feedId, stop_id: startRef.localId })[0]?.stop_name
+					ctx.augmented.stopsRec.get(run.from)?.stop_name ??
+					cache.getRawStops(ctx, { feed_id: startRef.feedId, stop_id: startRef.localId })[0]?.stop_name
 				)?.replace(" station", "");
 				const endName = (
-					ctx.augmented.stopsRec.get(run.to)?.stop_name ?? cache.getRawStops(ctx, { feed_id: endRef.feedId, stop_id: endRef.localId })[0]?.stop_name
+					ctx.augmented.stopsRec.get(run.to)?.stop_name ??
+					cache.getRawStops(ctx, { feed_id: endRef.feedId, stop_id: endRef.localId })[0]?.stop_name
 				)?.replace(" station", "");
 				const stoppingAtNames = run.stoppingAt.map((stopId) => {
 					const ref = parseEntityKey(stopId);
 					return (
-						ctx.augmented.stopsRec.get(stopId)?.stop_name ?? cache.getRawStops(ctx, { feed_id: ref.feedId, stop_id: ref.localId })[0]?.stop_name
+						ctx.augmented.stopsRec.get(stopId)?.stop_name ??
+						cache.getRawStops(ctx, { feed_id: ref.feedId, stop_id: ref.localId })[0]?.stop_name
 					)?.replace(" station", "");
 				});
 				const formattedStoppingAtNames =
@@ -505,7 +489,14 @@ export function findExpressString(
 							: `${stoppingAtNames.slice(0, -1).join(", ")}, and ${stoppingAtNames[stoppingAtNames.length - 1]}`;
 
 				return stop_id !== null &&
-					(run.from === canonicalStationKey(ctx.config, { feedId: stop!.feedId, localId: cache.getRawStops(ctx, { feed_id: stop!.feedId, stop_id: stop!.localId })[0]?.parent_station ?? stop!.localId }) || run.from == stop_id)
+					(run.from ===
+						canonicalStationKey(ctx.config, {
+							feedId: stop!.feedId,
+							localId:
+								cache.getRawStops(ctx, { feed_id: stop!.feedId, stop_id: stop!.localId })[0]
+									?.parent_station ?? stop!.localId,
+						}) ||
+						run.from == stop_id)
 					? run.stoppingAt.length > 0
 						? `to ${endName}, stopping only at ${formattedStoppingAtNames}`
 						: `to ${endName}`
@@ -519,180 +510,7 @@ export function findExpressString(
 
 export type PassingStop = { stop_id: string; passing: boolean };
 
-function findPassingStops(stops: string[], ctx: cache.CacheContext): PassingStop[] {
-	const stopListHash = stops.join("|");
-	const cached = cache.getCachedPassingStops(ctx, stopListHash);
-	if (cached) return cached;
-
-	const expressSegments = findExpress(stops, ctx);
-	const allStops: PassingStop[] = [];
-
-	const addStop = (id: string, passing: boolean) => {
-		if (allStops.at(-1)?.stop_id !== id) {
-			allStops.push({ stop_id: id, passing });
-		}
-	};
-
-	for (const segment of expressSegments) {
-		if (segment.type === "unknown_segment") {
-			if (segment.from && segment.from.trim() !== "" && segment.to && segment.to.trim() !== "")
-				logger.warn(`Unknown segment between ${segment.from} and ${segment.to}: ${segment.message}`, {
-					module: "augmentedStopTime",
-					function: "findPassingStops",
-				});
-
-			continue;
-		}
-
-		if (segment.type === "local") {
-			addStop(segment.from, false);
-			addStop(segment.to, false);
-			continue;
-		}
-
-		addStop(segment.from, false);
-		segment.skipping?.forEach((s) => addStop(s, true));
-		addStop(segment.to, false);
-	}
-
-	cache.cachePassingStops(ctx, stopListHash, allStops);
-	return allStops;
-}
-
-function findPassingStopSRTs(stops: string[], ctx: cache.CacheContext): PassingStopSRT[] {
-	const allStops = findPassingStops(stops, ctx);
-	const results: PassingStopSRT[] = [];
-
-	for (let i = 0; i < allStops.length - 1; i++) {
-		const from = allStops[i].stop_id;
-		const to = allStops[i + 1].stop_id;
-		const srt = getSRT(from, to, ctx);
-
-		if (srt === undefined) {
-			const key = `${from}|${to}`;
-			if (!ctx.runtimeState.loggedMissingSrt.has(key)) {
-				logger.warn(`No SRT found between ${from} and ${to}`, {
-					module: "augmentedStopTime",
-					function: "findPassingStopSRTs",
-				});
-				ctx.runtimeState.loggedMissingSrt.add(key);
-			}
-			results.push({ from, to, emu: 1, passing: allStops[i + 1].passing });
-		} else {
-			results.push({ from, to, emu: srt, passing: allStops[i + 1].passing });
-		}
-	}
-	return results;
-}
-
-function getStopOrParentId(stopTime: qdf.StopTime, ctx: cache.CacheContext): string | undefined {
-	const key = entityKey({ feedId: stopTime.feed_id, localId: stopTime.stop_id });
-	const s =
-		ctx.augmented.stopsRec.get(key) ??
-		cache.getRawStops(ctx, { feed_id: stopTime.feed_id, stop_id: stopTime.stop_id })?.[0];
-	return s
-		? canonicalStationKey(ctx.config, { feedId: s.feed_id, localId: s.parent_station ?? s.stop_id })
-		: undefined;
-}
-
-/** emu weights for wasmInterpolateTimes (length = passing legs + 1); only set on synthetic passing rows. */
-export type StopTimeWithPassingMeta = qdf.StopTime & {
-	_passing: boolean;
-	_segmentEmus?: number[];
-};
-
-export function findPassingStopTimes(stopTimes: qdf.StopTime[], ctx: cache.CacheContext): StopTimeWithPassingMeta[] {
-	if (stopTimes.length === 0) return [];
-
-	const sortedStopTimes = [...stopTimes].sort((a, b) => (a.stop_sequence ?? 0) - (b.stop_sequence ?? 0));
-	const stops = sortedStopTimes
-		.map((st) => getStopOrParentId(st, ctx))
-		.filter((v): v is string => v !== undefined);
-
-	const idsToTimes: Record<string, qdf.StopTime> = {};
-	for (const st of stopTimes) {
-		const parent = getStopOrParentId(st, ctx);
-		if (parent) idsToTimes[parent] = st;
-	}
-
-	const passingSRTs = findPassingStopSRTs(stops, ctx);
-	if (!passingSRTs.length) {
-		return sortedStopTimes.map((v) => ({ ...v, _passing: false }));
-	}
-
-	let resultTimes: StopTimeWithPassingMeta[] = [{ ...idsToTimes[passingSRTs[0].from], _passing: false }];
-	let currentPassingRun: PassingStopSRT[] = [];
-
-	for (const srt of passingSRTs) {
-		if (srt.passing) {
-			currentPassingRun.push(srt);
-			continue;
-		}
-
-		if (currentPassingRun.length === 0) {
-			if (idsToTimes[srt.to]) {
-				resultTimes.push({ ...idsToTimes[srt.to], _passing: false });
-			}
-			continue;
-		}
-
-		const startTime = resultTimes.at(-1);
-		const endTime = idsToTimes[srt.to];
-
-		if (
-			startTime?.departure_time === undefined ||
-			startTime?.departure_time === null ||
-			endTime?.arrival_time === undefined ||
-			endTime?.arrival_time === null
-		) {
-			if (endTime) resultTimes.push({ ...endTime, _passing: false });
-			currentPassingRun = [];
-			continue;
-		}
-
-		const segmentEmus = [...currentPassingRun.map((r) => r.emu), srt.emu];
-		const interpolatedTimes = wasmInterpolateTimes(startTime.departure_time, endTime.arrival_time, segmentEmus);
-
-		for (let i = 0; i < currentPassingRun.length; i++) {
-			const run = currentPassingRun[i];
-			const interpolatedTime = interpolatedTimes[i];
-
-			const passingStop = parseEntityKey(run.to);
-			resultTimes.push({
-				_passing: true,
-				_segmentEmus: segmentEmus,
-				stop_id: passingStop.localId,
-				trip_id: stopTimes[0].trip_id,
-				stop_sequence:
-					(startTime.stop_sequence ?? 0) +
-					((i + 1) * ((endTime.stop_sequence ?? 0) - (startTime.stop_sequence ?? 0))) /
-						(currentPassingRun.length + 1),
-				departure_time: interpolatedTime,
-				arrival_time: interpolatedTime,
-				drop_off_type: 1,
-				pickup_type: 1,
-				continuous_drop_off: 0,
-				continuous_pickup: 0,
-				shape_dist_traveled: -1,
-				stop_headsign: "",
-				timepoint: 0,
-				feed_id: passingStop.feedId,
-			});
-		}
-
-		resultTimes.push({ ...endTime, _passing: false });
-		currentPassingRun = [];
-	}
-
-	return resultTimes;
-}
-
-export default {
-	findExpress,
-	findExpressString,
-	getSRT,
-	findPassingStopTimes,
-};
+export default { findExpress, findExpressForJourney, findExpressString, getSRT };
 
 export const _test = {
 	getPatternEdgeTimes,
@@ -736,8 +554,6 @@ export function getStaticFeedFingerprint(config: TraxConfig): string | null {
  */
 export function resetNetworkTopologyForStaticFeed(ctx: cache.CacheContext): void {
 	ctx.runtimeState.srtNetworkData = null;
-	ctx.runtimeState.srtBfs.clear();
-	ctx.runtimeState.loggedMissingSrt.clear();
 	ctx.runtimeState.srtExpectedStaticFingerprint = getStaticFeedFingerprint(ctx.config);
 	if (ctx.runtimeState.srtExpectedStaticFingerprint === null) deleteCacheFile(CACHE_FILE, ctx.config.cacheDir);
 }
@@ -745,8 +561,6 @@ export function resetNetworkTopologyForStaticFeed(ctx: cache.CacheContext): void
 /** Clears in-memory rail topology and deletes the on-disk cache explicitly. */
 export function invalidateNetworkTopologyCache(ctx: cache.CacheContext): void {
 	ctx.runtimeState.srtNetworkData = null;
-	ctx.runtimeState.srtBfs.clear();
-	ctx.runtimeState.loggedMissingSrt.clear();
 	ctx.runtimeState.srtExpectedStaticFingerprint = null;
 	deleteCacheFile(CACHE_FILE, ctx.config.cacheDir);
 }

@@ -1,7 +1,8 @@
 import * as qdf from "qdf-gtfs";
 import { AugmentedStop } from "./augmentedStop.js";
 import * as cache from "../cache/index.js";
-import { findPassingStopTimes } from "./SRT.js";
+import { expandStopTimesWithCorridor, type StopTimeWithPassingMeta } from "./corridor/timing.js";
+import type { CorridorResolution, JourneyContext } from "./corridor/types.js";
 import { interpolateTimes as wasmInterpolateTimes } from "../../build/release.js";
 import { getPlatformData as loadPlatformData, seqPlatformDefinitionsPresent } from "./platformData.js";
 import type { PlatformData, PlatformDefinition } from "./platformData.js";
@@ -292,6 +293,8 @@ export function augmentStopTimes(
 		serviceDate: string;
 		tripUpdate: qdf.RealtimeTripUpdate | null;
 		scheduleRelationship: qdf.TripScheduleRelationship;
+		journey?: JourneyContext;
+		corridor?: CorridorResolution;
 	},
 	ctx: cache.CacheContext,
 ): AugmentedStopTime[] {
@@ -313,7 +316,15 @@ export function augmentStopTimes(
 	const rtBySeq = new Map<number, qdf.RealtimeStopTimeUpdate>();
 	const rtByStopId = new Map<string, qdf.RealtimeStopTimeUpdate>();
 	const rtByParentStationId = new Map<string, qdf.RealtimeStopTimeUpdate>();
-	for (const rt of stopTimeUpdates) {
+	const orderedRealtimeUpdates = stopTimeUpdates
+		.map((rt, index) => ({ rt, index, sequence: rt.stop_sequence ?? index + 1 }))
+		.filter(({ rt }) => Boolean(rt.stop_id))
+		.sort((a, b) => a.sequence - b.sequence || a.index - b.index);
+	const realtimeOnlySequences = new Map<number, number>();
+	if (!staticStopTimes) {
+		orderedRealtimeUpdates.forEach(({ index }, sequence) => realtimeOnlySequences.set(index, sequence + 1));
+	}
+	for (const [index, rt] of stopTimeUpdates.entries()) {
 		if (rt.stop_sequence != null) {
 			rtBySeq.set(rt.stop_sequence, rt);
 		} else if (rt.stop_id) {
@@ -321,6 +332,10 @@ export function augmentStopTimes(
 			const rawStop = cache.getRawStops(ctx, { feed_id: feedId, stop_id: rt.stop_id })[0];
 			const parentStationId = rawStop?.parent_station;
 			if (parentStationId) rtByParentStationId.set(parentStationId, rt);
+		}
+		if (!staticStopTimes) {
+			const sequence = realtimeOnlySequences.get(index);
+			if (sequence != null) rtBySeq.set(sequence, rt);
 		}
 	}
 
@@ -335,9 +350,10 @@ export function augmentStopTimes(
 		}
 	}
 
-	for (const rt of stopTimeUpdates) {
-		const seq = rt.stop_sequence;
+	for (const [index, rt] of stopTimeUpdates.entries()) {
+		const seq = staticStopTimes ? rt.stop_sequence : realtimeOnlySequences.get(index);
 		if (seq !== undefined && seq !== null) {
+			if (!rt.stop_id) continue;
 			if (!sequenceMap.has(seq)) sequenceMap.set(seq, {});
 			sequenceMap.get(seq)!.rt = rt;
 		}
@@ -406,8 +422,10 @@ export function augmentStopTimes(
 	}
 	ctx.augmented.timer.stop("augmentStopTimes:buildMergedList");
 
-	const activeStops = mergedList.filter((s) => !s._isSkipped);
-	const interpolatedActiveStops = findPassingStopTimes(activeStops, ctx);
+	const interpolatedActiveStops: StopTimeWithPassingMeta[] =
+		instanceContext.journey && instanceContext.corridor
+			? expandStopTimesWithCorridor(mergedList, instanceContext.journey, instanceContext.corridor, ctx)
+			: mergedList.map((stopTime) => ({ ...stopTime, _passing: false }));
 	const finalStops: IntermediateAST[] = [];
 
 	const firstValid = interpolatedActiveStops[0];
@@ -431,99 +449,12 @@ export function augmentStopTimes(
 	let pendingPassingRows: AugmentedStopTime[] = [];
 	let pendingEmus: number[] | null = null;
 
-	let currentSequence = -1;
-
 	ctx.augmented.timer.start("augmentStopTimes:processStops");
 	for (const stopTime of interpolatedActiveStops) {
 		const seq = stopTime.stop_sequence;
 		const isPassing = Boolean((stopTime as qdf.StopTime & { _passing?: boolean })._passing);
 		// Synthetic topology rows retain the feed that owns the physical station.
 		const stopFeedId = isPassing ? stopTime.feed_id : feedId;
-
-		const prevWholeSeq = Math.floor(currentSequence);
-		const currWholeSeq = Math.floor(seq);
-
-		for (let s = prevWholeSeq + 1; s < currWholeSeq; s++) {
-			const missed = sequenceMap.get(s);
-			if (missed && missed.rt?.schedule_relationship === qdf.StopTimeScheduleRelationship.SKIPPED) {
-				const originalMergeItem = mergedList.find((m) => m.stop_sequence === s);
-				if (originalMergeItem) {
-					const scheduledStop = cache.getAugmentedStops(ctx, {
-						feedId,
-						localId: originalMergeItem.stop_id,
-					})[0];
-					const scheduledParent = scheduledStop?.parent_stop_id
-						? cache.getAugmentedStops(ctx, { feedId, localId: scheduledStop.parent_stop_id })[0]
-						: null;
-					const skipped: AugmentedStopTime = {
-						_stopTime: originalMergeItem,
-						feed_id: feedId,
-						trip_id: tripId,
-						passing: false,
-						pickup_type: originalMergeItem.pickup_type,
-						drop_off_type: originalMergeItem.drop_off_type,
-						instance_id: "",
-						service_date: "",
-						schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED,
-						service_capacity: ServiceCapacity.NOT_CALCULATED,
-						occupancy: staticOccupancyBySequence.has(s)
-							? {
-									statuses: [staticOccupancyBySequence.get(s)!],
-									scope: "vehicle",
-									source: "tfnsw-static-occupancies",
-									confidence: "historical",
-									observed_at: null,
-									expires_at: null,
-								}
-							: null,
-						actual_exit_side: null,
-						scheduled_exit_side: null,
-						actual_arrival_time: null,
-						actual_departure_time: null,
-						actual_stop_id: scheduledStop?.stop_id ?? null,
-						actual_parent_station_id: scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null,
-						actual_platform_code: null,
-						actual_arrival_boarding_locations: [],
-						actual_departure_boarding_locations: [],
-						rt_stop_updated: true,
-						rt_parent_station_updated: false,
-						rt_platform_code_updated: false,
-						rt_arrival_updated: false,
-						rt_departure_updated: false,
-						scheduled_arrival_time: originalMergeItem.arrival_time,
-						scheduled_departure_time: originalMergeItem.departure_time,
-						scheduled_stop_id: scheduledStop?.stop_id ?? null,
-						scheduled_parent_station_id: scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null,
-						scheduled_platform_code: scheduledStop?.platform_code ?? null,
-						realtime: true,
-						realtime_info: {
-							delay_secs: 0,
-							delay_string: "Skipped",
-							delay_class: "scheduled",
-							schedule_relationship: qdf.StopTimeScheduleRelationship.SKIPPED,
-							propagated: false,
-							rt_start_date: tripUpdate?.trip.start_date ?? serviceDate,
-						},
-						scheduled_arrival_dates: [],
-						actual_arrival_dates: [],
-						scheduled_arrival_date_offset: 0,
-						actual_arrival_date_offset: 0,
-						scheduled_departure_dates: [],
-						actual_departure_dates: [],
-						scheduled_departure_date_offset: 0,
-						actual_departure_date_offset: 0,
-					};
-					attachStopReferences(skipped, {
-						actualStop: scheduledStop,
-						actualParent: scheduledParent,
-						scheduledStop: scheduledStop,
-						scheduledParent: scheduledParent,
-					});
-					finalStops.push(skipped);
-				}
-			}
-		}
-		currentSequence = seq;
 
 		const stopId = stopTime.stop_id;
 		const scheduledStop = cache.getAugmentedStops(ctx, { feedId: stopFeedId, localId: stopId })[0];

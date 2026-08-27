@@ -158,6 +158,7 @@ export interface QRTTravelTrip {
 	status: string;
 	offersGoldClass: boolean;
 	serviceDate: string;
+	sourceModifiedAt?: string;
 	departureDate: string;
 	stops: QRTTravelStopTime[];
 	stopsWithPassing?: QRTSRTStop[];

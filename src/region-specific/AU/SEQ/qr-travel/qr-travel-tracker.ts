@@ -410,7 +410,8 @@ function convertQRTServiceToTravelTrip(
 		line,
 		status: serviceMeta.QRTServiceDisruption?.Status ?? "Scheduled",
 		offersGoldClass: false,
-		serviceDate: serviceMeta.Modified,
+		serviceDate: service.ServiceDate,
+		sourceModifiedAt: serviceMeta.Modified,
 		departureDate: stops[0]?.plannedDeparture ?? "",
 		stops,
 		disruption: serviceMeta.QRTServiceDisruption,
@@ -463,7 +464,8 @@ async function processService(
 				(s) =>
 					s.qrt_Direction == direction.DirectionName &&
 					s.qrt_ServiceLine.endsWith(serviceLine.ServiceLineName) &&
-					(s.Title.split(" ")[0].length != 4 || s.Title.split(" ")[0].slice(1) === serviceResponse.ServiceId.slice(0, 3)),
+					(s.Title.split(" ")[0].length != 4 ||
+						s.Title.split(" ")[0].slice(1) === serviceResponse.ServiceId.slice(0, 3)),
 			);
 
 			if (qrtService) {
@@ -500,7 +502,12 @@ async function processService(
 						DepartureDelaySeconds: s.departureDelaySeconds ?? 0,
 					};
 				});
-				const expanded = expandWithSRTPassingStops(trainMovements, ctx);
+				const expanded = expandWithSRTPassingStops(trainMovements, ctx, {
+					serviceId: travelTrip.serviceId,
+					serviceDate: service.ServiceDate,
+					line: travelTrip.line,
+					direction: travelTrip.direction,
+				});
 				return {
 					...travelTrip,
 					stopsWithPassing: expanded,
@@ -564,3 +571,5 @@ export async function getCurrentQRTravelTrains(ctx: CacheContext, retries = 2): 
 		}
 	}
 }
+
+export const _test = { getCurrentQRTravelTrains, convertQRTServiceToTravelTrip };

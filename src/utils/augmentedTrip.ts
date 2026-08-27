@@ -3,8 +3,15 @@ import { getServiceDatesByTrip } from "./calendar.js";
 import { AugmentedStopTime, augmentStopTimes } from "./augmentedStopTime.js";
 import * as cache from "../cache/index.js";
 import { getServiceCapacity, ServiceCapacity } from "./serviceCapacity.js";
-import { ExpressInfo, findExpress } from "./SRT.js";
-import { canonicalStationIdentity, getFeedTimeZone, resolveTripNumber } from "../config.js";
+import type { ExpressInfo } from "./SRT.js";
+import {
+	createJourneyContext,
+	createRealtimeJourneyContext,
+	expressInfoFromCorridor,
+	resolveJourneyCorridor,
+} from "./corridor/resolver.js";
+import type { CorridorResolution, JourneyContext } from "./corridor/types.js";
+import { getFeedTimeZone, resolveTripNumber } from "../config.js";
 import { getToday } from "./time.js";
 import { encodeTripInstanceId, entityKey } from "../identity.js";
 import { isNonRevenueTrip } from "./considered.js";
@@ -66,6 +73,23 @@ export type AugmentTripOptions = {
 	/** Restrict realtime updates independently from scheduled calendar dates. */
 	realtimeDates?: readonly string[];
 };
+
+/** Build the minimal static-shaped record needed to expose a realtime-only trip. */
+export function createRealtimeOnlyTrip(update: qdf.RealtimeTripUpdate): qdf.Trip {
+	return {
+		trip_id: update.trip.trip_id,
+		route_id: update.trip.route_id,
+		service_id: `realtime-${update.trip.start_date ?? "unknown"}`,
+		trip_headsign: null,
+		trip_short_name: null,
+		direction_id: update.trip.direction_id,
+		block_id: null,
+		shape_id: null,
+		wheelchair_accessible: null,
+		bikes_allowed: null,
+		feed_id: update.feed_id,
+	};
+}
 
 function dateToEpochDays(ymd: number | string): number {
 	const ymdStr = ymd.toString();
@@ -137,29 +161,7 @@ export function augmentTrip(
 	const nonRevenue = isNonRevenueTrip(route, rawStopTimes, ctx);
 	ctx.augmented.timer.stop("augmentTrip:getRawStopTimes");
 
-	ctx.augmented.timer.start("augmentTrip:getParentStops");
-	const parentStops = new Array<string>(rawStopTimes.length);
-	const stopsRec = ctx.augmented.stopsRec;
-	for (let i = 0; i < rawStopTimes.length; i++) {
-		const cached = stopsRec.get(entityKey({ feedId: rawStopTimes[i].feed_id, localId: rawStopTimes[i].stop_id }));
-		const localStopId = cached?.parent_stop_id ?? rawStopTimes[i].stop_id;
-		parentStops[i] = entityKey(
-			canonicalStationIdentity(ctx.config, { feedId: rawStopTimes[i].feed_id, localId: localStopId }),
-		);
-	}
-	ctx.augmented.timer.stop("augmentTrip:getParentStops");
-
-	ctx.augmented.timer.start("augmentTrip:findExpress");
-	const parentStopSignature = parentStops.join("|");
-	let expressInfo = ctx.augmented.expressInfoCache.get(parentStopSignature);
-	if (!expressInfo) {
-		expressInfo = findExpress(
-			parentStops.filter((id): id is string => !!id),
-			ctx,
-		);
-		ctx.augmented.expressInfoCache.set(parentStopSignature, expressInfo);
-	}
-	ctx.augmented.timer.stop("augmentTrip:findExpress");
+	const journey = createJourneyContext(trip, rawStopTimes, ctx);
 
 	ctx.augmented.timer.start("augmentTrip:getTripUpdates");
 	const allUpdates = tripUpdatesCache ? (tripUpdatesCache.get(tripKey) ?? []) : cache.getTripUpdates(ctx, tripRef);
@@ -194,17 +196,29 @@ export function augmentTrip(
 			realtimeStartTime: startTime,
 		});
 
+		const staticStopTimesForInstance =
+			scheduleRelationship === qdf.TripScheduleRelationship.ADDED ||
+			scheduleRelationship === qdf.TripScheduleRelationship.UNSCHEDULED ||
+			scheduleRelationship === qdf.TripScheduleRelationship.REPLACEMENT
+				? null
+				: rawStopTimes;
+		const journeyForDate: JourneyContext =
+			staticStopTimesForInstance === null && update
+				? createRealtimeJourneyContext(update, ctx)
+				: { ...journey, serviceDate };
+		const corridor: CorridorResolution =
+			journeyForDate.anchors.length > 1 ? resolveJourneyCorridor(journeyForDate, ctx) : { gaps: [], nodes: [] };
+		const expressInfo = expressInfoFromCorridor(corridor);
+
 		ctx.augmented.timer.start("createInstance:augmentStopTimes");
 		const stopTimes = augmentStopTimes(
-			scheduleRelationship === qdf.TripScheduleRelationship.ADDED ||
-				scheduleRelationship === qdf.TripScheduleRelationship.UNSCHEDULED ||
-				scheduleRelationship === qdf.TripScheduleRelationship.REPLACEMENT
-				? null
-				: rawStopTimes,
+			staticStopTimesForInstance,
 			{
 				serviceDate,
 				tripUpdate: update,
 				scheduleRelationship,
+				journey: journeyForDate,
+				corridor,
 			},
 			ctx,
 		);
@@ -315,6 +329,7 @@ export function augmentTrip(
 			coveredServiceDates.add(startDate);
 			instances.push(createInstance(startDate, update, rel));
 		} else if (rel === qdf.TripScheduleRelationship.UNSCHEDULED) {
+			coveredServiceDates.add(startDate);
 			instances.push(createInstance(startDate, update, rel));
 		} else if (rel === qdf.TripScheduleRelationship.CANCELED) {
 			coveredServiceDates.add(startDate);

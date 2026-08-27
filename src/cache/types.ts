@@ -16,6 +16,8 @@ import type { AugmentedTrip, AugmentedTripInstance, RunSeries } from "../utils/a
 import type { AugmentedStopTime } from "../utils/augmentedStopTime.js";
 import type { Timer } from "../utils/timer.js";
 import type { ExpressInfo, PassingStop } from "../utils/SRT.js";
+import type { CorridorIndex } from "../utils/corridor/shapeIndex.js";
+import type { CorridorResolution } from "../utils/corridor/types.js";
 import type { SeqDiagramTopology } from "../region-specific/AU/SEQ/seq-diagram.js";
 import type { TraxConfig } from "../config.js";
 import { LRUCache } from "./lruCache.js";
@@ -28,6 +30,8 @@ export type RawCache = {
 	tripsByKey: Map<string, Trip>;
 	/** Considered trips from the same static snapshot as {@link tripsByKey}. */
 	consideredTrips?: Trip[];
+	/** Feed-qualified trips created from ADDED/UNSCHEDULED realtime updates. */
+	realtimeOnlyTripKeys: Set<string>;
 	stopsByKey: Map<string, Stop>;
 	stopsByFeed: Map<string, Stop[]>;
 	injectedTripUpdates?: RealtimeTripUpdate[];
@@ -53,6 +57,10 @@ export type AugmentedCache = {
 	passingTrips: Map<string, string[]>;
 
 	shapes: { feed_id: string; shape_id: string; route_id: string }[];
+	/** Static station, shape, and active-pattern indexes for corridor routing. */
+	corridorIndex: CorridorIndex;
+	/** Physical-route decisions keyed by the complete qualified journey context. */
+	corridorResolutionCache: LRUCache<string, CorridorResolution>;
 
 	expressInfoCache: LRUCache<string, ExpressInfo[]>;
 	passingStopsCache: LRUCache<string, PassingStop[]>;
@@ -93,7 +101,5 @@ export type CacheContext = {
 		previousVehicleInfo: Map<string, unknown>;
 		srtNetworkData: unknown | null;
 		srtExpectedStaticFingerprint: string | null;
-		srtBfs: Map<string, string[] | null>;
-		loggedMissingSrt: Set<string>;
 	};
 };

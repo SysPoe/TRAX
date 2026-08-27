@@ -3,12 +3,14 @@ import type { TraxConfig } from "../config.js";
 import type { AugmentedCache, CacheContext, RawCache } from "./types.js";
 import { LRUCache } from "./lruCache.js";
 import type { ExpressInfo, PassingStop } from "../utils/SRT.js";
+import { createEmptyCorridorIndex } from "../utils/corridor/shapeIndex.js";
 
 export function createEmptyRawCache(): RawCache {
 	return {
 		tripServiceIds: new Map(),
 		routesByKey: new Map(),
 		tripsByKey: new Map(),
+		realtimeOnlyTripKeys: new Set(),
 		stopsByKey: new Map(),
 		stopsByFeed: new Map(),
 		injectedTripUpdates: [],
@@ -32,6 +34,8 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 		serviceDateTripsSet: new Map(),
 		passingTrips: new Map(),
 		shapes: [],
+		corridorIndex: createEmptyCorridorIndex(),
+		corridorResolutionCache: new LRUCache(5000),
 		expressInfoCache: new LRUCache<string, ExpressInfo[]>(1000),
 		passingStopsCache: new LRUCache<string, PassingStop[]>(5000),
 		runSeriesCache: new Map(),
@@ -69,7 +73,5 @@ export function createRuntimeState(): CacheContext["runtimeState"] {
 		previousVehicleInfo: new Map(),
 		srtNetworkData: null,
 		srtExpectedStaticFingerprint: null,
-		srtBfs: new Map(),
-		loggedMissingSrt: new Set(),
 	};
 }

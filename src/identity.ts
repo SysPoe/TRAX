@@ -1,4 +1,7 @@
 import type { QualifiedEntityId } from "qdf-gtfs";
+import { qualifiedKey } from "./utils/corridor/keys.js";
+
+export { qualifiedKey } from "./utils/corridor/keys.js";
 
 export type EntityKind = "agency" | "place" | "station" | "stop" | "route" | "trip" | "shape" | "service" | "vehicle";
 
@@ -13,11 +16,6 @@ export interface TripInstanceIdentity extends PublicEntityIdentity {
 	realtimeStartTime: string;
 }
 
-/** Length-prefixed components cannot collide even when IDs contain separators. */
-export function qualifiedKey(feedId: string, localId: string): string {
-	return `${feedId.length}:${feedId}${localId}`;
-}
-
 export function entityKey(entity: QualifiedEntityId): string {
 	return qualifiedKey(entity.feedId, entity.localId);
 }
@@ -25,11 +23,11 @@ export function entityKey(entity: QualifiedEntityId): string {
 export function parseEntityKey(key: string): QualifiedEntityId {
 	const separator = key.indexOf(":");
 	const feedLength = Number.parseInt(key.slice(0, separator), 10);
-	if (separator < 1 || !Number.isInteger(feedLength) || feedLength < 0) throw new Error("Invalid qualified entity key");
+	if (separator < 1 || !Number.isInteger(feedLength) || feedLength < 0)
+		throw new Error("Invalid qualified entity key");
 	const feedStart = separator + 1;
 	return { feedId: key.slice(feedStart, feedStart + feedLength), localId: key.slice(feedStart + feedLength) };
 }
-
 
 function encode(value: unknown): string {
 	return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
@@ -45,7 +43,12 @@ export function encodePublicEntityId(identity: PublicEntityIdentity): string {
 
 export function decodePublicEntityId(value: string): PublicEntityIdentity {
 	const decoded = decode(value);
-	if (!Array.isArray(decoded) || decoded.length !== 5 || decoded[0] !== 1 || decoded.slice(1).some((part) => typeof part !== "string")) {
+	if (
+		!Array.isArray(decoded) ||
+		decoded.length !== 5 ||
+		decoded[0] !== 1 ||
+		decoded.slice(1).some((part) => typeof part !== "string")
+	) {
 		throw new Error("Invalid public entity ID");
 	}
 	return { networkId: decoded[1], feedId: decoded[2], kind: decoded[3] as EntityKind, localId: decoded[4] };

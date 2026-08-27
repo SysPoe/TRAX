@@ -1,9 +1,14 @@
-import { TransferType, type GTFS, type Trip, type Stop } from "qdf-gtfs";
-import { isConsideredTrip } from "../utils/considered.js";
+import { TransferType, TripScheduleRelationship, type GTFS, type Trip, type Stop } from "qdf-gtfs";
+import { isConsideredRoute, isConsideredTrip } from "../utils/considered.js";
 import { syncCalendarsToWasm } from "../utils/calendar.js";
 import { augmentStop } from "../utils/augmentedStop.js";
 import type { AugmentedStop } from "../utils/augmentedStop.js";
-import { augmentTrip, EAGER_SERVICE_DATE_FUTURE_DAYS, EAGER_SERVICE_DATE_PAST_DAYS } from "../utils/augmentedTrip.js";
+import {
+	augmentTrip,
+	createRealtimeOnlyTrip,
+	EAGER_SERVICE_DATE_FUTURE_DAYS,
+	EAGER_SERVICE_DATE_PAST_DAYS,
+} from "../utils/augmentedTrip.js";
 import { clearAugmentedStopTimeCaches } from "../utils/augmentedStopTime.js";
 import { getCurrentQRTravelTrains, getPlacesWithCache } from "../region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
 import {
@@ -26,6 +31,7 @@ import { getSeqState } from "../plugins/seq-state.js";
 import { addDaysToServiceDate, getToday } from "../utils/time.js";
 import { applyRealtimeReplacementPrecedence, canonicalizeRealtimeTripUpdates } from "./realtime.js";
 import { getRawStopTimes, primeRawStopTimes } from "./gtfsReads.js";
+import { buildCorridorIndex } from "../utils/corridor/shapeIndex.js";
 
 type CacheProgressReporter = (info: Parameters<TraxConfig["progressLog"]>[0] & { unit?: "bytes" | "items" }) => void;
 
@@ -67,6 +73,35 @@ export function refreshQRTTrainsInBackground(ctx: CacheContext): void {
 
 function tripUpdateSignature(updates: readonly unknown[]): string {
 	return JSON.stringify(updates);
+}
+
+function isRealtimeOnlyRelationship(relationship: TripScheduleRelationship): boolean {
+	return (
+		relationship === TripScheduleRelationship.ADDED ||
+		relationship === TripScheduleRelationship.UNSCHEDULED ||
+		relationship === TripScheduleRelationship.REPLACEMENT
+	);
+}
+
+function createRealtimeOnlyTrips(
+	updatesByTrip: ReadonlyMap<string, readonly import("qdf-gtfs").RealtimeTripUpdate[]>,
+	usableStaticTripKeys: ReadonlySet<string>,
+	ctx: CacheContext,
+): Trip[] {
+	const result: Trip[] = [];
+	for (const [tripKey, updates] of updatesByTrip) {
+		if (usableStaticTripKeys.has(tripKey)) continue;
+		const update = updates.find(
+			(candidate) =>
+				isRealtimeOnlyRelationship(candidate.trip.schedule_relationship) &&
+				candidate.stop_time_updates.filter((stopTime) => Boolean(stopTime.stop_id)).length > 1,
+		);
+		if (!update) continue;
+		const route = ctx.raw.routesByKey.get(entityKey({ feedId: update.feed_id, localId: update.trip.route_id }));
+		if (!route || !isConsideredRoute(route, ctx)) continue;
+		result.push(createRealtimeOnlyTrip(update));
+	}
+	return result;
 }
 
 function findChangedRealtimeTripIds(
@@ -111,6 +146,19 @@ function resetRealtimeCacheIncremental(updatedTripIds: Set<string>, ctx: CacheCo
 		} else {
 			augmentedCache.passingTrips.set(stopId, filteredTripIds);
 		}
+	}
+}
+
+function removeRealtimeOnlyTrip(ctx: CacheContext, tripKey: string): void {
+	if (!ctx.raw.realtimeOnlyTripKeys.delete(tripKey)) return;
+
+	ctx.raw.tripsByKey.delete(tripKey);
+	ctx.raw.tripServiceIds?.delete(tripKey);
+	ctx.augmented.rawTripsRec.delete(tripKey);
+
+	for (const [tripNumber, tripKeys] of ctx.augmented.tripNumberTrips) {
+		tripKeys.delete(tripKey);
+		if (tripKeys.size === 0) ctx.augmented.tripNumberTrips.delete(tripNumber);
 	}
 }
 
@@ -311,29 +359,43 @@ export async function refreshStaticCache(
 
 	ctx.augmented.timer.start("refreshStaticCache:loadStopTimes");
 	primeRawStopTimes(ctx, consideredTrips);
-	const trips = consideredTrips.filter((trip) =>
-		getRawStopTimes(ctx, { feedId: trip.feed_id, localId: trip.trip_id }).length > 0,
+	const trips = consideredTrips.filter(
+		(trip) => getRawStopTimes(ctx, { feedId: trip.feed_id, localId: trip.trip_id }).length > 0,
 	);
+	const realtimeOnlyTrips = createRealtimeOnlyTrips(
+		ctx.augmented.tripUpdatesCache,
+		new Set(trips.map((trip) => entityKey({ feedId: trip.feed_id, localId: trip.trip_id }))),
+		ctx,
+	);
+	for (const trip of realtimeOnlyTrips) {
+		const key = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
+		newRawCache.realtimeOnlyTripKeys.add(key);
+		newRawCache.tripsByKey.set(key, trip);
+	}
+	const tripsToAugment = [...trips, ...realtimeOnlyTrips];
 	ctx.augmented.timer.stop("refreshStaticCache:loadStopTimes");
+	ctx.augmented.timer.start("refreshStaticCache:buildCorridorIndex");
+	newAugmentedCache.corridorIndex = buildCorridorIndex(ctx);
+	ctx.augmented.timer.stop("refreshStaticCache:buildCorridorIndex");
 	for (const t of allTrips) {
 		newRawCache.tripServiceIds!.set(
 			entityKey({ feedId: t.feed_id, localId: t.trip_id }),
 			entityKey({ feedId: t.feed_id, localId: t.service_id }),
 		);
 	}
-	for (const trip of trips)
+	for (const trip of tripsToAugment)
 		newAugmentedCache.rawTripsRec.set(entityKey({ feedId: trip.feed_id, localId: trip.trip_id }), trip);
-	for (const trip of trips) {
+	for (const trip of tripsToAugment) {
 		const tripNumber = resolveTripNumber(ctx.config.network, trip);
 		const keys = newAugmentedCache.tripNumberTrips.get(tripNumber) ?? new Set<string>();
 		keys.add(entityKey({ feedId: trip.feed_id, localId: trip.trip_id }));
 		newAugmentedCache.tripNumberTrips.set(tripNumber, keys);
 	}
 	logger.debug(
-		`Loaded ${trips.length} usable considered trips out of ${allTrips.length} total; skipped ${consideredTrips.length - trips.length} trip rows without stop times.`,
+		`Loaded ${tripsToAugment.length} usable considered trips out of ${allTrips.length} static rows; skipped ${consideredTrips.length - trips.length} static trip rows without stop times.`,
 		{
-		module: "cache",
-		function: "refreshStaticCache",
+			module: "cache",
+			function: "refreshStaticCache",
 		},
 	);
 
@@ -442,7 +504,7 @@ export async function refreshStaticCache(
 	ctx.augmented.timer.start("refreshStaticCache:augmentTrips");
 	const tripUpdatesCache = ctx.augmented.tripUpdatesCache;
 	newAugmentedCache.trips = await processWithProgress(
-		trips,
+		tripsToAugment,
 		"Augmenting trips",
 		(trip) => {
 			const augmentedTrip = augmentTrip(trip, ctx, tripUpdatesCache);
@@ -542,6 +604,22 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 	for (const [tripId, updates] of nextUpdatesByTrip) {
 		nextSignatures.set(tripId, tripUpdateSignature(updates));
 	}
+	const staticTripKeys = new Set(
+		Array.from(augmentedCache.rawTripsRec.keys()).filter((tripKey) => !ctx.raw.realtimeOnlyTripKeys.has(tripKey)),
+	);
+	const realtimeOnlyTrips = createRealtimeOnlyTrips(nextUpdatesByTrip, staticTripKeys, ctx);
+	const nextRealtimeOnlyTripKeys = new Set<string>();
+	for (const trip of realtimeOnlyTrips) {
+		const tripKey = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
+		nextRealtimeOnlyTripKeys.add(tripKey);
+		ctx.raw.realtimeOnlyTripKeys.add(tripKey);
+		ctx.raw.tripsByKey.set(tripKey, trip);
+		augmentedCache.rawTripsRec.set(tripKey, trip);
+		const tripNumber = resolveTripNumber(ctx.config.network, trip);
+		const tripNumberIds = augmentedCache.tripNumberTrips.get(tripNumber) ?? new Set<string>();
+		tripNumberIds.add(tripKey);
+		augmentedCache.tripNumberTrips.set(tripNumber, tripNumberIds);
+	}
 
 	logger.debug(
 		`Loaded ${tripUpdates.length} trip updates with ${tripUpdates.flatMap((v) => v.stop_time_updates).length} stop time updates.`,
@@ -554,11 +632,18 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 	for (const tripId of augmentedCache.tripsRec.keys()) {
 		if (augmentedCache.rawTripsRec.has(tripId)) availableTripIds.add(tripId);
 	}
+	for (const tripKey of nextRealtimeOnlyTripKeys) availableTripIds.add(tripKey);
 	const updatedTripIds = findChangedRealtimeTripIds(
 		augmentedCache.tripUpdateSignatures,
 		nextSignatures,
 		availableTripIds,
 	);
+	for (const tripKey of ctx.raw.realtimeOnlyTripKeys) {
+		if (!nextRealtimeOnlyTripKeys.has(tripKey)) updatedTripIds.add(tripKey);
+	}
+	for (const tripKey of nextRealtimeOnlyTripKeys) {
+		if (!augmentedCache.tripsRec.has(tripKey)) updatedTripIds.add(tripKey);
+	}
 	augmentedCache.tripUpdatesCache.clear();
 	for (const [tripId, updates] of nextUpdatesByTrip) {
 		augmentedCache.tripUpdatesCache.set(tripId, updates);
@@ -585,6 +670,9 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 			if (existing) reusableTrips.set(tripId, existing);
 		}
 		resetRealtimeCacheIncremental(updatedTripIds, ctx);
+		for (const tripKey of Array.from(ctx.raw.realtimeOnlyTripKeys)) {
+			if (!nextRealtimeOnlyTripKeys.has(tripKey)) removeRealtimeOnlyTrip(ctx, tripKey);
+		}
 
 		logger.debug("Re-augmenting updated trips...", {
 			module: "cache",
