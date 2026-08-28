@@ -106,6 +106,7 @@ raw.routesByKey.set(entityKey({ feedId, localId: routeId }), route);
 for (const stop of stops) raw.stopsByKey.set(entityKey({ feedId, localId: stop.stop_id }), stop);
 
 function realtimeUpdate({
+	id = tripId,
 	timestamp = 0,
 	stopIds = ["a", "b", "d"],
 	relationship = TripScheduleRelationship.ADDED,
@@ -113,10 +114,10 @@ function realtimeUpdate({
 	startDate = serviceDate,
 } = {}) {
 	return {
-		update_id: "update-1",
+		update_id: `update-${id}`,
 		is_deleted: false,
 		trip: {
-			trip_id: tripId,
+			trip_id: id,
 			route_id: routeId,
 			direction_id: 0,
 			start_time: startTime,
@@ -345,5 +346,26 @@ for (const category of [
 ]) {
 	assert.equal(timingCategories.has(category), true, `missing timing category: ${category}`);
 }
+
+const streamedTripIds = Array.from({ length: 12 }, (_, index) => `streamed-trip-${index}`);
+updates = streamedTripIds.map((id) => realtimeUpdate({ id, timestamp: 2 }));
+await refreshRealtimeCache(gtfs, config, ctx);
+
+let observedIncrementalCheckpoint = false;
+config.progressLog = (progress) => {
+	if (progress.task !== "Re-augmenting updated trips" || progress.current !== 10) return;
+	observedIncrementalCheckpoint = true;
+	for (const id of streamedTripIds.slice(0, 10)) {
+		const key = entityKey({ feedId, localId: id });
+		assert.equal(augmented.tripsRec.get(key)?.instances[0].realtime_update?.timestamp, 3);
+	}
+	for (const id of streamedTripIds.slice(10)) {
+		const key = entityKey({ feedId, localId: id });
+		assert.equal(augmented.tripsRec.get(key)?.instances[0].realtime_update?.timestamp, 2);
+	}
+};
+updates = streamedTripIds.map((id) => realtimeUpdate({ id, timestamp: 3 }));
+await refreshRealtimeCache(gtfs, config, ctx);
+assert.equal(observedIncrementalCheckpoint, true, "realtime trips must be replaced incrementally");
 
 console.log("Realtime cache tests passed.");

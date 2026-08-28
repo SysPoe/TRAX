@@ -145,16 +145,14 @@ function registerTripNumber(ctx: CacheContext, trip: Trip): void {
 	ctx.augmented.tripNumberByTrip.set(tripKey, tripNumber);
 }
 
-function resetRealtimeCacheIncremental(updatedTripIds: Set<string>, ctx: CacheContext): void {
+function resetRealtimeTripIncremental(tripId: string, ctx: CacheContext): void {
 	const { augmented: augmentedCache } = ctx;
 
-	for (const tripId of updatedTripIds) {
-		unregisterAugmentedTrip(ctx, tripId);
-		augmentedCache.tripsRec.delete(tripId);
-		removeAugmentedTripFromArray(ctx, tripId);
-		delete augmentedCache.stopTimes[tripId];
-		delete augmentedCache.baseStopTimes[tripId];
-	}
+	unregisterAugmentedTrip(ctx, tripId);
+	augmentedCache.tripsRec.delete(tripId);
+	removeAugmentedTripFromArray(ctx, tripId);
+	delete augmentedCache.stopTimes[tripId];
+	delete augmentedCache.baseStopTimes[tripId];
 }
 
 function removeRealtimeOnlyTrip(ctx: CacheContext, tripKey: string): void {
@@ -624,61 +622,73 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 			function: "refreshRealtimeCache",
 		});
 	} else {
-		const reusableTrips = new Map<string, ReturnType<typeof augmentTrip>>();
-		for (const tripId of updatedTripIds) {
-			const existing = augmentedCache.tripsRec.get(tripId);
-			if (existing) reusableTrips.set(tripId, existing);
-		}
-		timer.start("refreshRealtimeCache:unregisterChangedTrips");
-		resetRealtimeCacheIncremental(updatedTripIds, ctx);
-		for (const tripKey of updatedTripIds) {
-			if (ctx.raw.realtimeOnlyTripKeys.has(tripKey) && !nextRealtimeOnlyTripKeys.has(tripKey)) {
-				removeRealtimeOnlyTrip(ctx, tripKey);
-			}
-		}
-		timer.stop("refreshRealtimeCache:unregisterChangedTrips");
-
 		logger.debug("Re-augmenting updated trips...", {
 			module: "cache",
 			function: "refreshRealtimeCache",
 		});
 
-		timer.start("refreshRealtimeCache:fetchRawChangedTrips");
-		const tripsToUpdate: Trip[] = [];
-		for (const tripKey of updatedTripIds) {
-			if (!augmentedCache.rawTripsRec.has(tripKey)) continue;
-			const rawTrip = ctx.raw.tripsByKey.get(tripKey) ?? augmentedCache.rawTripsRec.get(tripKey);
-			if (rawTrip) tripsToUpdate.push(rawTrip);
+		const tripKeys = Array.from(updatedTripIds);
+		const total = tripKeys.length;
+		const startedAt = Date.now();
+		ctx.config.progressLog({
+			task: "Re-augmenting updated trips",
+			current: 0,
+			total,
+			speed: 0,
+			eta: 0,
+			percent: 0,
+			unit: "items",
+		});
+
+		for (let index = 0; index < total; index += 1) {
+			const tripKey = tripKeys[index];
+			const reusableTrip = augmentedCache.tripsRec.get(tripKey);
+
+			timer.start("refreshRealtimeCache:unregisterChangedTrips");
+			resetRealtimeTripIncremental(tripKey, ctx);
+			const removeRealtimeOnly =
+				ctx.raw.realtimeOnlyTripKeys.has(tripKey) && !nextRealtimeOnlyTripKeys.has(tripKey);
+			if (removeRealtimeOnly) removeRealtimeOnlyTrip(ctx, tripKey);
+			timer.stop("refreshRealtimeCache:unregisterChangedTrips");
+
+			timer.start("refreshRealtimeCache:fetchRawChangedTrips");
+			const rawTrip = removeRealtimeOnly
+				? undefined
+				: (ctx.raw.tripsByKey.get(tripKey) ?? augmentedCache.rawTripsRec.get(tripKey));
+			timer.stop("refreshRealtimeCache:fetchRawChangedTrips");
+
+			if (rawTrip) {
+				timer.start("refreshRealtimeCache:reaugmentChangedTrips");
+				const updatedTrip = augmentTrip(rawTrip, ctx, ctx.augmented.tripUpdatesCache, reusableTrip);
+				timer.stop("refreshRealtimeCache:reaugmentChangedTrips");
+
+				timer.start("refreshRealtimeCache:reregisterIndexes");
+				augmentedCache.tripsRec.set(tripKey, updatedTrip);
+				registerAugmentedTrip(ctx, updatedTrip);
+				replaceAugmentedTripInArray(ctx, updatedTrip);
+
+				const allStopTimes = updatedTrip.instances.flatMap((instance) => instance.stopTimes);
+				augmentedCache.stopTimes[tripKey] = allStopTimes;
+				augmentedCache.baseStopTimes[tripKey] = [...allStopTimes];
+				timer.stop("refreshRealtimeCache:reregisterIndexes");
+			}
+
+			const current = index + 1;
+			if (current % 10 === 0 || current === total) {
+				await new Promise((resolve) => setImmediate(resolve));
+				const elapsed = (Date.now() - startedAt) / 1000;
+				const speed = elapsed > 0 ? current / elapsed : 0;
+				ctx.config.progressLog({
+					task: "Re-augmenting updated trips",
+					current,
+					total,
+					speed,
+					eta: speed > 0 ? (total - current) / speed : 0,
+					percent: (current / total) * 100,
+					unit: "items",
+				});
+			}
 		}
-		timer.stop("refreshRealtimeCache:fetchRawChangedTrips");
-
-		timer.start("refreshRealtimeCache:reaugmentChangedTrips");
-		const updatedAugmented = await processWithProgress(
-			tripsToUpdate,
-			"Re-augmenting updated trips",
-			(t) =>
-				augmentTrip(
-					t,
-					ctx,
-					ctx.augmented.tripUpdatesCache,
-					reusableTrips.get(entityKey({ feedId: t.feed_id, localId: t.trip_id })),
-				),
-			ctx.config.progressLog,
-		);
-		timer.stop("refreshRealtimeCache:reaugmentChangedTrips");
-
-		timer.start("refreshRealtimeCache:reregisterIndexes");
-		for (const at of updatedAugmented) {
-			const tripKey = entityKey({ feedId: at.feed_id, localId: at.trip_id });
-			augmentedCache.tripsRec.set(tripKey, at);
-			registerAugmentedTrip(ctx, at);
-			replaceAugmentedTripInArray(ctx, at);
-
-			const allStopTimes = at.instances.flatMap((i) => i.stopTimes);
-			augmentedCache.stopTimes[tripKey] = allStopTimes;
-			augmentedCache.baseStopTimes[tripKey] = [...allStopTimes];
-		}
-		timer.stop("refreshRealtimeCache:reregisterIndexes");
 
 		logger.debug(`Re-augmented ${updatedTripIds.size} trips.`, {
 			module: "cache",
