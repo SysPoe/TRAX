@@ -53,9 +53,18 @@ export type AugmentedCache = {
 	tripsRec: Map<string, AugmentedTrip>;
 	stopsRec: Map<string, AugmentedStop>;
 
+	/** Materialized array views for callers that explicitly need arrays. */
 	serviceDateTrips: Map<string, string[]>;
+	/** Canonical service-date membership index. */
 	serviceDateTripsSet: Map<string, Set<string>>;
+	/** Service-date buckets owned by each feed-qualified trip. */
+	serviceDatesByTrip: Map<string, Set<string>>;
+	/** Materialized array views for callers that explicitly need arrays. */
 	passingTrips: Map<string, string[]>;
+	/** Canonical passing-stop membership index. */
+	passingTripsSet: Map<string, Set<string>>;
+	/** Passing-stop buckets owned by each feed-qualified trip. */
+	passingStopsByTrip: Map<string, Set<string>>;
 
 	shapes: { feed_id: string; shape_id: string; route_id: string }[];
 	/** Static station, shape, and active-pattern indexes for corridor routing. */
@@ -76,6 +85,10 @@ export type AugmentedCache = {
 	runSeriesCache: Map<string, Map<string, RunSeries>>;
 	carTrips: Map<string, Set<string>>;
 	tripNumberTrips: Map<string, Set<string>>;
+	/** Direct reverse lookup used when a realtime-only trip is removed. */
+	tripNumberByTrip: Map<string, string>;
+	/** Position of each trip in the stable public array view. */
+	tripArrayIndex: Map<string, number>;
 
 	tripsStoppingAt: Map<string, Set<string>>;
 	stopDeparturesCached: Map<string, Map<string, AugmentedStopTime[]>>;

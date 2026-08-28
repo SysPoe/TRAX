@@ -2,6 +2,7 @@ import {
 	type CacheContext,
 	getAugmentedTripInstance,
 	getAugmentedTrips,
+	getTripIdsByServiceDate,
 	getTripUpdates,
 	replaceInjectedTripUpdates,
 } from "../../../cache/index.js";
@@ -367,7 +368,7 @@ function propagatePlatformToNextTripInBlock(
 
 	const blockTrips = blockMap
 		? blockMap.get(currentInst.block_id) || []
-		: (ctx.augmented.serviceDateTrips.get(currentInst.serviceDate) ?? [])
+		: getTripIdsByServiceDate(ctx, currentInst.serviceDate)
 				.map((id) => ctx.augmented.tripsRec.get(id))
 				.filter(Boolean)
 				.flatMap((at) => at!.instances.filter((i) => i.serviceDate === currentInst.serviceDate));
@@ -427,7 +428,7 @@ function propagateVehicleInfoToBlock(
 
 	let blockTrips = blockMap
 		? blockMap.get(blockId) || []
-		: (ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [])
+		: getTripIdsByServiceDate(ctx, serviceDateStr)
 				.map((id) => ctx.augmented.tripsRec.get(id))
 				.filter((v) => v && v.block_id === blockId)
 				.flatMap((at) => at!.instances.filter((i) => i.serviceDate === serviceDateStr));
@@ -757,7 +758,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	}
 
 	// Re-bootstrap current-day vehicle and block indexes in one pass.
-	const existingTripsForDate = ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [];
+	const existingTripsForDate = getTripIdsByServiceDate(ctx, serviceDateStr);
 	const blockMap = new Map<string, any[]>();
 	let indexedTrips = 0;
 	timer.start("updateAllSources:buildBlockMap");
@@ -1447,7 +1448,7 @@ export async function updateSourceF(ctx: CacheContext, serviceDateStr: string, b
 			state.vehicleConsists[vehicleNumber] = consist;
 			consist.forEach((car) => state.activeCars.add(car));
 
-			const tripsForDate = ctx.augmented.serviceDateTrips.get(serviceDateStr) ?? [];
+			const tripsForDate = getTripIdsByServiceDate(ctx, serviceDateStr);
 			for (const tripId of tripsForDate) {
 				const augmentedTrip = ctx.augmented.tripsRec.get(tripId);
 				if (!augmentedTrip) continue;

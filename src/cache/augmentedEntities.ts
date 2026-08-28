@@ -26,30 +26,199 @@ import { getServiceDatesByTrip } from "../utils/calendar.js";
 
 const MAX_LAZY_SERVICE_DATES = 8;
 
+function getMembershipSet(
+	membersByBucket: Map<string, Set<string>>,
+	arraysByBucket: Map<string, string[]>,
+	bucket: string,
+): Set<string> | undefined {
+	const members = membersByBucket.get(bucket);
+	if (members) return members;
+	const legacyArray = arraysByBucket.get(bucket);
+	if (!legacyArray) return undefined;
+	const result = new Set(legacyArray);
+	membersByBucket.set(bucket, result);
+	return result;
+}
+
+function addOwnedMembership(
+	membersByBucket: Map<string, Set<string>>,
+	arraysByBucket: Map<string, string[]>,
+	bucketsByTrip: Map<string, Set<string>>,
+	bucket: string,
+	tripKey: string,
+): void {
+	let members = getMembershipSet(membersByBucket, arraysByBucket, bucket);
+	if (!members) {
+		members = new Set();
+		membersByBucket.set(bucket, members);
+	}
+	if (!members.has(tripKey)) {
+		members.add(tripKey);
+		arraysByBucket.delete(bucket);
+	}
+
+	let ownedBuckets = bucketsByTrip.get(tripKey);
+	if (!ownedBuckets) {
+		ownedBuckets = new Set();
+		bucketsByTrip.set(tripKey, ownedBuckets);
+	}
+	ownedBuckets.add(bucket);
+}
+
+function removeOwnedMembership(
+	membersByBucket: Map<string, Set<string>>,
+	arraysByBucket: Map<string, string[]>,
+	bucketsByTrip: Map<string, Set<string>>,
+	bucket: string,
+	tripKey: string,
+): void {
+	const members = getMembershipSet(membersByBucket, arraysByBucket, bucket);
+	if (members) {
+		members.delete(tripKey);
+		if (members.size === 0) membersByBucket.delete(bucket);
+	}
+	arraysByBucket.delete(bucket);
+
+	const ownedBuckets = bucketsByTrip.get(tripKey);
+	if (!ownedBuckets) return;
+	ownedBuckets.delete(bucket);
+	if (ownedBuckets.size === 0) bucketsByTrip.delete(tripKey);
+}
+
+function materializeMembershipArray(
+	membersByBucket: Map<string, Set<string>>,
+	arraysByBucket: Map<string, string[]>,
+	bucket: string,
+): string[] {
+	const members = getMembershipSet(membersByBucket, arraysByBucket, bucket);
+	if (!members) return [];
+	const cached = arraysByBucket.get(bucket);
+	if (cached) return cached;
+	const result = Array.from(members);
+	arraysByBucket.set(bucket, result);
+	return result;
+}
+
+function getServiceDateTripSet(ctx: CacheContext, serviceDate: string): Set<string> | undefined {
+	const { augmented } = ctx;
+	return getMembershipSet(augmented.serviceDateTripsSet, augmented.serviceDateTrips, serviceDate);
+}
+
+export function rebuildAugmentedTripArrayIndex(ctx: CacheContext): void {
+	const { augmented } = ctx;
+	augmented.tripArrayIndex.clear();
+	for (let index = 0; index < augmented.trips.length; index += 1) {
+		const trip = augmented.trips[index];
+		augmented.tripArrayIndex.set(entityKey({ feedId: trip.feed_id, localId: trip.trip_id }), index);
+	}
+}
+
+export function replaceAugmentedTripInArray(ctx: CacheContext, trip: AugmentedTrip): void {
+	const { augmented } = ctx;
+	const tripKey = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
+	const index = augmented.tripArrayIndex.get(tripKey);
+	if (index === undefined) {
+		augmented.tripArrayIndex.set(tripKey, augmented.trips.length);
+		augmented.trips.push(trip);
+	} else {
+		augmented.trips[index] = trip;
+	}
+}
+
+export function removeAugmentedTripFromArray(ctx: CacheContext, tripKey: string): void {
+	const { augmented } = ctx;
+	const index = augmented.tripArrayIndex.get(tripKey);
+	if (index === undefined) return;
+
+	const lastIndex = augmented.trips.length - 1;
+	if (index !== lastIndex) {
+		const movedTrip = augmented.trips[lastIndex];
+		augmented.trips[index] = movedTrip;
+		augmented.tripArrayIndex.set(entityKey({ feedId: movedTrip.feed_id, localId: movedTrip.trip_id }), index);
+	}
+	augmented.trips.pop();
+	augmented.tripArrayIndex.delete(tripKey);
+}
+
 export function unregisterAugmentedTrip(ctx: CacheContext, tripId: string): void {
 	const { augmented } = ctx;
 	const trip = augmented.tripsRec.get(tripId);
 	if (!trip) return;
 
+	const serviceDates = augmented.serviceDatesByTrip.get(tripId);
+	if (serviceDates) {
+		for (const date of [...serviceDates]) {
+			removeOwnedMembership(
+				augmented.serviceDateTripsSet,
+				augmented.serviceDateTrips,
+				augmented.serviceDatesByTrip,
+				date,
+				tripId,
+			);
+		}
+	} else {
+		const fallbackDates = new Set(trip.instances.flatMap((instance) => instance.actualTripDates));
+		for (const date of fallbackDates) {
+			removeOwnedMembership(
+				augmented.serviceDateTripsSet,
+				augmented.serviceDateTrips,
+				augmented.serviceDatesByTrip,
+				date,
+				tripId,
+			);
+		}
+	}
+
+	const passingStops = augmented.passingStopsByTrip.get(tripId);
+	if (passingStops) {
+		for (const stopKey of [...passingStops]) {
+			removeOwnedMembership(
+				augmented.passingTripsSet,
+				augmented.passingTrips,
+				augmented.passingStopsByTrip,
+				stopKey,
+				tripId,
+			);
+		}
+	} else {
+		const fallbackStops = new Set(
+			trip.instances.flatMap((instance) =>
+				instance.stopTimes
+					.filter((stopTime) => stopTime.passing && stopTime.actual_stop_id)
+					.map((stopTime) => entityKey({ feedId: stopTime.feed_id, localId: stopTime.actual_stop_id! })),
+			),
+		);
+		for (const stopKey of fallbackStops) {
+			removeOwnedMembership(
+				augmented.passingTripsSet,
+				augmented.passingTrips,
+				augmented.passingStopsByTrip,
+				stopKey,
+				tripId,
+			);
+		}
+	}
+
+	const stopsToCleanup = new Set<string>();
 	for (const instance of trip.instances) {
 		for (const st of instance.stopTimes) {
-			const stopsToCleanup = new Set<string>();
-			if (st.actual_stop_id) stopsToCleanup.add(st.actual_stop_id);
-			if (st.actual_parent_station_id) stopsToCleanup.add(st.actual_parent_station_id);
-			if (st.scheduled_stop_id) stopsToCleanup.add(st.scheduled_stop_id);
-			if (st.scheduled_parent_station_id) stopsToCleanup.add(st.scheduled_parent_station_id);
-
-			for (const localStopId of stopsToCleanup) {
-				const stopId = entityKey({ feedId: st.feed_id, localId: localStopId });
-				const tripSet = augmented.tripsStoppingAt.get(stopId);
-				if (tripSet) {
-					tripSet.delete(tripId);
-					// Clear all date-based caches for this stop
-					augmented.stopDeparturesCached.delete(stopId);
-				}
-			}
+			if (st.actual_stop_id) stopsToCleanup.add(entityKey({ feedId: st.feed_id, localId: st.actual_stop_id }));
+			if (st.actual_parent_station_id)
+				stopsToCleanup.add(entityKey({ feedId: st.feed_id, localId: st.actual_parent_station_id }));
+			if (st.scheduled_stop_id)
+				stopsToCleanup.add(entityKey({ feedId: st.feed_id, localId: st.scheduled_stop_id }));
+			if (st.scheduled_parent_station_id)
+				stopsToCleanup.add(entityKey({ feedId: st.feed_id, localId: st.scheduled_parent_station_id }));
 		}
 		augmented.instancesRec.delete(instance.instance_id);
+	}
+	for (const stopId of stopsToCleanup) {
+		const tripSet = augmented.tripsStoppingAt.get(stopId);
+		if (tripSet) {
+			tripSet.delete(tripId);
+			if (tripSet.size === 0) augmented.tripsStoppingAt.delete(stopId);
+		}
+		augmented.stopDeparturesCached.delete(stopId);
 	}
 }
 
@@ -57,11 +226,19 @@ export function registerAugmentedTrip(ctx: CacheContext, trip: AugmentedTrip): v
 	const { augmented } = ctx;
 	const tripId = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
 
-	// Populate tripsStoppingAt once per trip (from the first instance's stop times)
-	// This identifies which stops this trip potentially visits.
-	const firstInstance = trip.instances[0];
-	if (firstInstance) {
-		for (const st of firstInstance.stopTimes) {
+	for (const instance of trip.instances) {
+		augmented.instancesRec.set(instance.instance_id, instance);
+		for (const date of instance.actualTripDates) {
+			addOwnedMembership(
+				augmented.serviceDateTripsSet,
+				augmented.serviceDateTrips,
+				augmented.serviceDatesByTrip,
+				date,
+				tripId,
+			);
+		}
+
+		for (const st of instance.stopTimes) {
 			const stopsToIndex = new Set<string>();
 			if (st.actual_stop_id) stopsToIndex.add(st.actual_stop_id);
 			if (st.actual_parent_station_id) stopsToIndex.add(st.actual_parent_station_id);
@@ -76,44 +253,19 @@ export function registerAugmentedTrip(ctx: CacheContext, trip: AugmentedTrip): v
 					augmented.tripsStoppingAt.set(stopId, tripSet);
 				}
 				tripSet.add(tripId);
-				// Invalidate cache for this stop across all dates (since a trip changed)
 				augmented.stopDeparturesCached.delete(stopId);
 			}
-		}
-	}
 
-	for (const instance of trip.instances) {
-		augmented.instancesRec.set(instance.instance_id, instance);
-	}
-}
-
-function indexInstances(ctx: CacheContext, tripKey: string, instances: readonly AugmentedTripInstance[]): void {
-	const { augmented } = ctx;
-	for (const instance of instances) {
-		augmented.instancesRec.set(instance.instance_id, instance);
-		for (const date of instance.actualTripDates) {
-			let tripIds = augmented.serviceDateTrips.get(date);
-			if (!tripIds) {
-				tripIds = [];
-				augmented.serviceDateTrips.set(date, tripIds);
+			if (st.passing && st.actual_stop_id) {
+				const stopKey = entityKey({ feedId: st.feed_id, localId: st.actual_stop_id });
+				addOwnedMembership(
+					augmented.passingTripsSet,
+					augmented.passingTrips,
+					augmented.passingStopsByTrip,
+					stopKey,
+					tripId,
+				);
 			}
-			if (!tripIds.includes(tripKey)) tripIds.push(tripKey);
-			let tripSet = augmented.serviceDateTripsSet.get(date);
-			if (!tripSet) {
-				tripSet = new Set(tripIds);
-				augmented.serviceDateTripsSet.set(date, tripSet);
-			}
-			tripSet.add(tripKey);
-		}
-		for (const stopTime of instance.stopTimes) {
-			if (!stopTime.passing || !stopTime.actual_stop_id) continue;
-			const stopKey = entityKey({ feedId: stopTime.feed_id, localId: stopTime.actual_stop_id });
-			let tripIds = augmented.passingTrips.get(stopKey);
-			if (!tripIds) {
-				tripIds = [];
-				augmented.passingTrips.set(stopKey, tripIds);
-			}
-			if (!tripIds.includes(tripKey)) tripIds.push(tripKey);
 		}
 	}
 }
@@ -131,67 +283,29 @@ function refreshDiagramAfterInstanceChange(ctx: CacheContext, affectedTripIds: S
 	revalidateSeqDiagramRealtimeEdges(ctx, affectedTripIds);
 }
 
-function rebuildDateIndexes(ctx: CacheContext, dates: ReadonlySet<string>): void {
-	for (const date of dates) {
-		const tripIds = new Set<string>();
-		for (const [tripKey, trip] of ctx.augmented.tripsRec) {
-			if (trip.instances.some((instance) => instance.actualTripDates.includes(date))) tripIds.add(tripKey);
-		}
-		if (tripIds.size === 0) {
-			ctx.augmented.serviceDateTrips.delete(date);
-			ctx.augmented.serviceDateTripsSet.delete(date);
-		} else {
-			ctx.augmented.serviceDateTrips.set(date, Array.from(tripIds));
-			ctx.augmented.serviceDateTripsSet.set(date, tripIds);
-		}
-	}
-}
-
 function evictStartServiceDate(ctx: CacheContext, serviceDate: string): void {
 	if (ctx.runtimeState.operationalServiceDates.has(serviceDate)) return;
 	const affectedDates = new Set<string>([serviceDate]);
-	const affectedPassingStops = new Set<string>();
 	const affectedTripIds = new Set<string>();
+	const tripIds = getServiceDateTripSet(ctx, serviceDate);
+	if (!tripIds) return;
 
-	for (const [tripKey, trip] of ctx.augmented.tripsRec) {
+	for (const tripKey of tripIds) {
+		const trip = ctx.augmented.tripsRec.get(tripKey);
+		if (!trip) continue;
 		const removed = trip.instances.filter((instance) => instance.serviceDate === serviceDate);
 		if (removed.length === 0) continue;
 		for (const instance of removed) {
-			ctx.augmented.instancesRec.delete(instance.instance_id);
 			for (const date of instance.actualTripDates) affectedDates.add(date);
-			for (const stopTime of instance.stopTimes) {
-				if (stopTime.passing && stopTime.actual_stop_id) {
-					affectedPassingStops.add(entityKey({ feedId: stopTime.feed_id, localId: stopTime.actual_stop_id }));
-				}
-			}
 		}
+		unregisterAugmentedTrip(ctx, tripKey);
 		trip.instances = trip.instances.filter((instance) => instance.serviceDate !== serviceDate);
 		trip.scheduledStartServiceDates = trip.scheduledStartServiceDates.filter((date) => date !== serviceDate);
+		registerAugmentedTrip(ctx, trip);
 		refreshTripStopTimeRecords(ctx, tripKey, trip);
 		affectedTripIds.add(trip.trip_id);
 	}
 
-	rebuildDateIndexes(ctx, affectedDates);
-	for (const stopKey of affectedPassingStops) {
-		const tripIds: string[] = [];
-		for (const [tripKey, trip] of ctx.augmented.tripsRec) {
-			if (
-				trip.instances.some((instance) =>
-					instance.stopTimes.some(
-						(stopTime) =>
-							stopTime.passing &&
-							stopTime.actual_stop_id !== null &&
-							entityKey({ feedId: stopTime.feed_id, localId: stopTime.actual_stop_id }) === stopKey,
-					),
-				)
-			) {
-				tripIds.push(tripKey);
-			}
-		}
-		if (tripIds.length === 0) ctx.augmented.passingTrips.delete(stopKey);
-		else ctx.augmented.passingTrips.set(stopKey, tripIds);
-	}
-	ctx.augmented.stopDeparturesCached.clear();
 	for (const date of affectedDates) ctx.augmented.runSeriesCache.delete(date);
 	refreshDiagramAfterInstanceChange(ctx, affectedTripIds);
 }
@@ -236,9 +350,7 @@ export function ensureStartServiceDateMaterialized(ctx: CacheContext, serviceDat
 		const nextInstances = dateTrip.instances.filter((instance) => instance.serviceDate === serviceDate);
 		if (nextInstances.length === 0) continue;
 
-		for (const instance of existing.instances) {
-			if (instance.serviceDate === serviceDate) ctx.augmented.instancesRec.delete(instance.instance_id);
-		}
+		unregisterAugmentedTrip(ctx, tripKey);
 		existing.instances = existing.instances
 			.filter((instance) => instance.serviceDate !== serviceDate)
 			.concat(nextInstances)
@@ -248,7 +360,6 @@ export function ensureStartServiceDateMaterialized(ctx: CacheContext, serviceDat
 			existing.scheduledStartServiceDates.sort();
 		}
 		registerAugmentedTrip(ctx, existing);
-		indexInstances(ctx, tripKey, nextInstances);
 		refreshTripStopTimeRecords(ctx, tripKey, existing);
 		affectedTripIds.add(existing.trip_id);
 	}
@@ -261,7 +372,7 @@ export function ensureStartServiceDateMaterialized(ctx: CacheContext, serviceDat
 export function getTripIdsByServiceDate(ctx: CacheContext, serviceDate: string): string[] {
 	ensureStartServiceDateMaterialized(ctx, addDaysToServiceDate(serviceDate, -1));
 	ensureStartServiceDateMaterialized(ctx, serviceDate);
-	return ctx.augmented.serviceDateTrips.get(serviceDate) ?? [];
+	return materializeMembershipArray(ctx.augmented.serviceDateTripsSet, ctx.augmented.serviceDateTrips, serviceDate);
 }
 
 /** Calendar availability without eagerly constructing trip instances. */
@@ -280,7 +391,11 @@ export function getAvailableServiceDates(ctx: CacheContext): string[] {
 	return ctx.runtimeState.availableServiceDates;
 }
 
-export function getStopDeparturesCached(ctx: CacheContext, stop: QualifiedEntityId, serviceDate: string): AugmentedStopTime[] {
+export function getStopDeparturesCached(
+	ctx: CacheContext,
+	stop: QualifiedEntityId,
+	serviceDate: string,
+): AugmentedStopTime[] {
 	ensureStartServiceDateMaterialized(ctx, serviceDate);
 	const stopId = entityKey(stop);
 	const timer = ctx.augmented.timer;
@@ -295,14 +410,7 @@ export function getStopDeparturesCached(ctx: CacheContext, stop: QualifiedEntity
 
 	timer.start("getStopDeparturesCached:idIntersection");
 	const tripIdsForStop = augmented.tripsStoppingAt.get(stopId);
-	let tripIdsForDate = augmented.serviceDateTripsSet.get(serviceDate);
-	if (!tripIdsForDate) {
-		const tripIdsList = augmented.serviceDateTrips.get(serviceDate);
-		if (tripIdsList) {
-			tripIdsForDate = new Set(tripIdsList);
-			augmented.serviceDateTripsSet.set(serviceDate, tripIdsForDate);
-		}
-	}
+	const tripIdsForDate = getServiceDateTripSet(ctx, serviceDate);
 
 	if (!tripIdsForStop || !tripIdsForDate) {
 		timer.stop("getStopDeparturesCached:idIntersection");
@@ -408,6 +516,7 @@ export function getAugmentedTrips(ctx: CacheContext, trip?: QualifiedEntityId): 
 			const augmentedTrip = augmentTrip(rawTrip, context);
 			registerAugmentedTrip(ctx, augmentedTrip);
 			augmented.tripsRec.set(key, augmentedTrip);
+			replaceAugmentedTripInArray(ctx, augmentedTrip);
 			patchSeqDiagramOntoAugmentedTrip(context, augmentedTrip);
 			return [addVehicleModelTrip(addSC(augmentedTrip, ctx, context.config), ctx, context.config)];
 		}
@@ -572,7 +681,7 @@ export function getCachedPassingStops(ctx: CacheContext, stopListHash: string): 
 
 export function getPassingTrips(ctx: CacheContext, stop: QualifiedEntityId): string[] {
 	const { augmented } = ctx;
-	return augmented.passingTrips.get(entityKey(stop)) ?? [];
+	return materializeMembershipArray(augmented.passingTripsSet, augmented.passingTrips, entityKey(stop));
 }
 
 export function getShapes(ctx: CacheContext): { feed_id: string; shape_id: string; route_id: string }[] {
@@ -594,18 +703,21 @@ export function getRunSeries(
 		dateMap = new Map();
 		augmented.runSeriesCache.set(date, dateMap);
 	}
-	if (
-		!dateMap.get(runSeries) &&
-		calcIfNotFound &&
-		augmented.serviceDateTrips.get(date)?.find((key) => augmented.tripsRec.get(key)?.trip_id.endsWith(runSeries))
-	) {
-		const tripKey = augmented.serviceDateTrips.get(date)?.find((key) => augmented.tripsRec.get(key)?.trip_id.endsWith(runSeries));
-		if (tripKey) {
-			const trip = augmented.tripsRec.get(tripKey)!;
-			const instance = trip.instances.find((i) => i.serviceDate === date);
-			if (instance) {
-				calculateRunSeries(instance, context);
+	const tripIdsForDate = getServiceDateTripSet(ctx, date);
+	let matchingTripKey: string | undefined;
+	if (!dateMap.get(runSeries) && calcIfNotFound && tripIdsForDate) {
+		for (const key of tripIdsForDate) {
+			if (augmented.tripsRec.get(key)?.trip_id.endsWith(runSeries)) {
+				matchingTripKey = key;
+				break;
 			}
+		}
+	}
+	if (matchingTripKey) {
+		const trip = augmented.tripsRec.get(matchingTripKey)!;
+		const instance = trip.instances.find((i) => i.serviceDate === date);
+		if (instance) {
+			calculateRunSeries(instance, context);
 		}
 	} else if (!dateMap.get(runSeries))
 		dateMap.set(runSeries, {
