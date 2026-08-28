@@ -6,7 +6,6 @@ import { AugmentedStopTime } from "./augmentedStopTime.js";
 import { AugmentedTripInstance } from "./augmentedTrip.js";
 import { addDaysToServiceDate, getEpochDayFromServiceDate, getServiceDate, getServiceDayStart } from "./time.js";
 import { getFeedTimeZone } from "../config.js";
-import { filterAndSortDepartures } from "../../build/release.js";
 
 function timeSeconds(time: string): number {
 	const [hours, minutes, seconds] = time.split(":").map(Number);
@@ -15,16 +14,84 @@ function timeSeconds(time: string): number {
 
 type DepartureResult = AugmentedStopTime & { express_string: string; instance_id: string };
 
-function mapDepartureResults(
+type DepartureSlice = {
+	stopTimes: AugmentedStopTime[];
+	dayStart: number;
+};
+
+/** Keep this order in sync with getStopDeparturesCached's sort key. */
+function departureTimeSeconds(stopTime: AugmentedStopTime): number {
+	return stopTime.actual_departure_time ?? stopTime.scheduled_departure_time ?? stopTime.actual_arrival_time ?? 0;
+}
+
+function lowerBound(stopTimes: readonly AugmentedStopTime[], timeSeconds: number): number {
+	let low = 0;
+	let high = stopTimes.length;
+	while (low < high) {
+		const middle = low + Math.floor((high - low) / 2);
+		if (departureTimeSeconds(stopTimes[middle]) < timeSeconds) low = middle + 1;
+		else high = middle;
+	}
+	return low;
+}
+
+function upperBound(stopTimes: readonly AugmentedStopTime[], timeSeconds: number): number {
+	let low = 0;
+	let high = stopTimes.length;
+	while (low < high) {
+		const middle = low + Math.floor((high - low) / 2);
+		if (departureTimeSeconds(stopTimes[middle]) <= timeSeconds) low = middle + 1;
+		else high = middle;
+	}
+	return low;
+}
+
+function getDepartureSlice(
 	stopTimes: AugmentedStopTime[],
-	ctx: cache.CacheContext,
-): DepartureResult[] {
+	dayStart: number,
+	windowStartAbs: number,
+	windowEndAbs: number,
+): DepartureSlice {
+	const first = lowerBound(stopTimes, windowStartAbs - dayStart);
+	const end = upperBound(stopTimes, windowEndAbs - dayStart);
+	return { stopTimes: stopTimes.slice(first, end), dayStart };
+}
+
+/** Merge the already sorted per-stop slices without sorting the combined day. */
+function mergeDepartureSlices(slices: readonly DepartureSlice[]): AugmentedStopTime[] {
+	const merged: AugmentedStopTime[] = [];
+	const cursors = slices.map((slice) => ({ slice, index: 0 }));
+
+	while (true) {
+		let nextCursor: (typeof cursors)[number] | undefined;
+		let nextTime = Number.POSITIVE_INFINITY;
+		for (const cursor of cursors) {
+			const stopTime = cursor.slice.stopTimes[cursor.index];
+			if (!stopTime) continue;
+			const time = cursor.slice.dayStart + departureTimeSeconds(stopTime);
+			if (nextCursor === undefined || time < nextTime) {
+				nextCursor = cursor;
+				nextTime = time;
+			}
+		}
+		if (!nextCursor) break;
+		merged.push(nextCursor.slice.stopTimes[nextCursor.index]);
+		nextCursor.index++;
+	}
+
+	return merged;
+}
+
+function mapDepartureResults(stopTimes: AugmentedStopTime[], ctx: cache.CacheContext): DepartureResult[] {
 	const instanceCache = new Map<string, AugmentedTripInstance>();
 	const seenInstanceIds = new Set<string>();
 	const results: DepartureResult[] = [];
 	for (const st of stopTimes) {
 		if (seenInstanceIds.has(st.instance_id)) continue;
-		const inst = instanceCache.get(st.instance_id) ?? ctx.augmented.instancesRec.get(st.instance_id) ?? cache.getAugmentedTripInstance(ctx, st.instance_id);
+		const inst =
+			instanceCache.get(st.instance_id) ??
+			ctx.augmented.instancesRec.get(st.instance_id) ??
+			cache.getAugmentedTripInstance(ctx, st.instance_id);
 		if (!inst) continue;
 		instanceCache.set(st.instance_id, inst);
 		seenInstanceIds.add(st.instance_id);
@@ -93,7 +160,6 @@ export function getDeparturesForStop(
 	const parentId = stop.parent_stop_id;
 	const childIds = stop.child_stop_ids;
 	const validStops = new Set<string>([stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]);
-	const instanceCache = new Map<string, AugmentedTripInstance>();
 	const baseDayStart = getServiceDayStart(date, getFeedTimeZone(ctx.config, stop.feed_id));
 	const windowStartAbs = baseDayStart + startSec;
 	const windowEndAbs = baseDayStart + endSec;
@@ -101,83 +167,31 @@ export function getDeparturesForStop(
 	const daysForwardStart = Math.floor(startSec / 86400);
 	const daysForwardEnd = Math.floor(endSec / 86400);
 
-	const getInstance = (instanceId: string): AugmentedTripInstance | null => {
-		if (instanceCache.has(instanceId)) return instanceCache.get(instanceId) ?? null;
-		const cached = ctx.augmented.instancesRec.get(instanceId) ?? cache.getAugmentedTripInstance(ctx, instanceId);
-		if (cached) instanceCache.set(instanceId, cached);
-		return cached ?? null;
-	};
-
 	ctx.augmented.timer.start("getDeparturesForStop:collect");
-	const allTimestamps: number[] = [];
-	const allStopsAndInsts: { st: AugmentedStopTime; inst: AugmentedTripInstance | null }[] = [];
+	const slices: DepartureSlice[] = [];
 
 	for (let df = daysForwardStart; df <= daysForwardEnd; df++) {
 		const serviceDateStr = addDaysToServiceDate(date, df);
 		const dayStart = getServiceDayStart(serviceDateStr, getFeedTimeZone(ctx.config, stop.feed_id));
 
 		for (const stopId of validStops) {
-			const stopDepartures = cache.getStopDeparturesCached(ctx, { feedId: stop.feed_id, localId: stopId }, serviceDateStr);
-			for (const st of stopDepartures) {
-				const timeSecs = st.actual_departure_time ?? st.actual_arrival_time ?? st.scheduled_departure_time ?? 0;
-				const absTs = dayStart + timeSecs;
-
-				allTimestamps.push(absTs);
-				allStopsAndInsts.push({ st, inst: null }); // inst will be fetched later for filtered results
-			}
+			const stopDepartures = cache.getStopDeparturesCached(
+				ctx,
+				{ feedId: stop.feed_id, localId: stopId },
+				serviceDateStr,
+			);
+			slices.push(getDepartureSlice(stopDepartures, dayStart, windowStartAbs, windowEndAbs));
 		}
 	}
 	ctx.augmented.timer.stop("getDeparturesForStop:collect");
 
-	ctx.augmented.timer.start("getDeparturesForStop:wasm");
-	const originalIndices: number[] = new Array(allTimestamps.length);
-	for (let i = 0; i < allTimestamps.length; i++) originalIndices[i] = i;
-
-	const filteredIndicesBig = filterAndSortDepartures(allTimestamps, originalIndices, windowStartAbs, windowEndAbs);
-	const filteredIndices = filteredIndicesBig.map(Number);
-	ctx.augmented.timer.stop("getDeparturesForStop:wasm");
-
-	ctx.augmented.timer.start("getDeparturesForStop:instantiate");
-	const finalResults: { st: AugmentedStopTime; inst: AugmentedTripInstance }[] = [];
-	for (const idx of filteredIndices) {
-		const entry = allStopsAndInsts[idx];
-		const inst = getInstance(entry.st.instance_id);
-		if (inst) {
-			finalResults.push({ st: entry.st, inst });
-		}
-	}
-	ctx.augmented.timer.stop("getDeparturesForStop:instantiate");
-
+	const mergedResults = mergeDepartureSlices(slices);
 	ctx.augmented.timer.start("getDeparturesForStop:map");
-	const sortedResults = finalResults.map(({ st, inst }) => {
-		const expressString = findExpressString(
-			inst.expressInfo,
-			ctx,
-			st.actual_parent_station_id || st.actual_stop_id
-				? { feedId: st.feed_id, localId: st.actual_parent_station_id ?? st.actual_stop_id! }
-				: null,
-		);
-		return {
-			...st,
-			express_string: expressString,
-			instance_id: inst.instance_id,
-			service_capacity:
-				st.service_capacity === ServiceCapacity.NOT_CALCULATED
-					? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx, ctx.config)
-					: st.service_capacity,
-		};
-	});
+	const results = mapDepartureResults(mergedResults, ctx);
 	ctx.augmented.timer.stop("getDeparturesForStop:map");
 
-	const seenInstanceIds = new Set<string>();
-	const dedupedResults = sortedResults.filter((dep) => {
-		if (seenInstanceIds.has(dep.instance_id)) return false;
-		seenInstanceIds.add(dep.instance_id);
-		return true;
-	});
-
 	ctx.augmented.timer.stop("getDeparturesForStop");
-	return dedupedResults;
+	return results;
 }
 
 export function getServiceDateDeparturesForStop(
@@ -191,84 +205,30 @@ export function getServiceDateDeparturesForStop(
 	const parentId = stop.parent_stop_id;
 	const childIds = stop.child_stop_ids;
 	const validStops = new Set<string>([stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]);
-	const instanceCache = new Map<string, AugmentedTripInstance>();
 	const dayStart = getServiceDayStart(serviceDate, getFeedTimeZone(ctx.config, stop.feed_id));
 	const windowStartAbs = dayStart + start_time_secs;
 	const windowEndAbs = dayStart + end_time_secs;
-	const results: { st: AugmentedStopTime; inst: AugmentedTripInstance }[] = [];
-
-	const getInstance = (instanceId: string): AugmentedTripInstance | null => {
-		if (instanceCache.has(instanceId)) return instanceCache.get(instanceId) ?? null;
-		const cached = ctx.augmented.instancesRec.get(instanceId) ?? cache.getAugmentedTripInstance(ctx, instanceId);
-		if (cached) instanceCache.set(instanceId, cached);
-		return cached ?? null;
-	};
 
 	ctx.augmented.timer.start("getServiceDateDeparturesForStop:collect");
-	const allTimestamps: number[] = [];
-	const allStopsAndInsts: { st: AugmentedStopTime; inst: AugmentedTripInstance | null }[] = [];
+	const slices: DepartureSlice[] = [];
 
 	for (const stopId of validStops) {
-			const stopDepartures = cache.getStopDeparturesCached(ctx, { feedId: stop.feed_id, localId: stopId }, serviceDate);
-		for (const st of stopDepartures) {
-			const timeSecs = st.actual_departure_time ?? st.actual_arrival_time ?? st.scheduled_departure_time ?? 0;
-			const absTs = dayStart + timeSecs;
-
-			allTimestamps.push(absTs);
-			allStopsAndInsts.push({ st, inst: null });
-		}
+		const stopDepartures = cache.getStopDeparturesCached(
+			ctx,
+			{ feedId: stop.feed_id, localId: stopId },
+			serviceDate,
+		);
+		slices.push(getDepartureSlice(stopDepartures, dayStart, windowStartAbs, windowEndAbs));
 	}
 	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:collect");
 
-	ctx.augmented.timer.start("getServiceDateDeparturesForStop:wasm");
-	const originalIndices: number[] = new Array(allTimestamps.length);
-	for (let i = 0; i < allTimestamps.length; i++) originalIndices[i] = i;
-
-	const filteredIndicesBig = filterAndSortDepartures(allTimestamps, originalIndices, windowStartAbs, windowEndAbs);
-	const filteredIndices = filteredIndicesBig.map(Number);
-	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:wasm");
-
-	ctx.augmented.timer.start("getServiceDateDeparturesForStop:instantiate");
-	const finalResults: { st: AugmentedStopTime; inst: AugmentedTripInstance }[] = [];
-	for (const idx of filteredIndices) {
-		const entry = allStopsAndInsts[idx];
-		const inst = getInstance(entry.st.instance_id);
-		if (inst) {
-			finalResults.push({ st: entry.st, inst });
-		}
-	}
-	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:instantiate");
-
+	const mergedResults = mergeDepartureSlices(slices);
 	ctx.augmented.timer.start("getServiceDateDeparturesForStop:map");
-	const sortedResults = finalResults.map(({ st, inst }) => {
-		const expressString = findExpressString(
-			inst.expressInfo,
-			ctx,
-			st.actual_parent_station_id || st.actual_stop_id
-				? { feedId: st.feed_id, localId: st.actual_parent_station_id ?? st.actual_stop_id! }
-				: null,
-		);
-		return {
-			...st,
-			express_string: expressString,
-			instance_id: inst.instance_id,
-			service_capacity:
-				st.service_capacity === ServiceCapacity.NOT_CALCULATED
-					? getServiceCapacity(inst, st, inst.serviceDate, undefined, ctx, ctx.config)
-					: st.service_capacity,
-		};
-	});
+	const results = mapDepartureResults(mergedResults, ctx);
 	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:map");
 
-	const seenInstanceIds = new Set<string>();
-	const dedupedResults = sortedResults.filter((dep) => {
-		if (seenInstanceIds.has(dep.instance_id)) return false;
-		seenInstanceIds.add(dep.instance_id);
-		return true;
-	});
-
 	ctx.augmented.timer.stop("getServiceDateDeparturesForStop");
-	return dedupedResults;
+	return results;
 }
 
 export function attachDeparturesHelpers(stop: AugmentedStop, ctx: cache.CacheContext): AugmentedStop {
