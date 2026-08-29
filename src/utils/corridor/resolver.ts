@@ -5,7 +5,11 @@ import { canonicalStationIdentity } from "../../config.js";
 import { entityKey } from "../../identity.js";
 import { corridorJourneyKey, qualifiedKey } from "./keys.js";
 import { alignShapeAnchors, type ShapeAlignment } from "./alignShape.js";
-import { findCompatibleShapes, type CompatibleShapeCandidate } from "./compatibleShapes.js";
+import {
+	findAnchorCompatibleShapes,
+	findCompatibleShapes,
+	type CompatibleShapeCandidate,
+} from "./compatibleShapes.js";
 import { resolveAuthoritativeManualGap, resolveFallbackManualGap } from "./manualNetwork.js";
 import { resolvePatternGap } from "./patternResolver.js";
 import { buildCorridorIndex, type CorridorIndex, type IndexedShape } from "./shapeIndex.js";
@@ -426,6 +430,7 @@ function resolveOneGap(
 	exactAlignment: ShapeAlignment | null,
 	exactGapContext: ShapeGapContext | undefined,
 	compatibleCandidates: () => readonly CompatibleShapeCandidate[],
+	anchorCompatibleCandidates: () => readonly CompatibleShapeCandidate[],
 	validationContext: CorridorValidationContext,
 ): CorridorGapResolution {
 	const exact = exactShape
@@ -482,6 +487,18 @@ function resolveOneGap(
 	}
 	if (fallbackManual && "ambiguous" in fallbackManual)
 		return emptyGap(from, to, "Manual topology has multiple plausible station paths.");
+
+	const anchorCompatible = resolveCompatibleGap(
+		from,
+		to,
+		fromIndex,
+		journey,
+		index,
+		ctx,
+		anchorCompatibleCandidates(),
+		validationContext,
+	);
+	if (anchorCompatible) return anchorCompatible;
 
 	const pattern = resolvePatternGap(from, to, journey, index, ctx);
 	if (pattern) {
@@ -545,6 +562,9 @@ export function resolveJourneyCorridor(journey: JourneyContext, ctx: CacheContex
 	const validationContext = createCorridorValidationContext(journey);
 	let compatibleCandidates: CompatibleShapeCandidate[] | null = null;
 	const getCompatibleCandidates = () => (compatibleCandidates ??= findCompatibleShapes(journey, index, ctx));
+	let anchorCompatibleCandidates: CompatibleShapeCandidate[] | null = null;
+	const getAnchorCompatibleCandidates = () =>
+		(anchorCompatibleCandidates ??= findAnchorCompatibleShapes(journey, index, ctx));
 	const gaps: CorridorGapResolution[] = [];
 	for (let anchorIndex = 0; anchorIndex < journey.anchors.length - 1; anchorIndex++) {
 		gaps.push(
@@ -560,6 +580,7 @@ export function resolveJourneyCorridor(journey: JourneyContext, ctx: CacheContex
 				exactAlignment,
 				exactGapContext,
 				getCompatibleCandidates,
+				getAnchorCompatibleCandidates,
 				validationContext,
 			),
 		);

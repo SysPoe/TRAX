@@ -50,6 +50,8 @@ export interface CorridorIndex {
 	stationGeometry: Map<string, StationGeometry>;
 	shapes: Map<string, IndexedShape>;
 	shapesByRouteDirection: Map<string, Set<string>>;
+	/** Shape keys by physical station, used when a provider supplies an unknown route ID. */
+	shapesByStation: Map<string, Set<string>>;
 	patternsByRouteDirection: Map<string, RoutePattern[]>;
 	patterns: RoutePattern[];
 	version: string;
@@ -302,6 +304,7 @@ export function buildCorridorIndex(ctx: CacheContext, trips: readonly Trip[] = c
 	const relevantStationIds = new Set<string>();
 	const shapes = new Map<string, IndexedShape>();
 	const shapesByRouteDirection = new Map<string, Set<string>>();
+	const shapesByStation = new Map<string, Set<string>>();
 	const patternBuilder = createPatternIndexBuilder(ctx);
 
 	const processTrip = (trip: Trip, stopTimes: readonly StopTime[]) => {
@@ -398,6 +401,11 @@ export function buildCorridorIndex(ctx: CacheContext, trips: readonly Trip[] = c
 			);
 			indexShapeProjections(shape, grid, config);
 			finalizeShapeGeometryIndex(shape);
+			for (const stationId of shape.scheduledStations) {
+				const group = shapesByStation.get(stationId) ?? new Set<string>();
+				group.add(shape.key);
+				shapesByStation.set(stationId, group);
+			}
 		}
 	}
 
@@ -406,6 +414,7 @@ export function buildCorridorIndex(ctx: CacheContext, trips: readonly Trip[] = c
 		stationGeometry,
 		shapes,
 		shapesByRouteDirection,
+		shapesByStation,
 		patternsByRouteDirection: patternData.byRouteDirection,
 		patterns: patternData.patterns,
 		version: config.version,
@@ -418,6 +427,7 @@ export function createEmptyCorridorIndex(version = "1"): CorridorIndex {
 		stationGeometry: new Map(),
 		shapes: new Map(),
 		shapesByRouteDirection: new Map(),
+		shapesByStation: new Map(),
 		patternsByRouteDirection: new Map(),
 		patterns: [],
 		version,

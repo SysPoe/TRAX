@@ -95,3 +95,30 @@ export function findCompatibleShapes(
 	}
 	return [...unique.values()];
 }
+
+/** Find same-feed shapes from ordered physical anchors when the provider route has no static match. */
+export function findAnchorCompatibleShapes(
+	journey: JourneyContext,
+	index: CorridorIndex,
+	ctx: CacheContext,
+): CompatibleShapeCandidate[] {
+	const counts = new Map<string, number>();
+	const stationIds = new Set(
+		journey.anchors
+			.map((anchor) => anchor.stationId)
+			.filter((stationId): stationId is string => stationId !== null),
+	);
+	for (const stationId of stationIds) {
+		for (const shapeKey of index.shapesByStation.get(stationId) ?? []) {
+			counts.set(shapeKey, (counts.get(shapeKey) ?? 0) + 1);
+		}
+	}
+	const candidates: CompatibleShapeCandidate[] = [];
+	for (const [shapeKey, count] of counts) {
+		if (count < 2) continue;
+		const shape = index.shapes.get(shapeKey);
+		if (!shape || shape.feedId !== journey.feedId || !isActiveShape(shape, journey, ctx)) continue;
+		candidates.push({ shape, evidence: "compatible-shape", score: overlapScore(shape, journey) });
+	}
+	return candidates.sort((a, b) => b.score - a.score || a.shape.key.localeCompare(b.shape.key));
+}

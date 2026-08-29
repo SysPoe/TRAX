@@ -137,6 +137,11 @@ function indexedShape(feedId, shapeId, localIds, coordinates, options = {}) {
 function addShapes(index, shapes) {
 	for (const shape of shapes) {
 		index.shapes.set(shape.key, shape);
+		for (const stationId of shape.scheduledStations) {
+			const stationShapes = index.shapesByStation.get(stationId) ?? new Set();
+			stationShapes.add(shape.key);
+			index.shapesByStation.set(stationId, stationShapes);
+		}
 		for (const routeDirection of shape.routeDirections) {
 			const group = index.shapesByRouteDirection.get(routeDirection) ?? new Set();
 			group.add(shape.key);
@@ -252,6 +257,57 @@ function testCompatibleShapeWithUnknownDirection() {
 		result.gaps[0].nodes.map((node) => node.stationId),
 		[q("feed", "a"), q("feed", "b"), q("feed", "d")],
 	);
+}
+
+function testUnmatchedRouteUsesAnchorCompatibleShape() {
+	const localIds = ["a", "b", "c", "d"];
+	const coordinates = simpleCoordinates(localIds);
+	const index = createEmptyCorridorIndex("test");
+	index.stationGeometry = stationGeometry("feed", localIds, coordinates);
+	addShapes(index, [
+		indexedShape("feed", "stored-shape", localIds, coordinates, {
+			scheduledStations: ["a", "d"],
+			routeId: "stored-route",
+			direction: 0,
+		}),
+	]);
+	const result = resolveJourneyCorridor(
+		journey("feed", ["a", "d"], coordinates, { routeId: "provider-only-route", direction: null }),
+		context({ index }),
+	);
+	assert.equal(result.gaps[0].evidence, "compatible-shape");
+	assert.deepEqual(
+		result.gaps[0].nodes.map((node) => node.stationId),
+		[q("feed", "a"), q("feed", "b"), q("feed", "c"), q("feed", "d")],
+	);
+}
+
+function testUnmatchedRouteKeepsDisagreeingShapesUnresolved() {
+	const localIds = ["a", "b", "c", "d"];
+	const coordinates = {
+		a: { lat: -27, lon: 153 },
+		b: { lat: -26.995, lon: 153.001 },
+		c: { lat: -27.005, lon: 153.001 },
+		d: { lat: -27, lon: 153.002 },
+	};
+	const index = createEmptyCorridorIndex("test");
+	index.stationGeometry = stationGeometry("feed", localIds, coordinates);
+	addShapes(index, [
+		indexedShape("feed", "branch-b", ["a", "b", "d"], coordinates, {
+			scheduledStations: ["a", "d"],
+			routeId: "stored-route-b",
+		}),
+		indexedShape("feed", "branch-c", ["a", "c", "d"], coordinates, {
+			scheduledStations: ["a", "d"],
+			routeId: "stored-route-c",
+		}),
+	]);
+	const result = resolveJourneyCorridor(
+		journey("feed", ["a", "d"], coordinates, { routeId: "provider-only-route", direction: null }),
+		context({ index }),
+	);
+	assert.equal(result.gaps[0].status, "unresolved");
+	assert.deepEqual(result.gaps[0].nodes, []);
 }
 
 function testReverseShape() {
@@ -1795,6 +1851,8 @@ for (const testCase of [
 	["qualified keys isolate identical local entities", testQualifiedKeys],
 	["exact shape expands a physical corridor", testExactShape],
 	["compatible shapes support an unknown direction", testCompatibleShapeWithUnknownDirection],
+	["unmatched routes use anchor-compatible shapes", testUnmatchedRouteUsesAnchorCompatibleShape],
+	["unmatched routes keep disagreeing shapes unresolved", testUnmatchedRouteKeepsDisagreeingShapesUnresolved],
 	["reverse trips use the reverse interpretation", testReverseShape],
 	["normal and Milton-running shapes stay physically distinct", testMiltonShapeFamilies],
 	["native shape distance selects a loop occurrence", testNativeDistanceLoop],
