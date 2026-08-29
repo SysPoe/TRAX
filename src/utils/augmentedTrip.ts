@@ -12,7 +12,8 @@ import {
 } from "./corridor/resolver.js";
 import type { CorridorResolution, JourneyContext } from "./corridor/types.js";
 import { getFeedTimeZone, resolveTripNumber } from "../config.js";
-import { addDaysToServiceDate, getEpochDayFromServiceDate, getServiceDayStart, getToday } from "./time.js";
+import { serviceHandleFor } from "../cache/handles.js";
+import { addDaysToServiceDate, getEpochDayFromServiceDate, getServiceDateFromEpochDay, getServiceDayStart, getToday } from "./time.js";
 import { encodeTripInstanceId, entityKey } from "../identity.js";
 import { isNonRevenueTrip } from "./considered.js";
 import { pluginSupportsFeed } from "../plugins/types.js";
@@ -138,6 +139,21 @@ export function getOperationalServiceDatesForTrip(
 		ctx.runtimeState.operationalWindows.set(trip.feed_id, window);
 	}
 	const lookbackDays = Math.max(1, Math.ceil(bounds.end_time / 86_400) + 1);
+	// Fast path: use integer-handle inverse index when available (scales with window, not per-trip expansion)
+	if (ctx.runtimeState.servicesByDateHandle.size > 0 && ctx.runtimeState.tripsByServiceHandle.size > 0) {
+		const serviceHandle = serviceHandleFor(trip.feed_id, trip.service_id);
+		const overlapping: string[] = [];
+		for (let epochDay = window.todayEpochDay - OPERATIONAL_HORIZON_PAST_DAYS - lookbackDays; epochDay <= window.todayEpochDay + OPERATIONAL_HORIZON_FUTURE_DAYS + 1; epochDay++) {
+			const date = getServiceDateFromEpochDay(epochDay);
+			// Check if this service is active for this date via handle index
+			const servicesForDate = ctx.runtimeState.servicesByDateHandle.get(date);
+			if (!servicesForDate || !servicesForDate.has(serviceHandle)) continue;
+			const start = serviceDayStart(date);
+			if (start + bounds.end_time >= window.horizonStart && start + bounds.start_time < window.horizonEnd) overlapping.push(date);
+		}
+		for (const serviceDate of overlapping) ctx.runtimeState.operationalServiceDates.add(serviceDate);
+		return overlapping;
+	}
 	const candidateDates = getServiceDatesByTrip(
 		{ feedId: trip.feed_id, localId: trip.trip_id },
 		ctx,

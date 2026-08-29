@@ -1,6 +1,6 @@
 import { TransferType, TripScheduleRelationship, type GTFS, type Trip, type Stop } from "qdf-gtfs";
 import { isConsideredRoute, isConsideredTrip } from "../utils/considered.js";
-import { syncCalendarsToWasm } from "../utils/calendar.js";
+import { rebuildServiceInverseIndexes, syncCalendarsToWasm } from "../utils/calendar.js";
 import { augmentStop } from "../utils/augmentedStop.js";
 import type { AugmentedStop } from "../utils/augmentedStop.js";
 import {
@@ -374,11 +374,21 @@ export async function refreshStaticCache(
 			entityKey({ feedId: trip.feed_id, localId: trip.service_id }),
 		);
 	}
+	rebuildServiceInverseIndexes(ctx);
 	const usableConsideredTrips = consideredTrips.filter((trip) =>
 		newRawCache.tripStopTimeBoundsByKey.has(entityKey({ feedId: trip.feed_id, localId: trip.trip_id })),
 	);
 	for (const trip of usableConsideredTrips) {
-		newAugmentedCache.rawTripsRec.set(entityKey({ feedId: trip.feed_id, localId: trip.trip_id }), trip);
+		const key = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
+		newAugmentedCache.rawTripsRec.set(key, trip);
+		newAugmentedCache.staticTemplates.set(key, {
+			trip,
+			routeId: trip.route_id,
+			serviceId: trip.service_id,
+			shapeId: trip.shape_id,
+			stopTimes: [],
+			bounds: newRawCache.tripStopTimeBoundsByKey.get(key) ?? null,
+		});
 		registerTripNumber(ctx, trip);
 	}
 
@@ -411,6 +421,14 @@ export async function refreshStaticCache(
 		newRawCache.realtimeOnlyTripKeys.add(key);
 		newRawCache.tripsByKey.set(key, trip);
 		newAugmentedCache.rawTripsRec.set(key, trip);
+		newAugmentedCache.staticTemplates.set(key, {
+			trip,
+			routeId: trip.route_id,
+			serviceId: trip.service_id,
+			shapeId: trip.shape_id,
+			stopTimes: [],
+			bounds: null,
+		});
 		registerTripNumber(ctx, trip);
 	}
 	const tripsToAugment = [...trips, ...realtimeOnlyTrips];
@@ -593,9 +611,18 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		if (updates) updates.push(update);
 		else nextUpdatesByTrip.set(tripKey, [update]);
 	}
-	const nextSignatures = new Map<string, string>();
-	for (const [tripId, updates] of nextUpdatesByTrip) {
-		nextSignatures.set(tripId, tripUpdateSignature(updates));
+	let nextSignatures: Map<string, string> | null = null;
+	let nativeChanged: Set<string> | null = null;
+	const gtfsWithMeta = gtfs as unknown as { getLastChangedTripIds?: () => { feed_id:string; trip_id:string }[] };
+	if (gtfsWithMeta.getLastChangedTripIds) {
+		try {
+			const changed = gtfsWithMeta.getLastChangedTripIds();
+			if (Array.isArray(changed)) nativeChanged = new Set(changed.map(c => entityKey({ feedId: c.feed_id, localId: c.trip_id })));
+		} catch {}
+	}
+	if (!nativeChanged) {
+		nextSignatures = new Map<string, string>();
+		for (const [tripId, updates] of nextUpdatesByTrip) nextSignatures.set(tripId, tripUpdateSignature(updates));
 	}
 	const realtimeOnlyTrips = createRealtimeOnlyTrips(nextUpdatesByTrip, ctx);
 	const nextRealtimeOnlyTripKeys = new Set<string>();
@@ -615,22 +642,50 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 			function: "refreshRealtimeCache",
 		},
 	);
-	const updatedTripIds = findChangedRealtimeTripIds(augmentedCache.tripUpdateSignatures, nextSignatures, (tripKey) =>
-		augmentedCache.rawTripsRec.has(tripKey),
-	);
-	for (const tripKey of nextRealtimeOnlyTripKeys) {
-		if (!augmentedCache.tripsRec.has(tripKey)) updatedTripIds.add(tripKey);
-	}
-
-	const realtimeUpdateKeys = new Set([...augmentedCache.tripUpdateSignatures.keys(), ...nextSignatures.keys()]);
-	for (const tripKey of realtimeUpdateKeys) {
-		const updates = nextUpdatesByTrip.get(tripKey);
-		if (updates) {
-			augmentedCache.tripUpdatesCache.set(tripKey, updates);
-			augmentedCache.tripUpdateSignatures.set(tripKey, nextSignatures.get(tripKey)!);
-		} else {
-			augmentedCache.tripUpdatesCache.delete(tripKey);
-			augmentedCache.tripUpdateSignatures.delete(tripKey);
+	let updatedTripIds: Set<string>;
+	if (nativeChanged) {
+		updatedTripIds = new Set<string>();
+		for (const tripKey of nativeChanged) {
+			if (augmentedCache.rawTripsRec.has(tripKey) || nextRealtimeOnlyTripKeys.has(tripKey) || augmentedCache.tripUpdatesCache.has(tripKey) || nextUpdatesByTrip.has(tripKey)) updatedTripIds.add(tripKey);
+		}
+		for (const tripKey of nextRealtimeOnlyTripKeys) if (!augmentedCache.tripsRec.has(tripKey)) updatedTripIds.add(tripKey);
+		const allKeys = new Set([...augmentedCache.tripUpdateSignatures.keys(), ...nextUpdatesByTrip.keys()]);
+		for (const tripKey of allKeys) {
+			const updates = nextUpdatesByTrip.get(tripKey);
+			if (updates) {
+				augmentedCache.tripUpdatesCache.set(tripKey, updates);
+				if (nextSignatures) augmentedCache.tripUpdateSignatures.set(tripKey, nextSignatures.get(tripKey)!);
+				else augmentedCache.tripUpdateSignatures.set(tripKey, tripUpdateSignature(updates));
+			} else {
+				augmentedCache.tripUpdatesCache.delete(tripKey);
+				augmentedCache.tripUpdateSignatures.delete(tripKey);
+			}
+		}
+		augmentedCache.lastRealtimeChangedHandles.clear();
+		const { tripHandleFor } = await import("./handles.js");
+		for (const k of updatedTripIds) {
+			const colon = k.indexOf(":");
+			if (colon<0) continue;
+			const len = parseInt(k.slice(0,colon),10);
+			const rest = k.slice(colon+1);
+			const feedId = rest.slice(0,len);
+			const localId = rest.slice(len);
+			augmentedCache.lastRealtimeChangedHandles.add(tripHandleFor(feedId, localId));
+		}
+	} else {
+		nextSignatures = nextSignatures ?? new Map();
+		updatedTripIds = findChangedRealtimeTripIds(augmentedCache.tripUpdateSignatures, nextSignatures, (tripKey) => augmentedCache.rawTripsRec.has(tripKey));
+		for (const tripKey of nextRealtimeOnlyTripKeys) if (!augmentedCache.tripsRec.has(tripKey)) updatedTripIds.add(tripKey);
+		const realtimeUpdateKeys = new Set([...augmentedCache.tripUpdateSignatures.keys(), ...nextSignatures.keys()]);
+		for (const tripKey of realtimeUpdateKeys) {
+			const updates = nextUpdatesByTrip.get(tripKey);
+			if (updates) {
+				augmentedCache.tripUpdatesCache.set(tripKey, updates);
+				augmentedCache.tripUpdateSignatures.set(tripKey, nextSignatures.get(tripKey)!);
+			} else {
+				augmentedCache.tripUpdatesCache.delete(tripKey);
+				augmentedCache.tripUpdateSignatures.delete(tripKey);
+			}
 		}
 	}
 	timer.stop("refreshRealtimeCache:collectChangedIds");

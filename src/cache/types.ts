@@ -42,24 +42,53 @@ export type RawCache = {
 	injectedVehiclePositions?: RealtimeVehiclePosition[];
 };
 
+export type StaticTripTemplate = {
+	trip: Trip;
+	routeId: string;
+	serviceId: string;
+	shapeId: string | null;
+	stopTimes: qdf.StopTime[]; // shared immutable sequence
+	bounds: TripStopTimeBounds | null;
+};
+
+export type TripInstanceOverlay = {
+	instanceId: string;
+	serviceDate: string;
+	scheduleRelationship: qdf.TripScheduleRelationship;
+	realtimeUpdate: qdf.RealtimeTripUpdate | null;
+	overlayStopTimes: AugmentedStopTime[] | null; // sparse diff, null means use template
+	vehicleId: string | null;
+	vehicleModel: string | null;
+};
+
 export type AugmentedCache = {
 	trips: AugmentedTrip[];
 	stops: AugmentedStop[];
 	railStations: Stop[];
 
 	rawStopTimesCache: Map<string, qdf.StopTime[]>;
+	rawPackedCache: Map<string, qdf.PackedStopTimes>;
 	rawTripsRec: Map<string, Trip>;
 	/** GTFS type 4/5 linked-trip rules, indexed by feed-qualified from_trip_id. */
 	linkedTransfersFromTrip: Map<string, Transfer[]>;
 	tripsRec: Map<string, AugmentedTrip>;
 	stopsRec: Map<string, AugmentedStop>;
 
+	/** Immutable static templates shared across dated instances (compact). */
+	staticTemplates: Map<string, StaticTripTemplate>;
+	/** Sparse per-instance overlays (dated/realtime). Keyed by instance_id */
+	instanceOverlays: Map<string, TripInstanceOverlay>;
+
 	/** Materialized array views for callers that explicitly need arrays. */
 	serviceDateTrips: Map<string, string[]>;
 	/** Canonical service-date membership index. */
 	serviceDateTripsSet: Map<string, Set<string>>;
+	/** Integer-handle compact index: date -> trip handles (high-volume). */
+	serviceDateTripHandles: Map<string, Set<number>>;
 	/** Service-date buckets owned by each feed-qualified trip. */
 	serviceDatesByTrip: Map<string, Set<string>>;
+	/** Integer handles for trip -> service dates (compact). */
+	serviceDatesByTripHandle: Map<number, Set<string>>;
 	/** Materialized array views for callers that explicitly need arrays. */
 	passingTrips: Map<string, string[]>;
 	/** Canonical passing-stop membership index. */
@@ -92,10 +121,14 @@ export type AugmentedCache = {
 	tripArrayIndex: Map<string, number>;
 
 	tripsStoppingAt: Map<string, Set<string>>;
+	/** Compact handle index: stop handle -> trip handles */
+	tripsStoppingAtHandles: Map<number, Set<number>>;
 	stopDeparturesCached: Map<string, Map<string, AugmentedStopTime[]>>;
 	instancesRec: Map<string, AugmentedTripInstance>;
 	tripUpdatesCache: Map<string, qdf.RealtimeTripUpdate[]>;
 	tripUpdateSignatures: Map<string, string>;
+	/** Sparse realtime overlay index: changed trip handles from last QDF revision */
+	lastRealtimeChangedHandles: Set<number>;
 	timer: Timer;
 	/** AU/SEQ: inferred trip chains (prev/next) from static topology + realtime gate */
 	seqDiagram?: SeqDiagramTopology;
@@ -118,6 +151,9 @@ export type CacheContext = {
 		serviceCalendarLoaded: boolean;
 		serviceCalendarRules: Map<string, Array<{ startEpochDay: number; endEpochDay: number; weekdayMask: number }>>;
 		serviceCalendarExceptions: Map<string, Map<number, 1 | 2>>;
+		// Inverse indexes for lazy date materialisation (date -> service handles, service -> trip handles)
+		servicesByDateHandle: Map<string, Set<number>>;
+		tripsByServiceHandle: Map<number, Set<number>>;
 		serviceDayStarts: Map<string, number>;
 		availableServiceDates: string[] | null;
 		operationalServiceDates: Set<string>;

@@ -267,21 +267,23 @@ export class TRAX {
 				return;
 			}
 			const retainedState = cache.retainStaticRefreshState(this.ctx);
-			const nextGtfs = this.gtfs;
-			// A full Australia generation cannot coexist with its replacement under
-			// the process RSS limit. Retire the JS graph before reusing QDF storage.
-			this.ctx = {
-				raw: cache.createEmptyRawCache(),
-				augmented: cache.createAugmentedCacheWithConfig(this.config),
-				config: this.config,
-				gtfs: nextGtfs,
-				pluginState: new Map(),
-				runtimeState: cache.createRuntimeState(),
-			};
-			await loadStatic(nextGtfs, this.config, this.reportSource);
-			this.validateFeedTimeZones(nextGtfs);
-			const nextCtx = await cache.refreshStaticCache(nextGtfs, this.config, retainedState);
-			this.ctx = nextCtx;
+			const previousCtx = this.ctx;
+			const previousGtfs = this.gtfs;
+			let nextGtfs: import("qdf-gtfs").GTFS | null = null;
+			let nextCtx: cache.CacheContext | null = null;
+			try {
+				const { createGtfs } = await import("./gtfsInterfaceLayer.js");
+				nextGtfs = await createGtfs(this.config, false, this.reportSource);
+				this.validateFeedTimeZones(nextGtfs);
+				nextCtx = await cache.refreshStaticCache(nextGtfs, this.config, retainedState);
+			} catch (error) {
+				logger.error(`Static refresh failed, retaining previous generation: ${error instanceof Error ? error.message : String(error)}`, { module:"index", function:"refreshStatic" });
+				if (nextGtfs) try { nextGtfs.clearStatic(); } catch {}
+				throw error;
+			}
+			this.gtfs = nextGtfs!;
+			this.ctx = nextCtx!;
+			setTimeout(() => { try { previousGtfs.clearStatic(); } catch {} }, 30_000).unref?.();
 		}).finally(() => {
 			this.staticRefreshInFlight = null;
 		});
