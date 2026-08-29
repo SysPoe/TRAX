@@ -729,3 +729,18 @@ export type {
 	CarriageProducts,
 	CarriageSegment,
 } from "./region-specific/CA/VIA/consist.js";
+
+export {
+	DEFAULT_RESOLVER_CONFIG,
+	QRT_WIFI_RESOLVER_VERSION,
+	haversineM,
+	normalizeNasid,
+	resolveVehicleObservation,
+} from "./qrtWifiResolver.js";
+export type {
+	ResolverConfig,
+	VehicleObservation,
+	VehicleObservationCandidate,
+	VehicleObservationResolution,
+	ResolveOptions,
+} from "./qrtWifiResolver.js";
