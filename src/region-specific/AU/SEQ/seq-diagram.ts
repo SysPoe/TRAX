@@ -489,10 +489,32 @@ export function revalidateSeqDiagramRealtimeEdges(ctx: CacheContext, affectedTri
 /** Build topology and attach to ctx (static refresh, AU/SEQ). */
 export function buildAndApplySeqDiagram(ctx: CacheContext, gtfs: GTFS, trips: Trip[]): SeqDiagramTopology {
 	const stopTimesByLocalTrip = new Map(
-		trips.map((trip) => [
-			trip.trip_id,
-			ctx.augmented.rawStopTimesCache.get(entityKey({ feedId: trip.feed_id, localId: trip.trip_id })) ?? [],
-		]),
+		trips.map((trip) => {
+			const bounds = ctx.raw.tripStopTimeBoundsByKey.get(
+				entityKey({ feedId: trip.feed_id, localId: trip.trip_id }),
+			);
+			const stopTimes = bounds
+				? ([
+						{
+							trip_id: trip.trip_id,
+							feed_id: trip.feed_id,
+							stop_id: bounds.first_stop_id,
+							stop_sequence: 1,
+							arrival_time: bounds.start_time,
+							departure_time: bounds.start_time,
+						},
+						{
+							trip_id: trip.trip_id,
+							feed_id: trip.feed_id,
+							stop_id: bounds.last_stop_id,
+							stop_sequence: 2,
+							arrival_time: bounds.end_time,
+							departure_time: bounds.end_time,
+						},
+					] as StopTime[])
+				: [];
+			return [trip.trip_id, stopTimes] as const;
+		}),
 	);
 	const top = buildSeqDiagramTopology(gtfs, trips, stopTimesByLocalTrip);
 	applySeqDiagramToInstances(ctx, top);

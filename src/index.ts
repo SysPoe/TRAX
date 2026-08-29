@@ -4,7 +4,7 @@ import * as qrTravel from "./region-specific/AU/SEQ/qr-travel/qr-travel-tracker.
 import * as timeUtils from "./utils/time.js";
 import { EventEmitter } from "events";
 import { GTFS, RealtimeVehiclePosition, Route, Stop, Trip } from "qdf-gtfs";
-import type { QualifiedEntityId } from "qdf-gtfs";
+import type { QualifiedEntityId, StopTime } from "qdf-gtfs";
 import logger from "./utils/logger.js";
 import { findExpressString } from "./utils/SRT.js";
 import {
@@ -30,7 +30,7 @@ import {
 	type TraxConfig,
 	resolveConfig,
 } from "./config.js";
-import { createGtfs, loadRealtime, type SourceReport } from "./gtfsInterfaceLayer.js";
+import { createGtfs, loadRealtime, loadStatic, type SourceReport } from "./gtfsInterfaceLayer.js";
 import { entityKey } from "./identity.js";
 import { createVehicleFormation, type VehicleFormation } from "./utils/vehicleModel.js";
 import { getOnboardReachableStops, type ReachabilityOrigin } from "./utils/passengerContinuations.js";
@@ -53,6 +53,8 @@ export interface SourceHealth {
 	transport: SourceReport["transport"] | null;
 }
 
+export type StaticRefreshCoordinator = <T>(task: () => Promise<T>) => Promise<T>;
+
 export class TRAX {
 	public config: TraxConfig;
 	public gtfs?: GTFS;
@@ -64,6 +66,7 @@ export class TRAX {
 	private staticRefreshInFlight: Promise<void> | null = null;
 	private realtimeRefreshInFlight: Promise<void> | null = null;
 	private sourceHealth = new Map<string, SourceHealth>();
+	private coordinateStaticRefresh: StaticRefreshCoordinator;
 
 	private hasRealtimeSources(): boolean {
 		return (
@@ -73,9 +76,14 @@ export class TRAX {
 		);
 	}
 
-	constructor(network: NetworkDefinition, options: RuntimeOptions = {}) {
+	constructor(
+		network: NetworkDefinition,
+		options: RuntimeOptions = {},
+		coordinateStaticRefresh: StaticRefreshCoordinator = (task) => task(),
+	) {
 		this.config = resolveConfig(network, options);
 		this.events = new EventEmitter();
+		this.coordinateStaticRefresh = coordinateStaticRefresh;
 
 		this.ctx = {
 			raw: cache.createEmptyRawCache(),
@@ -232,7 +240,12 @@ export class TRAX {
 	 */
 	private async ensureGtfs(): Promise<GTFS> {
 		if (this.gtfs) return this.gtfs;
+		await this.refreshStatic();
+		if (!this.gtfs) throw new Error("Static GTFS refresh completed without a snapshot");
+		return this.gtfs;
+	}
 
+	private async initializeGtfs(): Promise<void> {
 		const gtfs = await createGtfs(this.config, false, this.reportSource);
 		this.validateFeedTimeZones(gtfs);
 		this.ctx.augmented.timer.start("TRAX:initialCacheRefresh");
@@ -241,7 +254,6 @@ export class TRAX {
 		this.gtfs = gtfs;
 		this.ctx = nextCtx;
 
-		return this.gtfs;
 	}
 
 	/**
@@ -249,15 +261,28 @@ export class TRAX {
 	 */
 	public async refreshStatic(): Promise<void> {
 		if (this.staticRefreshInFlight) return this.staticRefreshInFlight;
-		this.staticRefreshInFlight = (async () => {
-			await this.ensureGtfs();
-			const nextGtfs = await createGtfs(this.config, false, this.reportSource);
+		this.staticRefreshInFlight = this.coordinateStaticRefresh(async () => {
+			if (!this.gtfs) {
+				await this.initializeGtfs();
+				return;
+			}
+			const retainedState = cache.retainStaticRefreshState(this.ctx);
+			const nextGtfs = this.gtfs;
+			// A full Australia generation cannot coexist with its replacement under
+			// the process RSS limit. Retire the JS graph before reusing QDF storage.
+			this.ctx = {
+				raw: cache.createEmptyRawCache(),
+				augmented: cache.createAugmentedCacheWithConfig(this.config),
+				config: this.config,
+				gtfs: nextGtfs,
+				pluginState: new Map(),
+				runtimeState: cache.createRuntimeState(),
+			};
+			await loadStatic(nextGtfs, this.config, this.reportSource);
 			this.validateFeedTimeZones(nextGtfs);
-			const nextCtx = await cache.refreshStaticCache(nextGtfs, this.config, this.ctx);
-			// Readers use the prior immutable snapshot until both objects are ready.
-			this.gtfs = nextGtfs;
+			const nextCtx = await cache.refreshStaticCache(nextGtfs, this.config, retainedState);
 			this.ctx = nextCtx;
-		})().finally(() => {
+		}).finally(() => {
 			this.staticRefreshInFlight = null;
 		});
 		return this.staticRefreshInFlight;
@@ -442,6 +467,11 @@ export class TRAX {
 		cache.getVehicleTripInstance(this.ctx, vehicle);
 	public getAugmentedStops = (stop?: QualifiedEntityId) => cache.getAugmentedStops(this.ctx, stop);
 	public getAugmentedStopTimes = (trip?: QualifiedEntityId) => cache.getAugmentedStopTimes(this.ctx, trip);
+	public getAugmentedRawStopTimePage = (options: {
+		offset: number;
+		limit: number;
+		predicate?: (value: StopTime | null) => boolean;
+	}) => cache.getAugmentedRawStopTimePage(this.ctx, options);
 	public getBaseStopTimes = (trip: QualifiedEntityId) => cache.getBaseStopTimes(this.ctx, trip);
 	public getStations = () => stations.getAugmentedRailStations(this.ctx);
 	public getRawTrips = (filter?: Partial<Trip>) => cache.getRawTrips(this.ctx, filter);

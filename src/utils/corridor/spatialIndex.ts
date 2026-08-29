@@ -52,15 +52,25 @@ export class CoordinateGridIndex<T = string> {
 		b: { lat: number; lon: number },
 		expandedMeters: number,
 	): SpatialPoint<T>[] {
-		const latitude = (a.lat + b.lat) / 2;
+		return this.querySegmentCoordinates(a.lat, a.lon, b.lat, b.lon, expandedMeters);
+	}
+
+	querySegmentCoordinates(
+		aLat: number,
+		aLon: number,
+		bLat: number,
+		bLon: number,
+		expandedMeters: number,
+	): SpatialPoint<T>[] {
+		const latitude = (aLat + bLat) / 2;
 		const latExpansion = expandedMeters / 111_320;
 		const lonScale = Math.max(0.01, Math.cos((latitude * Math.PI) / 180));
 		const lonExpansion = expandedMeters / (111_320 * lonScale);
 		return this.queryBounds(
-			Math.min(a.lat, b.lat) - latExpansion,
-			Math.max(a.lat, b.lat) + latExpansion,
-			Math.min(a.lon, b.lon) - lonExpansion,
-			Math.max(a.lon, b.lon) + lonExpansion,
+			Math.min(aLat, bLat) - latExpansion,
+			Math.max(aLat, bLat) + latExpansion,
+			Math.min(aLon, bLon) - lonExpansion,
+			Math.max(aLon, bLon) + lonExpansion,
 		);
 	}
 

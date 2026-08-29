@@ -32,7 +32,7 @@ type SeqCapacityState = {
 	loaded: boolean;
 	loadedFileIdentity: string | null;
 	dayTypeCache: Map<string, string>;
-	routeNameCache: Map<string, string | null>;
+	routeLinesCache: Map<string, readonly string[]>;
 };
 
 function getState(ctx: CacheContext): SeqCapacityState {
@@ -41,7 +41,7 @@ function getState(ctx: CacheContext): SeqCapacityState {
 		loaded: false,
 		loadedFileIdentity: null,
 		dayTypeCache: new Map(),
-		routeNameCache: new Map(),
+		routeLinesCache: new Map(),
 	}));
 }
 
@@ -323,12 +323,15 @@ export function getServiceCapacity(
 	if (!state.loaded || stopTime.passing) return ServiceCapacity.UNKNOWN;
 
 	const routeKey = entityKey({ feedId: inst.feed_id, localId: inst.route_id });
-	let routeName = state.routeNameCache.get(routeKey);
-	if (routeName === undefined) {
-		routeName = getRawRoutes(ctx, { feed_id: inst.feed_id, route_id: inst.route_id })[0]?.route_long_name ?? null;
-		state.routeNameCache.set(routeKey, routeName);
+	let candidateLines = state.routeLinesCache.get(routeKey);
+	if (!candidateLines) {
+		const routeName = getRawRoutes(ctx, { feed_id: inst.feed_id, route_id: inst.route_id })[0]?.route_long_name;
+		candidateLines = routeName
+			? [...new Set(routeName.split(" - ").map((part) => ROUTE_KEYWORD_MAP[part.trim()]).filter(Boolean))]
+			: [];
+		state.routeLinesCache.set(routeKey, candidateLines);
 	}
-	if (!routeName) return ServiceCapacity.UNKNOWN;
+	if (candidateLines.length === 0) return ServiceCapacity.UNKNOWN;
 
 	const seq = stopTime._stopTime?.stop_sequence ?? 0;
 	const direction = _dirOverride ?? getTripDirection(inst, seq);
@@ -353,17 +356,6 @@ export function getServiceCapacity(
 	if (departureTime === null) return ServiceCapacity.UNKNOWN;
 
 	const timeBucket = formatTimeBucket(departureTime);
-
-	// Map routeName (e.g. "Brisbane City - Ferny Grove") to potential lines (e.g. "Ferny Grove Line")
-	const routeParts = routeName.split(" - ");
-	const candidateLines = new Set<string>();
-
-	for (const part of routeParts) {
-		const trimmed = part.trim();
-		if (ROUTE_KEYWORD_MAP[trimmed]) candidateLines.add(ROUTE_KEYWORD_MAP[trimmed]);
-	}
-
-	if (candidateLines.size === 0) return ServiceCapacity.UNKNOWN;
 
 	for (const lineName of candidateLines) {
 		const rMap = state.capacityIndex.get(lineName);

@@ -1,13 +1,13 @@
 import type { Shape, Stop, StopTime, Trip } from "qdf-gtfs";
 import type { CacheContext } from "../../cache/types.js";
-import { getRawStopTimes } from "../../cache/gtfsReads.js";
+import { getStopTimesForTrips } from "../../cache/gtfsReads.js";
 import { canonicalStationIdentity } from "../../config.js";
 import { entityKey } from "../../identity.js";
-import { cumulativePolylineDistance } from "./geometry.js";
+import { coordinateDistanceMeters } from "./geometry.js";
 import { CoordinateGridIndex } from "./spatialIndex.js";
-import { projectPointOnSegment } from "./projection.js";
+import { projectCoordinatesOnSegment } from "./projection.js";
 import { qualifiedRouteDirectionKey } from "./keys.js";
-import { buildPatternIndex } from "./patternIndex.js";
+import { createPatternIndexBuilder } from "./patternIndex.js";
 import type { RoutePattern, StationGeometry, StationProjection } from "./types.js";
 import type { CorridorResolutionConfig } from "./types.js";
 
@@ -19,19 +19,28 @@ export interface IndexedShapePoint {
 	nativeShapeDistance: number | null;
 }
 
+export interface PackedShapePoints {
+	readonly length: number;
+	readonly latitudes: Float64Array;
+	readonly longitudes: Float64Array;
+	readonly geometricDistances: Float64Array;
+	/** NaN represents a missing GTFS shape_dist_traveled value. */
+	readonly nativeDistances: Float64Array;
+}
+
 export interface IndexedShape {
 	key: string;
 	feedId: string;
 	shapeId: string;
-	points: IndexedShapePoint[];
+	points: IndexedShapePoint[] | PackedShapePoints;
 	lengthMeters: number;
 	routeDirections: Set<string>;
 	scheduledStations: Set<string>;
 	tripIds: Set<string>;
 	serviceIds: Set<string>;
 	projections: Map<string, StationProjection[]>;
-	/** Native chainage samples, sorted once for binary anchor lookup. */
-	nativeDistancePoints: Array<{ nativeShapeDistance: number; geometricDistanceMeters: number }>;
+	/** Point indexes with monotonic native chainage, for binary anchor lookup. */
+	nativeDistancePoints: Uint32Array;
 	nativeDistanceScale: number;
 	/** Every retained station projection in geometric chainage order. */
 	orderedProjections: Array<{ stationId: string; projection: StationProjection }>;
@@ -94,18 +103,62 @@ function getStationGeometry(
 	return result;
 }
 
-function shapePoints(rows: Shape[]): IndexedShapePoint[] {
-	const sorted = [...rows].sort((a, b) => a.shape_pt_sequence - b.shape_pt_sequence);
-	const distances = cumulativePolylineDistance(
-		sorted.map((row) => ({ lat: row.shape_pt_lat, lon: row.shape_pt_lon })),
-	);
-	return sorted.map((row, index) => ({
-		lat: row.shape_pt_lat,
-		lon: row.shape_pt_lon,
-		sequence: row.shape_pt_sequence,
-		geometricDistanceMeters: distances.cumulativeMeters[index],
-		nativeShapeDistance: finite(row.shape_dist_traveled),
-	}));
+function isPackedShapePoints(points: IndexedShape["points"]): points is PackedShapePoints {
+	return !Array.isArray(points);
+}
+
+export function indexedShapePoint(shape: IndexedShape, index: number): IndexedShapePoint {
+	if (!isPackedShapePoints(shape.points)) return shape.points[index];
+	const nativeDistance = shape.points.nativeDistances[index];
+	return {
+		lat: shape.points.latitudes[index],
+		lon: shape.points.longitudes[index],
+		sequence: index,
+		geometricDistanceMeters: shape.points.geometricDistances[index],
+		nativeShapeDistance: Number.isNaN(nativeDistance) ? null : nativeDistance,
+	};
+}
+
+function shapePointValues(points: IndexedShape["points"], index: number) {
+	if (!isPackedShapePoints(points)) {
+		const point = points[index];
+		return {
+			lat: point.lat,
+			lon: point.lon,
+			geometricDistanceMeters: point.geometricDistanceMeters,
+			nativeShapeDistance: point.nativeShapeDistance,
+		};
+	}
+	const nativeDistance = points.nativeDistances[index];
+	return {
+		lat: points.latitudes[index],
+		lon: points.longitudes[index],
+		geometricDistanceMeters: points.geometricDistances[index],
+		nativeShapeDistance: Number.isNaN(nativeDistance) ? null : nativeDistance,
+	};
+}
+
+function shapePoints(rows: Shape[]): PackedShapePoints {
+	rows.sort((a, b) => a.shape_pt_sequence - b.shape_pt_sequence);
+	const latitudes = new Float64Array(rows.length);
+	const longitudes = new Float64Array(rows.length);
+	const geometricDistances = new Float64Array(rows.length);
+	const nativeDistances = new Float64Array(rows.length);
+	for (let index = 0; index < rows.length; index++) {
+		const row = rows[index];
+		latitudes[index] = row.shape_pt_lat;
+		longitudes[index] = row.shape_pt_lon;
+		nativeDistances[index] = finite(row.shape_dist_traveled) ?? Number.NaN;
+		if (index > 0) {
+			geometricDistances[index] =
+				geometricDistances[index - 1] +
+				coordinateDistanceMeters(
+					{ lat: latitudes[index - 1], lon: longitudes[index - 1] },
+					{ lat: latitudes[index], lon: longitudes[index] },
+				);
+		}
+	}
+	return { length: rows.length, latitudes, longitudes, geometricDistances, nativeDistances };
 }
 
 function appendProjection(
@@ -164,13 +217,26 @@ function indexShapeProjections(
 	config: CorridorResolutionConfig,
 ): void {
 	for (let index = 0; index < shape.points.length - 1; index++) {
-		const from = shape.points[index];
-		const to = shape.points[index + 1];
-		const candidates = grid.querySegment(from, to, config.geometry.endpointSnapMaxMeters);
+		const from = shapePointValues(shape.points, index);
+		const to = shapePointValues(shape.points, index + 1);
+		const candidates = grid.querySegmentCoordinates(
+			from.lat,
+			from.lon,
+			to.lat,
+			to.lon,
+			config.geometry.endpointSnapMaxMeters,
+		);
 		const segmentLength = to.geometricDistanceMeters - from.geometricDistanceMeters;
 		for (const candidate of candidates) {
 			const { stationId, source: coordinateSource } = candidate.id;
-			const projected = projectPointOnSegment(candidate, from, to);
+			const projected = projectCoordinatesOnSegment(
+				candidate.lat,
+				candidate.lon,
+				from.lat,
+				from.lon,
+				to.lat,
+				to.lon,
+			);
 			const nativeStart = from.nativeShapeDistance;
 			const nativeEnd = to.nativeShapeDistance;
 			const nativeShapeDistance =
@@ -197,23 +263,26 @@ function indexShapeProjections(
 
 /** Finalize read-heavy per-shape indexes after points and projections are populated. */
 export function finalizeShapeGeometryIndex(shape: IndexedShape): void {
-	const nativeDistancePoints = shape.points
-		.filter((point) => point.nativeShapeDistance != null)
-		.map((point) => ({
-			nativeShapeDistance: point.nativeShapeDistance!,
-			geometricDistanceMeters: point.geometricDistanceMeters,
-		}));
+	const nativeDistancePointIndexes: number[] = [];
 	let monotonic = true;
-	for (let index = 1; index < nativeDistancePoints.length; index++) {
-		if (nativeDistancePoints[index].nativeShapeDistance < nativeDistancePoints[index - 1].nativeShapeDistance) {
+	let previousNativeDistance = -Infinity;
+	let minimumNativeDistance = Infinity;
+	let maximumNativeDistance = -Infinity;
+	for (let index = 0; index < shape.points.length; index++) {
+		const nativeDistance = shapePointValues(shape.points, index).nativeShapeDistance;
+		if (nativeDistance == null) continue;
+		if (nativeDistance < previousNativeDistance) {
 			monotonic = false;
 			break;
 		}
+		previousNativeDistance = nativeDistance;
+		minimumNativeDistance = Math.min(minimumNativeDistance, nativeDistance);
+		maximumNativeDistance = Math.max(maximumNativeDistance, nativeDistance);
+		nativeDistancePointIndexes.push(index);
 	}
-	shape.nativeDistancePoints = monotonic ? nativeDistancePoints : [];
-	if (nativeDistancePoints.length > 1) {
-		const values = nativeDistancePoints.map((point) => point.nativeShapeDistance);
-		shape.nativeDistanceScale = Math.max(1, (Math.max(...values) - Math.min(...values)) / 100);
+	shape.nativeDistancePoints = monotonic ? Uint32Array.from(nativeDistancePointIndexes) : new Uint32Array();
+	if (nativeDistancePointIndexes.length > 1 && monotonic) {
+		shape.nativeDistanceScale = Math.max(1, (maximumNativeDistance - minimumNativeDistance) / 100);
 	} else {
 		shape.nativeDistanceScale = 1;
 	}
@@ -224,30 +293,26 @@ export function finalizeShapeGeometryIndex(shape: IndexedShape): void {
 	shape.orderedProjections.sort((a, b) => a.projection.distanceAlongMeters - b.projection.distanceAlongMeters);
 }
 
-/** Build all feed-qualified station, shape, and route-pattern indexes for one static snapshot. */
-export function buildCorridorIndex(ctx: CacheContext): CorridorIndex {
+const STOP_TIME_BATCH_TRIPS = 512;
+
+/** Build all indexes while limiting native stop-time materialization to one trip batch. */
+export function buildCorridorIndex(ctx: CacheContext, trips: readonly Trip[] = ctx.raw.consideredTrips ?? []): CorridorIndex {
 	const config = ctx.config.corridor;
-	const trips = ctx.raw.consideredTrips ?? [];
-	const stops = ctx.gtfs?.getStops() ?? [...ctx.raw.stopsByKey.values()];
+	const stops = [...ctx.raw.stopsByKey.values()];
 	const relevantStationIds = new Set<string>();
-	for (const trip of trips) {
-		for (const stopTime of getRawStopTimes(ctx, { feedId: trip.feed_id, localId: trip.trip_id })) {
+	const shapes = new Map<string, IndexedShape>();
+	const shapesByRouteDirection = new Map<string, Set<string>>();
+	const patternBuilder = createPatternIndexBuilder(ctx);
+
+	const processTrip = (trip: Trip, stopTimes: readonly StopTime[]) => {
+		for (const stopTime of stopTimes) {
 			const stop = getStop(ctx, stopTime.feed_id, stopTime.stop_id);
 			relevantStationIds.add(
 				stationKey(ctx, stop ?? { feed_id: stopTime.feed_id, stop_id: stopTime.stop_id, parent_station: null }),
 			);
 		}
-	}
-	const stationGeometry = getStationGeometry(
-		stops,
-		ctx,
-		relevantStationIds.size > 0 ? relevantStationIds : undefined,
-	);
-	const shapes = new Map<string, IndexedShape>();
-	const shapesByRouteDirection = new Map<string, Set<string>>();
-	if (ctx.gtfs) {
-		for (const trip of trips) {
-			if (!trip.shape_id) continue;
+		patternBuilder.addTrip(trip, stopTimes);
+		if (ctx.gtfs && trip.shape_id) {
 			const shapeKey = entityKey({ feedId: trip.feed_id, localId: trip.shape_id });
 			let shape = shapes.get(shapeKey);
 			if (!shape) {
@@ -258,13 +323,13 @@ export function buildCorridorIndex(ctx: CacheContext): CorridorIndex {
 					feedId: trip.feed_id,
 					shapeId: trip.shape_id,
 					points,
-					lengthMeters: points.at(-1)?.geometricDistanceMeters ?? 0,
+					lengthMeters: points.geometricDistances.at(-1) ?? 0,
 					routeDirections: new Set(),
 					scheduledStations: new Set(),
 					tripIds: new Set(),
 					serviceIds: new Set(),
 					projections: new Map(),
-					nativeDistancePoints: [],
+					nativeDistancePoints: new Uint32Array(),
 					nativeDistanceScale: 1,
 					orderedProjections: [],
 				};
@@ -273,7 +338,7 @@ export function buildCorridorIndex(ctx: CacheContext): CorridorIndex {
 			shape.routeDirections.add(qualifiedRouteDirectionKey(trip.feed_id, trip.route_id, trip.direction_id));
 			shape.tripIds.add(entityKey({ feedId: trip.feed_id, localId: trip.trip_id }));
 			shape.serviceIds.add(trip.service_id);
-			for (const stopTime of getRawStopTimes(ctx, { feedId: trip.feed_id, localId: trip.trip_id })) {
+			for (const stopTime of stopTimes) {
 				const stop = getStop(ctx, stopTime.feed_id, stopTime.stop_id);
 				shape.scheduledStations.add(
 					stationKey(
@@ -287,6 +352,44 @@ export function buildCorridorIndex(ctx: CacheContext): CorridorIndex {
 			group.add(shapeKey);
 			shapesByRouteDirection.set(routeDirectionKey, group);
 		}
+	};
+
+	const tripsByFeed = new Map<string, Trip[]>();
+	for (const trip of trips) {
+		const group = tripsByFeed.get(trip.feed_id) ?? [];
+		group.push(trip);
+		tripsByFeed.set(trip.feed_id, group);
+	}
+	for (const [feedId, feedTrips] of tripsByFeed) {
+		for (let offset = 0; offset < feedTrips.length; offset += STOP_TIME_BATCH_TRIPS) {
+			const batch = feedTrips.slice(offset, offset + STOP_TIME_BATCH_TRIPS);
+			const uncached = batch.filter(
+				(trip) => !ctx.augmented.rawStopTimesCache.has(entityKey({ feedId, localId: trip.trip_id })),
+			);
+			const rows =
+				uncached.length > 0 && ctx.gtfs
+					? getStopTimesForTrips(ctx, feedId, uncached.map((trip) => trip.trip_id))
+					: [];
+			const rowsByTrip = new Map<string, StopTime[]>();
+			for (const row of rows) {
+				const key = entityKey({ feedId: row.feed_id, localId: row.trip_id });
+				const tripRows = rowsByTrip.get(key) ?? [];
+				tripRows.push(row);
+				rowsByTrip.set(key, tripRows);
+			}
+			for (const trip of batch) {
+				const key = entityKey({ feedId, localId: trip.trip_id });
+				processTrip(trip, ctx.augmented.rawStopTimesCache.get(key) ?? rowsByTrip.get(key) ?? []);
+			}
+		}
+	}
+
+	const stationGeometry = getStationGeometry(
+		stops,
+		ctx,
+		relevantStationIds.size > 0 ? relevantStationIds : undefined,
+	);
+	if (ctx.gtfs) {
 		let projectionGrid: CoordinateGridIndex<ProjectionCoordinate> | null = null;
 		for (const shape of shapes.values()) {
 			const grid = projectionGrid ??= buildProjectionGrid(
@@ -298,7 +401,7 @@ export function buildCorridorIndex(ctx: CacheContext): CorridorIndex {
 		}
 	}
 
-	const patternData = buildPatternIndex(ctx, trips);
+	const patternData = patternBuilder.build();
 	return {
 		stationGeometry,
 		shapes,

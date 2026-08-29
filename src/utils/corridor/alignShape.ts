@@ -1,5 +1,5 @@
 import type { CorridorResolutionConfig, JourneyAnchor, StationProjection } from "./types.js";
-import type { IndexedShape } from "./shapeIndex.js";
+import { indexedShapePoint, type IndexedShape } from "./shapeIndex.js";
 
 interface AlignmentCandidate {
 	key: string;
@@ -49,8 +49,8 @@ function nativePosition(
 	const points = shape.nativeDistancePoints;
 	if (points.length < 2) {
 		for (let index = 0; index < shape.points.length - 1; index++) {
-			const from = shape.points[index];
-			const to = shape.points[index + 1];
+			const from = indexedShapePoint(shape, index);
+			const to = indexedShapePoint(shape, index + 1);
 			const fromNative = from.nativeShapeDistance;
 			const toNative = to.nativeShapeDistance;
 			if (fromNative == null || toNative == null || toNative <= fromNative) continue;
@@ -70,14 +70,14 @@ function nativePosition(
 	let high = points.length - 1;
 	while (low < high) {
 		const middle = Math.floor((low + high + 1) / 2);
-		if (points[middle].nativeShapeDistance <= target) low = middle;
+		if ((indexedShapePoint(shape, points[middle]).nativeShapeDistance ?? Infinity) <= target) low = middle;
 		else high = middle - 1;
 	}
 	for (let index = Math.max(0, low - 1); index < Math.min(points.length - 1, low + 1); index++) {
-		const from = points[index];
-		const to = points[index + 1];
-		const fromNative = from.nativeShapeDistance;
-		const toNative = to.nativeShapeDistance;
+		const from = indexedShapePoint(shape, points[index]);
+		const to = indexedShapePoint(shape, points[index + 1]);
+		const fromNative = from.nativeShapeDistance!;
+		const toNative = to.nativeShapeDistance!;
 		if (toNative <= fromNative) continue;
 		const fraction = (target - fromNative) / (toNative - fromNative);
 		if (fraction < -1e-6 || fraction > 1 + 1e-6) continue;

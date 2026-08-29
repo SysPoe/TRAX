@@ -5,19 +5,21 @@ export interface SegmentProjection {
 	lateralDistanceMeters: number;
 }
 
-/** Project one coordinate onto a segment in a local equirectangular plane. */
-export function projectPointOnSegment(
-	point: { lat: number; lon: number },
-	a: { lat: number; lon: number },
-	b: { lat: number; lon: number },
+export function projectCoordinatesOnSegment(
+	pointLat: number,
+	pointLon: number,
+	aLat: number,
+	aLon: number,
+	bLat: number,
+	bLon: number,
 ): SegmentProjection {
-	const latitude = (point.lat + a.lat + b.lat) / 3;
+	const latitude = (pointLat + aLat + bLat) / 3;
 	const longitudeScale = Math.max(0.01, Math.cos((latitude * Math.PI) / 180));
 	const scale = 111_320;
-	const px = (point.lon - a.lon) * scale * longitudeScale;
-	const py = (point.lat - a.lat) * scale;
-	const bx = (b.lon - a.lon) * scale * longitudeScale;
-	const by = (b.lat - a.lat) * scale;
+	const px = (pointLon - aLon) * scale * longitudeScale;
+	const py = (pointLat - aLat) * scale;
+	const bx = (bLon - aLon) * scale * longitudeScale;
+	const by = (bLat - aLat) * scale;
 	const denominator = bx * bx + by * by;
 	if (denominator <= Number.EPSILON) {
 		return { segmentFraction: 0, lateralDistanceMeters: Math.hypot(px, py) };
@@ -29,6 +31,15 @@ export function projectPointOnSegment(
 		segmentFraction: fraction,
 		lateralDistanceMeters: Math.hypot(px - projectedX, py - projectedY),
 	};
+}
+
+/** Project one coordinate onto a segment in a local equirectangular plane. */
+export function projectPointOnSegment(
+	point: { lat: number; lon: number },
+	a: { lat: number; lon: number },
+	b: { lat: number; lon: number },
+): SegmentProjection {
+	return projectCoordinatesOnSegment(point.lat, point.lon, a.lat, a.lon, b.lat, b.lon);
 }
 
 /** Project a coordinate onto every segment and retain the closest positions. */

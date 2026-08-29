@@ -22,7 +22,12 @@ export const seqPlugin: TransitPlugin = {
 		await Promise.all([loadSEQStaticMetadata(ctx), ensureServiceCapacityData(ctx)]);
 	},
 	afterSnapshotBuilt(ctx) {
-		if (ctx.gtfs) buildAndApplySeqDiagram(ctx, ctx.gtfs, Array.from(ctx.augmented.rawTripsRec.values()));
+		if (ctx.gtfs)
+			buildAndApplySeqDiagram(
+				ctx,
+				ctx.gtfs,
+				Array.from(ctx.augmented.rawTripsRec.values()).filter((trip) => trip.feed_id === "translink-seq"),
+			);
 	},
 	afterRealtime(ctx, changedTripKeys) {
 		refreshQRTTrainsInBackground(ctx);

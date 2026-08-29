@@ -12,7 +12,7 @@ import {
 } from "./corridor/resolver.js";
 import type { CorridorResolution, JourneyContext } from "./corridor/types.js";
 import { getFeedTimeZone, resolveTripNumber } from "../config.js";
-import { getToday } from "./time.js";
+import { addDaysToServiceDate, getEpochDayFromServiceDate, getServiceDayStart, getToday } from "./time.js";
 import { encodeTripInstanceId, entityKey } from "../identity.js";
 import { isNonRevenueTrip } from "./considered.js";
 import { pluginSupportsFeed } from "../plugins/types.js";
@@ -64,8 +64,8 @@ export type RunSeries = {
 	vehicle_sightings: { vehicle_id: string; trip_id: string }[];
 };
 
-export const EAGER_SERVICE_DATE_PAST_DAYS = 1;
-export const EAGER_SERVICE_DATE_FUTURE_DAYS = 7;
+export const OPERATIONAL_HORIZON_PAST_DAYS = 1;
+export const OPERATIONAL_HORIZON_FUTURE_DAYS = 1;
 
 export type AugmentTripOptions = {
 	/** Restrict construction to explicit start service dates for lazy materialization. */
@@ -108,6 +108,50 @@ function dateToEpochDays(ymd: number | string): number {
 	);
 }
 
+/** Select scheduled starts whose full GTFS interval overlaps today +/- one day. */
+export function getOperationalServiceDatesForTrip(
+	trip: qdf.Trip,
+	ctx: cache.CacheContext,
+	bounds: qdf.TripStopTimeBounds | undefined = ctx.raw.tripStopTimeBoundsByKey.get(
+		entityKey({ feedId: trip.feed_id, localId: trip.trip_id }),
+	),
+): string[] {
+	if (!bounds) return [];
+	const timezone = getFeedTimeZone(ctx.config, trip.feed_id);
+	const serviceDayStart = (serviceDate: string) => {
+		const key = `${timezone}\0${serviceDate}`;
+		let value = ctx.runtimeState.serviceDayStarts.get(key);
+		if (value === undefined) {
+			value = getServiceDayStart(serviceDate, timezone);
+			ctx.runtimeState.serviceDayStarts.set(key, value);
+		}
+		return value;
+	};
+	let window = ctx.runtimeState.operationalWindows.get(trip.feed_id);
+	if (!window) {
+		const today = getToday(timezone);
+		window = {
+			todayEpochDay: getEpochDayFromServiceDate(today),
+			horizonStart: serviceDayStart(addDaysToServiceDate(today, -OPERATIONAL_HORIZON_PAST_DAYS)),
+			horizonEnd: serviceDayStart(addDaysToServiceDate(today, OPERATIONAL_HORIZON_FUTURE_DAYS + 1)),
+		};
+		ctx.runtimeState.operationalWindows.set(trip.feed_id, window);
+	}
+	const lookbackDays = Math.max(1, Math.ceil(bounds.end_time / 86_400) + 1);
+	const candidateDates = getServiceDatesByTrip(
+		{ feedId: trip.feed_id, localId: trip.trip_id },
+		ctx,
+		window.todayEpochDay - OPERATIONAL_HORIZON_PAST_DAYS - lookbackDays,
+		window.todayEpochDay + OPERATIONAL_HORIZON_FUTURE_DAYS + 1,
+	);
+	const overlapping = candidateDates.filter((serviceDate) => {
+		const start = serviceDayStart(serviceDate);
+		return start + bounds.end_time >= window!.horizonStart && start + bounds.start_time < window!.horizonEnd;
+	});
+	for (const serviceDate of overlapping) ctx.runtimeState.operationalServiceDates.add(serviceDate);
+	return overlapping;
+}
+
 export function augmentTrip(
 	trip: qdf.Trip,
 	ctx: cache.CacheContext,
@@ -116,15 +160,8 @@ export function augmentTrip(
 	options: AugmentTripOptions = {},
 ): AugmentedTrip {
 	ctx.augmented.timer.start("augmentTrip");
-	const todayEpoch = dateToEpochDays(getToday(getFeedTimeZone(ctx.config, trip.feed_id)));
 	const requestedServiceDates =
-		options.serviceDates ??
-		getServiceDatesByTrip(
-			{ feedId: trip.feed_id, localId: trip.trip_id },
-			ctx,
-			todayEpoch - EAGER_SERVICE_DATE_PAST_DAYS,
-			todayEpoch + EAGER_SERVICE_DATE_FUTURE_DAYS,
-		);
+		options.serviceDates ?? getOperationalServiceDatesForTrip(trip, ctx);
 	const serviceDateSet = new Set(requestedServiceDates);
 	// Realtime refreshes must preserve lazily materialized scheduled dates which
 	// are still resident. Explicit lazy calls intentionally build only their date.
@@ -165,11 +202,7 @@ export function augmentTrip(
 
 	ctx.augmented.timer.start("augmentTrip:getTripUpdates");
 	const allUpdates = tripUpdatesCache ? (tripUpdatesCache.get(tripKey) ?? []) : cache.getTripUpdates(ctx, tripRef);
-	const realtimeDateSet = options.realtimeDates
-		? new Set(options.realtimeDates)
-		: options.serviceDates
-			? serviceDateSet
-			: null;
+	const realtimeDateSet = options.realtimeDates ? new Set(options.realtimeDates) : null;
 	const updates = realtimeDateSet
 		? allUpdates.filter((update) => {
 				const startDate = update.trip.start_date;

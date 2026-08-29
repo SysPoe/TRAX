@@ -47,61 +47,72 @@ function edgeMetrics(stopTimes: readonly StopTime[]): { minutes: number[]; dista
 	return { minutes, distances };
 }
 
-/** Build feed-qualified stopping patterns from the considered static trips. */
-export function buildPatternIndex(
-	ctx: CacheContext,
-	trips: readonly Trip[],
-): {
+export type PatternIndexData = {
 	patterns: RoutePattern[];
 	byRouteDirection: Map<string, RoutePattern[]>;
+};
+
+/** Incrementally build patterns so static loading can keep only one bounded row batch in JS. */
+export function createPatternIndexBuilder(ctx: CacheContext): {
+	addTrip(trip: Trip, stopTimes: readonly StopTime[]): void;
+	build(): PatternIndexData;
 } {
 	const patterns: RoutePattern[] = [];
 	const byRouteDirection = new Map<string, RoutePattern[]>();
 	const bySignature = new Map<string, RoutePattern>();
+	return {
+		addTrip(trip, inputStopTimes) {
+			const stopTimes = [...inputStopTimes].sort((a, b) => a.stop_sequence - b.stop_sequence);
+			if (stopTimes.length < 2) return;
+			const stations = stopTimes.map((stopTime) => {
+				const stop = getStop(ctx, stopTime.feed_id, stopTime.stop_id);
+				return stationKey(
+					ctx,
+					stop ?? { feed_id: stopTime.feed_id, stop_id: stopTime.stop_id, parent_station: null },
+				);
+			});
+			const metrics = edgeMetrics(stopTimes);
+			const routeDirectionKey = qualifiedRouteDirectionKey(trip.feed_id, trip.route_id, trip.direction_id);
+			const signature = JSON.stringify([
+				routeDirectionKey,
+				trip.service_id,
+				trip.shape_id,
+				stations,
+			]);
+			const tripId = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
+			const existing = bySignature.get(signature);
+			if (existing) {
+				existing.tripIds.push(tripId);
+				return;
+			}
+			const pattern: RoutePattern = {
+				feedId: trip.feed_id,
+				routeId: trip.route_id,
+				direction: trip.direction_id,
+				serviceId: trip.service_id,
+				shapeId: trip.shape_id,
+				stations,
+				tripIds: [tripId],
+				edgeMinutes: metrics.minutes,
+				edgeDistances: metrics.distances,
+			};
+			bySignature.set(signature, pattern);
+			patterns.push(pattern);
+			const group = byRouteDirection.get(routeDirectionKey) ?? [];
+			group.push(pattern);
+			byRouteDirection.set(routeDirectionKey, group);
+		},
+		build: () => ({ patterns, byRouteDirection }),
+	};
+}
+
+/** Build feed-qualified stopping patterns from the considered static trips. */
+export function buildPatternIndex(ctx: CacheContext, trips: readonly Trip[]): PatternIndexData {
+	const builder = createPatternIndexBuilder(ctx);
 	for (const trip of trips) {
-		const stopTimes = [...getRawStopTimes(ctx, { feedId: trip.feed_id, localId: trip.trip_id })].sort(
-			(a, b) => a.stop_sequence - b.stop_sequence,
-		);
-		if (stopTimes.length < 2) continue;
-		const stations = stopTimes.map((stopTime) => {
-			const stop = getStop(ctx, stopTime.feed_id, stopTime.stop_id);
-			return stationKey(
-				ctx,
-				stop ?? { feed_id: stopTime.feed_id, stop_id: stopTime.stop_id, parent_station: null },
-			);
-		});
-		const metrics = edgeMetrics(stopTimes);
-		const routeDirectionKey = qualifiedRouteDirectionKey(trip.feed_id, trip.route_id, trip.direction_id);
-		const signature = JSON.stringify([
-			routeDirectionKey,
-			trip.service_id,
-			trip.shape_id,
-			stations,
-		]);
-		const tripId = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
-		const existing = bySignature.get(signature);
-		if (existing) {
-			existing.tripIds.push(tripId);
-			continue;
-		}
-		const pattern: RoutePattern = {
-			feedId: trip.feed_id,
-			routeId: trip.route_id,
-			direction: trip.direction_id,
-			serviceId: trip.service_id,
-			shapeId: trip.shape_id,
-			stations,
-			tripIds: [tripId],
-			edgeMinutes: metrics.minutes,
-			edgeDistances: metrics.distances,
-		};
-		bySignature.set(signature, pattern);
-		patterns.push(pattern);
-		const group = byRouteDirection.get(routeDirectionKey) ?? [];
-		group.push(pattern);
-		byRouteDirection.set(routeDirectionKey, group);
+		builder.addTrip(trip, getRawStopTimes(ctx, { feedId: trip.feed_id, localId: trip.trip_id }));
 	}
-	return { patterns, byRouteDirection };
+	return builder.build();
 }
 
 /** Return patterns that operate on the requested service date. */

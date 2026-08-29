@@ -186,12 +186,6 @@ function swapF64(arr: f64[], i: i32, j: i32): void {
 
 // --- Static Data Store for Augmentation ---
 
-class WasmStop {
-	id: string = "";
-	parentId: string = "";
-	platformCode: string = "";
-}
-
 class WasmCalendar {
 	monday: bool = false;
 	tuesday: bool = false;
@@ -210,20 +204,12 @@ class WasmCalendarDate {
 	exceptionType: i32 = 0;
 }
 
-const stops = new Map<string, WasmStop>();
 const calendars = new Map<string, WasmCalendar>();
 const calendarDates = new Array<WasmCalendarDate>();
-const tripServiceIds = new Map<string, string>();
 
 export function clearStaticData(): void {
-	stops.clear();
 	calendars.clear();
 	calendarDates.length = 0;
-	tripServiceIds.clear();
-}
-
-export function addWasmStop(id: string, parentId: string, platformCode: string): void {
-	stops.set(id, { id, parentId, platformCode });
 }
 
 export function addWasmCalendar(
@@ -253,10 +239,6 @@ export function addWasmCalendar(
 
 export function addWasmCalendarDate(serviceId: string, date: string, type: i32): void {
 	calendarDates.push({ serviceId, date, exceptionType: type });
-}
-
-export function addWasmTripRecord(tripId: string, serviceId: string): void {
-	tripServiceIds.set(tripId, serviceId);
 }
 
 // --- Date Utilities ---

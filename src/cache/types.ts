@@ -8,6 +8,7 @@ import type {
 	Stop,
 	StopTime,
 	Trip,
+	TripStopTimeBounds,
 	Transfer,
 	GTFS,
 } from "qdf-gtfs";
@@ -31,6 +32,8 @@ export type RawCache = {
 	tripsByKey: Map<string, Trip>;
 	/** Considered trips from the same static snapshot as {@link tripsByKey}. */
 	consideredTrips?: Trip[];
+	/** Compact native extents used to select eager trip instances without loading stop-time rows. */
+	tripStopTimeBoundsByKey: Map<string, TripStopTimeBounds>;
 	/** Feed-qualified trips created from ADDED/UNSCHEDULED realtime updates. */
 	realtimeOnlyTripKeys: Set<string>;
 	stopsByKey: Map<string, Stop>;
@@ -44,8 +47,6 @@ export type AugmentedCache = {
 	stops: AugmentedStop[];
 	railStations: Stop[];
 
-	stopTimes: { [trip_id: string]: AugmentedStopTime[] };
-	baseStopTimes: { [trip_id: string]: AugmentedStopTime[] };
 	rawStopTimesCache: Map<string, qdf.StopTime[]>;
 	rawTripsRec: Map<string, Trip>;
 	/** GTFS type 4/5 linked-trip rules, indexed by feed-qualified from_trip_id. */
@@ -114,9 +115,14 @@ export type CacheContext = {
 		consideredStops: Map<string, boolean>;
 		consideredTrips: Map<string, boolean>;
 		serviceDates: Map<string, string[]>;
+		serviceCalendarLoaded: boolean;
+		serviceCalendarRules: Map<string, Array<{ startEpochDay: number; endEpochDay: number; weekdayMask: number }>>;
+		serviceCalendarExceptions: Map<string, Map<number, 1 | 2>>;
 		serviceDayStarts: Map<string, number>;
 		availableServiceDates: string[] | null;
 		operationalServiceDates: Set<string>;
+		operationalWindows: Map<string, { todayEpochDay: number; horizonStart: number; horizonEnd: number }>;
+		maxTripLookbackDays: number;
 		lazyServiceDates: Map<string, true>;
 		dateOffsets: Map<string, string>;
 		serviceDateArrays: Map<string, string[]>;

@@ -131,8 +131,8 @@ export function getDeparturesForInstantWindow(
 	const validStops = new Set<string>([stop.stop_id, stop.parent_stop_id, ...stop.child_stop_ids].filter(Boolean) as string[]);
 	const candidates: { stopTime: AugmentedStopTime; at: number }[] = [];
 
-	// The previous service date owns ordinary after-midnight GTFS times such as 25:30.
-	for (let offset = -1; offset <= dayCount + 1; offset++) {
+	// Long services can start several dates earlier than the requested window.
+	for (let offset = -ctx.runtimeState.maxTripLookbackDays; offset <= dayCount + 1; offset++) {
 		const serviceDate = addDaysToServiceDate(firstLocalDate, offset);
 		const dayStart = getServiceDayStart(serviceDate, timeZone);
 		for (const stopId of validStops) {

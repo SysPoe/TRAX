@@ -9,6 +9,7 @@ import type {
 	StopTime,
 	Trip,
 	QualifiedEntityId,
+	PackedStopTimes,
 } from "qdf-gtfs";
 import { isConsideredTrip } from "../utils/considered.js";
 import type { CacheContext } from "./types.js";
@@ -87,6 +88,37 @@ export function getRawStop(ctx: CacheContext, stop: QualifiedEntityId): Stop | u
 	return result;
 }
 
+function unpackStopTimes(packed: PackedStopTimes): StopTime[] {
+	const values = new Array<StopTime>(packed.tripIds.length);
+	for (let index = 0; index < values.length; index++) {
+		const stopHeadsign = packed.stopHeadsigns[index];
+		const shapeDistance = packed.shapeDistances[index];
+		values[index] = {
+			trip_id: packed.strings[packed.tripIds[index]],
+			stop_id: packed.strings[packed.stopIds[index]],
+			arrival_time: packed.arrivalTimes[index] === -2_147_483_648 ? null : packed.arrivalTimes[index],
+			departure_time: packed.departureTimes[index] === -2_147_483_648 ? null : packed.departureTimes[index],
+			stop_sequence: packed.stopSequences[index],
+			stop_headsign: stopHeadsign === 0xffffffff ? null : packed.strings[stopHeadsign],
+			pickup_type: packed.pickupTypes[index],
+			drop_off_type: packed.dropOffTypes[index],
+			shape_dist_traveled: Number.isNaN(shapeDistance) ? null : shapeDistance,
+			timepoint: packed.timepoints[index] < 0 ? null : packed.timepoints[index],
+			continuous_pickup: packed.continuousPickups[index] < 0 ? null : packed.continuousPickups[index],
+			continuous_drop_off: packed.continuousDropOffs[index] < 0 ? null : packed.continuousDropOffs[index],
+			feed_id: packed.strings[packed.feedIds[index]],
+		};
+	}
+	return values;
+}
+
+/** Transfer a trip batch in columns, then materialize JS rows with shared strings. */
+export function getStopTimesForTrips(ctx: CacheContext, feedId: string, tripIds: readonly string[]): StopTime[] {
+	if (tripIds.length === 0) return [];
+	const gtfs = requireGtfs(ctx);
+	return unpackStopTimes(gtfs.getStopTimesPacked({ feed_id: feedId, trip_ids: tripIds }));
+}
+
 /** Load all requested trip stop-times with one indexed native query per feed. */
 export function primeRawStopTimes(ctx: CacheContext, trips: readonly Trip[]): void {
 	if (trips.length === 0) return;
@@ -105,7 +137,7 @@ export function primeRawStopTimes(ctx: CacheContext, trips: readonly Trip[]): vo
 
 	for (const [feedId, tripIds] of tripIdsByFeed) {
 		const stopTimesByTrip = new Map<string, StopTime[]>();
-		for (const stopTime of gtfs.getStopTimes({ feed_id: feedId, trip_ids: [...tripIds] })) {
+		for (const stopTime of unpackStopTimes(gtfs.getStopTimesPacked({ feed_id: feedId, trip_ids: [...tripIds] }))) {
 			const key = entityKey({ feedId: stopTime.feed_id, localId: stopTime.trip_id });
 			const rows = stopTimesByTrip.get(key) ?? [];
 			rows.push(stopTime);

@@ -6,8 +6,7 @@ import type { AugmentedStop } from "../utils/augmentedStop.js";
 import {
 	augmentTrip,
 	createRealtimeOnlyTrip,
-	EAGER_SERVICE_DATE_FUTURE_DAYS,
-	EAGER_SERVICE_DATE_PAST_DAYS,
+	getOperationalServiceDatesForTrip,
 } from "../utils/augmentedTrip.js";
 import { clearAugmentedStopTimeCaches } from "../utils/augmentedStopTime.js";
 import { getCurrentQRTravelTrains, getPlacesWithCache } from "../region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
@@ -34,9 +33,8 @@ import {
 import { clearPreviousVehicleInfo, prunePreviousVehicleInfo } from "../utils/vehicleModel.js";
 import { entityKey } from "../identity.js";
 import { getSeqState } from "../plugins/seq-state.js";
-import { addDaysToServiceDate, getToday } from "../utils/time.js";
 import { applyRealtimeReplacementPrecedence, canonicalizeRealtimeTripUpdates } from "./realtime.js";
-import { getRawStopTimes, primeRawStopTimes } from "./gtfsReads.js";
+import { primeRawStopTimes } from "./gtfsReads.js";
 import { buildCorridorIndex } from "../utils/corridor/shapeIndex.js";
 
 type CacheProgressReporter = (info: Parameters<TraxConfig["progressLog"]>[0] & { unit?: "bytes" | "items" }) => void;
@@ -75,6 +73,12 @@ export function refreshQRTTrainsInBackground(ctx: CacheContext): void {
 	// The promise owns its rejection handler above, so callers do not need to
 	// await QRT for core GTFS realtime readiness.
 	ctx.augmented.qrtRefreshInFlight = refreshPromise;
+}
+
+export type RetainedStaticRefreshState = { qrtTrains: QRTTravelTrip[] };
+
+export function retainStaticRefreshState(ctx: CacheContext): RetainedStaticRefreshState {
+	return { qrtTrains: getSeqState(ctx).qrtTrains };
 }
 
 function tripUpdateSignature(updates: readonly unknown[]): string {
@@ -151,8 +155,6 @@ function resetRealtimeTripIncremental(tripId: string, ctx: CacheContext): void {
 	unregisterAugmentedTrip(ctx, tripId);
 	augmentedCache.tripsRec.delete(tripId);
 	removeAugmentedTripFromArray(ctx, tripId);
-	delete augmentedCache.stopTimes[tripId];
-	delete augmentedCache.baseStopTimes[tripId];
 }
 
 function removeRealtimeOnlyTrip(ctx: CacheContext, tripKey: string): void {
@@ -252,7 +254,7 @@ export async function loadSEQStaticMetadata(ctx: CacheContext): Promise<void> {
 export async function refreshStaticCache(
 	gtfs: GTFS,
 	config: TraxConfig,
-	previousCtx?: CacheContext,
+	retainedState?: RetainedStaticRefreshState,
 ): Promise<CacheContext> {
 	logger.debug("Refreshing static GTFS cache...", {
 		module: "cache",
@@ -269,15 +271,7 @@ export async function refreshStaticCache(
 		pluginState: new Map(),
 		runtimeState: createRuntimeState(),
 	};
-	for (const feed of config.network.feeds) {
-		const timezone = config.feedTimeZones.get(feed.id);
-		if (!timezone) continue;
-		const today = getToday(timezone);
-		for (let offset = -EAGER_SERVICE_DATE_PAST_DAYS; offset <= EAGER_SERVICE_DATE_FUTURE_DAYS; offset++) {
-			ctx.runtimeState.operationalServiceDates.add(addDaysToServiceDate(today, offset));
-		}
-	}
-	if (previousCtx) getSeqState(ctx).qrtTrains = getSeqState(previousCtx).qrtTrains;
+	if (retainedState) getSeqState(ctx).qrtTrains = retainedState.qrtTrains;
 	const startTotal = Date.now();
 	ctx.augmented.timer.clear();
 	ctx.augmented.timer.start("refreshStaticCache");
@@ -340,7 +334,7 @@ export async function refreshStaticCache(
 	});
 
 	ctx.augmented.timer.start("refreshStaticCache:syncToWasm");
-	syncCalendarsToWasm(ctx);
+	syncCalendarsToWasm(ctx, calendars, calendarDates);
 	ctx.augmented.timer.stop("refreshStaticCache:syncToWasm");
 
 	ctx.augmented.timer.start("refreshStaticCache:loadRoutes");
@@ -363,11 +357,50 @@ export async function refreshStaticCache(
 	newRawCache.consideredTrips = consideredTrips;
 	ctx.augmented.timer.stop("refreshStaticCache:loadTrips");
 
-	ctx.augmented.timer.start("refreshStaticCache:loadStopTimes");
-	primeRawStopTimes(ctx, consideredTrips);
-	const trips = consideredTrips.filter(
-		(trip) => getRawStopTimes(ctx, { feedId: trip.feed_id, localId: trip.trip_id }).length > 0,
+	ctx.augmented.timer.start("refreshStaticCache:loadTripStopTimeBounds");
+	for (const bounds of gtfs.getTripStopTimeBounds()) {
+		const key = entityKey({ feedId: bounds.feed_id, localId: bounds.trip_id });
+		newRawCache.tripStopTimeBoundsByKey.set(key, bounds);
+		ctx.runtimeState.maxTripLookbackDays = Math.max(
+			ctx.runtimeState.maxTripLookbackDays,
+			Math.ceil(bounds.end_time / 86_400),
+		);
+	}
+	ctx.augmented.timer.stop("refreshStaticCache:loadTripStopTimeBounds");
+
+	for (const trip of allTrips) {
+		newRawCache.tripServiceIds!.set(
+			entityKey({ feedId: trip.feed_id, localId: trip.trip_id }),
+			entityKey({ feedId: trip.feed_id, localId: trip.service_id }),
+		);
+	}
+	const usableConsideredTrips = consideredTrips.filter((trip) =>
+		newRawCache.tripStopTimeBoundsByKey.has(entityKey({ feedId: trip.feed_id, localId: trip.trip_id })),
 	);
+	for (const trip of usableConsideredTrips) {
+		newAugmentedCache.rawTripsRec.set(entityKey({ feedId: trip.feed_id, localId: trip.trip_id }), trip);
+		registerTripNumber(ctx, trip);
+	}
+
+	ctx.augmented.timer.start("refreshStaticCache:buildCorridorIndex");
+	newAugmentedCache.corridorIndex = buildCorridorIndex(ctx, usableConsideredTrips);
+	ctx.augmented.timer.stop("refreshStaticCache:buildCorridorIndex");
+
+	const operationalServiceDatesByTrip = new Map<string, string[]>();
+	const activeTrips = usableConsideredTrips.filter((trip) => {
+		const key = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
+		const serviceDates = getOperationalServiceDatesForTrip(trip, ctx);
+		operationalServiceDatesByTrip.set(key, serviceDates);
+		const hasRealtimeStartDate = (newAugmentedCache.tripUpdatesCache.get(key) ?? []).some(
+			(update) => update.trip.start_date != null,
+		);
+		return serviceDates.length > 0 || hasRealtimeStartDate;
+	});
+
+	ctx.augmented.timer.start("refreshStaticCache:loadStopTimes");
+	// Trip bounds already prove that these trips have scheduled rows. Load those
+	// rows only in the bounded augmentation batches below.
+	const trips = activeTrips;
 	const realtimeOnlyTrips = createRealtimeOnlyTrips(
 		ctx.augmented.tripUpdatesCache,
 		ctx,
@@ -377,23 +410,13 @@ export async function refreshStaticCache(
 		const key = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
 		newRawCache.realtimeOnlyTripKeys.add(key);
 		newRawCache.tripsByKey.set(key, trip);
+		newAugmentedCache.rawTripsRec.set(key, trip);
+		registerTripNumber(ctx, trip);
 	}
 	const tripsToAugment = [...trips, ...realtimeOnlyTrips];
 	ctx.augmented.timer.stop("refreshStaticCache:loadStopTimes");
-	ctx.augmented.timer.start("refreshStaticCache:buildCorridorIndex");
-	newAugmentedCache.corridorIndex = buildCorridorIndex(ctx);
-	ctx.augmented.timer.stop("refreshStaticCache:buildCorridorIndex");
-	for (const t of allTrips) {
-		newRawCache.tripServiceIds!.set(
-			entityKey({ feedId: t.feed_id, localId: t.trip_id }),
-			entityKey({ feedId: t.feed_id, localId: t.service_id }),
-		);
-	}
-	for (const trip of tripsToAugment)
-		newAugmentedCache.rawTripsRec.set(entityKey({ feedId: trip.feed_id, localId: trip.trip_id }), trip);
-	for (const trip of tripsToAugment) registerTripNumber(ctx, trip);
 	logger.debug(
-		`Loaded ${tripsToAugment.length} usable considered trips out of ${allTrips.length} static rows; skipped ${consideredTrips.length - trips.length} static trip rows without stop times.`,
+		`Materializing ${tripsToAugment.length} active trips from ${usableConsideredTrips.length} usable considered trips and ${allTrips.length} static rows.`,
 		{
 			module: "cache",
 			function: "refreshStaticCache",
@@ -414,17 +437,9 @@ export async function refreshStaticCache(
 	}
 	ctx.augmented.timer.stop("refreshStaticCache:loadLinkedTransfers");
 
-	if (config.preloadStopTimes) {
-		ctx.augmented.timer.start("refreshStaticCache:preloadStopTimes");
-		for (const trip of trips) {
-			getRawStopTimes(ctx, { feedId: trip.feed_id, localId: trip.trip_id });
-		}
-		ctx.augmented.timer.stop("refreshStaticCache:preloadStopTimes");
-	}
-
 	ctx.augmented.timer.start("refreshStaticCache:processShapes");
 	const shapeSet = new Set<string>();
-	for (const trip of trips) {
+	for (const trip of usableConsideredTrips) {
 		const shapeKey = trip.shape_id ? entityKey({ feedId: trip.feed_id, localId: trip.shape_id }) : null;
 		if (trip.shape_id && shapeKey && !shapeSet.has(shapeKey)) {
 			shapeSet.add(shapeKey);
@@ -506,27 +521,36 @@ export async function refreshStaticCache(
 	const tripUpdatesCache = ctx.augmented.tripUpdatesCache;
 	newAugmentedCache.trips = await processWithProgress(
 		tripsToAugment,
-		"Augmenting trips",
-		(trip) => {
-			const augmentedTrip = augmentTrip(trip, ctx, tripUpdatesCache);
+			"Augmenting trips",
+			(trip) => {
+				const tripKey = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
+				let augmentedTrip;
+				try {
+					augmentedTrip = augmentTrip(trip, ctx, tripUpdatesCache, undefined, {
+						serviceDates: operationalServiceDatesByTrip.get(tripKey) ?? [],
+					});
+				} finally {
+					newAugmentedCache.rawStopTimesCache.delete(tripKey);
+				}
 
-			const tripKey = entityKey({ feedId: augmentedTrip.feed_id, localId: augmentedTrip.trip_id });
-			newAugmentedCache.tripsRec.set(tripKey, augmentedTrip);
-			registerAugmentedTrip(ctx, augmentedTrip);
+				const augmentedTripKey = entityKey({ feedId: augmentedTrip.feed_id, localId: augmentedTrip.trip_id });
+				newAugmentedCache.tripsRec.set(augmentedTripKey, augmentedTrip);
+				registerAugmentedTrip(ctx, augmentedTrip);
 
-			const allStopTimes = augmentedTrip.instances.flatMap((i) => i.stopTimes);
-			newAugmentedCache.stopTimes[tripKey] = allStopTimes;
-			newAugmentedCache.baseStopTimes[tripKey] = [...allStopTimes];
-
-			return augmentedTrip;
+				return augmentedTrip;
 		},
 		config.progressLog,
+		250,
+		(batch) => primeRawStopTimes(ctx, batch),
 	);
 	ctx.augmented.timer.stop("refreshStaticCache:augmentTrips");
 
 	rebuildAugmentedTripArrayIndex(ctx);
 
 	for (const plugin of config.network.plugins) await plugin.afterSnapshotBuilt?.(ctx);
+	// QDF remains the canonical static schedule. Realtime and lazy paths can fetch
+	// individual trips again instead of retaining a second complete JS copy.
+	newAugmentedCache.rawStopTimesCache.clear();
 
 	ctx.augmented.timer.stop("refreshStaticCache");
 	ctx.augmented.timer.log("Static Cache Refresh", true);
@@ -667,10 +691,7 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 				registerAugmentedTrip(ctx, updatedTrip);
 				replaceAugmentedTripInArray(ctx, updatedTrip);
 
-				const allStopTimes = updatedTrip.instances.flatMap((instance) => instance.stopTimes);
-				augmentedCache.stopTimes[tripKey] = allStopTimes;
-				augmentedCache.baseStopTimes[tripKey] = [...allStopTimes];
-				timer.stop("refreshRealtimeCache:reregisterIndexes");
+					timer.stop("refreshRealtimeCache:reregisterIndexes");
 			}
 
 			const current = index + 1;
@@ -739,6 +760,7 @@ async function processWithProgress<T, U>(
 	processFn: (item: T) => U,
 	reportProgress: CacheProgressReporter = (info) => logger.progress(info),
 	chunkSize = 250,
+	prepareChunk?: (items: T[]) => void | Promise<void>,
 ): Promise<U[]> {
 	const results: U[] = [];
 	let current = 0;
@@ -759,6 +781,7 @@ async function processWithProgress<T, U>(
 
 	for (let i = 0; i < total; i += chunkSize) {
 		const end = Math.min(i + chunkSize, total);
+		if (prepareChunk) await prepareChunk(items.slice(i, end));
 		for (let j = i; j < end; j++) {
 			results.push(processFn(items[j]));
 		}

@@ -201,10 +201,12 @@ function assignPlatformSides(st: IntermediateAST[], platformDataMap: PlatformDat
 	let prevActualTrack = "";
 	let prevScheduledTrack = "";
 
-	let pathBuffer: AugmentedStopTime[] = [];
-	let candidatePathB: AugmentedStopTime[] = [];
-	let candidatePathA: AugmentedStopTime[] = [];
-	let candidatePathS: AugmentedStopTime[] = [];
+	type PathNode = { value: AugmentedStopTime; previous: PathNode | null };
+	let pathTail: PathNode | null = null;
+	let candidatePathB: PathNode | null = null;
+	let candidatePathA: PathNode | null = null;
+	let candidatePathS: PathNode | null = null;
+	const append = (tail: PathNode | null, value: AugmentedStopTime): PathNode => ({ value, previous: tail });
 
 	for (let i = 0; i < st.length; i++) {
 		const item = st[i];
@@ -221,7 +223,7 @@ function assignPlatformSides(st: IntermediateAST[], platformDataMap: PlatformDat
 				scheduled_exit_side: null,
 			} as AugmentedStopTime;
 			attachStopReferences(skippedWithSides, refs);
-			pathBuffer.push(skippedWithSides);
+			pathTail = append(pathTail, skippedWithSides);
 			continue;
 		}
 
@@ -245,11 +247,11 @@ function assignPlatformSides(st: IntermediateAST[], platformDataMap: PlatformDat
 		}
 
 		if (actPlat?.trackCode === prevActualTrack && schPlat?.trackCode === prevScheduledTrack) {
-			pathBuffer = candidatePathB.slice();
+			pathTail = candidatePathB;
 		} else if (actPlat?.trackCode === prevActualTrack) {
-			pathBuffer = candidatePathA.slice();
+			pathTail = candidatePathA;
 		} else if (schPlat?.trackCode === prevScheduledTrack) {
-			pathBuffer = candidatePathS.slice();
+			pathTail = candidatePathS;
 		}
 
 		let actSide: "left" | "right" | "both" | null = null;
@@ -275,16 +277,19 @@ function assignPlatformSides(st: IntermediateAST[], platformDataMap: PlatformDat
 		} as AugmentedStopTime;
 		attachStopReferences(newEntry, refs);
 
-		pathBuffer.push(newEntry);
-		candidatePathB = pathBuffer.slice();
-		candidatePathA = pathBuffer.slice();
-		candidatePathS = pathBuffer.slice();
+		pathTail = append(pathTail, newEntry);
+		candidatePathB = pathTail;
+		candidatePathA = pathTail;
+		candidatePathS = pathTail;
 
 		prevActualTrack = actPlat?.trackCode ?? "";
 		prevScheduledTrack = schPlat?.trackCode ?? "";
 	}
 
-	return pathBuffer;
+	const result: AugmentedStopTime[] = [];
+	for (let node = pathTail; node; node = node.previous) result.push(node.value);
+	result.reverse();
+	return result;
 }
 
 export function augmentStopTimes(

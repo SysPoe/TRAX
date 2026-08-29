@@ -81,6 +81,7 @@ import {
 	parseQrtPublishedFormations,
 } from "../dist/region-specific/AU/SEQ/qr-travel/published-formations.js";
 import { findUniqueTripInstanceForServiceDate } from "../dist/cache/augmentedEntities.js";
+import { entityKey } from "../dist/identity.js";
 import { DropOffType, PickupType, RouteType, TripScheduleRelationship } from "qdf-gtfs";
 import {
 	buildCisBoardingAssignments,
@@ -1713,19 +1714,26 @@ function createZip(files) {
 	return Buffer.concat([...localParts, directory, end]);
 }
 
-function feed(name, timezone, includeIntermediate = false) {
+function feed(name, timezone, includeIntermediate = false, includeInactiveTrip = false) {
 	const middleStop = includeIntermediate ? `middle,${name} Middle,-27.45,153.05\n` : "";
 	const middleStopTime = includeIntermediate ? "shared,25:45:00,25:45:00,middle,2,0,0\n" : "";
 	const endSequence = includeIntermediate ? 3 : 2;
+	const inactiveTrip = includeInactiveTrip ? "shared,inactive,inactive-trip,End,0,shared\n" : "";
+	const inactiveStopTimes = includeInactiveTrip
+		? "inactive-trip,12:00:00,12:00:00,shared,1,0,1\ninactive-trip,13:00:00,13:00:00,end,2,1,0\n"
+		: "";
+	const inactiveCalendar = includeInactiveTrip ? "inactive,1,1,1,1,1,1,1,20261201,20261231\n" : "";
 	return createZip({
 		"agency.txt": `agency_id,agency_name,agency_url,agency_timezone\nagency,${name},https://example.test,${timezone}\n`,
 		"routes.txt": "route_id,agency_id,route_short_name,route_long_name,route_type\nshared,agency,R,Shared Rail,2\n",
 		"stops.txt": `stop_id,stop_name,stop_lat,stop_lon\nshared,${name} Station,-27.4,153.0\n${middleStop}end,${name} End,-27.5,153.1\n`,
 		"trips.txt":
-			"route_id,service_id,trip_id,trip_headsign,direction_id,shape_id\nshared,shared,shared,End,0,shared\n",
-		"stop_times.txt": `trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type\nshared,25:30:00,25:30:00,shared,1,0,1\n${middleStopTime}shared,26:00:00,26:00:00,end,${endSequence},1,0\n`,
+			"route_id,service_id,trip_id,trip_headsign,direction_id,shape_id\nshared,shared,shared,End,0,shared\n" +
+			inactiveTrip,
+		"stop_times.txt": `trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type\nshared,25:30:00,25:30:00,shared,1,0,1\n${middleStopTime}shared,26:00:00,26:00:00,end,${endSequence},1,0\n${inactiveStopTimes}`,
 		"calendar.txt":
-			"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nshared,1,1,1,1,1,1,1,20260101,20261231\n",
+			"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nshared,1,1,1,1,1,1,1,20260101,20261231\n" +
+			inactiveCalendar,
 		"shapes.txt":
 			"shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence\nshared,-27.4,153.0,1\nshared,-27.5,153.1,2\n",
 	});
@@ -1861,7 +1869,7 @@ function continuationFeed() {
 }
 
 const feeds = {
-	"/a.zip": feed("Alpha", "Australia/Brisbane"),
+	"/a.zip": feed("Alpha", "Australia/Brisbane", false, true),
 	"/b.zip": feed("Beta", "America/Toronto", true),
 	"/orphan.zip": orphanTripFeed(),
 	"/continuations.zip": continuationFeed(),
@@ -1879,6 +1887,7 @@ await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 
 try {
+	let vehicleInfoCalls = 0;
 	const definition = {
 		id: "synthetic",
 		name: "Synthetic multi-feed",
@@ -1888,6 +1897,10 @@ try {
 				id: "alpha-only",
 				feedIds: ["alpha"],
 				capabilities: ["facilities"],
+				vehicleInfoForTrip() {
+					vehicleInfoCalls++;
+					return { vehicle_model: "Synthetic train", vehicle_id: null };
+				},
 				enrichStop(stop) {
 					stop.testPluginApplied = true;
 				},
@@ -1930,6 +1943,16 @@ try {
 	);
 	const runtime = new TRAX(definition, { cacheDir: ".TRAXCACHE/test-synthetic" });
 	await runtime.loadGTFS(false, false);
+	assert.equal(
+		runtime.ctx.augmented.rawStopTimesCache.has(entityKey({ feedId: "alpha", localId: "inactive-trip" })),
+		false,
+		"static refresh must not retain JS stop-time rows for trips outside the operational horizon",
+	);
+	const vehicleCallsAfterSnapshot = vehicleInfoCalls;
+	runtime.getAugmentedTrips();
+	runtime.getAugmentedTrips({ feedId: "alpha", localId: "shared" });
+	assert.ok(vehicleCallsAfterSnapshot > 0, "vehicle enrichment must run while the snapshot is built");
+	assert.equal(vehicleInfoCalls, vehicleCallsAfterSnapshot, "trip getters must not rerun vehicle enrichment");
 	const orphanRuntime = new TRAX(
 		{
 			id: "orphan-test",
@@ -2097,7 +2120,7 @@ try {
 	const eagerInstanceCount = alphaTrip.instances.length;
 	assert.ok(runtime.getAvailableServiceDates().includes("20261215"));
 	assert.equal(alphaTrip.instances.length, eagerInstanceCount, "listing calendar dates must not build instances");
-	assert.equal(runtime.getTripIdsByServiceDate("20261215").length, 2);
+	assert.equal(runtime.getTripIdsByServiceDate("20261215").length, 3);
 	const lazyAlpha = alphaTrip.instances.find((instance) => instance.serviceDate === "20261215");
 	assert.ok(lazyAlpha, "a far service date should materialize on demand");
 	const lazyAlphaId = lazyAlpha.instance_id;
@@ -2137,8 +2160,8 @@ try {
 		{ cacheDir: ".TRAXCACHE/test-other" },
 	);
 	await other.loadGTFS(false, false);
-	assert.equal(other.getRawTrips().length, 1);
-	assert.equal(runtime.getRawTrips().length, 2);
+	assert.equal(other.getRawTrips().length, 2);
+	assert.equal(runtime.getRawTrips().length, 3);
 	assert.notEqual(
 		other.getAugmentedTrips({ feedId: "alpha", localId: "shared" })[0].instances[0].instance_id,
 		alphaTrip.instances[0].instance_id,

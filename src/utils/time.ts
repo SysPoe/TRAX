@@ -103,7 +103,7 @@ export function serviceTimeToInstant(serviceDate: ServiceDate | string, serviceT
 	return new Date(epochSeconds * 1000).toISOString() as Instant;
 }
 
-function epochDaysToServiceDate(epochDays: number): string {
+export function getServiceDateFromEpochDay(epochDays: number): string {
 	let y = Math.floor((10000 * epochDays + 1478010) / 3652425);
 	let ddt = epochDays - (365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400));
 	if (ddt < 0) {
@@ -145,7 +145,7 @@ export function addDaysToServiceDate(serviceDate: string, daysToAdd: number): st
 	if (!daysToAdd) return serviceDate;
 	const epochDay = getEpochDayFromServiceDate(serviceDate);
 	if (!Number.isFinite(epochDay)) return serviceDate;
-	return epochDaysToServiceDate(epochDay + daysToAdd);
+	return getServiceDateFromEpochDay(epochDay + daysToAdd);
 }
 
 export function parseTimeWithConfig(dateStr: string, timezone: string): number {
@@ -172,6 +172,7 @@ export default {
 	getTimezoneOffsetSeconds,
 	getServiceDayStart,
 	getEpochDayFromServiceDate,
+	getServiceDateFromEpochDay,
 	addDaysToServiceDate,
 	getServiceDate,
 	getLocalISOString,

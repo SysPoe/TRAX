@@ -4,8 +4,7 @@ import type { AugmentedStop } from "../utils/augmentedStop.js";
 import { augmentTrip, calculateRunSeries } from "../utils/augmentedTrip.js";
 import type { AugmentedTrip, AugmentedTripInstance, RunSeries } from "../utils/augmentedTrip.js";
 import type { AugmentedStopTime } from "../utils/augmentedStopTime.js";
-import { addSC, addSCI } from "../utils/serviceCapacity.js";
-import { addVehicleModel, addVehicleModelTrip } from "../utils/vehicleModel.js";
+import { addVehicleModel } from "../utils/vehicleModel.js";
 import { addDaysToServiceDate, getEpochDayFromServiceDate, getServiceDayStart } from "../utils/time.js";
 import {
 	applySeqDiagramToInstances,
@@ -16,7 +15,7 @@ import ensureQRTEnabled from "../region-specific/AU/SEQ/qr-travel/enabled.js";
 import type { QRTPlace, QRTStations, QRTTravelTrip } from "../region-specific/AU/SEQ/qr-travel/types.js";
 import type { RailwayStationFacility } from "../region-specific/AU/SEQ/facilities-types.js";
 import type { CacheContext } from "./types.js";
-import { getFeedTimeZone, type TraxConfig } from "../config.js";
+import { getFeedTimeZone } from "../config.js";
 import * as qdf from "qdf-gtfs";
 import type { ExpressInfo, PassingStop } from "../utils/SRT.js";
 import { getRawStopTimes, getStops, getTrips } from "./gtfsReads.js";
@@ -227,6 +226,7 @@ export function registerAugmentedTrip(ctx: CacheContext, trip: AugmentedTrip): v
 	const tripId = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
 
 	for (const instance of trip.instances) {
+		addVehicleModel(instance, ctx, ctx.config);
 		augmented.instancesRec.set(instance.instance_id, instance);
 		for (const date of instance.actualTripDates) {
 			addOwnedMembership(
@@ -270,12 +270,6 @@ export function registerAugmentedTrip(ctx: CacheContext, trip: AugmentedTrip): v
 	}
 }
 
-function refreshTripStopTimeRecords(ctx: CacheContext, tripKey: string, trip: AugmentedTrip): void {
-	const stopTimes = trip.instances.flatMap((instance) => instance.stopTimes);
-	ctx.augmented.stopTimes[tripKey] = stopTimes;
-	ctx.augmented.baseStopTimes[tripKey] = [...stopTimes];
-}
-
 function refreshDiagramAfterInstanceChange(ctx: CacheContext, affectedTripIds: Set<string>): void {
 	const topology = ctx.augmented.seqDiagram;
 	if (!topology) return;
@@ -302,7 +296,6 @@ function evictStartServiceDate(ctx: CacheContext, serviceDate: string): void {
 		trip.instances = trip.instances.filter((instance) => instance.serviceDate !== serviceDate);
 		trip.scheduledStartServiceDates = trip.scheduledStartServiceDates.filter((date) => date !== serviceDate);
 		registerAugmentedTrip(ctx, trip);
-		refreshTripStopTimeRecords(ctx, tripKey, trip);
 		affectedTripIds.add(trip.trip_id);
 	}
 
@@ -342,13 +335,21 @@ export function ensureStartServiceDateMaterialized(ctx: CacheContext, serviceDat
 		if (!scheduled && !hasRealtime) continue;
 
 		const existing = ctx.augmented.tripsRec.get(tripKey);
-		if (!existing) continue;
 		const dateTrip = augmentTrip(rawTrip, ctx, ctx.augmented.tripUpdatesCache, existing, {
 			serviceDates: scheduled ? [serviceDate] : [],
 			realtimeDates: [serviceDate],
 		});
 		const nextInstances = dateTrip.instances.filter((instance) => instance.serviceDate === serviceDate);
 		if (nextInstances.length === 0) continue;
+		if (!existing) {
+			dateTrip.instances = nextInstances;
+			ctx.augmented.tripsRec.set(tripKey, dateTrip);
+			replaceAugmentedTripInArray(ctx, dateTrip);
+			registerAugmentedTrip(ctx, dateTrip);
+			patchSeqDiagramOntoAugmentedTrip(ctx, dateTrip);
+			affectedTripIds.add(dateTrip.trip_id);
+			continue;
+		}
 
 		unregisterAugmentedTrip(ctx, tripKey);
 		existing.instances = existing.instances
@@ -360,7 +361,6 @@ export function ensureStartServiceDateMaterialized(ctx: CacheContext, serviceDat
 			existing.scheduledStartServiceDates.sort();
 		}
 		registerAugmentedTrip(ctx, existing);
-		refreshTripStopTimeRecords(ctx, tripKey, existing);
 		affectedTripIds.add(existing.trip_id);
 	}
 
@@ -370,8 +370,9 @@ export function ensureStartServiceDateMaterialized(ctx: CacheContext, serviceDat
 
 /** Date-filter index. The previous start date is included for GTFS times beyond 24:00. */
 export function getTripIdsByServiceDate(ctx: CacheContext, serviceDate: string): string[] {
-	ensureStartServiceDateMaterialized(ctx, addDaysToServiceDate(serviceDate, -1));
-	ensureStartServiceDateMaterialized(ctx, serviceDate);
+	for (let offset = -ctx.runtimeState.maxTripLookbackDays; offset <= 0; offset++) {
+		ensureStartServiceDateMaterialized(ctx, addDaysToServiceDate(serviceDate, offset));
+	}
 	return materializeMembershipArray(ctx.augmented.serviceDateTripsSet, ctx.augmented.serviceDateTrips, serviceDate);
 }
 
@@ -477,15 +478,6 @@ export function getStopDeparturesCached(
 	return results;
 }
 
-/** {@link addSCI} + {@link addVehicleModel} — instance cache entries are registered without these passes (unlike {@link getAugmentedTrips} return values). */
-function enrichAugmentedTripInstance(
-	ctx: CacheContext,
-	config: TraxConfig,
-	inst: AugmentedTripInstance,
-): AugmentedTripInstance {
-	return addVehicleModel(addSCI(inst, ctx, config), ctx, config);
-}
-
 /**
  * Realtime updates can replace a scheduled instance ID while a client still
  * has the old URL open. Only follow that replacement when the trip/date has a
@@ -510,7 +502,7 @@ export function getAugmentedTrips(ctx: CacheContext, trip?: QualifiedEntityId): 
 	if (trip) {
 		const key = entityKey(trip);
 		const cachedTrip = augmented.tripsRec.get(key);
-		if (cachedTrip) return [addVehicleModelTrip(addSC(cachedTrip, ctx, context.config), ctx, context.config)];
+		if (cachedTrip) return [cachedTrip];
 		const rawTrip = getTrips(ctx, { feed_id: trip.feedId, trip_id: trip.localId })[0];
 		if (rawTrip && getRawStopTimes(ctx, trip).length > 0) {
 			const augmentedTrip = augmentTrip(rawTrip, context);
@@ -518,21 +510,16 @@ export function getAugmentedTrips(ctx: CacheContext, trip?: QualifiedEntityId): 
 			augmented.tripsRec.set(key, augmentedTrip);
 			replaceAugmentedTripInArray(ctx, augmentedTrip);
 			patchSeqDiagramOntoAugmentedTrip(context, augmentedTrip);
-			return [addVehicleModelTrip(addSC(augmentedTrip, ctx, context.config), ctx, context.config)];
+			return [augmentedTrip];
 		}
 		return [];
 	}
-	const trips = Array.from(augmented.tripsRec.values());
-	for (const trip of trips) {
-		addVehicleModelTrip(addSC(trip, ctx, context.config), ctx, context.config);
-	}
-	return trips;
+	return Array.from(augmented.tripsRec.values());
 }
 
 export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string): AugmentedTripInstance | null {
-	const context = ctx;
 	const cached = ctx.augmented.instancesRec.get(instance_id);
-	if (cached) return enrichAugmentedTripInstance(context, context.config, cached);
+	if (cached) return cached;
 
 	try {
 		const identity = decodeTripInstanceId(instance_id);
@@ -544,13 +531,13 @@ export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string)
 			const inst = trip.instances.find((v) => v.instance_id === instance_id);
 			if (inst) {
 				ctx.augmented.instancesRec.set(instance_id, inst);
-				return enrichAugmentedTripInstance(context, context.config, inst);
+				return inst;
 			}
 			const replacement = findUniqueTripInstanceForServiceDate(trip.instances, identity.serviceDate);
-			if (replacement) return enrichAugmentedTripInstance(context, context.config, replacement);
+			if (replacement) return replacement;
 		}
 
-		// Fallback to slow way if not in record (getAugmentedTrips already runs addSC + addVehicleModel per instance)
+		// Fallback for lazily materialized or replaced instance identifiers.
 		const instances = getAugmentedTrips(ctx, tripRef)[0]?.instances ?? [];
 		return (
 			instances.find((v) => v.instance_id === instance_id) ??
@@ -628,8 +615,34 @@ export function getAugmentedStops(ctx: CacheContext, stop?: QualifiedEntityId): 
 
 export function getAugmentedStopTimes(ctx: CacheContext, trip?: QualifiedEntityId): AugmentedStopTime[] {
 	const { augmented } = ctx;
-	if (trip) return augmented.stopTimes?.[entityKey(trip)] ?? [];
-	return Object.values(augmented.stopTimes ?? {}).flat();
+	if (trip) return augmented.tripsRec.get(entityKey(trip))?.instances.flatMap((instance) => instance.stopTimes) ?? [];
+	return Array.from(augmented.tripsRec.values()).flatMap((value) =>
+		value.instances.flatMap((instance) => instance.stopTimes),
+	);
+}
+
+/** Scan augmented stop-times without first flattening the full dated graph. */
+export function getAugmentedRawStopTimePage(
+	ctx: CacheContext,
+	options: {
+		offset: number;
+		limit: number;
+		predicate?: (value: qdf.StopTime | null) => boolean;
+	},
+): { values: Array<qdf.StopTime | null>; totalCount: number } {
+	const values: Array<qdf.StopTime | null> = [];
+	let totalCount = 0;
+	for (const trip of ctx.augmented.tripsRec.values()) {
+		for (const instance of trip.instances) {
+			for (const stopTime of instance.stopTimes) {
+				const value = stopTime._stopTime;
+				if (options.predicate && !options.predicate(value)) continue;
+				if (totalCount >= options.offset && values.length < options.limit) values.push(value);
+				totalCount++;
+			}
+		}
+	}
+	return { values, totalCount };
 }
 
 export function queryAugmentedStopTimes(ctx: CacheContext, query: qdf.StopTimeQuery): AugmentedStopTime[] {
@@ -655,8 +668,7 @@ export function queryAugmentedStopTimes(ctx: CacheContext, query: qdf.StopTimeQu
 }
 
 export function getBaseStopTimes(ctx: CacheContext, trip: QualifiedEntityId): AugmentedStopTime[] {
-	const { augmented } = ctx;
-	return augmented.baseStopTimes?.[entityKey(trip)] ?? [];
+	return getAugmentedStopTimes(ctx, trip);
 }
 
 export function cacheExpressInfo(ctx: CacheContext, stopListHash: string, expressInfo: ExpressInfo[]) {
