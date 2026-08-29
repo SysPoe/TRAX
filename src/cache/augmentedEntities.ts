@@ -221,25 +221,15 @@ export function unregisterAugmentedTrip(ctx: CacheContext, tripId: string): void
 	}
 }
 
-/**
- * Provider vehicle lookup can lazily materialize another service date. Drain
- * those nested registrations as a queue instead of growing the JS call stack.
- */
+/** Provider callbacks may register another date. Do not enrich that nested registration recursively. */
 function enrichRegisteredTripInstances(ctx: CacheContext, instances: readonly AugmentedTripInstance[]): void {
 	const runtime = ctx.runtimeState;
-	for (const instance of instances) runtime.vehicleEnrichmentQueue.set(instance.instance_id, instance);
 	if (runtime.vehicleEnrichmentActive) return;
 
 	runtime.vehicleEnrichmentActive = true;
 	try {
-		while (runtime.vehicleEnrichmentQueue.size > 0) {
-			const next = runtime.vehicleEnrichmentQueue.entries().next().value as
-				| [string, AugmentedTripInstance]
-				| undefined;
-			if (!next) break;
-			const [instanceId, instance] = next;
-			runtime.vehicleEnrichmentQueue.delete(instanceId);
-			if (ctx.augmented.instancesRec.get(instanceId) !== instance) continue;
+		for (const instance of instances) {
+			if (ctx.augmented.instancesRec.get(instance.instance_id) !== instance) continue;
 			addVehicleModel(instance, ctx, ctx.config);
 		}
 	} finally {

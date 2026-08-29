@@ -1,5 +1,5 @@
 import { RealtimeVehiclePosition } from "qdf-gtfs";
-import { CacheContext, getTripIdsByServiceDate, getVehiclePositions } from "../../../cache/index.js";
+import { CacheContext, getVehiclePositions } from "../../../cache/index.js";
 import { AugmentedTripInstance } from "../../../utils/augmentedTrip.js";
 import type { VehicleInfo } from "../../../utils/vehicleModel.js";
 
@@ -12,6 +12,30 @@ const GTHA_VEHICLE_RANGES: { start: number; end: number; model: string }[] = [
 	{ start: 1001, end: 1014, model: "Type A DMU" },
 	{ start: 3001, end: 3006, model: "Type C DMU" },
 ];
+
+type GthaVehicleModelState = { blockTrips: Map<string, string[]> };
+
+function getState(ctx: CacheContext): GthaVehicleModelState {
+	const key = "ca-gtha:vehicle-model";
+	const existing = ctx.pluginState.get(key) as GthaVehicleModelState | undefined;
+	if (existing) return existing;
+	const state: GthaVehicleModelState = { blockTrips: new Map() };
+	ctx.pluginState.set(key, state);
+	return state;
+}
+
+function getActiveBlockTripIds(inst: AugmentedTripInstance, startDate: string, ctx: CacheContext): string[] {
+	if (!inst.block_id || !ctx.gtfs) return [];
+	const key = `${inst.feed_id}\0${inst.block_id}\0${startDate}`;
+	const state = getState(ctx);
+	const cached = state.blockTrips.get(key);
+	if (cached) return cached;
+	const tripIds = ctx.gtfs
+		.getTrips({ feed_id: inst.feed_id, block_id: inst.block_id, date: startDate })
+		.map((trip) => trip.trip_id);
+	state.blockTrips.set(key, tripIds);
+	return tripIds;
+}
 
 export function getModelFromId(vehicleId: string): string | null {
 	const numericId = Number.parseInt(vehicleId, 10);
@@ -33,14 +57,7 @@ function findRelevantVehicle(inst: AugmentedTripInstance, ctx: CacheContext): Re
 	const candidateTripIds = new Set<string>([inst.trip_id]);
 
 	if (inst.block_id) {
-		const serviceDateTrips = getTripIdsByServiceDate(ctx, startDate);
-		for (const tripKey of serviceDateTrips) {
-			const rawTrip = ctx.augmented.rawTripsRec.get(tripKey);
-			if (!rawTrip || candidateTripIds.has(rawTrip.trip_id)) continue;
-			if (rawTrip?.block_id && rawTrip.block_id === inst.block_id) {
-				candidateTripIds.add(rawTrip.trip_id);
-			}
-		}
+		for (const tripId of getActiveBlockTripIds(inst, startDate, ctx)) candidateTripIds.add(tripId);
 	}
 
 	let blockMatch: RealtimeVehiclePosition | null = null;

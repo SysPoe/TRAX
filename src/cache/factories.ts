@@ -83,7 +83,6 @@ export function createRuntimeState(): CacheContext["runtimeState"] {
 		lazyServiceDates: new Map(),
 		dateOffsets: new Map(),
 		serviceDateArrays: new Map(),
-		vehicleEnrichmentQueue: new Map(),
 		vehicleEnrichmentActive: false,
 		previousVehicleInfo: new Map(),
 		srtNetworkData: null,

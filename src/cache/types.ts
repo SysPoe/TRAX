@@ -126,8 +126,7 @@ export type CacheContext = {
 		lazyServiceDates: Map<string, true>;
 		dateOffsets: Map<string, string>;
 		serviceDateArrays: Map<string, string[]>;
-		/** Pending one-time vehicle enrichment, drained iteratively to prevent provider callbacks from nesting registration. */
-		vehicleEnrichmentQueue: Map<string, AugmentedTripInstance>;
+		/** Prevent provider callbacks from recursively enriching nested trip registration. */
 		vehicleEnrichmentActive: boolean;
 		previousVehicleInfo: Map<string, unknown>;
 		srtNetworkData: unknown | null;
