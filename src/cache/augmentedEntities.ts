@@ -221,12 +221,37 @@ export function unregisterAugmentedTrip(ctx: CacheContext, tripId: string): void
 	}
 }
 
+/**
+ * Provider vehicle lookup can lazily materialize another service date. Drain
+ * those nested registrations as a queue instead of growing the JS call stack.
+ */
+function enrichRegisteredTripInstances(ctx: CacheContext, instances: readonly AugmentedTripInstance[]): void {
+	const runtime = ctx.runtimeState;
+	for (const instance of instances) runtime.vehicleEnrichmentQueue.set(instance.instance_id, instance);
+	if (runtime.vehicleEnrichmentActive) return;
+
+	runtime.vehicleEnrichmentActive = true;
+	try {
+		while (runtime.vehicleEnrichmentQueue.size > 0) {
+			const next = runtime.vehicleEnrichmentQueue.entries().next().value as
+				| [string, AugmentedTripInstance]
+				| undefined;
+			if (!next) break;
+			const [instanceId, instance] = next;
+			runtime.vehicleEnrichmentQueue.delete(instanceId);
+			if (ctx.augmented.instancesRec.get(instanceId) !== instance) continue;
+			addVehicleModel(instance, ctx, ctx.config);
+		}
+	} finally {
+		runtime.vehicleEnrichmentActive = false;
+	}
+}
+
 export function registerAugmentedTrip(ctx: CacheContext, trip: AugmentedTrip): void {
 	const { augmented } = ctx;
 	const tripId = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
 
 	for (const instance of trip.instances) {
-		addVehicleModel(instance, ctx, ctx.config);
 		augmented.instancesRec.set(instance.instance_id, instance);
 		for (const date of instance.actualTripDates) {
 			addOwnedMembership(
@@ -268,6 +293,8 @@ export function registerAugmentedTrip(ctx: CacheContext, trip: AugmentedTrip): v
 			}
 		}
 	}
+
+	enrichRegisteredTripInstances(ctx, trip.instances);
 }
 
 function refreshDiagramAfterInstanceChange(ctx: CacheContext, affectedTripIds: Set<string>): void {

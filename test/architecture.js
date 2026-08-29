@@ -80,7 +80,10 @@ import {
 	matchQrtPublishedFormation,
 	parseQrtPublishedFormations,
 } from "../dist/region-specific/AU/SEQ/qr-travel/published-formations.js";
-import { findUniqueTripInstanceForServiceDate } from "../dist/cache/augmentedEntities.js";
+import {
+	findUniqueTripInstanceForServiceDate,
+	getTripIdsByServiceDate,
+} from "../dist/cache/augmentedEntities.js";
 import { entityKey } from "../dist/identity.js";
 import { DropOffType, PickupType, RouteType, TripScheduleRelationship } from "qdf-gtfs";
 import {
@@ -1888,6 +1891,7 @@ const origin = `http://127.0.0.1:${server.address().port}`;
 
 try {
 	let vehicleInfoCalls = 0;
+	let vehicleDateRequestComplete = false;
 	const definition = {
 		id: "synthetic",
 		name: "Synthetic multi-feed",
@@ -1897,8 +1901,12 @@ try {
 				id: "alpha-only",
 				feedIds: ["alpha"],
 				capabilities: ["facilities"],
-				vehicleInfoForTrip() {
+				vehicleInfoForTrip(_trip, ctx) {
 					vehicleInfoCalls++;
+					if (!vehicleDateRequestComplete) {
+						getTripIdsByServiceDate(ctx, "20261215");
+						vehicleDateRequestComplete = true;
+					}
 					return { vehicle_model: "Synthetic train", vehicle_id: null };
 				},
 				enrichStop(stop) {
