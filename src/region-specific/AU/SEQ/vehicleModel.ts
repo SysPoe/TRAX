@@ -11,7 +11,10 @@ const RUN_MODEL_MAP: Record<string, string> = {
 };
 
 export function getVehicleInfo(inst: AugmentedTripInstance): VehicleInfo {
-	const prefix = inst.trip_number?.[0]?.toUpperCase();
+	// Unplanned runs wrap the train's report number as `TRN 'XXXX'`; the code
+	// inside still carries the leading letter used for model detection.
+	const code = inst.trip_number?.match(/^TRN '([A-Z0-9]{4})'$/i)?.[1] ?? inst.trip_number;
+	const prefix = code?.[0]?.toUpperCase();
 	const vehicle_model = prefix ? (RUN_MODEL_MAP[prefix] ?? null) : null;
 
 	let passenger_cars: number | null = null;

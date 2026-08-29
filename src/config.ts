@@ -20,8 +20,16 @@ export interface RealtimeSource {
 	source: FeedSource;
 }
 
+/** Realtime facts a feed may use when deriving a public run number. */
+export interface TripRealtimeContext {
+	vehicleLabel: string | null;
+}
+
 /** Derives the public run number for one static feed's trips. */
-export type TripNumberResolver = (trip: Pick<Trip, "trip_id" | "trip_short_name">) => string | undefined;
+export type TripNumberResolver = (
+	trip: Pick<Trip, "trip_id" | "trip_short_name">,
+	realtime?: TripRealtimeContext,
+) => string | undefined;
 
 export interface FeedDefinition {
 	id: string;
@@ -210,10 +218,11 @@ export function getDefaultTimeZone(config: TraxConfig): string {
 export function resolveTripNumber(
 	network: NetworkDefinition,
 	trip: Pick<Trip, "feed_id" | "trip_id" | "trip_short_name">,
+	realtime?: TripRealtimeContext,
 ): string {
 	const configured = network.feeds
 		.find((feed) => feed.id === trip.feed_id)
-		?.tripNumber?.(trip)
+		?.tripNumber?.(trip, realtime)
 		?.trim();
 	if (configured) return configured;
 	return trip.trip_short_name && /^\d{1,3}$/.test(trip.trip_short_name)

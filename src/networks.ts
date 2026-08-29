@@ -19,6 +19,14 @@ export const AU_SEQ_NETWORK: NetworkDefinition = {
 		{
 			id: "translink-seq",
 			staticSource: { url: "https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip" },
+			// SEQ publishes the train's four-character report number (TRN) as the
+			// realtime vehicle label; unplanned trips have no scheduled run number,
+			// so their label is wrapped to make the report-number provenance explicit.
+			tripNumber: (trip, realtime) => {
+				const label = realtime?.vehicleLabel?.trim().toUpperCase();
+				if (!label || !/^[A-Z0-9]{4}$/.test(label)) return undefined;
+				return trip.trip_id.startsWith("UNPLANNED-") ? `TRN '${label}'` : label;
+			},
 			realtimeSources: [
 				{
 					id: "translink-seq-alerts",

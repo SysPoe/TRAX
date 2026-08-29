@@ -80,10 +80,7 @@ import {
 	matchQrtPublishedFormation,
 	parseQrtPublishedFormations,
 } from "../dist/region-specific/AU/SEQ/qr-travel/published-formations.js";
-import {
-	findUniqueTripInstanceForServiceDate,
-	getTripIdsByServiceDate,
-} from "../dist/cache/augmentedEntities.js";
+import { findUniqueTripInstanceForServiceDate, getTripIdsByServiceDate } from "../dist/cache/augmentedEntities.js";
 import { entityKey } from "../dist/identity.js";
 import { DropOffType, PickupType, RouteType, TripScheduleRelationship } from "qdf-gtfs";
 import {
@@ -205,17 +202,11 @@ const qrtBookingStops = [
 		actualDeparture: "2026-09-01T14:00:00",
 	},
 ];
-const qrtInProgressLeg = selectQrtBookingLeg(
-	{ stops: qrtBookingStops },
-	Date.parse("2026-09-01T09:00:00+10:00"),
-);
+const qrtInProgressLeg = selectQrtBookingLeg({ stops: qrtBookingStops }, Date.parse("2026-09-01T09:00:00+10:00"));
 assert.equal(qrtInProgressLeg?.origin.placeCode, "MBJ");
 assert.equal(qrtInProgressLeg?.destination.placeCode, "ROK");
 assert.equal(qrtInProgressLeg?.departureDate, "2026-09-01T12:30:00");
-assert.equal(
-	selectQrtBookingLeg({ stops: qrtBookingStops }, Date.parse("2026-09-01T13:30:00+10:00")),
-	null,
-);
+assert.equal(selectQrtBookingLeg({ stops: qrtBookingStops }, Date.parse("2026-09-01T13:30:00+10:00")), null);
 const rockhampton = { id: 6031, code: "ROK", name: "Rockhampton" };
 assert.equal(
 	selectQrtRailService(
@@ -548,6 +539,54 @@ assert.equal(
 assert.equal(
 	resolveTripNumber(australiaRail, { feed_id: "vic-vline", trip_id: "service-2042", trip_short_name: null }),
 	"2042",
+);
+assert.equal(
+	resolveTripNumber(
+		australiaRail,
+		{
+			feed_id: "translink-seq",
+			trip_id: "35827515-ATS_HBL 26-41689",
+			trip_short_name: null,
+		},
+		{ vehicleLabel: "XAC7" },
+	),
+	"XAC7",
+	"SEQ planned runs use the vehicle label when it is a four-character code",
+);
+assert.equal(
+	resolveTripNumber(
+		australiaRail,
+		{
+			feed_id: "translink-seq",
+			trip_id: "UNPLANNED-96637669",
+			trip_short_name: null,
+		},
+		{ vehicleLabel: "XAC7" },
+	),
+	"TRN 'XAC7'",
+	"SEQ unplanned runs wrap the vehicle label as a TRN",
+);
+assert.equal(
+	resolveTripNumber(australiaRail, {
+		feed_id: "translink-seq",
+		trip_id: "35827515-ATS_HBL 26-41689",
+		trip_short_name: null,
+	}),
+	"1689",
+	"SEQ keeps the default run number without a realtime label",
+);
+assert.equal(
+	resolveTripNumber(
+		australiaRail,
+		{
+			feed_id: "translink-seq",
+			trip_id: "35827515-ATS_HBL 26-41689",
+			trip_short_name: null,
+		},
+		{ vehicleLabel: "96637669" },
+	),
+	"1689",
+	"SEQ ignores labels that are not four-character codes",
 );
 assert.deepEqual(australiaRail.places.find((place) => place.id === "southern-cross").members, [
 	{ feedId: "vic-vline", localId: "vic:rail:SSS" },

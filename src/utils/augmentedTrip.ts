@@ -176,8 +176,7 @@ export function augmentTrip(
 	options: AugmentTripOptions = {},
 ): AugmentedTrip {
 	ctx.augmented.timer.start("augmentTrip");
-	const requestedServiceDates =
-		options.serviceDates ?? getOperationalServiceDatesForTrip(trip, ctx);
+	const requestedServiceDates = options.serviceDates ?? getOperationalServiceDatesForTrip(trip, ctx);
 	const serviceDateSet = new Set(requestedServiceDates);
 	// Realtime refreshes must preserve lazily materialized scheduled dates which
 	// are still resident. Explicit lazy calls intentionally build only their date.
@@ -314,7 +313,9 @@ export function augmentTrip(
 		const actualTripDates = getUniqueDates(stopTimes, "actual");
 		ctx.augmented.timer.stop("createInstance:calculateTripDates");
 
-		const trip_number = resolveTripNumber(ctx.config.network, trip);
+		const trip_number = resolveTripNumber(ctx.config.network, trip, {
+			vehicleLabel: update?.vehicle?.label ?? null,
+		});
 
 		let instance: AugmentedTripInstance = {
 			...trip,
@@ -422,7 +423,11 @@ export function augmentTrip(
 }
 
 export function calculateRunSeries(instance: AugmentedTripInstance, ctx: cache.CacheContext): RunSeries {
-	const seriesRaw = instance.trip_number || resolveTripNumber(ctx.config.network, instance);
+	const seriesRaw =
+		instance.trip_number ||
+		resolveTripNumber(ctx.config.network, instance, {
+			vehicleLabel: instance.realtime_update?.vehicle?.label ?? null,
+		});
 	const series = seriesRaw.toUpperCase();
 	const tripKey = entityKey({ feedId: instance.feed_id, localId: instance.trip_id });
 	const vehicle_sightings: { vehicle_id: string; trip_id: string }[] = [];

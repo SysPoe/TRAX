@@ -1,13 +1,16 @@
-import { TransferType, TripScheduleRelationship, type GTFS, type Trip, type Stop } from "qdf-gtfs";
+import {
+	TransferType,
+	TripScheduleRelationship,
+	type GTFS,
+	type RealtimeTripUpdate,
+	type Trip,
+	type Stop,
+} from "qdf-gtfs";
 import { isConsideredRoute, isConsideredTrip } from "../utils/considered.js";
 import { rebuildServiceInverseIndexes, syncCalendarsToWasm } from "../utils/calendar.js";
 import { augmentStop } from "../utils/augmentedStop.js";
 import type { AugmentedStop } from "../utils/augmentedStop.js";
-import {
-	augmentTrip,
-	createRealtimeOnlyTrip,
-	getOperationalServiceDatesForTrip,
-} from "../utils/augmentedTrip.js";
+import { augmentTrip, createRealtimeOnlyTrip, getOperationalServiceDatesForTrip } from "../utils/augmentedTrip.js";
 import { clearAugmentedStopTimeCaches } from "../utils/augmentedStopTime.js";
 import { getCurrentQRTravelTrains, getPlacesWithCache } from "../region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
 import {
@@ -19,7 +22,7 @@ import { getRailwayStationFacilities } from "../region-specific/AU/SEQ/facilitie
 import type { QRTPlace, QRTStationDetails, QRTTravelTrip } from "../region-specific/AU/SEQ/qr-travel/types.js";
 import type { RailwayStationFacility } from "../region-specific/AU/SEQ/facilities-types.js";
 import logger from "../utils/logger.js";
-import { resolveTripNumber, type TraxConfig } from "../config.js";
+import { resolveTripNumber, type TraxConfig, type TripRealtimeContext } from "../config.js";
 import { clearConsideredCaches } from "../utils/considered.js";
 import type { CacheContext } from "./types.js";
 import { createEmptyRawCache, createAugmentedCacheWithConfig, createRuntimeState } from "./factories.js";
@@ -133,9 +136,19 @@ function findChangedRealtimeTripIds(
 	return changed;
 }
 
-function registerTripNumber(ctx: CacheContext, trip: Trip): void {
+/** Latest non-empty realtime vehicle label across a trip's updates, if any. */
+function latestVehicleLabel(updates: RealtimeTripUpdate[] | undefined): string | null {
+	let latest: RealtimeTripUpdate | null = null;
+	for (const update of updates ?? []) {
+		if (!update.vehicle?.label) continue;
+		if (!latest || (update.timestamp ?? 0) > (latest.timestamp ?? 0)) latest = update;
+	}
+	return latest?.vehicle?.label ?? null;
+}
+
+function registerTripNumber(ctx: CacheContext, trip: Trip, realtime?: TripRealtimeContext): void {
 	const tripKey = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
-	const tripNumber = resolveTripNumber(ctx.config.network, trip);
+	const tripNumber = resolveTripNumber(ctx.config.network, trip, realtime);
 	const previousTripNumber = ctx.augmented.tripNumberByTrip.get(tripKey);
 	if (previousTripNumber !== undefined && previousTripNumber !== tripNumber) {
 		const previousTrips = ctx.augmented.tripNumberTrips.get(previousTripNumber);
@@ -389,7 +402,9 @@ export async function refreshStaticCache(
 			stopTimes: [],
 			bounds: newRawCache.tripStopTimeBoundsByKey.get(key) ?? null,
 		});
-		registerTripNumber(ctx, trip);
+		registerTripNumber(ctx, trip, {
+			vehicleLabel: latestVehicleLabel(ctx.augmented.tripUpdatesCache.get(key)),
+		});
 	}
 
 	ctx.augmented.timer.start("refreshStaticCache:buildCorridorIndex");
@@ -429,7 +444,9 @@ export async function refreshStaticCache(
 			stopTimes: [],
 			bounds: null,
 		});
-		registerTripNumber(ctx, trip);
+		registerTripNumber(ctx, trip, {
+			vehicleLabel: latestVehicleLabel(ctx.augmented.tripUpdatesCache.get(key)),
+		});
 	}
 	const tripsToAugment = [...trips, ...realtimeOnlyTrips];
 	ctx.augmented.timer.stop("refreshStaticCache:loadStopTimes");
@@ -539,23 +556,23 @@ export async function refreshStaticCache(
 	const tripUpdatesCache = ctx.augmented.tripUpdatesCache;
 	newAugmentedCache.trips = await processWithProgress(
 		tripsToAugment,
-			"Augmenting trips",
-			(trip) => {
-				const tripKey = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
-				let augmentedTrip;
-				try {
-					augmentedTrip = augmentTrip(trip, ctx, tripUpdatesCache, undefined, {
-						serviceDates: operationalServiceDatesByTrip.get(tripKey) ?? [],
-					});
-				} finally {
-					newAugmentedCache.rawStopTimesCache.delete(tripKey);
-				}
+		"Augmenting trips",
+		(trip) => {
+			const tripKey = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
+			let augmentedTrip;
+			try {
+				augmentedTrip = augmentTrip(trip, ctx, tripUpdatesCache, undefined, {
+					serviceDates: operationalServiceDatesByTrip.get(tripKey) ?? [],
+				});
+			} finally {
+				newAugmentedCache.rawStopTimesCache.delete(tripKey);
+			}
 
-				const augmentedTripKey = entityKey({ feedId: augmentedTrip.feed_id, localId: augmentedTrip.trip_id });
-				newAugmentedCache.tripsRec.set(augmentedTripKey, augmentedTrip);
-				registerAugmentedTrip(ctx, augmentedTrip);
+			const augmentedTripKey = entityKey({ feedId: augmentedTrip.feed_id, localId: augmentedTrip.trip_id });
+			newAugmentedCache.tripsRec.set(augmentedTripKey, augmentedTrip);
+			registerAugmentedTrip(ctx, augmentedTrip);
 
-				return augmentedTrip;
+			return augmentedTrip;
 		},
 		config.progressLog,
 		250,
@@ -632,7 +649,9 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		ctx.raw.realtimeOnlyTripKeys.add(tripKey);
 		ctx.raw.tripsByKey.set(tripKey, trip);
 		augmentedCache.rawTripsRec.set(tripKey, trip);
-		registerTripNumber(ctx, trip);
+		registerTripNumber(ctx, trip, {
+			vehicleLabel: latestVehicleLabel(nextUpdatesByTrip.get(tripKey)),
+		});
 	}
 
 	logger.debug(
@@ -746,7 +765,7 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 				registerAugmentedTrip(ctx, updatedTrip);
 				replaceAugmentedTripInArray(ctx, updatedTrip);
 
-					timer.stop("refreshRealtimeCache:reregisterIndexes");
+				timer.stop("refreshRealtimeCache:reregisterIndexes");
 			}
 
 			const current = index + 1;
