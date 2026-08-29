@@ -21,6 +21,8 @@ The corridor resolver chooses the physical path for one journey. It is shape-fir
 13. Shape, trip, route, station, manual-network, and resolver identities include their feed or source namespace.
 14. A journey-wide validation pass rejects repeated synthetic stations after gap-local providers return their candidates.
 
+Topology-only manual networks use conservative unique-path resolution by default. A curated provider network may opt into weighted shortest-path resolution when its edge runtimes are authoritative.
+
 ## Evidence order
 
 For each gap, the resolver tries the following evidence in order:

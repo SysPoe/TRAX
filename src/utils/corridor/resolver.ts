@@ -143,6 +143,7 @@ function configVersion(ctx: CacheContext): string {
 		geometrySources: ctx.config.corridor.geometrySources,
 		manualNetworks: ctx.config.corridor.manualNetworks.map((network) => ({
 			id: network.id,
+			pathSelection: network.pathSelection ?? "unique",
 			version: network.version ?? "1",
 		})),
 		minimumOutputConfidence: ctx.config.corridor.minimumOutputConfidence,

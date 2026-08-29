@@ -142,6 +142,8 @@ export interface ManualNetwork {
 	id: string;
 
 	feedId: string;
+	/** Select a provider-specific path strategy for topology-only networks. */
+	pathSelection?: "unique" | "shortest";
 
 	nodes: ManualCorridorNode[];
 

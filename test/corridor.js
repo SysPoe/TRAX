@@ -20,7 +20,10 @@ import {
 	withCorridorTimingInstants,
 } from "../dist/utils/corridor/timing.js";
 import { manualNodeKind } from "../dist/region-specific/AU/SEQ/qr-travel/manual-network.js";
-import { _test as qrtSrtTest } from "../dist/region-specific/AU/SEQ/qr-travel/srt.js";
+import {
+	expandWithSRTPassingStops,
+	_test as qrtSrtTest,
+} from "../dist/region-specific/AU/SEQ/qr-travel/srt.js";
 import { _test as qrtTrackerTest } from "../dist/region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
 import { augmentTrip } from "../dist/utils/augmentedTrip.js";
 import { findExpress } from "../dist/utils/SRT.js";
@@ -1378,6 +1381,81 @@ function testUnknownQrtNodePromotesFromGtfsStationGeometry() {
 	assert.equal(result.gaps[0].nodes[1].passing, true);
 }
 
+function testQrtSrtExpandsPassingStations() {
+	const names = [
+		"Caboolture",
+		"Elimbah",
+		"Beerburrum",
+		"Glass House Mountains",
+		"Beerwah",
+		"Landsborough",
+		"Mooloolah",
+		"Eudlo",
+		"Palmwoods",
+		"Woombye",
+		"Nambour",
+	];
+	const index = createEmptyCorridorIndex("test");
+	index.stationGeometry = new Map(
+		names.map((name) => [q("seq", name), { stationId: q("seq", name), coordinates: [], names: [name] }]),
+	);
+	const ctx = context({
+		feedIds: ["QRT", "seq"],
+		index,
+		geometrySources: [{ feedId: "QRT", borrowFromFeedIds: ["seq"] }],
+		manualNetworks: [qrtSrtTest.getQrtManualNetwork()],
+	});
+	ctx.config.feedTimeZones.set("QRT", "Australia/Brisbane");
+	ctx.gtfs = {};
+	for (const name of ["Caboolture", "Landsborough", "Nambour"])
+		ctx.raw.stopsByKey.set(q("seq", name), {
+			feed_id: "seq",
+			stop_id: name,
+			stop_name: name,
+			stop_lat: null,
+			stop_lon: null,
+			parent_station: null,
+		});
+	const movement = (placeName, plannedArrival, plannedDeparture = plannedArrival) => ({
+		PlaceCode: "",
+		PlaceName: placeName,
+		sourceStopId: placeName,
+		KStation: false,
+		Status: "Scheduled",
+		TrainPosition: "NotArrived",
+		PlannedArrival: `2026-08-29T${plannedArrival}:00`,
+		PlannedDeparture: `2026-08-29T${plannedDeparture}:00`,
+		ActualArrival: "0001-01-01T00:00:00",
+		ActualDeparture: "0001-01-01T00:00:00",
+	});
+	const expanded = expandWithSRTPassingStops(
+		[
+			movement("Caboolture", "10:00", "10:01"),
+			movement("Landsborough", "10:31", "10:32"),
+			movement("Nambour", "10:55", "10:56"),
+		],
+		ctx,
+		{ serviceId: "Q301", serviceDate: "20260829", line: "Spirit", direction: "Northbound" },
+	);
+	assert.deepEqual(
+		expanded.filter((stop) => !stop.isStop).map((stop) => stop.placeName),
+		["Elimbah", "Beerburrum", "Glass House Mountains", "Beerwah", "Mooloolah", "Eudlo", "Palmwoods", "Woombye"],
+	);
+	const reverse = expandWithSRTPassingStops(
+		[
+			movement("Nambour", "10:00", "10:01"),
+			movement("Landsborough", "10:24", "10:25"),
+			movement("Caboolture", "10:55", "10:56"),
+		],
+		ctx,
+		{ serviceId: "Q302", serviceDate: "20260829", line: "Spirit", direction: "Southbound" },
+	);
+	assert.deepEqual(
+		reverse.filter((stop) => !stop.isStop).map((stop) => stop.placeName),
+		["Woombye", "Palmwoods", "Eudlo", "Mooloolah", "Beerwah", "Glass House Mountains", "Beerburrum", "Elimbah"],
+	);
+}
+
 function testTimingCannotChangeCorridor() {
 	const coordinates = simpleCoordinates(["a", "b", "c", "d"]);
 	const index = createEmptyCorridorIndex("test");
@@ -1748,6 +1826,7 @@ for (const testCase of [
 	["skipped anchors remain in the physical overlay", testSkippedOverlay],
 	["QRT unknown nodes stay waypoints without station evidence", testQrtWaypointClassification],
 	["unknown QRT nodes promote from GTFS station geometry", testUnknownQrtNodePromotesFromGtfsStationGeometry],
+	["QRT SRT expands every passing station between calls", testQrtSrtExpandsPassingStations],
 	["timing records stay attached after filtering", testTimingRecordsStayAttachedAfterFiltering],
 	["contextual findExpress uses the journey shape", testContextualFindExpressUsesJourneyShape],
 	["QRT uses the operating service date", testQrtUsesOperatingServiceDate],

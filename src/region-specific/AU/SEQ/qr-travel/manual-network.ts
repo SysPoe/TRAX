@@ -21,6 +21,17 @@ const OPERATIONAL_POINT_NAMES = new Set([
 	"townsville new station",
 ]);
 
+const MANUAL_NAME_ALIASES = new Map([["glasshouse mountains", "Glass House Mountains"]]);
+
+function canonicalManualName(name: string): string {
+	return MANUAL_NAME_ALIASES.get(normalizeStationName(name)) ?? name;
+}
+
+function manualNameAliases(name: string): string[] {
+	const canonical = canonicalManualName(name);
+	return [...new Set([normalizeStationName(name), normalizeStationName(canonical)])];
+}
+
 function numberIsFinite(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
@@ -97,15 +108,18 @@ export function getQrtManualNetwork(): ManualNetwork {
 		}
 	}
 	const nodes = [...names.entries()].map(([, name]) => {
-		const classification = manualNodeClassification(name, passengerNames);
+		const displayName = canonicalManualName(name);
+		const classification = manualNodeClassification(displayName, passengerNames);
 		return {
-			id: nodeId(name),
-			name,
-			aliases: [normalizeStationName(name)],
+			id: nodeId(displayName),
+			name: displayName,
+			aliases: manualNameAliases(name),
 			...classification,
 		} satisfies ManualNetwork["nodes"][number];
 	});
-	const nodeIdByName = new Map([...names.keys()].map((normalized) => [normalized, nodeId(names.get(normalized)!)]));
+	const nodeIdByName = new Map(
+		[...names.keys()].map((normalized) => [normalized, nodeId(canonicalManualName(names.get(normalized)!))]),
+	);
 	const edgeMap = new Map<string, SRTEntry>();
 	for (const entry of entries) {
 		const from = nodeIdByName.get(normalizeStationName(entry.from));
@@ -118,6 +132,7 @@ export function getQrtManualNetwork(): ManualNetwork {
 	return {
 		id: QRT_MANUAL_NETWORK_ID,
 		feedId: QRT_MANUAL_FEED_ID,
+		pathSelection: "shortest",
 		nodes,
 		edges: [...edgeMap.values()].map((edge) => ({
 			from: edge.from,
@@ -127,6 +142,6 @@ export function getQrtManualNetwork(): ManualNetwork {
 		})),
 		priority: "fallback",
 		sourceIds: [QRT_SOURCE_ID],
-		version: "srt-1",
+		version: "srt-2",
 	};
 }

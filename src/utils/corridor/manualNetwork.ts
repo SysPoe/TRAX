@@ -221,6 +221,10 @@ function topologyPath(
 		addEdge(adjacency, fromKey, toKey, edge.minutes ?? null);
 		if (edge.bidirectional) addEdge(adjacency, toKey, fromKey, edge.minutes ?? null);
 	}
+	if (network.pathSelection === "shortest") {
+		const shortest = shortestTopologyPath(networkKey(network), start, ends, adjacency);
+		return shortest ? { ...shortest, minutes: pathMinutes(network, shortest.nodes) } : null;
+	}
 
 	const queue = start.map((key) => [key]);
 	let queueIndex = 0;
@@ -251,6 +255,62 @@ function topologyPath(
 		minutes: pathMinutes(network, path),
 		evidence: "manual-topology",
 	};
+}
+
+interface ManualQueueEntry {
+	key: string;
+	path: string[];
+	distance: number;
+	hops: number;
+	order: number;
+}
+
+/** Resolve explicitly opted-in weighted topology without weakening default ambiguity checks. */
+function shortestTopologyPath(
+	networkId: string,
+	start: readonly string[],
+	ends: ReadonlySet<string>,
+	adjacency: ReadonlyMap<string, readonly ManualEdge[]>,
+): ManualPath | null {
+	const queue: ManualQueueEntry[] = start.map((key, order) => ({
+		key,
+		path: [key],
+		distance: 0,
+		hops: 0,
+		order,
+	}));
+	const best = new Map<string, { distance: number; hops: number }>();
+	for (const entry of queue) best.set(entry.key, { distance: 0, hops: 0 });
+	let order = queue.length;
+	while (queue.length > 0) {
+		queue.sort((a, b) => a.distance - b.distance || a.hops - b.hops || a.order - b.order);
+		const current = queue.shift()!;
+		const known = best.get(current.key);
+		if (
+			known &&
+			(current.distance > known.distance || (current.distance === known.distance && current.hops > known.hops))
+		)
+			continue;
+		if (ends.has(current.key)) {
+			return {
+				networkId,
+				nodes: current.path,
+				minutes: [],
+				evidence: "manual-topology",
+			};
+		}
+		for (const edge of adjacency.get(current.key) ?? []) {
+			if (current.path.includes(edge.to)) continue;
+			const distance = current.distance + (edge.minutes != null && edge.minutes > 0 ? edge.minutes : 1);
+			const hops = current.hops + 1;
+			const previous = best.get(edge.to);
+			if (previous && (previous.distance < distance || (previous.distance === distance && previous.hops <= hops)))
+				continue;
+			best.set(edge.to, { distance, hops });
+			queue.push({ key: edge.to, path: [...current.path, edge.to], distance, hops, order: order++ });
+		}
+	}
+	return null;
 }
 
 function toNode(
