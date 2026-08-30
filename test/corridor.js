@@ -534,6 +534,24 @@ function testNearVertexProjectionKeepsBetterLaterSegment() {
 	assert.equal(projections.get(stationId).length, 1);
 	assert.equal(projections.get(stationId)[0].segmentIndex, 1);
 	assert.equal(projections.get(stationId)[0].lateralDistanceMeters, 2);
+
+	const sameStationPlatform = {
+		...better,
+		segmentIndex: 2,
+		distanceAlongMeters: 112,
+		lateralDistanceMeters: 0.5,
+	};
+	shapeIndexTest.appendProjection(projections, stationId, sameStationPlatform, 3);
+	assert.equal(projections.get(stationId).length, 1);
+	assert.equal(projections.get(stationId)[0].segmentIndex, 2);
+
+	const laterOccurrence = {
+		...sameStationPlatform,
+		segmentIndex: 8,
+		distanceAlongMeters: 400,
+	};
+	shapeIndexTest.appendProjection(projections, stationId, laterOccurrence, 3);
+	assert.equal(projections.get(stationId).length, 2);
 }
 
 function testDisplacedParent() {
@@ -1209,6 +1227,40 @@ function testReplacementUsesRealtimeStopSequence() {
 		result.instances[0].stopTimes.some((stopTime) => stopTime.actual_stop_id === "x"),
 		false,
 	);
+
+	const malformedUpdate = {
+		...update,
+		stop_time_updates: [
+			{ stop_id: "a", stop_sequence: 1, arrival_delay: 60, departure_delay: 60 },
+			{ stop_id: "b", stop_sequence: 1 },
+			{ stop_id: "a", stop_sequence: 2, arrival_delay: 3_600, departure_delay: 3_600 },
+			{ stop_id: "c", stop_sequence: 2 },
+		],
+	};
+	const malformedResult = augmentTrip(
+		{
+			feed_id: "feed",
+			trip_id: "trip",
+			route_id: "r",
+			service_id: "daily",
+			direction_id: 0,
+			shape_id: "replacement-shape",
+			trip_headsign: null,
+			trip_short_name: null,
+			block_id: null,
+			wheelchair_accessible: null,
+			bikes_allowed: null,
+		},
+		ctx,
+		new Map([[q("feed", "trip"), [malformedUpdate]]]),
+		undefined,
+		{ serviceDates: ["20260827"], realtimeDates: ["20260827"] },
+	);
+	assert.deepEqual(
+		malformedResult.instances[0].stopTimes.map((stopTime) => stopTime.actual_stop_id),
+		["a", "x", "c"],
+	);
+	assert.equal(malformedResult.instances[0].stopTimes[0].actual_arrival_time, 3_660);
 }
 
 function testTimingRecordsStayAttachedAfterFiltering() {

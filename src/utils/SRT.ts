@@ -11,6 +11,7 @@ import type { QualifiedEntityId } from "qdf-gtfs";
 import { isConsideredRoute } from "./considered.js";
 import { expressInfoFromCorridor, resolveJourneyCorridor } from "./corridor/resolver.js";
 import type { JourneyContext } from "./corridor/types.js";
+import { getStopTimesForTrips } from "../cache/gtfsReads.js";
 
 export type SRTMatrix = {
 	[from: string]: {
@@ -44,6 +45,7 @@ interface NetworkData {
 const CACHE_FILE = "network_topology.json";
 const MAX_CACHE_AGE_DAYS = 7;
 const TOPOLOGY_CACHE_VERSION = 4;
+const TOPOLOGY_TRIP_BATCH_SIZE = 1_000;
 
 type PatternStop = { id: string; timeFromPrev: number; distanceFromPrev: number };
 
@@ -211,6 +213,37 @@ function pruneExpressSkipEdges(patterns: PatternStop[][], validEdges: Set<string
 	}
 }
 
+function visitTripStopTimesBatched(
+	ctx: cache.CacheContext,
+	trips: readonly qdf.Trip[],
+	visit: (trip: qdf.Trip, stopTimes: qdf.StopTime[]) => void,
+	batchSize = TOPOLOGY_TRIP_BATCH_SIZE,
+): void {
+	const tripsByFeed = new Map<string, qdf.Trip[]>();
+	for (const trip of trips) {
+		const feedTrips = tripsByFeed.get(trip.feed_id) ?? [];
+		feedTrips.push(trip);
+		tripsByFeed.set(trip.feed_id, feedTrips);
+	}
+
+	for (const [feedId, feedTrips] of tripsByFeed) {
+		for (let start = 0; start < feedTrips.length; start += batchSize) {
+			const batch = feedTrips.slice(start, start + batchSize);
+			const stopTimesByTrip = new Map<string, qdf.StopTime[]>();
+			for (const stopTime of getStopTimesForTrips(
+				ctx,
+				feedId,
+				batch.map((trip) => trip.trip_id),
+			)) {
+				const rows = stopTimesByTrip.get(stopTime.trip_id) ?? [];
+				rows.push(stopTime);
+				stopTimesByTrip.set(stopTime.trip_id, rows);
+			}
+			for (const trip of batch) visit(trip, stopTimesByTrip.get(trip.trip_id) ?? []);
+		}
+	}
+}
+
 function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 	if (!ctx.gtfs) throw new Error("GTFS not initialized!");
 	const gtfs = ctx.gtfs;
@@ -237,8 +270,7 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		module: "topology",
 	});
 
-	railTrips.forEach((trip) => {
-		const stopTimes = gtfs.getStopTimes({ feed_id: trip.feed_id, trip_id: trip.trip_id });
+	visitTripStopTimesBatched(ctx, railTrips, (trip, stopTimes) => {
 		const edgeTimes = getPatternEdgeTimes(stopTimes);
 		const edgeDistances = getPatternEdgeDistances(stopTimes);
 		const stops = stopTimes.map((st: qdf.StopTime, i: number) => {
@@ -516,6 +548,7 @@ export const _test = {
 	getPatternEdgeTimes,
 	getPatternEdgeDistances,
 	pruneExpressSkipEdges,
+	visitTripStopTimesBatched,
 };
 
 /**

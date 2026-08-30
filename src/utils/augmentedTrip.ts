@@ -226,6 +226,15 @@ export function augmentTrip(
 		: allUpdates;
 	ctx.augmented.timer.stop("augmentTrip:getTripUpdates");
 	let reusableStaticCorridor: CorridorResolution | null = null;
+	const replacementHasConflictingSequences = (update: qdf.RealtimeTripUpdate): boolean => {
+		const seen = new Set<number>();
+		for (const stopTime of update.stop_time_updates) {
+			if (stopTime.stop_sequence == null) continue;
+			if (seen.has(stopTime.stop_sequence)) return true;
+			seen.add(stopTime.stop_sequence);
+		}
+		return false;
+	};
 
 	const createInstance = (
 		serviceDate: string,
@@ -245,12 +254,16 @@ export function augmentTrip(
 			realtimeStartTime: startTime,
 		});
 
-		const staticStopTimesForInstance =
+		// A replacement must describe one unambiguous stop order before it can own
+		// the whole instance. Some feeds publish a current segment with reset stop
+		// sequences; retain the static trip in that case and apply updates by stop.
+		const realtimeOwnsStopSequence =
 			scheduleRelationship === qdf.TripScheduleRelationship.ADDED ||
 			scheduleRelationship === qdf.TripScheduleRelationship.UNSCHEDULED ||
-			scheduleRelationship === qdf.TripScheduleRelationship.REPLACEMENT
-				? null
-				: rawStopTimes;
+			(scheduleRelationship === qdf.TripScheduleRelationship.REPLACEMENT &&
+				update !== null &&
+				!replacementHasConflictingSequences(update));
+		const staticStopTimesForInstance = realtimeOwnsStopSequence ? null : rawStopTimes;
 		const journeyForDate: JourneyContext =
 			staticStopTimesForInstance === null && update
 				? createRealtimeJourneyContext(update, ctx)

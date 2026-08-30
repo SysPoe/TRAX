@@ -116,11 +116,21 @@ export function matchRealtimeStopTimeUpdate(input: {
 	byStopId: ReadonlyMap<string, qdf.RealtimeStopTimeUpdate>;
 	byParentStationId: ReadonlyMap<string, qdf.RealtimeStopTimeUpdate>;
 }): qdf.RealtimeStopTimeUpdate | undefined {
-	return (
-		input.bySequence.get(input.stopSequence) ??
-		input.byStopId.get(input.stopId) ??
-		(input.parentStationId ? input.byParentStationId.get(input.parentStationId) : undefined)
-	);
+	const sequenceMatch = input.bySequence.get(input.stopSequence);
+	const parentMatch = input.parentStationId
+		? input.byParentStationId.get(input.parentStationId)
+		: undefined;
+	if (
+		sequenceMatch &&
+		(!sequenceMatch.stop_id ||
+			sequenceMatch.stop_id === input.stopId ||
+			sequenceMatch.stop_id === input.parentStationId ||
+			sequenceMatch === parentMatch)
+	) {
+		return sequenceMatch;
+	}
+
+	return input.byStopId.get(input.stopId) ?? parentMatch;
 }
 
 function attachStopReferences(
@@ -332,11 +342,14 @@ export function augmentStopTimes(
 	for (const [index, rt] of stopTimeUpdates.entries()) {
 		if (rt.stop_sequence != null) {
 			rtBySeq.set(rt.stop_sequence, rt);
-		} else if (rt.stop_id) {
-			rtByStopId.set(rt.stop_id, rt);
+		}
+		if (rt.stop_id) {
+			if (!rtByStopId.has(rt.stop_id)) rtByStopId.set(rt.stop_id, rt);
 			const rawStop = cache.getRawStops(ctx, { feed_id: feedId, stop_id: rt.stop_id })[0];
 			const parentStationId = rawStop?.parent_station;
-			if (parentStationId) rtByParentStationId.set(parentStationId, rt);
+			if (parentStationId && !rtByParentStationId.has(parentStationId)) {
+				rtByParentStationId.set(parentStationId, rt);
+			}
 		}
 		if (!staticStopTimes) {
 			const sequence = realtimeOnlySequences.get(index);

@@ -8,6 +8,9 @@ import { CoordinateGridIndex } from "./spatialIndex.js";
 import { projectCoordinatesOnSegment } from "./projection.js";
 import { qualifiedRouteDirectionKey } from "./keys.js";
 import { createPatternIndexBuilder } from "./patternIndex.js";
+
+/** Projections inside one platform-length window describe one station occurrence. */
+export const SAME_STATION_PROJECTION_WINDOW_METERS = 25;
 import type { RoutePattern, StationGeometry, StationProjection } from "./types.js";
 import type { CorridorResolutionConfig } from "./types.js";
 
@@ -171,7 +174,11 @@ function appendProjection(
 ): void {
 	const current = projections.get(stationId) ?? [];
 	const nearbyIndex = current.reduce((bestIndex, candidate, index) => {
-		if (Math.abs(candidate.distanceAlongMeters - projection.distanceAlongMeters) >= 5) return bestIndex;
+		if (
+			Math.abs(candidate.distanceAlongMeters - projection.distanceAlongMeters) >=
+			SAME_STATION_PROJECTION_WINDOW_METERS
+		)
+			return bestIndex;
 		if (bestIndex < 0) return index;
 		return Math.abs(current[bestIndex].distanceAlongMeters - projection.distanceAlongMeters) >
 			Math.abs(candidate.distanceAlongMeters - projection.distanceAlongMeters)

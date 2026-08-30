@@ -985,6 +985,20 @@ assert.equal(
 	"2015142",
 );
 assert.equal(
+	matchRealtimeStopTimeUpdate({
+		stopSequence: 1,
+		stopId: "600493",
+		parentStationId: "place_woom",
+		bySequence: new Map([[1, { stop_sequence: 1, stop_id: "600019" }]]),
+		byStopId: new Map([
+			["600493", { stop_sequence: 1, stop_id: "600493" }],
+			["600019", { stop_sequence: 1, stop_id: "600019" }],
+		]),
+		byParentStationId: new Map(),
+	})?.stop_id,
+	"600493",
+);
+assert.equal(
 	tfnswPlugin.considerRoute({
 		feed_id: "nsw-sydney-trains",
 		agency_id: "NSWTrains",

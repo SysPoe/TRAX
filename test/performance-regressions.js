@@ -168,6 +168,56 @@ function testExpressPruningDistinguishesParallelCorridors() {
 	assert.ok(!expressEdges.has(directEdge), "an express skip over the same corridor must not become track");
 }
 
+function testTopologyStopTimesAreReadInFeedBatches() {
+	const calls = [];
+	const emptyPacked = () => ({
+		strings: [],
+		tripIds: new Uint32Array(),
+		stopIds: new Uint32Array(),
+		arrivalTimes: new Int32Array(),
+		departureTimes: new Int32Array(),
+		stopSequences: new Int32Array(),
+		stopHeadsigns: new Uint32Array(),
+		pickupTypes: new Uint8Array(),
+		dropOffTypes: new Uint8Array(),
+		shapeDistances: new Float64Array(),
+		timepoints: new Int8Array(),
+		continuousPickups: new Int8Array(),
+		continuousDropOffs: new Int8Array(),
+		feedIds: new Uint32Array(),
+	});
+	const ctx = {
+		gtfs: {
+			getStopTimesPacked(query) {
+				calls.push(query);
+				return emptyPacked();
+			},
+		},
+	};
+	const trips = [
+		...Array.from({ length: 5 }, (_, index) => ({ feed_id: "feed-a", trip_id: `a-${index}` })),
+		{ feed_id: "feed-b", trip_id: "b-0" },
+	];
+	const visited = [];
+	srtTest.visitTripStopTimesBatched(
+		ctx,
+		trips,
+		(trip, stopTimes) => {
+			visited.push(trip.trip_id);
+			assert.deepEqual(stopTimes, []);
+		},
+		2,
+	);
+
+	assert.deepEqual(calls, [
+		{ feed_id: "feed-a", trip_ids: ["a-0", "a-1"] },
+		{ feed_id: "feed-a", trip_ids: ["a-2", "a-3"] },
+		{ feed_id: "feed-a", trip_ids: ["a-4"] },
+		{ feed_id: "feed-b", trip_ids: ["b-0"] },
+	]);
+	assert.deepEqual(visited, ["a-0", "a-1", "a-2", "a-3", "a-4", "b-0"]);
+}
+
 function testPtvReplacementBusIsNotConsideredRail() {
 	const ctx = {
 		config: { network: { plugins: [ptvMetroPlugin] } },
@@ -317,6 +367,7 @@ await testRealtimeUpdatesMaterializeByFeed();
 testStaticFingerprintTracksQDFCacheFile();
 testUntimedPassingPointsUseShapeDistance();
 testExpressPruningDistinguishesParallelCorridors();
+testTopologyStopTimesAreReadInFeedBatches();
 testPtvReplacementBusIsNotConsideredRail();
 testVLineEnrichmentReadsVehicleSnapshotOnce();
 await testVLineInstanceScanYieldsToRequests();

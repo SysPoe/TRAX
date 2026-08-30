@@ -1,5 +1,9 @@
 import type { CorridorResolutionConfig, JourneyAnchor, StationProjection } from "./types.js";
-import { indexedShapePoint, type IndexedShape } from "./shapeIndex.js";
+import {
+	indexedShapePoint,
+	SAME_STATION_PROJECTION_WINDOW_METERS,
+	type IndexedShape,
+} from "./shapeIndex.js";
 
 interface AlignmentCandidate {
 	key: string;
@@ -195,7 +199,8 @@ interface AlignmentState {
 	last: AlignmentCandidate | null;
 	cost: number;
 	matchedCount: number;
-	choices: Array<AlignmentCandidate | null>;
+	previous: AlignmentState | null;
+	choice: AlignmentCandidate | null;
 }
 
 function betterState(a: AlignmentState, b: AlignmentState): AlignmentState {
@@ -211,7 +216,7 @@ function solveOrientation(
 	orientation: "forward" | "reverse",
 	options: ShapeAlignmentOptions,
 ): AlignmentState {
-	let states: AlignmentState[] = [{ last: null, cost: 0, matchedCount: 0, choices: [] }];
+	let states: AlignmentState[] = [{ last: null, cost: 0, matchedCount: 0, previous: null, choice: null }];
 	for (let index = 0; index < anchors.length; index++) {
 		const candidates = makeCandidates(anchors[index], index, shape, config, anchors.length, orientation, options);
 		const next = new Map<string, AlignmentState>();
@@ -220,7 +225,8 @@ function solveOrientation(
 				last: state.last,
 				cost: state.cost + 300,
 				matchedCount: state.matchedCount,
-				choices: [...state.choices, null],
+				previous: state,
+				choice: null,
 			};
 			const skippedKey = state.last?.key ?? "none";
 			next.set(skippedKey, next.has(skippedKey) ? betterState(next.get(skippedKey)!, skipped) : skipped);
@@ -231,7 +237,8 @@ function solveOrientation(
 					last: candidate,
 					cost: state.cost + candidate.cost,
 					matchedCount: state.matchedCount + 1,
-					choices: [...state.choices, candidate],
+					previous: state,
+					choice: candidate,
 				};
 				const key = candidate.key;
 				next.set(key, next.has(key) ? betterState(next.get(key)!, resolved) : resolved);
@@ -250,8 +257,14 @@ function toAlignment(
 	options: ShapeAlignmentOptions,
 ): ShapeAlignment {
 	const aligned = new Map<number, AlignedAnchor>();
-	for (let index = 0; index < state.choices.length; index++) {
-		const candidate = state.choices[index];
+	const choices = new Array<AlignmentCandidate | null>(anchors.length);
+	let cursor: AlignmentState | null = state;
+	for (let index = choices.length - 1; index >= 0; index--) {
+		choices[index] = cursor?.choice ?? null;
+		cursor = cursor?.previous ?? null;
+	}
+	for (let index = 0; index < choices.length; index++) {
+		const candidate = choices[index];
 		if (!candidate) continue;
 		aligned.set(index, {
 			index,
@@ -295,7 +308,8 @@ function hasComparableAlternative(
 		if (
 			candidates.some(
 				(candidate) =>
-					Math.abs(candidate.routeProgress - selected.distanceAlongMeters) > 5 &&
+					Math.abs(candidate.routeProgress - selected.distanceAlongMeters) >
+						SAME_STATION_PROJECTION_WINDOW_METERS &&
 					Math.abs(candidate.cost - selected.cost) <= 1 &&
 					(!previous || candidate.routeProgress > previous.distanceAlongMeters + 2) &&
 					(!next || candidate.routeProgress < next.distanceAlongMeters - 2),
