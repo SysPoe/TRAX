@@ -599,6 +599,7 @@ assert.deepEqual(australiaRail.places.find((place) => place.id === "albury").mem
 ]);
 assert.deepEqual(australiaRail.places.find((place) => place.id === "brisbane-roma-street").members, [
 	{ feedId: "translink-seq", localId: "place_romsta" },
+	{ feedId: "nsw-sydney-trains", localId: "40001" },
 	{ feedId: "nsw-trainlink", localId: "40001" },
 ]);
 assert.deepEqual(australiaRail.places.find((place) => place.id === "sydney-central").members, [

@@ -260,6 +260,7 @@ export function createAuRailNetwork(options: AuRailNetworkOptions = {}): Network
 					name: "Roma Street station",
 					members: [
 						{ feedId: "translink-seq", localId: "place_romsta" },
+						{ feedId: "nsw-sydney-trains", localId: "40001" },
 						{ feedId: "nsw-trainlink", localId: "40001" },
 					],
 				},
