@@ -138,10 +138,19 @@ export function createAuVicVlineNetwork(options: AuVicVlineNetworkOptions = {}):
 			id,
 			name,
 			members: [
-				{ feedId: "vic-vline", localId },
+				// V/Line no longer publishes East Pakenham in its current static feed.
+				...(id === "east-pakenham" ? [] : [{ feedId: "vic-vline", localId }]),
 				{ feedId: "vic-metro", localId },
 			],
 		})),
+		sameStationIdPlaces: [
+			{
+				feedIds: ["vic-vline", "vic-metro"],
+				canonicalFeedId: "vic-metro",
+				placeIdPrefix: "victoria-rail-",
+				maxDistanceMeters: 250,
+			},
+		],
 	};
 }
 
@@ -160,10 +169,10 @@ const SHARED_NSW_RAIL_STATIONS = [
 ] as const;
 
 const SHARED_VLINE_TRAINLINK_STATIONS = [
-	["albury", "Albury Railway Station", "nsw:rail:ABY", "26401"],
-	["benalla", "Benalla Railway Station", "vic:rail:BXA", "20295"],
-	["seymour", "Seymour Railway Station", "vic:rail:SER", "20342"],
-	["wangaratta", "Wangaratta Railway Station", "vic:rail:WRT", "20356"],
+	["albury", "Albury Railway Station", "nsw:rail:ABY", "26401", "26401"],
+	["benalla", "Benalla Railway Station", "vic:rail:BXA", "36721", "20295"],
+	["seymour", "Seymour Railway Station", "vic:rail:SER", "V17191", "20342"],
+	["wangaratta", "Wangaratta Railway Station", "vic:rail:WRT", "36771", "20356"],
 ] as const;
 
 /**
@@ -232,9 +241,21 @@ export function createAuRailNetwork(options: AuRailNetworkOptions = {}): Network
 		: [];
 
 	const victoriaPlaces = (victoria.places ?? []).map((place) => {
-		const trainLinkId = place.id === "broadmeadows" ? "20030" : place.id === "southern-cross" ? "22180" : null;
-		return trainLinkId && tfnswKey
-			? { ...place, members: [...place.members, { feedId: "nsw-trainlink", localId: trainLinkId }] }
+		const tfnswIds =
+			place.id === "broadmeadows"
+				? { sydneyTrains: "V20030", trainLink: "20030" }
+				: place.id === "southern-cross"
+					? { sydneyTrains: "V22180", trainLink: "22180" }
+					: null;
+		return tfnswIds && tfnswKey
+			? {
+					...place,
+					members: [
+						...place.members,
+						{ feedId: "nsw-sydney-trains", localId: tfnswIds.sydneyTrains },
+						{ feedId: "nsw-trainlink", localId: tfnswIds.trainLink },
+					],
+				}
 			: place;
 	});
 	const tfnswPlaces = tfnswKey
@@ -247,11 +268,12 @@ export function createAuRailNetwork(options: AuRailNetworkOptions = {}): Network
 						{ feedId: "nsw-trainlink", localId },
 					],
 				})),
-				...SHARED_VLINE_TRAINLINK_STATIONS.map(([id, name, vlineId, trainLinkId]) => ({
+				...SHARED_VLINE_TRAINLINK_STATIONS.map(([id, name, vlineId, sydneyTrainsId, trainLinkId]) => ({
 					id,
 					name,
 					members: [
 						{ feedId: "vic-vline", localId: vlineId },
+						{ feedId: "nsw-sydney-trains", localId: sydneyTrainsId },
 						{ feedId: "nsw-trainlink", localId: trainLinkId },
 					],
 				})),
@@ -281,6 +303,19 @@ export function createAuRailNetwork(options: AuRailNetworkOptions = {}): Network
 		],
 		corridor: AU_SEQ_NETWORK.corridor,
 		places: [...(AU_SEQ_NETWORK.places ?? []), ...victoriaPlaces, ...tfnswPlaces],
+		sameStationIdPlaces: [
+			...(victoria.sameStationIdPlaces ?? []),
+			...(tfnswKey
+				? [
+						{
+							feedIds: ["nsw-sydney-trains", "nsw-trainlink"] as const,
+							canonicalFeedId: "nsw-sydney-trains",
+							placeIdPrefix: "nsw-rail-",
+							maxDistanceMeters: 250,
+						},
+					]
+				: []),
+		],
 	};
 }
 
@@ -303,6 +338,14 @@ export function createCaGthaNetwork(apiKeys: string | readonly string[] = []): N
 			{ feedId: "go", localId: goId },
 			...(includeUp ? [{ feedId: "up", localId: goId }] : []),
 			{ feedId: "via", localId: viaId },
+		],
+	});
+	const goUpInterchange = (id: string, name: string, localId: string) => ({
+		id,
+		name,
+		members: [
+			{ feedId: "go", localId },
+			{ feedId: "up", localId },
 		],
 	});
 	return {
@@ -377,6 +420,10 @@ export function createCaGthaNetwork(apiKeys: string | readonly string[] = []): N
 		plugins: [gthaPlugin, viaPlugin],
 		places: [
 			interchange("toronto-union", "Toronto Union Station", "UN", "119", true),
+			goUpInterchange("bloor", "Bloor GO/UP", "BL"),
+			goUpInterchange("mount-dennis", "Mount Dennis GO/UP", "MD"),
+			goUpInterchange("pearson-airport", "Pearson Airport", "PA"),
+			goUpInterchange("weston", "Weston GO/UP", "WE"),
 			interchange("oshawa", "Oshawa", "OS", "367"),
 			interchange("guildwood", "Guildwood", "GU", "450"),
 			interchange("kitchener", "Kitchener", "KI", "114"),
@@ -389,6 +436,14 @@ export function createCaGthaNetwork(apiKeys: string | readonly string[] = []): N
 			interchange("malton", "Malton", "MA", "34"),
 			interchange("niagara-falls", "Niagara Falls", "NI", "346"),
 			interchange("st-catharines", "St. Catharines", "SCTH", "185"),
+		],
+		sameStationIdPlaces: [
+			{
+				feedIds: ["go", "up"],
+				canonicalFeedId: "up",
+				placeIdPrefix: "go-up-",
+				maxDistanceMeters: 300,
+			},
 		],
 	};
 }

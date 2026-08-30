@@ -332,6 +332,17 @@ assert.deepEqual(gthaWithFallbacks.places.find((place) => place.id === "toronto-
 	{ feedId: "up", localId: "UN" },
 	{ feedId: "via", localId: "119" },
 ]);
+for (const [placeId, localId] of [
+	["bloor", "BL"],
+	["mount-dennis", "MD"],
+	["pearson-airport", "PA"],
+	["weston", "WE"],
+]) {
+	assert.deepEqual(gthaWithFallbacks.places.find((place) => place.id === placeId).members, [
+		{ feedId: "go", localId },
+		{ feedId: "up", localId },
+	]);
+}
 assert.deepEqual(gthaWithFallbacks.places.find((place) => place.id === "guildwood").members, [
 	{ feedId: "go", localId: "GU" },
 	{ feedId: "via", localId: "450" },
@@ -498,6 +509,9 @@ assert.deepEqual(vlineNoKey.places[0].members, [
 	{ feedId: "vic-metro", localId: "vic:rail:SSS" },
 ]);
 assert.equal(vlineNoKey.places.length, 17);
+assert.deepEqual(vlineNoKey.places.find((place) => place.id === "east-pakenham").members, [
+	{ feedId: "vic-metro", localId: "vic:rail:EPH" },
+]);
 assert.ok(vlineNoKey.places.some((place) => place.id === "watergardens"));
 assert.equal(
 	journeyLocationName("Traralgon Railway Station", [
@@ -591,12 +605,29 @@ assert.equal(
 assert.deepEqual(australiaRail.places.find((place) => place.id === "southern-cross").members, [
 	{ feedId: "vic-vline", localId: "vic:rail:SSS" },
 	{ feedId: "vic-metro", localId: "vic:rail:SSS" },
+	{ feedId: "nsw-sydney-trains", localId: "V22180" },
 	{ feedId: "nsw-trainlink", localId: "22180" },
 ]);
 assert.deepEqual(australiaRail.places.find((place) => place.id === "albury").members, [
 	{ feedId: "vic-vline", localId: "nsw:rail:ABY" },
+	{ feedId: "nsw-sydney-trains", localId: "26401" },
 	{ feedId: "nsw-trainlink", localId: "26401" },
 ]);
+assert.deepEqual(australiaRail.places.find((place) => place.id === "broadmeadows").members, [
+	{ feedId: "vic-vline", localId: "vic:rail:BMS" },
+	{ feedId: "vic-metro", localId: "vic:rail:BMS" },
+	{ feedId: "nsw-sydney-trains", localId: "V20030" },
+	{ feedId: "nsw-trainlink", localId: "20030" },
+]);
+for (const [placeId, sydneyTrainsId, trainLinkId] of [
+	["benalla", "36721", "20295"],
+	["seymour", "V17191", "20342"],
+	["wangaratta", "36771", "20356"],
+]) {
+	const place = australiaRail.places.find((candidate) => candidate.id === placeId);
+	assert.ok(place.members.some((member) => member.feedId === "nsw-sydney-trains" && member.localId === sydneyTrainsId));
+	assert.ok(place.members.some((member) => member.feedId === "nsw-trainlink" && member.localId === trainLinkId));
+}
 assert.deepEqual(australiaRail.places.find((place) => place.id === "brisbane-roma-street").members, [
 	{ feedId: "translink-seq", localId: "place_romsta" },
 	{ feedId: "nsw-sydney-trains", localId: "40001" },
@@ -1769,7 +1800,7 @@ function feed(name, timezone, includeIntermediate = false, includeInactiveTrip =
 	return createZip({
 		"agency.txt": `agency_id,agency_name,agency_url,agency_timezone\nagency,${name},https://example.test,${timezone}\n`,
 		"routes.txt": "route_id,agency_id,route_short_name,route_long_name,route_type\nshared,agency,R,Shared Rail,2\n",
-		"stops.txt": `stop_id,stop_name,stop_lat,stop_lon\nshared,${name} Station,-27.4,153.0\n${middleStop}end,${name} End,-27.5,153.1\n`,
+		"stops.txt": `stop_id,stop_name,stop_lat,stop_lon\nshared,${name} Station,-27.4,153.0\nauto,${name} Auto,-27.45,153.05\n${middleStop}end,${name} End,-27.5,153.1\n`,
 		"trips.txt":
 			"route_id,service_id,trip_id,trip_headsign,direction_id,shape_id\nshared,shared,shared,End,0,shared\n" +
 			inactiveTrip,
@@ -1976,6 +2007,14 @@ try {
 				],
 			},
 		],
+		sameStationIdPlaces: [
+			{
+				feedIds: ["alpha", "beta"],
+				canonicalFeedId: "alpha",
+				placeIdPrefix: "derived-",
+				maxDistanceMeters: 100,
+			},
+		],
 	};
 	assert.throws(
 		() =>
@@ -1991,6 +2030,14 @@ try {
 	);
 	const runtime = new TRAX(definition, { cacheDir: ".TRAXCACHE/test-synthetic" });
 	await runtime.loadGTFS(false, false);
+	assert.deepEqual(runtime.getPlaceForStation({ feedId: "alpha", localId: "auto" }), {
+		id: "derived-auto",
+		name: "Alpha Auto",
+		members: [
+			{ feedId: "alpha", localId: "auto" },
+			{ feedId: "beta", localId: "auto" },
+		],
+	});
 	assert.equal(
 		runtime.ctx.augmented.rawStopTimesCache.has(entityKey({ feedId: "alpha", localId: "inactive-trip" })),
 		false,
@@ -2101,6 +2148,7 @@ try {
 			id: "synthetic-supplemental-failure",
 			feeds: [definition.feeds[0]],
 			places: [],
+			sameStationIdPlaces: [],
 			plugins: [
 				{
 					id: "failing-supplemental",
@@ -2204,7 +2252,7 @@ try {
 
 	const registry = new NetworkRuntimeRegistry();
 	const other = registry.register(
-		{ ...definition, id: "other", feeds: [definition.feeds[0]], places: [] },
+		{ ...definition, id: "other", feeds: [definition.feeds[0]], places: [], sameStationIdPlaces: [] },
 		{ cacheDir: ".TRAXCACHE/test-other" },
 	);
 	await other.loadGTFS(false, false);

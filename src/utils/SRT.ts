@@ -529,6 +529,7 @@ export function getStaticFeedFingerprint(config: TraxConfig): string | null {
 	hash.update(JSON.stringify(config.mergeStops));
 	hash.update(JSON.stringify(config.updateStopActions));
 	hash.update(JSON.stringify(config.network.places ?? []));
+	hash.update(JSON.stringify(config.network.sameStationIdPlaces ?? []));
 
 	for (const feed of config.network.feeds) {
 		const feedConfig = feed.staticSource;

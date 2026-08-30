@@ -49,6 +49,14 @@ export interface PlaceDefinition {
 	members: QualifiedEntityId[];
 }
 
+/** Derive shared places when two feeds publish the same station ID. */
+export interface SameStationIdPlacesDefinition {
+	feedIds: readonly [string, string];
+	canonicalFeedId: string;
+	placeIdPrefix: string;
+	maxDistanceMeters: number;
+}
+
 export interface NetworkDefinition {
 	id: string;
 	name: string;
@@ -57,6 +65,8 @@ export interface NetworkDefinition {
 	plugins: TransitPlugin[];
 	/** Client-facing places that group equivalent stations across static feeds. */
 	places?: PlaceDefinition[];
+	/** Feed pairs whose matching station IDs should become shared places after static loading. */
+	sameStationIdPlaces?: SameStationIdPlacesDefinition[];
 	/** Provider-neutral physical corridor data and resolver thresholds. */
 	corridor?: CorridorResolutionOverrides;
 }
@@ -93,6 +103,8 @@ export interface TraxConfig {
 	feedTimeZones: Map<string, string>;
 	/** O(1) lookup for the cross-feed place containing a station member. */
 	placeByMember: Map<string, PlaceDefinition>;
+	/** Explicit and static-feed-derived places for this loaded generation. */
+	places: PlaceDefinition[];
 	corridor: CorridorResolutionConfig;
 }
 
@@ -151,9 +163,27 @@ export function resolveConfig(network: NetworkDefinition, options: RuntimeOption
 			if (!feedIds.has(feedId)) throw new Error(`Plugin '${plugin.id}' references unknown feed '${feedId}'`);
 		}
 	}
+	for (const rule of network.sameStationIdPlaces ?? []) {
+		const [leftFeedId, rightFeedId] = rule.feedIds;
+		if (
+			!feedIds.has(leftFeedId) ||
+			!feedIds.has(rightFeedId) ||
+			leftFeedId === rightFeedId ||
+			!rule.feedIds.includes(rule.canonicalFeedId) ||
+			!rule.placeIdPrefix ||
+			!Number.isFinite(rule.maxDistanceMeters) ||
+			rule.maxDistanceMeters <= 0
+		) {
+			throw new Error(`Network '${network.id}' contains an invalid same-station-ID place rule`);
+		}
+	}
 	const placeIds = new Set<string>();
 	const placeByMember = new Map<string, PlaceDefinition>();
-	for (const place of network.places ?? []) {
+	const places = (network.places ?? []).map((place) => ({
+		...place,
+		members: place.members.map((member) => ({ ...member })),
+	}));
+	for (const place of places) {
 		if (!place.id || !place.name || place.members.length === 0)
 			throw new Error(`Network '${network.id}' contains an invalid place`);
 		if (placeIds.has(place.id)) throw new Error(`Network '${network.id}' contains duplicate place '${place.id}'`);
@@ -185,8 +215,106 @@ export function resolveConfig(network: NetworkDefinition, options: RuntimeOption
 		requestTimeoutMs: options.requestTimeoutMs ?? 30_000,
 		feedTimeZones: new Map(),
 		placeByMember,
+		places,
 		corridor: resolveCorridorConfig(network, options),
 	};
+}
+
+function stationDistanceMeters(left: Stop, right: Stop): number | null {
+	if (
+		!Number.isFinite(left.stop_lat) ||
+		!Number.isFinite(left.stop_lon) ||
+		!Number.isFinite(right.stop_lat) ||
+		!Number.isFinite(right.stop_lon)
+	)
+		return null;
+	const leftLat = (left.stop_lat! * Math.PI) / 180;
+	const rightLat = (right.stop_lat! * Math.PI) / 180;
+	const latDelta = rightLat - leftLat;
+	const lonDelta = ((right.stop_lon! - left.stop_lon!) * Math.PI) / 180;
+	const haversine =
+		Math.sin(latDelta / 2) ** 2 + Math.cos(leftLat) * Math.cos(rightLat) * Math.sin(lonDelta / 2) ** 2;
+	return 12_742_000 * Math.asin(Math.sqrt(haversine));
+}
+
+function stationStopsById(stops: Stop[], feedId: string): Map<string, Stop> {
+	const feedStops = stops.filter((stop) => stop.feed_id === feedId);
+	const byId = new Map(feedStops.map((stop) => [stop.stop_id, stop]));
+	const stations = new Map<string, Stop>();
+	for (const stop of feedStops) {
+		const stationId = stop.parent_station ?? stop.stop_id;
+		stations.set(stationId, byId.get(stationId) ?? stop);
+	}
+	return stations;
+}
+
+function generatedPlaceId(prefix: string, localId: string): string {
+	const suffix = localId
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-|-$/g, "");
+	if (!suffix) throw new Error(`Cannot derive a place ID from station '${localId}'`);
+	return `${prefix}${suffix}`;
+}
+
+/** Materialize feed-derived places without mutating the previous static generation. */
+export function materializeSameStationIdPlaces(config: TraxConfig, stops: Stop[]): TraxConfig {
+	const availableMembers = new Set(stops.map((stop) => entityKey({ feedId: stop.feed_id, localId: stop.stop_id })));
+	const places = (config.network.places ?? [])
+		.map((place) => ({
+			...place,
+			members: place.members.filter((member) => availableMembers.has(entityKey(member))).map((member) => ({ ...member })),
+		}))
+		.filter((place) => place.members.length > 0);
+	const placeById = new Map(places.map((place) => [place.id, place]));
+	const placeByMember = new Map<string, PlaceDefinition>();
+	for (const place of places) {
+		for (const member of place.members) placeByMember.set(entityKey(member), place);
+	}
+
+	for (const rule of config.network.sameStationIdPlaces ?? []) {
+		const [leftFeedId, rightFeedId] = rule.feedIds;
+		const leftStations = stationStopsById(stops, leftFeedId);
+		const rightStations = stationStopsById(stops, rightFeedId);
+		for (const localId of [...leftStations.keys()].filter((id) => rightStations.has(id)).sort()) {
+			const left = leftStations.get(localId)!;
+			const right = rightStations.get(localId)!;
+			const distance = stationDistanceMeters(left, right);
+			if (distance === null || distance > rule.maxDistanceMeters) continue;
+			const members = rule.feedIds.map((feedId) => ({ feedId, localId }));
+			const existingPlaces = new Set(
+				members.flatMap((member) => {
+					const place = placeByMember.get(entityKey(member));
+					return place ? [place] : [];
+				}),
+			);
+			if (existingPlaces.size > 1) {
+				throw new Error(
+					`Matching station '${localId}' belongs to multiple configured places in network '${config.network.id}'`,
+				);
+			}
+
+			let place = [...existingPlaces][0];
+			if (!place) {
+				const id = generatedPlaceId(rule.placeIdPrefix, localId);
+				if (!id || placeById.has(id)) {
+					throw new Error(`Derived place '${id}' conflicts in network '${config.network.id}'`);
+				}
+				const canonicalStop = rule.canonicalFeedId === leftFeedId ? left : right;
+				place = { id, name: canonicalStop.stop_name ?? localId, members: [] };
+				places.push(place);
+				placeById.set(id, place);
+			}
+			for (const member of members) {
+				const key = entityKey(member);
+				if (placeByMember.has(key)) continue;
+				place.members.push(member);
+				placeByMember.set(key, place);
+			}
+		}
+	}
+
+	return { ...config, places, placeByMember };
 }
 
 export function getPlaceForStation(config: TraxConfig, station: QualifiedEntityId): PlaceDefinition | null {

@@ -22,7 +22,12 @@ import { getRailwayStationFacilities } from "../region-specific/AU/SEQ/facilitie
 import type { QRTPlace, QRTStationDetails, QRTTravelTrip } from "../region-specific/AU/SEQ/qr-travel/types.js";
 import type { RailwayStationFacility } from "../region-specific/AU/SEQ/facilities-types.js";
 import logger from "../utils/logger.js";
-import { resolveTripNumber, type TraxConfig, type TripRealtimeContext } from "../config.js";
+import {
+	materializeSameStationIdPlaces,
+	resolveTripNumber,
+	type TraxConfig,
+	type TripRealtimeContext,
+} from "../config.js";
 import { clearConsideredCaches } from "../utils/considered.js";
 import type { CacheContext } from "./types.js";
 import { createEmptyRawCache, createAugmentedCacheWithConfig, createRuntimeState } from "./factories.js";
@@ -324,6 +329,8 @@ export async function refreshStaticCache(
 		feedStops.push(stop);
 		newRawCache.stopsByFeed.set(stop.feed_id, feedStops);
 	}
+	config = materializeSameStationIdPlaces(config, stops);
+	ctx.config = config;
 	ctx.augmented.timer.stop("refreshStaticCache:loadStops");
 	logger.debug(`Loaded ${stops.length} stops.`, {
 		module: "cache",

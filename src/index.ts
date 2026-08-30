@@ -252,6 +252,7 @@ export class TRAX {
 		const nextCtx = await cache.refreshStaticCache(gtfs, this.config);
 		nextCtx.augmented.timer.stop("TRAX:initialCacheRefresh");
 		this.gtfs = gtfs;
+		this.config = nextCtx.config;
 		this.ctx = nextCtx;
 
 	}
@@ -282,6 +283,7 @@ export class TRAX {
 				throw error;
 			}
 			this.gtfs = nextGtfs!;
+			this.config = nextCtx!.config;
 			this.ctx = nextCtx!;
 			setTimeout(() => { try { previousGtfs.clearStatic(); } catch {} }, 30_000).unref?.();
 		}).finally(() => {
@@ -412,7 +414,7 @@ export class TRAX {
 				capabilities: feedCapabilities(feed.id),
 			})),
 			capabilities: Array.from(new Set(this.config.network.plugins.flatMap((plugin) => plugin.capabilities))),
-			places: (this.config.network.places ?? []).map((place) => ({
+			places: this.config.places.map((place) => ({
 				...place,
 				members: place.members.map((member) => ({ ...member })),
 			})),
@@ -420,7 +422,7 @@ export class TRAX {
 	}
 
 	public getPlaces = () =>
-		(this.config.network.places ?? []).map((place) => ({
+		this.config.places.map((place) => ({
 			...place,
 			members: place.members.map((member) => ({ ...member })),
 		}));
@@ -561,6 +563,7 @@ export {
 	type FeedSource,
 	type NetworkDefinition,
 	type PlaceDefinition,
+	type SameStationIdPlacesDefinition,
 	type RealtimeSource,
 	type RuntimeOptions,
 	type TraxConfig,
