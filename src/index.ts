@@ -414,7 +414,6 @@ export class TRAX {
 				assertCurrent();
 				await cache.refreshRealtimeCache(this.gtfs!, this.config, this.ctx, {
 					shouldAbort,
-					useNativeChangedIds: loadTransport,
 				});
 				for (const plugin of afterRealtimePlugins)
 					this.reportSupplemental(plugin.id, plugin.feedIds[0], "healthy");

@@ -121,6 +121,7 @@ function realtimeUpdate({
 	relationship = TripScheduleRelationship.ADDED,
 	startTime = "10:00:00",
 	startDate = serviceDate,
+	delay = null,
 } = {}) {
 	return {
 		update_id: `update-${id}`,
@@ -151,7 +152,7 @@ function realtimeUpdate({
 			source_id: "realtime",
 		})),
 		timestamp,
-		delay: null,
+		delay,
 		feed_id: feedId,
 		source_id: "realtime",
 	};
@@ -171,13 +172,21 @@ assert.deepEqual(
 );
 assert.equal(getTripIdsByServiceDate(ctx, serviceDate).includes(tripKey), true);
 
-let repeatedInitialReaugmentation = false;
+const metadataOnlyTrip = augmented.tripsRec.get(tripKey);
+let metadataOnlyReaugmentation = false;
 gtfs.getLastChangedTripIds = () => [{ feed_id: feedId, trip_id: tripId }];
+updates = [realtimeUpdate({ timestamp: 1 })];
 config.progressLog = (progress) => {
-	if (progress.task === "Re-augmenting updated trips") repeatedInitialReaugmentation = true;
+	if (progress.task === "Re-augmenting updated trips") metadataOnlyReaugmentation = true;
 };
-await refreshRealtimeCache(gtfs, config, ctx, { useNativeChangedIds: false });
-assert.equal(repeatedInitialReaugmentation, false, "initial reconciliation must ignore the consumed native delta");
+await refreshRealtimeCache(gtfs, config, ctx);
+assert.equal(metadataOnlyReaugmentation, false, "coarse native candidates and timestamp-only updates must not rebuild trips");
+assert.strictEqual(augmented.tripsRec.get(tripKey), metadataOnlyTrip, "metadata-only updates should reuse the trip");
+assert.equal(
+	augmented.tripsRec.get(tripKey)?.instances[0].realtime_update?.timestamp,
+	1,
+	"metadata-only updates must still publish the latest realtime record",
+);
 delete gtfs.getLastChangedTripIds;
 config.progressLog = () => {};
 
@@ -347,7 +356,7 @@ augmented.timer = {
 	log() {},
 };
 
-updates = [realtimeUpdate({ timestamp: 1 })];
+updates = [realtimeUpdate({ timestamp: 2, delay: 60 })];
 await refreshRealtimeCache(gtfs, config, ctx);
 
 assert.equal(serviceDateTrips.entryIterations, 0, "realtime refresh must not scan service-date buckets");
@@ -396,7 +405,7 @@ config.progressLog = (progress) => {
 		assert.equal(augmented.tripsRec.get(key)?.instances[0].realtime_update?.timestamp, 2);
 	}
 };
-updates = streamedTripIds.map((id) => realtimeUpdate({ id, timestamp: 3 }));
+updates = streamedTripIds.map((id) => realtimeUpdate({ id, timestamp: 3, delay: 60 }));
 await refreshRealtimeCache(gtfs, config, ctx);
 assert.equal(observedIncrementalCheckpoint, true, "realtime trips must be replaced incrementally");
 
