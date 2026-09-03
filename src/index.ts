@@ -228,7 +228,19 @@ export class TRAX {
 				this.events.emit("static-update-start");
 				try {
 					await this.refreshStatic();
-					await this.updateRealtime();
+					// The realtime tail is part of the static cycle: bracket it
+					// with the same pair the realtime timer emits, so consumers
+					// (GUI revisions, telemetry snapshots, cache invalidation)
+					// observe the tail's completion exactly once. updateRealtime
+					// swallows its own errors, so end always fires here.
+					if (this.hasRealtimeSources()) {
+						this.events.emit("realtime-update-start");
+						try {
+							await this.updateRealtime();
+						} finally {
+							this.events.emit("realtime-update-end");
+						}
+					}
 					this.events.emit("static-update-end");
 				} catch (error: any) {
 					const message = error?.message ?? String(error);
