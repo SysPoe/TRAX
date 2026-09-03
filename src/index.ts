@@ -187,7 +187,7 @@ export class TRAX {
 	): Promise<void> {
 		if (!this.gtfs) {
 			await this.ensureGtfs(loadRealtime);
-			if (loadRealtime) await this.refreshRealtime();
+			if (loadRealtime) await this.startRealtimeRefresh(this.initialRealtimeNeedsRetry());
 		} else {
 			await this.refreshStatic();
 			if (loadRealtime) await this.refreshRealtime();
@@ -343,24 +343,34 @@ export class TRAX {
 	 * updateRealtime() join safe: it transparently receives fresh work.
 	 */
 	public async refreshRealtime(): Promise<void> {
+		return this.startRealtimeRefresh(true);
+	}
+
+	private startRealtimeRefresh(loadTransport: boolean): Promise<void> {
 		if (this.realtimeRefreshInFlight) return this.realtimeRefreshInFlight;
-		this.realtimeRefreshInFlight = this.refreshRealtimeGuarded().finally(() => {
+		this.realtimeRefreshInFlight = this.refreshRealtimeGuarded(loadTransport).finally(() => {
 			this.realtimeRefreshInFlight = null;
 		});
 		return this.realtimeRefreshInFlight;
 	}
 
-	private async refreshRealtimeGuarded(): Promise<void> {
+	private initialRealtimeNeedsRetry(): boolean {
+		return this.config.network.feeds.some((feed) =>
+			feed.realtimeSources.some((source) => this.sourceHealth.get(source.id)?.state === "error"),
+		);
+	}
+
+	private async refreshRealtimeGuarded(loadTransport: boolean): Promise<void> {
 		try {
-			await this.refreshRealtimeOnce();
+			await this.refreshRealtimeOnce(loadTransport);
 		} catch (error) {
 			if (!(error instanceof cache.StaleGenerationError)) throw error;
-			await this.refreshRealtimeOnce();
+			await this.refreshRealtimeOnce(loadTransport);
 		}
 	}
 
-	private async refreshRealtimeOnce(): Promise<void> {
-			const gtfs = await this.ensureGtfs(true);
+	private async refreshRealtimeOnce(loadTransport: boolean): Promise<void> {
+			const gtfs = await this.ensureGtfs(loadTransport);
 			const generation = this.staticGeneration;
 			const assertCurrent = () => {
 				if (this.staticGeneration !== generation || this.gtfs !== gtfs)
@@ -368,7 +378,7 @@ export class TRAX {
 			};
 			const shouldAbort = () => this.staticGeneration !== generation || this.gtfs !== gtfs;
 			this.ctx.augmented.timer.start("refreshRealtime");
-			if (this.config.network.feeds.some((feed) => feed.realtimeSources.length > 0)) {
+			if (loadTransport && this.config.network.feeds.some((feed) => feed.realtimeSources.length > 0)) {
 				await loadRealtime(gtfs, this.config, this.reportSource);
 			}
 			assertCurrent();

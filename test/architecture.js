@@ -2064,6 +2064,9 @@ try {
 						afterStaticLoad() {
 							initialRealtimeOrder.push("afterStatic");
 						},
+						afterRealtime() {
+							initialRealtimeOrder.push("afterRealtime");
+						},
 					},
 				],
 			},
@@ -2071,9 +2074,9 @@ try {
 		);
 		await initialRealtimeRuntime.loadGTFS(true, false);
 		assert.deepEqual(
-			initialRealtimeOrder.slice(0, 2),
-			["realtime", "afterStatic"],
-			"initial realtime transport must finish before static cache construction",
+			initialRealtimeOrder,
+			["realtime", "afterStatic", "afterRealtime"],
+			"initial startup must reuse its realtime transport for the plugin-aware refresh",
 		);
 	} finally {
 		GTFS.prototype.updateRealtimeFromUrl = originalUpdateRealtimeFromUrl;
