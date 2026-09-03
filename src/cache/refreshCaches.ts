@@ -44,6 +44,9 @@ import { getSeqState } from "../plugins/seq-state.js";
 import { applyRealtimeReplacementPrecedence, canonicalizeRealtimeTripUpdates } from "./realtime.js";
 import { primeRawStopTimes } from "./gtfsReads.js";
 import { buildCorridorIndex } from "../utils/corridor/shapeIndex.js";
+import { YieldBudget } from "../utils/cooperative.js";
+import { runPluginHooks } from "../plugins/concurrency.js";
+import type { TransitPlugin } from "../plugins/types.js";
 
 type CacheProgressReporter = (info: Parameters<TraxConfig["progressLog"]>[0] & { unit?: "bytes" | "items" }) => void;
 
@@ -298,7 +301,15 @@ export async function refreshStaticCache(
 	clearPreviousVehicleInfo(ctx);
 	const { resetNetworkTopologyForStaticFeed } = await import("../utils/SRT.js");
 	resetNetworkTopologyForStaticFeed(ctx);
-	for (const plugin of config.network.plugins) await plugin.afterStaticLoad?.(ctx);
+	// Cooperative budget shared by the construction loops below: each phase
+	// yields at most every ~8ms of uninterrupted work so HTTP stays responsive.
+	const yieldBudget = new YieldBudget();
+	await runPluginHooks(
+		config.network.plugins.filter((plugin) => plugin.afterStaticLoad),
+		(plugin) => plugin.afterStaticLoad?.(ctx),
+		{ abortOnError: true },
+	);
+	yieldBudget.noteYield();
 
 	ctx.augmented.timer.start("refreshStaticCache:preloadTripUpdates");
 	const allUpdates = gtfs.getRealtimeTripUpdates();
@@ -317,17 +328,20 @@ export async function refreshStaticCache(
 	}
 	for (const [tripId, updates] of ctx.augmented.tripUpdatesCache) {
 		ctx.augmented.tripUpdateSignatures.set(tripId, tripUpdateSignature(updates));
+		await yieldBudget.maybeYield();
 	}
 	ctx.augmented.timer.stop("refreshStaticCache:preloadTripUpdates");
 
 	ctx.augmented.timer.start("refreshStaticCache:loadStops");
 	const stops = gtfs.getStops();
+	await yieldBudget.maybeYield();
 	for (const stop of stops) {
 		const key = entityKey({ feedId: stop.feed_id, localId: stop.stop_id });
 		newRawCache.stopsByKey.set(key, stop);
 		const feedStops = newRawCache.stopsByFeed.get(stop.feed_id) ?? [];
 		feedStops.push(stop);
 		newRawCache.stopsByFeed.set(stop.feed_id, feedStops);
+		if ((newRawCache.stopsByKey.size & 1023) === 0) await yieldBudget.maybeYield();
 	}
 	config = materializeSameStationIdPlaces(config, stops);
 	ctx.config = config;
@@ -359,9 +373,11 @@ export async function refreshStaticCache(
 
 	ctx.augmented.timer.start("refreshStaticCache:loadRoutes");
 	const routes = gtfs.getRoutes();
+	await yieldBudget.maybeYield();
 	for (const route of routes) {
 		newRawCache.routesByKey.set(entityKey({ feedId: route.feed_id, localId: route.route_id }), route);
 	}
+	await yieldBudget.maybeYield();
 	ctx.augmented.timer.stop("refreshStaticCache:loadRoutes");
 	logger.debug(`Loaded ${routes.length} routes.`, {
 		module: "cache",
@@ -370,8 +386,10 @@ export async function refreshStaticCache(
 
 	ctx.augmented.timer.start("refreshStaticCache:loadTrips");
 	const allTrips = gtfs.getTrips();
+	await yieldBudget.maybeYield();
 	for (const trip of allTrips) {
 		newRawCache.tripsByKey.set(entityKey({ feedId: trip.feed_id, localId: trip.trip_id }), trip);
+		if ((newRawCache.tripsByKey.size & 1023) === 0) await yieldBudget.maybeYield();
 	}
 	const consideredTrips = allTrips.filter((v: Trip) => isConsideredTrip(v, ctx));
 	newRawCache.consideredTrips = consideredTrips;
@@ -393,6 +411,7 @@ export async function refreshStaticCache(
 			entityKey({ feedId: trip.feed_id, localId: trip.trip_id }),
 			entityKey({ feedId: trip.feed_id, localId: trip.service_id }),
 		);
+		if ((newRawCache.tripServiceIds!.size & 2047) === 0) await yieldBudget.maybeYield();
 	}
 	rebuildServiceInverseIndexes(ctx);
 	const usableConsideredTrips = consideredTrips.filter((trip) =>
@@ -412,6 +431,7 @@ export async function refreshStaticCache(
 		registerTripNumber(ctx, trip, {
 			vehicleLabel: latestVehicleLabel(ctx.augmented.tripUpdatesCache.get(key)),
 		});
+		await yieldBudget.maybeYield();
 	}
 
 	ctx.augmented.timer.start("refreshStaticCache:buildCorridorIndex");
@@ -584,12 +604,17 @@ export async function refreshStaticCache(
 		config.progressLog,
 		250,
 		(batch) => primeRawStopTimes(ctx, batch),
+		yieldBudget,
 	);
 	ctx.augmented.timer.stop("refreshStaticCache:augmentTrips");
 
 	rebuildAugmentedTripArrayIndex(ctx);
 
-	for (const plugin of config.network.plugins) await plugin.afterSnapshotBuilt?.(ctx);
+	await runPluginHooks(
+		config.network.plugins.filter((plugin) => plugin.afterSnapshotBuilt),
+		(plugin) => plugin.afterSnapshotBuilt?.(ctx),
+		{ abortOnError: true },
+	);
 	// QDF remains the canonical static schedule. Realtime and lazy paths can fetch
 	// individual trips again instead of retaining a second complete JS copy.
 	newAugmentedCache.rawStopTimesCache.clear();
@@ -735,6 +760,7 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		const tripKeys = Array.from(updatedTripIds);
 		const total = tripKeys.length;
 		const startedAt = Date.now();
+		const realtimeYield = new YieldBudget();
 		ctx.config.progressLog({
 			task: "Re-augmenting updated trips",
 			current: 0,
@@ -776,8 +802,10 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 			}
 
 			const current = index + 1;
+			// Yield on time budget rather than item count: re-augmentation
+			// cost varies widely per trip, and this loop runs every 60s.
+			await realtimeYield.maybeYield();
 			if (current % 10 === 0 || current === total) {
-				await new Promise((resolve) => setImmediate(resolve));
 				const elapsed = (Date.now() - startedAt) / 1000;
 				const speed = elapsed > 0 ? current / elapsed : 0;
 				ctx.config.progressLog({
@@ -798,21 +826,34 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 		});
 	}
 
+	const hookTasks: { plugin: TransitPlugin; isSeqPlugin: boolean }[] = [];
 	for (const plugin of config.network.plugins) {
 		const isSeqPlugin = plugin.id === "au-seq";
-		if (isSeqPlugin) {
-			timer.start("refreshRealtimeCache:SEQ diagram realtime update");
-			timer.start("refreshRealtimeCache:QRT auxiliary refresh");
-		}
-		try {
-			await plugin.afterRealtime?.(ctx, updatedTripIds);
-		} finally {
-			if (isSeqPlugin) {
-				timer.stop("refreshRealtimeCache:QRT auxiliary refresh");
-				timer.stop("refreshRealtimeCache:SEQ diagram realtime update");
-			}
-		}
+		if (!plugin.afterRealtime) continue;
+		hookTasks.push({
+			plugin,
+			isSeqPlugin,
+		});
 	}
+	await runPluginHooks(
+		hookTasks.map((task) => task.plugin),
+		async (plugin) => {
+			const task = hookTasks.find((candidate) => candidate.plugin === plugin)!;
+			if (task.isSeqPlugin) {
+				timer.start("refreshRealtimeCache:SEQ diagram realtime update");
+				timer.start("refreshRealtimeCache:QRT auxiliary refresh");
+			}
+			try {
+				await plugin.afterRealtime!(ctx, updatedTripIds);
+			} finally {
+				if (task.isSeqPlugin) {
+					timer.stop("refreshRealtimeCache:QRT auxiliary refresh");
+					timer.stop("refreshRealtimeCache:SEQ diagram realtime update");
+				}
+			}
+		},
+		{ abortOnError: true },
+	);
 	prunePreviousVehicleInfo(ctx, augmentedCache.instancesRec.keys());
 
 	ctx.augmented.timer.stop("refreshRealtimeCache");
@@ -842,11 +883,13 @@ async function processWithProgress<T, U>(
 	reportProgress: CacheProgressReporter = (info) => logger.progress(info),
 	chunkSize = 250,
 	prepareChunk?: (items: T[]) => void | Promise<void>,
+	yieldBudget?: YieldBudget,
 ): Promise<U[]> {
 	const results: U[] = [];
 	let current = 0;
 	const total = items.length;
 	const startTime = Date.now();
+	const budget = yieldBudget ?? new YieldBudget();
 
 	if (total === 0) return results;
 
@@ -868,7 +911,10 @@ async function processWithProgress<T, U>(
 		}
 		current = end;
 
-		await new Promise((resolve) => setImmediate(resolve));
+		// Time-budgeted yield: cheap chunks skip the setImmediate round-trip,
+		// expensive chunks (e.g. trip augmentation) yield as soon as the
+		// budget is spent rather than waiting for the next 250-item boundary.
+		await budget.maybeYield();
 
 		const elapsed = (Date.now() - startTime) / 1000;
 		const speed = elapsed > 0 ? current / elapsed : 0;

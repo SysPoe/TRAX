@@ -163,6 +163,21 @@ export function resolveConfig(network: NetworkDefinition, options: RuntimeOption
 			if (!feedIds.has(feedId)) throw new Error(`Plugin '${plugin.id}' references unknown feed '${feedId}'`);
 		}
 	}
+	// Concurrency groups are only safe for mutually independent plugins.
+	for (let i = 0; i < network.plugins.length; i++) {
+		const left = network.plugins[i];
+		if (!left.concurrencyGroup) continue;
+		for (let j = i + 1; j < network.plugins.length; j++) {
+			const right = network.plugins[j];
+			if (right.concurrencyGroup !== left.concurrencyGroup) continue;
+			const overlap = left.feedIds.filter((feedId) => right.feedIds.includes(feedId));
+			if (overlap.length > 0) {
+				throw new Error(
+					`Plugins '${left.id}' and '${right.id}' share concurrency group '${left.concurrencyGroup}' but overlap on feed(s) ${overlap.join(", ")}`,
+				);
+			}
+		}
+	}
 	for (const rule of network.sameStationIdPlaces ?? []) {
 		const [leftFeedId, rightFeedId] = rule.feedIds;
 		if (

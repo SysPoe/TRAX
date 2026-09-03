@@ -31,6 +31,7 @@ import {
 	resolveConfig,
 } from "./config.js";
 import { createGtfs, loadRealtime, loadStatic, type SourceReport } from "./gtfsInterfaceLayer.js";
+import { runPluginHooks } from "./plugins/concurrency.js";
 import { entityKey } from "./identity.js";
 import { createVehicleFormation, type VehicleFormation } from "./utils/vehicleModel.js";
 import { getOnboardReachableStops, type ReachabilityOrigin } from "./utils/passengerContinuations.js";
@@ -39,7 +40,10 @@ export interface TRAXEvent {
 	"realtime-update-start": [];
 	"realtime-update-end": [];
 	"static-update-start": [];
+	/** Emitted only after a static generation publishes successfully. */
 	"static-update-end": [];
+	/** Emitted when a static refresh fails; previous snapshot stays published. */
+	"static-update-failed": [string];
 }
 
 export interface SourceHealth {
@@ -67,6 +71,13 @@ export class TRAX {
 	private realtimeRefreshInFlight: Promise<void> | null = null;
 	private sourceHealth = new Map<string, SourceHealth>();
 	private coordinateStaticRefresh: StaticRefreshCoordinator;
+	/**
+	 * Monotonic static publication counter. Bumped in the same synchronous
+	 * block as the gtfs/config/ctx pointer swap, so any reader that sees the
+	 * new context also sees the new generation. Never bumped on failure.
+	 */
+	private staticGeneration = 0;
+	private lastStaticPublishedAt: number | null = null;
 
 	private hasRealtimeSources(): boolean {
 		return (
@@ -218,13 +229,15 @@ export class TRAX {
 				try {
 					await this.refreshStatic();
 					await this.updateRealtime();
+					this.events.emit("static-update-end");
 				} catch (error: any) {
-					logger.error("Error refreshing static GTFS data: " + (error.message ?? error), {
+					const message = error?.message ?? String(error);
+					logger.error("Error refreshing static GTFS data: " + message, {
 						module: "index",
 						function: "loadGTFS - scheduleNextStatic",
 					});
+					this.events.emit("static-update-failed", message);
 				} finally {
-					this.events.emit("static-update-end");
 					scheduleNextStatic();
 				}
 			}, staticIntervalMs);
@@ -254,7 +267,22 @@ export class TRAX {
 		this.gtfs = gtfs;
 		this.config = nextCtx.config;
 		this.ctx = nextCtx;
+		this.publishStaticGeneration();
+	}
 
+	/** Record a successful static publication alongside the pointer swap. */
+	private publishStaticGeneration(): void {
+		this.staticGeneration += 1;
+		this.lastStaticPublishedAt = Date.now();
+	}
+
+	/** Monotonic id of the currently published static snapshot (0 = none). */
+	public getStaticGeneration(): number {
+		return this.staticGeneration;
+	}
+
+	public getLastStaticPublishedAt(): number | null {
+		return this.lastStaticPublishedAt;
 	}
 
 	/**
@@ -285,6 +313,7 @@ export class TRAX {
 			this.gtfs = nextGtfs!;
 			this.config = nextCtx!.config;
 			this.ctx = nextCtx!;
+			this.publishStaticGeneration();
 			setTimeout(() => { try { previousGtfs.clearStatic(); } catch {} }, 30_000).unref?.();
 		}).finally(() => {
 			this.staticRefreshInFlight = null;
@@ -303,20 +332,29 @@ export class TRAX {
 			if (this.config.network.feeds.some((feed) => feed.realtimeSources.length > 0)) {
 				await loadRealtime(gtfs, this.config, this.reportSource);
 			}
+			const failedSupplemental = new Set<string>();
+			await runPluginHooks(
+				this.config.network.plugins.filter((plugin) => plugin.beforeRealtime),
+				(plugin) => {
+					this.reportSupplemental(plugin.id, plugin.feedIds[0], "loading");
+					return plugin.beforeRealtime!(this.ctx);
+				},
+				{
+					abortOnError: false,
+					onError: (plugin, error) => {
+						failedSupplemental.add(plugin.id);
+						const message = error instanceof Error ? error.message : String(error);
+						this.reportSupplemental(plugin.id, plugin.feedIds[0], "error", message);
+						logger.error(`Supplemental source '${plugin.id}' failed: ${message}`, {
+							module: "index",
+							function: "refreshRealtime",
+						});
+					},
+				},
+			);
 			for (const plugin of this.config.network.plugins) {
-				if (!plugin.beforeRealtime) continue;
-				this.reportSupplemental(plugin.id, plugin.feedIds[0], "loading");
-				try {
-					await plugin.beforeRealtime(this.ctx);
-					this.reportSupplemental(plugin.id, plugin.feedIds[0], "healthy");
-				} catch (error) {
-					const message = error instanceof Error ? error.message : String(error);
-					this.reportSupplemental(plugin.id, plugin.feedIds[0], "error", message);
-					logger.error(`Supplemental source '${plugin.id}' failed: ${message}`, {
-						module: "index",
-						function: "refreshRealtime",
-					});
-				}
+				if (!plugin.beforeRealtime || failedSupplemental.has(plugin.id)) continue;
+				this.reportSupplemental(plugin.id, plugin.feedIds[0], "healthy");
 			}
 			const afterRealtimePlugins = this.config.network.plugins.filter((plugin) => plugin.afterRealtime);
 			for (const plugin of afterRealtimePlugins) this.reportSupplemental(plugin.id, plugin.feedIds[0], "loading");

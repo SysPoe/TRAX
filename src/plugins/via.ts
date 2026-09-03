@@ -64,6 +64,9 @@ export const viaPlugin: TransitPlugin = {
 	id: "ca-via",
 	feedIds: ["via"],
 	capabilities: ["consist", "boarding-locations", "supplemental-realtime"],
+	// Audited independent of ca-gtha: disjoint feeds, source-keyed injected
+	// writes, no cross-plugin state reads. Fetch phases overlap per refresh.
+	concurrencyGroup: "ca-supplemental",
 	afterStaticLoad(ctx) {
 		if (!ctx.gtfs) return;
 		for (const action of VIA_UPDATE_STOPS) ctx.gtfs.actions.updateStop(action.stop_id, action.new, "via");

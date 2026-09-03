@@ -20,6 +20,15 @@ export interface TransitPlugin {
 	/** Static feeds whose entities this plugin may enrich. */
 	feedIds: readonly string[];
 	capabilities: readonly TransitCapability[];
+	/**
+	 * Opt-in concurrency group for lifecycle hooks. Plugins sharing a group
+	 * run concurrently (fetch phases overlap); groups must be audited as
+	 * mutually independent: pairwise-disjoint `feedIds`, source-keyed shared
+	 * writes (see `replaceInjectedTripUpdates`), and no cross-plugin state
+	 * reads. Ungrouped plugins keep today's sequential registration order.
+	 * Enforced disjoint at `resolveConfig`.
+	 */
+	concurrencyGroup?: string;
 	afterStaticLoad?(ctx: CacheContext): Promise<void> | void;
 	afterSnapshotBuilt?(ctx: CacheContext): Promise<void> | void;
 	/** Fetch and inject supplemental data before the generic realtime cache is rebuilt. */

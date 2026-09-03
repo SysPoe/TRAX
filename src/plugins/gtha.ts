@@ -27,6 +27,9 @@ export const gthaPlugin: TransitPlugin = {
 	id: "ca-gtha",
 	feedIds: ["go", "up"],
 	capabilities: ["vehicles", "consist", "platform-changes", "supplemental-realtime"],
+	// Audited independent of ca-via: disjoint feeds, source-keyed injected
+	// writes, no cross-plugin state reads. Fetch phases overlap per refresh.
+	concurrencyGroup: "ca-supplemental",
 	beforeRealtime: refreshGthaOperatingSchedule,
 	enrichRealtimeTripUpdate: (update, ctx) =>
 		update.source_id === GTHA_OPERATING_SCHEDULE_SOURCE_ID ? update : normalizeGthaRealtimeTripUpdate(update, ctx),
