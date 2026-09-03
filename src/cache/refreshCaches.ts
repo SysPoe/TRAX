@@ -886,6 +886,10 @@ export async function refreshRealtimeCache(
 		},
 		{ abortOnError: true },
 	);
+	// Hooks yield for substantial periods (network fetches); a publication
+	// may have landed while they ran. Pruning and successful return must not
+	// bless work performed against the discarded context.
+	assertFresh(hooks);
 	prunePreviousVehicleInfo(ctx, augmentedCache.instancesRec.keys());
 
 	ctx.augmented.timer.stop("refreshRealtimeCache");
