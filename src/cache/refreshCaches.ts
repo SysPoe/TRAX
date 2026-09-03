@@ -67,6 +67,8 @@ export class StaleGenerationError extends Error {
 export interface RefreshRealtimeHooks {
 	/** Polled at existing yield points; return true to abort with StaleGenerationError. */
 	shouldAbort?: () => boolean;
+	/** False when the current native delta was already included in the published static snapshot. */
+	useNativeChangedIds?: boolean;
 }
 
 function assertFresh(hooks: RefreshRealtimeHooks | undefined): void {
@@ -691,7 +693,7 @@ export async function refreshRealtimeCache(
 	let nextSignatures: Map<string, string> | null = null;
 	let nativeChanged: Set<string> | null = null;
 	const gtfsWithMeta = gtfs as unknown as { getLastChangedTripIds?: () => { feed_id:string; trip_id:string }[] };
-	if (gtfsWithMeta.getLastChangedTripIds) {
+	if (hooks?.useNativeChangedIds !== false && gtfsWithMeta.getLastChangedTripIds) {
 		try {
 			const changed = gtfsWithMeta.getLastChangedTripIds();
 			if (Array.isArray(changed)) nativeChanged = new Set(changed.map(c => entityKey({ feedId: c.feed_id, localId: c.trip_id })));

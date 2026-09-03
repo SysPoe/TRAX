@@ -170,6 +170,16 @@ assert.deepEqual(
 );
 assert.equal(getTripIdsByServiceDate(ctx, serviceDate).includes(tripKey), true);
 
+let repeatedInitialReaugmentation = false;
+gtfs.getLastChangedTripIds = () => [{ feed_id: feedId, trip_id: tripId }];
+config.progressLog = (progress) => {
+	if (progress.task === "Re-augmenting updated trips") repeatedInitialReaugmentation = true;
+};
+await refreshRealtimeCache(gtfs, config, ctx, { useNativeChangedIds: false });
+assert.equal(repeatedInitialReaugmentation, false, "initial reconciliation must ignore the consumed native delta");
+delete gtfs.getLastChangedTripIds;
+config.progressLog = () => {};
+
 const oldInstanceId = augmented.tripsRec.get(tripKey).instances[0].instance_id;
 for (const stopId of ["a", "b", "d"]) {
 	assert.equal(
