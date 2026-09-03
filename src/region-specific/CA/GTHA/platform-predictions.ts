@@ -13,6 +13,15 @@ import { TripScheduleRelationship } from "qdf-gtfs";
 
 const CACHE_FILE = "region-specific/ca-gtha/platform-prediction-shadow-v1.sqlite";
 
+/**
+ * Feeds whose reported platforms feed the shadow predictor. VIA reports
+ * track/platform assignments through its CIS station boards (see
+ * `region-specific/CA/VIA/station-board.ts`), which land on the same
+ * `actual_*_boarding_locations` fields as GO/UP, so it uses the same event
+ * shape despite living behind a different plugin.
+ */
+export const PLATFORM_PREDICTION_FEED_IDS: ReadonlySet<string> = new Set(["go", "up", "via"]);
+
 function serviceDayOfWeek(serviceDate: string): number {
 	const year = Number(serviceDate.slice(0, 4));
 	const month = Number(serviceDate.slice(4, 6));
@@ -28,7 +37,15 @@ function state(ctx: CacheContext): PlatformPredictionShadow {
 	);
 }
 
-/** Build shadow predictions and evaluate them later without applying them to stop times. */
+/** Build shadow predictions and evaluate them later without applying them to stop times.
+ *
+ * Runs inside the GTHA plugin's `afterRealtime`, concurrently with the VIA
+ * plugin's CIS application (shared `ca-supplemental` group). Both touch
+ * augmented state synchronously, so the read here sees either the previous
+ * or the current cycle's CIS locations — never a torn write — and every
+ * shadow write is an idempotent event-key upsert. Worst case for VIA is one
+ * refresh cycle of staleness before an observation lands.
+ */
 export function updateGthaPlatformPredictionShadow(ctx: CacheContext, now = Date.now()): void {
 	if (!ctx.gtfs) return;
 	const routes = new Map(
@@ -39,7 +56,7 @@ export function updateGthaPlatformPredictionShadow(ctx: CacheContext, now = Date
 	const events: PlatformPredictionEvent[] = [];
 
 	for (const instance of ctx.augmented.instancesRec.values()) {
-		if ((instance.feed_id !== "go" && instance.feed_id !== "up") || instance.nonRevenue) continue;
+		if (!PLATFORM_PREDICTION_FEED_IDS.has(instance.feed_id) || instance.nonRevenue) continue;
 		if (instance.schedule_relationship === TripScheduleRelationship.CANCELED) continue;
 		const route = routes.get(entityKey({ feedId: instance.feed_id, localId: instance.route_id }));
 		const routeLabel = route?.route_short_name?.trim() || route?.route_long_name?.trim() || instance.route_id;
