@@ -617,7 +617,7 @@ export async function refreshStaticCache(
 					serviceDates: operationalServiceDatesByTrip.get(tripKey) ?? [],
 				});
 			} finally {
-				newAugmentedCache.rawStopTimesCache.delete(tripKey);
+				if (!tripUpdatesCache.has(tripKey)) newAugmentedCache.rawStopTimesCache.delete(tripKey);
 			}
 
 			const augmentedTripKey = entityKey({ feedId: augmentedTrip.feed_id, localId: augmentedTrip.trip_id });
@@ -640,9 +640,11 @@ export async function refreshStaticCache(
 		(plugin) => plugin.afterSnapshotBuilt?.(ctx),
 		{ abortOnError: true },
 	);
-	// QDF remains the canonical static schedule. Realtime and lazy paths can fetch
-	// individual trips again instead of retaining a second complete JS copy.
-	newAugmentedCache.rawStopTimesCache.clear();
+	// QDF remains the canonical static schedule. Keep stop times only for trips
+	// that currently have realtime updates so the first refresh can reuse them.
+	for (const tripKey of newAugmentedCache.rawStopTimesCache.keys()) {
+		if (!tripUpdatesCache.has(tripKey)) newAugmentedCache.rawStopTimesCache.delete(tripKey);
+	}
 
 	ctx.augmented.timer.stop("refreshStaticCache");
 	ctx.augmented.timer.log("Static Cache Refresh", true);
@@ -878,8 +880,13 @@ export async function refreshRealtimeCache(
 					}
 				}
 			} finally {
-				for (const tripKey of newlyPrimedKeys) augmentedCache.rawStopTimesCache.delete(tripKey);
+				for (const tripKey of newlyPrimedKeys) {
+					if (!augmentedCache.tripUpdatesCache.has(tripKey)) augmentedCache.rawStopTimesCache.delete(tripKey);
+				}
 			}
+		}
+		for (const tripKey of augmentedCache.rawStopTimesCache.keys()) {
+			if (!augmentedCache.tripUpdatesCache.has(tripKey)) augmentedCache.rawStopTimesCache.delete(tripKey);
 		}
 
 		logger.debug(`Re-augmented ${updatedTripIds.size} trips.`, {

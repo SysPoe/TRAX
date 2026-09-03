@@ -164,6 +164,7 @@ assert.equal(raw.realtimeOnlyTripKeys.has(tripKey), true);
 assert.equal(augmented.rawTripsRec.has(tripKey), true);
 assert.equal(augmented.tripsRec.has(tripKey), true);
 assert.equal(augmented.tripNumberTrips.get("trip")?.has(tripKey), true);
+assert.equal(augmented.rawStopTimesCache.has(tripKey), true, "realtime trips should retain their primed stop times");
 assert.deepEqual(
 	augmented.tripsRec.get(tripKey)?.instances[0].stopTimes.map((stopTime) => stopTime.actual_stop_id),
 	["a", "b", "d"],
@@ -266,6 +267,7 @@ assert.equal(raw.realtimeOnlyTripKeys.has(tripKey), false);
 assert.equal(raw.tripsByKey.has(tripKey), false);
 assert.equal(augmented.rawTripsRec.has(tripKey), false);
 assert.equal(augmented.tripsRec.has(tripKey), false);
+assert.equal(augmented.rawStopTimesCache.has(tripKey), false, "removed realtime trips must release retained stop times");
 assert.equal(
 	augmented.trips.some((trip) => trip.trip_id === tripId),
 	false,
@@ -373,6 +375,13 @@ updates = streamedTripIds.map((id) => realtimeUpdate({ id, timestamp: 2 }));
 await refreshRealtimeCache(gtfs, config, ctx);
 assert.equal(singleStopTimeQueries, 0, "a cold realtime batch must not query stop times one trip at a time");
 assert.equal(packedStopTimeQueries, 1, "a cold realtime batch should use one packed stop-time query per feed");
+for (const id of streamedTripIds) {
+	assert.equal(
+		augmented.rawStopTimesCache.has(entityKey({ feedId, localId: id })),
+		true,
+		"active realtime trips should keep their batched stop times",
+	);
+}
 
 let observedIncrementalCheckpoint = false;
 config.progressLog = (progress) => {
