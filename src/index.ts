@@ -335,25 +335,55 @@ export class TRAX {
 
 	/**
 	 * Refreshes realtime GTFS data from source and rebuilds the realtime cache.
+	 *
+	 * Concurrent callers share one in-flight refresh. If a static publication
+	 * lands mid-refresh, the attempt aborts and restarts once against the new
+	 * snapshot instead of mutating it with old-generation data; anything still
+	 * stale heals on the next 60s tick. This also makes the static tail's
+	 * updateRealtime() join safe: it transparently receives fresh work.
 	 */
 	public async refreshRealtime(): Promise<void> {
 		if (this.realtimeRefreshInFlight) return this.realtimeRefreshInFlight;
-		this.realtimeRefreshInFlight = (async () => {
+		this.realtimeRefreshInFlight = this.refreshRealtimeGuarded().finally(() => {
+			this.realtimeRefreshInFlight = null;
+		});
+		return this.realtimeRefreshInFlight;
+	}
+
+	private async refreshRealtimeGuarded(): Promise<void> {
+		try {
+			await this.refreshRealtimeOnce();
+		} catch (error) {
+			if (!(error instanceof cache.StaleGenerationError)) throw error;
+			await this.refreshRealtimeOnce();
+		}
+	}
+
+	private async refreshRealtimeOnce(): Promise<void> {
 			const gtfs = await this.ensureGtfs();
+			const generation = this.staticGeneration;
+			const assertCurrent = () => {
+				if (this.staticGeneration !== generation || this.gtfs !== gtfs)
+					throw new cache.StaleGenerationError();
+			};
+			const shouldAbort = () => this.staticGeneration !== generation || this.gtfs !== gtfs;
 			this.ctx.augmented.timer.start("refreshRealtime");
 			if (this.config.network.feeds.some((feed) => feed.realtimeSources.length > 0)) {
 				await loadRealtime(gtfs, this.config, this.reportSource);
 			}
+			assertCurrent();
 			const failedSupplemental = new Set<string>();
 			await runPluginHooks(
 				this.config.network.plugins.filter((plugin) => plugin.beforeRealtime),
 				(plugin) => {
+					assertCurrent();
 					this.reportSupplemental(plugin.id, plugin.feedIds[0], "loading");
 					return plugin.beforeRealtime!(this.ctx);
 				},
 				{
 					abortOnError: false,
 					onError: (plugin, error) => {
+						if (error instanceof cache.StaleGenerationError) throw error;
 						failedSupplemental.add(plugin.id);
 						const message = error instanceof Error ? error.message : String(error);
 						this.reportSupplemental(plugin.id, plugin.feedIds[0], "error", message);
@@ -371,20 +401,18 @@ export class TRAX {
 			const afterRealtimePlugins = this.config.network.plugins.filter((plugin) => plugin.afterRealtime);
 			for (const plugin of afterRealtimePlugins) this.reportSupplemental(plugin.id, plugin.feedIds[0], "loading");
 			try {
-				await cache.refreshRealtimeCache(gtfs, this.config, this.ctx);
+				assertCurrent();
+				await cache.refreshRealtimeCache(this.gtfs!, this.config, this.ctx, { shouldAbort });
 				for (const plugin of afterRealtimePlugins)
 					this.reportSupplemental(plugin.id, plugin.feedIds[0], "healthy");
 			} catch (error) {
+				if (error instanceof cache.StaleGenerationError) throw error;
 				const message = error instanceof Error ? error.message : String(error);
 				for (const plugin of afterRealtimePlugins)
 					this.reportSupplemental(plugin.id, plugin.feedIds[0], "error", message);
 				throw error;
 			}
 			this.ctx.augmented.timer.stop("refreshRealtime");
-		})().finally(() => {
-			this.realtimeRefreshInFlight = null;
-		});
-		return this.realtimeRefreshInFlight;
 	}
 
 	public async updateRealtime(): Promise<void> {

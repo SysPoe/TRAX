@@ -8,4 +8,5 @@ export {
 export * from "./gtfsReads.js";
 export * from "./realtime.js";
 export * from "./augmentedEntities.js";
-export { refreshStaticCache, refreshRealtimeCache, retainStaticRefreshState } from "./refreshCaches.js";
+export { refreshStaticCache, refreshRealtimeCache, retainStaticRefreshState, StaleGenerationError } from "./refreshCaches.js";
+export type { RefreshRealtimeHooks } from "./refreshCaches.js";

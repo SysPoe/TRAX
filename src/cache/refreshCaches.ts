@@ -50,6 +50,28 @@ import type { TransitPlugin } from "../plugins/types.js";
 
 type CacheProgressReporter = (info: Parameters<TraxConfig["progressLog"]>[0] & { unit?: "bytes" | "items" }) => void;
 
+/**
+ * Thrown when a static snapshot publication lands mid-refresh. The refresh
+ * must restart against the new snapshot instead of mutating it with data
+ * derived from the old one; the next attempt (or 60s tick) heals fully since
+ * re-augmentation is idempotent per trip.
+ */
+export class StaleGenerationError extends Error {
+	constructor() {
+		super("Static snapshot was replaced during realtime refresh");
+		this.name = "StaleGenerationError";
+	}
+}
+
+export interface RefreshRealtimeHooks {
+	/** Polled at existing yield points; return true to abort with StaleGenerationError. */
+	shouldAbort?: () => boolean;
+}
+
+function assertFresh(hooks: RefreshRealtimeHooks | undefined): void {
+	if (hooks?.shouldAbort?.()) throw new StaleGenerationError();
+}
+
 export function refreshQRTTrainsInBackground(ctx: CacheContext): void {
 	if (ctx.augmented.qrtRefreshInFlight) return;
 
@@ -630,7 +652,12 @@ export async function refreshStaticCache(
 	return ctx;
 }
 
-export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: CacheContext): Promise<void> {
+export async function refreshRealtimeCache(
+	gtfs: GTFS,
+	config: TraxConfig,
+	ctx: CacheContext,
+	hooks?: RefreshRealtimeHooks,
+): Promise<void> {
 	const startTotal = Date.now();
 	ctx.augmented.timer.start("refreshRealtimeCache");
 	const { augmented: augmentedCache } = ctx;
@@ -805,6 +832,10 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 			// Yield on time budget rather than item count: re-augmentation
 			// cost varies widely per trip, and this loop runs every 60s.
 			await realtimeYield.maybeYield();
+			// Abort (never partially commit further) when the generation this
+			// rebuild derived from is no longer published; the caller retries
+			// against the new snapshot. Partial writes heal on that retry.
+			assertFresh(hooks);
 			if (current % 10 === 0 || current === total) {
 				const elapsed = (Date.now() - startedAt) / 1000;
 				const speed = elapsed > 0 ? current / elapsed : 0;
@@ -835,6 +866,7 @@ export async function refreshRealtimeCache(gtfs: GTFS, config: TraxConfig, ctx: 
 			isSeqPlugin,
 		});
 	}
+	assertFresh(hooks);
 	await runPluginHooks(
 		hookTasks.map((task) => task.plugin),
 		async (plugin) => {
