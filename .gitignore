@@ -13,4 +13,5 @@ pnpm-lock.yaml
 .env
 *-ignore.*
 bun.lock
+AGENTS.md
 
