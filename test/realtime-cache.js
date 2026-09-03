@@ -79,6 +79,8 @@ const config = resolveConfig(
 config.feedTimeZones.set(feedId, "Australia/Brisbane");
 
 let updates = [];
+let singleStopTimeQueries = 0;
+let packedStopTimeQueries = 0;
 const gtfs = {
 	getRealtimeTripUpdates: () => updates,
 	getStaticOccupancies: () => [],
@@ -89,7 +91,14 @@ const gtfs = {
 				(!filter.feed_id || filter.feed_id === stop.feed_id) &&
 				(!filter.stop_id || filter.stop_id === stop.stop_id),
 		),
-	getStopTimes: () => [],
+	getStopTimes: () => {
+		singleStopTimeQueries += 1;
+		return [];
+	},
+	getStopTimesPacked: () => {
+		packedStopTimeQueries += 1;
+		return { tripIds: [] };
+	},
 };
 
 const raw = createEmptyRawCache();
@@ -348,8 +357,12 @@ for (const category of [
 }
 
 const streamedTripIds = Array.from({ length: 12 }, (_, index) => `streamed-trip-${index}`);
+singleStopTimeQueries = 0;
+packedStopTimeQueries = 0;
 updates = streamedTripIds.map((id) => realtimeUpdate({ id, timestamp: 2 }));
 await refreshRealtimeCache(gtfs, config, ctx);
+assert.equal(singleStopTimeQueries, 0, "a cold realtime batch must not query stop times one trip at a time");
+assert.equal(packedStopTimeQueries, 1, "a cold realtime batch should use one packed stop-time query per feed");
 
 let observedIncrementalCheckpoint = false;
 config.progressLog = (progress) => {

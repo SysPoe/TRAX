@@ -82,7 +82,7 @@ import {
 } from "../dist/region-specific/AU/SEQ/qr-travel/published-formations.js";
 import { findUniqueTripInstanceForServiceDate, getTripIdsByServiceDate } from "../dist/cache/augmentedEntities.js";
 import { entityKey } from "../dist/identity.js";
-import { DropOffType, PickupType, RouteType, TripScheduleRelationship } from "qdf-gtfs";
+import { DropOffType, GTFS, PickupType, RouteType, TripScheduleRelationship } from "qdf-gtfs";
 import {
 	buildCisBoardingAssignments,
 	collectCisStationCandidates,
@@ -2030,6 +2030,54 @@ try {
 			},
 		],
 	};
+	const initialRealtimeOrder = [];
+	const originalUpdateRealtimeFromUrl = GTFS.prototype.updateRealtimeFromUrl;
+	GTFS.prototype.updateRealtimeFromUrl = async function (sources) {
+		initialRealtimeOrder.push("realtime");
+		return sources.map((source) => ({ id: source.id, ok: true }));
+	};
+	try {
+		const initialRealtimeRuntime = new TRAX(
+			{
+				...definition,
+				id: "initial-realtime-order",
+				feeds: [
+					{
+						...definition.feeds[0],
+						realtimeSources: [
+							{
+								id: "initial-trip-updates",
+								targetFeedId: "alpha",
+								kind: "trip-updates",
+								source: { url: "https://example.test/realtime" },
+							},
+						],
+					},
+				],
+				places: [],
+				sameStationIdPlaces: [],
+				plugins: [
+					{
+						id: "initial-static-hook",
+						feedIds: ["alpha"],
+						capabilities: [],
+						afterStaticLoad() {
+							initialRealtimeOrder.push("afterStatic");
+						},
+					},
+				],
+			},
+			{ cacheDir: ".TRAXCACHE/test-initial-realtime-order" },
+		);
+		await initialRealtimeRuntime.loadGTFS(true, false);
+		assert.deepEqual(
+			initialRealtimeOrder.slice(0, 2),
+			["realtime", "afterStatic"],
+			"initial realtime transport must finish before static cache construction",
+		);
+	} finally {
+		GTFS.prototype.updateRealtimeFromUrl = originalUpdateRealtimeFromUrl;
+	}
 	assert.throws(
 		() =>
 			new TRAX({

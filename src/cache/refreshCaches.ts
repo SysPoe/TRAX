@@ -49,6 +49,7 @@ import { runPluginHooks } from "../plugins/concurrency.js";
 import type { TransitPlugin } from "../plugins/types.js";
 
 type CacheProgressReporter = (info: Parameters<TraxConfig["progressLog"]>[0] & { unit?: "bytes" | "items" }) => void;
+const REALTIME_REAUGMENT_BATCH_SIZE = 250;
 
 /**
  * Thrown when a static snapshot publication lands mid-refresh. The refresh
@@ -798,56 +799,84 @@ export async function refreshRealtimeCache(
 			unit: "items",
 		});
 
-		for (let index = 0; index < total; index += 1) {
-			const tripKey = tripKeys[index];
-			const reusableTrip = augmentedCache.tripsRec.get(tripKey);
+		for (let batchStart = 0; batchStart < total; batchStart += REALTIME_REAUGMENT_BATCH_SIZE) {
+			const batchEnd = Math.min(batchStart + REALTIME_REAUGMENT_BATCH_SIZE, total);
+			const rawTripsByKey = new Map<string, Trip>();
+			const newlyPrimedKeys = new Set<string>();
+			const tripsToPrime: Trip[] = [];
 
-			timer.start("refreshRealtimeCache:unregisterChangedTrips");
-			resetRealtimeTripIncremental(tripKey, ctx);
-			const removeRealtimeOnly =
-				ctx.raw.realtimeOnlyTripKeys.has(tripKey) && !nextRealtimeOnlyTripKeys.has(tripKey);
-			if (removeRealtimeOnly) removeRealtimeOnlyTrip(ctx, tripKey);
-			timer.stop("refreshRealtimeCache:unregisterChangedTrips");
-
-			timer.start("refreshRealtimeCache:fetchRawChangedTrips");
-			const rawTrip = removeRealtimeOnly
-				? undefined
-				: (ctx.raw.tripsByKey.get(tripKey) ?? augmentedCache.rawTripsRec.get(tripKey));
-			timer.stop("refreshRealtimeCache:fetchRawChangedTrips");
-
-			if (rawTrip) {
-				timer.start("refreshRealtimeCache:reaugmentChangedTrips");
-				const updatedTrip = augmentTrip(rawTrip, ctx, ctx.augmented.tripUpdatesCache, reusableTrip);
-				timer.stop("refreshRealtimeCache:reaugmentChangedTrips");
-
-				timer.start("refreshRealtimeCache:reregisterIndexes");
-				augmentedCache.tripsRec.set(tripKey, updatedTrip);
-				registerAugmentedTrip(ctx, updatedTrip);
-				replaceAugmentedTripInArray(ctx, updatedTrip);
-
-				timer.stop("refreshRealtimeCache:reregisterIndexes");
+			for (let index = batchStart; index < batchEnd; index += 1) {
+				const tripKey = tripKeys[index];
+				const removeRealtimeOnly =
+					ctx.raw.realtimeOnlyTripKeys.has(tripKey) && !nextRealtimeOnlyTripKeys.has(tripKey);
+				if (removeRealtimeOnly) continue;
+				const rawTrip = ctx.raw.tripsByKey.get(tripKey) ?? augmentedCache.rawTripsRec.get(tripKey);
+				if (!rawTrip) continue;
+				rawTripsByKey.set(tripKey, rawTrip);
+				if (!augmentedCache.rawStopTimesCache.has(tripKey)) {
+					newlyPrimedKeys.add(tripKey);
+					tripsToPrime.push(rawTrip);
+				}
 			}
 
-			const current = index + 1;
-			// Yield on time budget rather than item count: re-augmentation
-			// cost varies widely per trip, and this loop runs every 60s.
-			await realtimeYield.maybeYield();
-			// Abort (never partially commit further) when the generation this
-			// rebuild derived from is no longer published; the caller retries
-			// against the new snapshot. Partial writes heal on that retry.
-			assertFresh(hooks);
-			if (current % 10 === 0 || current === total) {
-				const elapsed = (Date.now() - startedAt) / 1000;
-				const speed = elapsed > 0 ? current / elapsed : 0;
-				ctx.config.progressLog({
-					task: "Re-augmenting updated trips",
-					current,
-					total,
-					speed,
-					eta: speed > 0 ? (total - current) / speed : 0,
-					percent: (current / total) * 100,
-					unit: "items",
-				});
+			try {
+				timer.start("refreshRealtimeCache:primeRawStopTimes");
+				primeRawStopTimes(ctx, tripsToPrime);
+				timer.stop("refreshRealtimeCache:primeRawStopTimes");
+				await realtimeYield.maybeYield();
+				assertFresh(hooks);
+
+				for (let index = batchStart; index < batchEnd; index += 1) {
+					const tripKey = tripKeys[index];
+					const reusableTrip = augmentedCache.tripsRec.get(tripKey);
+
+					timer.start("refreshRealtimeCache:unregisterChangedTrips");
+					resetRealtimeTripIncremental(tripKey, ctx);
+					const removeRealtimeOnly =
+						ctx.raw.realtimeOnlyTripKeys.has(tripKey) && !nextRealtimeOnlyTripKeys.has(tripKey);
+					if (removeRealtimeOnly) removeRealtimeOnlyTrip(ctx, tripKey);
+					timer.stop("refreshRealtimeCache:unregisterChangedTrips");
+
+					timer.start("refreshRealtimeCache:fetchRawChangedTrips");
+					const rawTrip = removeRealtimeOnly ? undefined : rawTripsByKey.get(tripKey);
+					timer.stop("refreshRealtimeCache:fetchRawChangedTrips");
+
+					if (rawTrip) {
+						timer.start("refreshRealtimeCache:reaugmentChangedTrips");
+						const updatedTrip = augmentTrip(rawTrip, ctx, ctx.augmented.tripUpdatesCache, reusableTrip);
+						timer.stop("refreshRealtimeCache:reaugmentChangedTrips");
+
+						timer.start("refreshRealtimeCache:reregisterIndexes");
+						augmentedCache.tripsRec.set(tripKey, updatedTrip);
+						registerAugmentedTrip(ctx, updatedTrip);
+						replaceAugmentedTripInArray(ctx, updatedTrip);
+						timer.stop("refreshRealtimeCache:reregisterIndexes");
+					}
+
+					const current = index + 1;
+					// Yield on time budget rather than item count: re-augmentation
+					// cost varies widely per trip, and this loop runs every 60s.
+					await realtimeYield.maybeYield();
+					// Abort (never partially commit further) when the generation this
+					// rebuild derived from is no longer published; the caller retries
+					// against the new snapshot. Partial writes heal on that retry.
+					assertFresh(hooks);
+					if (current % 10 === 0 || current === total) {
+						const elapsed = (Date.now() - startedAt) / 1000;
+						const speed = elapsed > 0 ? current / elapsed : 0;
+						ctx.config.progressLog({
+							task: "Re-augmenting updated trips",
+							current,
+							total,
+							speed,
+							eta: speed > 0 ? (total - current) / speed : 0,
+							percent: (current / total) * 100,
+							unit: "items",
+						});
+					}
+				}
+			} finally {
+				for (const tripKey of newlyPrimedKeys) augmentedCache.rawStopTimesCache.delete(tripKey);
 			}
 		}
 

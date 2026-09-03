@@ -186,7 +186,7 @@ export class TRAX {
 		staticIntervalMs: number = 24 * 60 * 60 * 1000,
 	): Promise<void> {
 		if (!this.gtfs) {
-			await this.ensureGtfs();
+			await this.ensureGtfs(loadRealtime);
 			if (loadRealtime) await this.refreshRealtime();
 		} else {
 			await this.refreshStatic();
@@ -263,15 +263,15 @@ export class TRAX {
 	 * Ensures GTFS is initialized and initial caches are built.
 	 * If GTFS is already initialized, this does nothing.
 	 */
-	private async ensureGtfs(): Promise<GTFS> {
+	private async ensureGtfs(initialRealtime: boolean = false): Promise<GTFS> {
 		if (this.gtfs) return this.gtfs;
-		await this.refreshStatic();
+		await this.refreshStatic(initialRealtime);
 		if (!this.gtfs) throw new Error("Static GTFS refresh completed without a snapshot");
 		return this.gtfs;
 	}
 
-	private async initializeGtfs(): Promise<void> {
-		const gtfs = await createGtfs(this.config, false, this.reportSource);
+	private async initializeGtfs(initialRealtime: boolean): Promise<void> {
+		const gtfs = await createGtfs(this.config, initialRealtime, this.reportSource);
 		this.validateFeedTimeZones(gtfs);
 		this.ctx.augmented.timer.start("TRAX:initialCacheRefresh");
 		const nextCtx = await cache.refreshStaticCache(gtfs, this.config);
@@ -300,11 +300,11 @@ export class TRAX {
 	/**
 	 * Refreshes static GTFS data from source and rebuilds the static cache.
 	 */
-	public async refreshStatic(): Promise<void> {
+	public async refreshStatic(initialRealtime: boolean = false): Promise<void> {
 		if (this.staticRefreshInFlight) return this.staticRefreshInFlight;
 		this.staticRefreshInFlight = this.coordinateStaticRefresh(async () => {
 			if (!this.gtfs) {
-				await this.initializeGtfs();
+				await this.initializeGtfs(initialRealtime);
 				return;
 			}
 			const retainedState = cache.retainStaticRefreshState(this.ctx);
@@ -360,7 +360,7 @@ export class TRAX {
 	}
 
 	private async refreshRealtimeOnce(): Promise<void> {
-			const gtfs = await this.ensureGtfs();
+			const gtfs = await this.ensureGtfs(true);
 			const generation = this.staticGeneration;
 			const assertCurrent = () => {
 				if (this.staticGeneration !== generation || this.gtfs !== gtfs)
