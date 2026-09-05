@@ -98,6 +98,6 @@ export function updateGthaPlatformPredictionShadow(ctx: CacheContext, now = Date
 	state(ctx).update(events, now);
 }
 
-export function getGthaPlatformPredictionDiagnostics(ctx: CacheContext): PlatformPredictionDiagnostics {
-	return state(ctx).diagnostics();
+export function getGthaPlatformPredictionDiagnostics(ctx: CacheContext, feedIds?: readonly string[]): PlatformPredictionDiagnostics {
+	return state(ctx).diagnostics(feedIds);
 }

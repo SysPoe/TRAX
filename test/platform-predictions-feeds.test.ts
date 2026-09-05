@@ -94,6 +94,8 @@ test("VIA Rail feeds the platform prediction shadow alongside GO/UP", async () =
 		]);
 		updateGthaPlatformPredictionShadow(ctx, NOW);
 		assert.equal(getGthaPlatformPredictionDiagnostics(ctx).observations, 4);
+		assert.equal(getGthaPlatformPredictionDiagnostics(ctx, ["via"]).observations, 3);
+		assert.equal(getGthaPlatformPredictionDiagnostics(ctx, ["go", "up"]).observations, 1);
 
 		// Three VIA observations clear the minimum-samples gate, so a future
 		// VIA departure without an assignment earns a pending prediction. The
@@ -110,6 +112,8 @@ test("VIA Rail feeds the platform prediction shadow alongside GO/UP", async () =
 		}
 		updateGthaPlatformPredictionShadow(ctx, NOW);
 		assert.equal(getGthaPlatformPredictionDiagnostics(ctx).pending, 1);
+		assert.equal(getGthaPlatformPredictionDiagnostics(ctx, ["via"]).pending, 1);
+		assert.equal(getGthaPlatformPredictionDiagnostics(ctx, ["go", "up"]).pending, 0);
 	} finally {
 		await rm(cacheDir, { recursive: true, force: true });
 	}

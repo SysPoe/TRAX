@@ -115,6 +115,7 @@ export type GthaRealtimeDiagnostics = {
 	operatingScheduleUnresolvedTrips: number;
 	operatingScheduleUnresolvedStops: number;
 	platformPrediction: PlatformPredictionDiagnostics;
+	viaPlatformPrediction: PlatformPredictionDiagnostics;
 };
 
 function getState(ctx: CacheContext): GthaRealtimeState {
@@ -265,7 +266,8 @@ export function getGthaRealtimeDiagnostics(ctx: CacheContext): GthaRealtimeDiagn
 		operatingScheduleOverrides: state.operatingScheduleOverrides,
 		operatingScheduleUnresolvedTrips: state.operatingScheduleUnresolvedTrips,
 		operatingScheduleUnresolvedStops: state.operatingScheduleUnresolvedStops,
-		platformPrediction: getGthaPlatformPredictionDiagnostics(ctx),
+		platformPrediction: getGthaPlatformPredictionDiagnostics(ctx, ["go", "up"]),
+		viaPlatformPrediction: getGthaPlatformPredictionDiagnostics(ctx, ["via"]),
 	};
 }
 

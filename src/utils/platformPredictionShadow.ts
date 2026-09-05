@@ -308,9 +308,11 @@ export class PlatformPredictionShadow {
 		}
 	}
 
-	diagnostics(): PlatformPredictionDiagnostics {
+	diagnostics(feedIds?: readonly string[]): PlatformPredictionDiagnostics {
+		const filter = feedIds ? `feed_id IN (${feedIds.map(() => "?").join(",")})` : "1 = 1";
+		const bindings = feedIds ?? [];
 		const count = (table: string) =>
-			Number((this.db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number }).count);
+			Number((this.db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${filter}`).get(...bindings) as { count: number }).count);
 		const byRoute = this.db
 			.prepare(
 				`
@@ -318,12 +320,12 @@ export class PlatformPredictionShadow {
 					SUM(CASE WHEN route_prediction = actual_platform THEN 1 ELSE 0 END) AS correct,
 					COUNT(route_prediction) AS total
 				FROM platform_prediction_outcomes
-				WHERE route_prediction IS NOT NULL
+				WHERE route_prediction IS NOT NULL AND ${filter}
 				GROUP BY feed_id, route_id, route_label
 				ORDER BY route_label, feed_id, route_id
 			`,
 			)
-			.all() as Array<{ feed_id: string; route_id: string; route_label: string; correct: number; total: number }>;
+			.all(...bindings) as Array<{ feed_id: string; route_id: string; route_label: string; correct: number; total: number }>;
 		const byServiceId = this.db
 			.prepare(
 				`
@@ -331,12 +333,12 @@ export class PlatformPredictionShadow {
 					SUM(CASE WHEN service_prediction = actual_platform THEN 1 ELSE 0 END) AS correct,
 					COUNT(service_prediction) AS total
 				FROM platform_prediction_outcomes
-				WHERE service_prediction IS NOT NULL
+				WHERE service_prediction IS NOT NULL AND ${filter}
 				GROUP BY feed_id, service_id
 				ORDER BY service_id, feed_id
 			`,
 			)
-			.all() as Array<{ feed_id: string; service_id: string; correct: number; total: number }>;
+			.all(...bindings) as Array<{ feed_id: string; service_id: string; correct: number; total: number }>;
 		const byServiceDay = this.db
 			.prepare(
 				`
@@ -344,12 +346,12 @@ export class PlatformPredictionShadow {
 					SUM(CASE WHEN service_day_prediction = actual_platform THEN 1 ELSE 0 END) AS correct,
 					COUNT(service_day_prediction) AS total
 				FROM platform_prediction_outcomes
-				WHERE service_day_prediction IS NOT NULL
+				WHERE service_day_prediction IS NOT NULL AND ${filter}
 				GROUP BY feed_id, service_id, day_of_week
 				ORDER BY service_id, day_of_week, feed_id
 			`,
 			)
-			.all() as Array<{
+			.all(...bindings) as Array<{
 			feed_id: string;
 			service_id: string;
 			day_of_week: number;
@@ -357,8 +359,8 @@ export class PlatformPredictionShadow {
 			total: number;
 		}>;
 		const latest = this.db
-			.prepare("SELECT MAX(observed_at) AS observed_at FROM platform_prediction_outcomes")
-			.get() as {
+			.prepare(`SELECT MAX(observed_at) AS observed_at FROM platform_prediction_outcomes WHERE ${filter}`)
+			.get(...bindings) as {
 			observed_at: number | null;
 		};
 
