@@ -39,9 +39,6 @@ importers:
       '@types/node':
         specifier: ^24.0.14
         version: 24.13.3
-      assemblyscript:
-        specifier: ^0.28.9
-        version: 0.28.20
       prettier:
         specifier: ^3.6.2
         version: 3.9.6
@@ -203,15 +200,6 @@ packages:
     resolution: {integrity: sha512-WpDfL7NO6j7tH88IDBNVdUJxDh9nmCteAVW9dsep846XdwF4naCBK+/tGLX3KJgcpgMRXCFlTM2hKGoK9FsdrQ==}
     engines: {node: '>=12'}
 
-  assemblyscript@0.28.20:
-    resolution: {integrity: sha512-5PM7GZpvcLypHcLmi30aP8mqm5HjU+LL3BdV1xDyA3USGtL2w+iMiUnhtH+vW8+2kOuHlAyPu7M+QgyEw5he1g==}
-    engines: {node: '>=20', npm: '>=10'}
-    hasBin: true
-
-  binaryen@131.0.0-nightly.20260721:
-    resolution: {integrity: sha512-AAQIkhfbYXh4FBObwBrlO+5L+6Rp6OOMOjh6AdT0M+GLNLyrwKWgtW+EzmizNgx9CWDfTJPfDtKoZi62QESbtg==}
-    hasBin: true
-
   boolbase@1.0.0:
     resolution: {integrity: sha512-JZOSA7Mo9sNGB8+UjSgzdLtokWAky1zbztM3WRLCbZ70/3cTANmQmOdR7y2g+J0e2WXywy1yS468tY+IruqEww==}
 
@@ -281,9 +269,6 @@ packages:
   is-fullwidth-code-point@3.0.0:
     resolution: {integrity: sha512-zymm5+u+sCsSWyD9qNaejV3DFvhCKclKdizYaJUuHA83RLjb7nSuGnddCHGv0hk+KY7BMAlsWeK4Ueg6EV6XQg==}
     engines: {node: '>=8'}
-
-  long@5.3.2:
-    resolution: {integrity: sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA==}
 
   node-addon-api@8.9.2:
     resolution: {integrity: sha512-VijLXbi3UACN69I0JVXJsX4tjACjNoQDgv2gTF6sx2wWEi8tkSg2eX8p5gSIFi8z2+DL3oHmY6OyKce38SDolg==}
@@ -420,13 +405,6 @@ snapshots:
 
   ansi-regex@6.3.0: {}
 
-  assemblyscript@0.28.20:
-    dependencies:
-      binaryen: 131.0.0-nightly.20260721
-      long: 5.3.2
-
-  binaryen@131.0.0-nightly.20260721: {}
-
   boolbase@1.0.0: {}
 
   buffer-from@1.1.2: {}
@@ -508,8 +486,6 @@ snapshots:
   he@1.2.0: {}
 
   is-fullwidth-code-point@3.0.0: {}
-
-  long@5.3.2: {}
 
   node-addon-api@8.9.2: {}
 

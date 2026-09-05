@@ -7,7 +7,7 @@ import {
 	type Stop,
 } from "qdf-gtfs";
 import { isConsideredRoute, isConsideredTrip } from "../utils/considered.js";
-import { rebuildServiceInverseIndexes, syncCalendarsToWasm } from "../utils/calendar.js";
+import { rebuildServiceInverseIndexes, loadServiceCalendarRules } from "../utils/calendar.js";
 import { augmentStop } from "../utils/augmentedStop.js";
 import type { AugmentedStop } from "../utils/augmentedStop.js";
 import { augmentTrip, createRealtimeOnlyTrip, getOperationalServiceDatesForTrip } from "../utils/augmentedTrip.js";
@@ -426,9 +426,9 @@ export async function refreshStaticCache(
 		function: "refreshStaticCache",
 	});
 
-	ctx.augmented.timer.start("refreshStaticCache:syncToWasm");
-	syncCalendarsToWasm(ctx, calendars, calendarDates);
-	ctx.augmented.timer.stop("refreshStaticCache:syncToWasm");
+	ctx.augmented.timer.start("refreshStaticCache:loadServiceCalendarRules");
+	loadServiceCalendarRules(ctx, calendars, calendarDates);
+	ctx.augmented.timer.stop("refreshStaticCache:loadServiceCalendarRules");
 
 	ctx.augmented.timer.start("refreshStaticCache:loadRoutes");
 	const routes = gtfs.getRoutes();

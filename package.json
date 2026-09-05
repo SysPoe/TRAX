@@ -8,7 +8,6 @@
   "devDependencies": {
     "@types/crypto-js": "^4.2.2",
     "@types/node": "^24.0.14",
-    "assemblyscript": "^0.28.9",
     "prettier": "^3.6.2",
     "tsx": "^3.12.7",
     "typescript": "^5.9.3"
@@ -24,13 +23,10 @@
     "strip-ansi": "^7.1.2"
   },
   "scripts": {
-    "build": "nub run asbuild && tsc",
+    "build": "tsc",
     "prepare": "nub run build",
     "link:local": "nub link ../QDF-GTFS",
     "format": "prettier . --write --config .prettierrc",
-    "asbuild:debug": "asc assembly/index.ts --target debug --enable threads --initialMemory 100 --maximumMemory 1000 --sharedMemory",
-    "asbuild:release": "asc assembly/index.ts --target release --enable threads --initialMemory 100 --maximumMemory 1000 --sharedMemory",
-    "asbuild": "nub run asbuild:debug && nub run asbuild:release",
     "test": "nub run build && node test/corridor.js && node test/realtime-cache.js && node test/architecture.js",
     "test:performance-regressions": "nub run build && node test/performance-regressions.js",
     "test:corridor-performance": "nub run build && node test/corridor-performance.js",
@@ -40,7 +36,6 @@
   },
   "files": [
     "dist",
-    "build",
     "data"
   ],
   "exports": {

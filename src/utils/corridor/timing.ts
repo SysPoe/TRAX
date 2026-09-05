@@ -7,7 +7,7 @@ import type { CorridorGapResolution, CorridorNode, JourneyContext } from "./type
 import type { CorridorIndex } from "./shapeIndex.js";
 import { parseEntityKey } from "../../identity.js";
 import { qualifiedRouteDirectionKey } from "./keys.js";
-import { interpolateTimes as wasmInterpolateTimes } from "../../../build/release.js";
+import { interpolateTimes } from "../interpolateTimes.js";
 
 export type StopTimeWithPassingMeta = qdf.StopTime & {
 	_passing?: boolean;
@@ -174,7 +174,7 @@ function interpolatedTimes(from: qdf.StopTime, to: qdf.StopTime, weights: readon
 	const start = from.departure_time ?? from.arrival_time;
 	const end = to.arrival_time ?? to.departure_time;
 	if (start == null || end == null || end <= start || weights.length === 0) return [];
-	return wasmInterpolateTimes(start, end, [...weights]);
+	return interpolateTimes(start, end, weights);
 }
 
 /** Interpolate one corridor segment with the same weights used by GTFS rows. */

@@ -3,15 +3,14 @@ import { AugmentedStop } from "./augmentedStop.js";
 import * as cache from "../cache/index.js";
 import { expandStopTimesWithCorridor, type StopTimeWithPassingMeta } from "./corridor/timing.js";
 import type { CorridorResolution, JourneyContext } from "./corridor/types.js";
-import { interpolateTimes as wasmInterpolateTimes } from "../../build/release.js";
+import { interpolateTimes } from "./interpolateTimes.js";
 import { getPlatformData as loadPlatformData, seqPlatformDefinitionsPresent } from "./platformData.js";
 import type { PlatformData, PlatformDefinition } from "./platformData.js";
 import { ServiceCapacity } from "./serviceCapacity.js";
-import { getServiceDayStart } from "./time.js";
+import { addDaysToServiceDate, getServiceDayStart } from "./time.js";
 import { getFeedTimeZone } from "../config.js";
 import { isPassingStopTime } from "./considered.js";
 import { Timer } from "./timer.js";
-import { addDaysToDateString as wasmAddDaysToDateString, calculateDelayClassWasm } from "../../build/release.js";
 import { getSeqState } from "../plugins/seq-state.js";
 
 export type BoardingLocationKind = "track" | "platform" | "gate" | "door" | "letter";
@@ -148,9 +147,16 @@ function attachStopReferences(
 	ast.scheduled_parent_station = refs.scheduledParent ?? null;
 }
 
-function calculateDelayClass(delaySecs: number) {
-	const info = calculateDelayClassWasm(delaySecs);
-	return { str: info.str, cls: info.cls as "on-time" | "late" | "very-late" | "early" };
+function calculateDelayClass(delaySecs: number): {
+	str: string;
+	cls: "on-time" | "late" | "very-late" | "early";
+} {
+	// Realtime delay values are whole seconds.
+	delaySecs = Math.trunc(delaySecs);
+	if (Math.abs(delaySecs) <= 60) return { str: "on time", cls: "on-time" };
+	const minutes = Math.round(Math.abs(delaySecs) / 60).toFixed(1);
+	if (delaySecs < 0) return { str: `${minutes}m early`, cls: "early" };
+	return { str: `${minutes}m late`, cls: delaySecs <= 300 ? "late" : "very-late" };
 }
 
 function addDaysToDateString(dateStr: string, daysToAdd: number, ctx: cache.CacheContext): string {
@@ -158,7 +164,7 @@ function addDaysToDateString(dateStr: string, daysToAdd: number, ctx: cache.Cach
 	const key = `${dateStr}|${daysToAdd}`;
 	let cached = ctx.runtimeState.dateOffsets.get(key);
 	if (cached !== undefined) return cached;
-	const result = wasmAddDaysToDateString(dateStr, daysToAdd);
+	const result = addDaysToServiceDate(dateStr, daysToAdd);
 	ctx.runtimeState.dateOffsets.set(key, result);
 	return result;
 }
@@ -573,7 +579,7 @@ export function augmentStopTimes(
 			const startDep = lastNonPassingActDepRaw;
 			const endArr = actArr;
 			if (endArr > startDep) {
-				const wallTimes = wasmInterpolateTimes(startDep, endArr, pendingEmus);
+				const wallTimes = interpolateTimes(startDep, endArr, pendingEmus);
 				const getOffsetPass = (secs: number) => Math.floor(secs / 86400);
 				for (let pi = 0; pi < pendingPassingRows.length; pi++) {
 					const row = pendingPassingRows[pi];

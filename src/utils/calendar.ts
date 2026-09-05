@@ -104,7 +104,7 @@ export function getServiceDatesByService(
 }
 
 /** Build compact service rules without expanding every calendar into date strings. */
-export function syncCalendarsToWasm(
+export function loadServiceCalendarRules(
 	ctx: CacheContext,
 	calendars: readonly Calendar[] = [],
 	calendarDates: readonly CalendarDate[] = [],
