@@ -2,6 +2,26 @@ export type ServiceDate = string & { readonly __serviceDate: unique symbol };
 export type GtfsTime = number & { readonly __gtfsTime: unique symbol };
 export type Instant = string & { readonly __instant: unique symbol };
 
+const MAX_TIMEZONE_FORMATTERS = 64;
+const serviceDateFormatters = new Map<string, Intl.DateTimeFormat>();
+const localIsoFormatters = new Map<string, Intl.DateTimeFormat>();
+const offsetFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/** Reuse Intl setup, but evaluate every instant so DST offsets stay exact. */
+function timezoneFormatter(
+	cache: Map<string, Intl.DateTimeFormat>,
+	timezone: string,
+	locale: string,
+	options: Intl.DateTimeFormatOptions,
+): Intl.DateTimeFormat {
+	let formatter = cache.get(timezone);
+	if (formatter) return formatter;
+	formatter = new Intl.DateTimeFormat(locale, { ...options, timeZone: timezone });
+	if (cache.size >= MAX_TIMEZONE_FORMATTERS) cache.delete(cache.keys().next().value!);
+	cache.set(timezone, formatter);
+	return formatter;
+}
+
 export function asServiceDate(value: string): ServiceDate {
 	if (!/^\d{8}$/.test(value)) throw new Error(`Invalid ServiceDate '${value}'`);
 	return value as ServiceDate;
@@ -35,8 +55,7 @@ export function secTimeDiff(t1: string, t2: string): number {
 }
 
 export function getServiceDate(date: Date, timezone: string): string {
-	const parts = new Intl.DateTimeFormat("en-CA", {
-		timeZone: timezone,
+	const parts = timezoneFormatter(serviceDateFormatters, timezone, "en-CA", {
 		year: "numeric",
 		month: "2-digit",
 		day: "2-digit",
@@ -51,8 +70,7 @@ export function getLocalISOString(date: Date, timezone: string): string {
 	const format = (type: Intl.DateTimeFormatPartTypes, parts: Intl.DateTimeFormatPart[]) =>
 		parts.find((p) => p.type === type)!.value;
 
-	const parts = new Intl.DateTimeFormat("en-CA", {
-		timeZone: timezone,
+	const parts = timezoneFormatter(localIsoFormatters, timezone, "en-CA", {
 		year: "numeric",
 		month: "2-digit",
 		day: "2-digit",
@@ -74,8 +92,7 @@ export function getLocalISOString(date: Date, timezone: string): string {
 
 export function getTimezoneOffsetSeconds(timezone: string, date: Date = new Date()): number {
 	if (Number.isNaN(date.getTime())) return 0;
-	const parts = new Intl.DateTimeFormat("en-US", {
-		timeZone: timezone,
+	const parts = timezoneFormatter(offsetFormatters, timezone, "en-US", {
 		timeZoneName: "shortOffset",
 	}).formatToParts(date);
 	const offsetPart = parts.find((p) => p.type === "timeZoneName");

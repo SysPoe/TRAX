@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import "./corridor-alignment.js";
 import { RouteType, TripScheduleRelationship } from "qdf-gtfs";
 import { createEmptyAugmentedCache, createEmptyRawCache, createRuntimeState } from "../dist/cache/factories.js";
 import { resolveConfig } from "../dist/config.js";

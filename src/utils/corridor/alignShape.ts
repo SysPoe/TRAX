@@ -209,6 +209,13 @@ function betterState(a: AlignmentState, b: AlignmentState): AlignmentState {
 	return a.cost <= b.cost ? a : b;
 }
 
+function improvesState(current: AlignmentState | undefined, cost: number, matchedCount: number): boolean {
+	if (!current) return true;
+	if (Math.abs(current.cost - cost) > 1) return cost < current.cost;
+	if (current.matchedCount !== matchedCount) return matchedCount > current.matchedCount;
+	return !(current.cost <= cost);
+}
+
 function solveOrientation(
 	anchors: readonly JourneyAnchor[],
 	shape: IndexedShape,
@@ -221,27 +228,32 @@ function solveOrientation(
 		const candidates = makeCandidates(anchors[index], index, shape, config, anchors.length, orientation, options);
 		const next = new Map<string, AlignmentState>();
 		for (const state of states) {
-			const skipped: AlignmentState = {
-				last: state.last,
-				cost: state.cost + 300,
-				matchedCount: state.matchedCount,
-				previous: state,
-				choice: null,
-			};
 			const skippedKey = state.last?.key ?? "none";
-			next.set(skippedKey, next.has(skippedKey) ? betterState(next.get(skippedKey)!, skipped) : skipped);
+			const skippedCost = state.cost + 300;
+			if (improvesState(next.get(skippedKey), skippedCost, state.matchedCount)) {
+				next.set(skippedKey, {
+					last: state.last,
+					cost: skippedCost,
+					matchedCount: state.matchedCount,
+					previous: state,
+					choice: null,
+				});
+			}
 
 			for (const candidate of candidates) {
 				if (state.last && candidate.routeProgress <= state.last.routeProgress + 2) continue;
-				const resolved: AlignmentState = {
+				const cost = state.cost + candidate.cost;
+				const matchedCount = state.matchedCount + 1;
+				// Losing transitions need no object or predecessor link. Keep the same
+				// traversal and tie order as the full dynamic-programming search.
+				if (!improvesState(next.get(candidate.key), cost, matchedCount)) continue;
+				next.set(candidate.key, {
 					last: candidate,
-					cost: state.cost + candidate.cost,
-					matchedCount: state.matchedCount + 1,
+					cost,
+					matchedCount,
 					previous: state,
 					choice: candidate,
-				};
-				const key = candidate.key;
-				next.set(key, next.has(key) ? betterState(next.get(key)!, resolved) : resolved);
+				});
 			}
 		}
 		states = [...next.values()];
