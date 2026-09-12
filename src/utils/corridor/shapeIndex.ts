@@ -102,7 +102,25 @@ function getStationGeometry(
 				stopId: stop.stop_id,
 			});
 		}
-		if (stop.stop_name && !current.names.includes(stop.stop_name)) current.names.push(stop.stop_name);
+		if (stop.stop_name) {
+			// Consumers render names[0] as the station display name (passing
+			// nodes in resolveShapeGap, patternResolver, and the manual
+			// fallback). The canonical station record must own that slot:
+			// platform ("X, platform N") and bus ("X, stop B") variants share
+			// the same key but must never precede it, regardless of feed row
+			// order.
+			const isCanonicalStationRecord = entityKey({ feedId: stop.feed_id, localId: stop.stop_id }) === key;
+			const existingIndex = current.names.indexOf(stop.stop_name);
+			if (existingIndex !== -1) {
+				// The same display string arrived via a platform/bus variant
+				// first; the canonical record claims the display slot.
+				if (isCanonicalStationRecord && existingIndex !== 0) {
+					current.names.splice(existingIndex, 1);
+					current.names.unshift(stop.stop_name);
+				}
+			} else if (isCanonicalStationRecord) current.names.unshift(stop.stop_name);
+			else current.names.push(stop.stop_name);
+		}
 		result.set(key, current);
 	}
 	return result;

@@ -606,6 +606,50 @@ function testDisplacedParent() {
 	assert.deepEqual(projectionSources, ["platform"]);
 }
 
+function testStationDisplayNamePrefersParentStation() {
+	// Regression test: StationGeometry.names[0] is rendered as the display
+	// name of synthetic passing stops (resolveShapeGap, patternResolver, and
+	// the manual-network fallback all read names[0]). SEQ lists platform and
+	// bus stops before the parent record in stops.txt, so encounter order
+	// alone must never promote a "X, platform N" / "X, stop B" variant.
+	const stops = [
+		// Multi-platform station: platforms precede the parent record.
+		{ feed_id: "feed", stop_id: "600481", stop_name: "Beerburrum station, platform 2", stop_lat: -26.959732, stop_lon: 152.95904, parent_station: "place_bbrsta" },
+		{ feed_id: "feed", stop_id: "600482", stop_name: "Beerburrum station, platform 1", stop_lat: -26.959931, stop_lon: 152.959007, parent_station: "place_bbrsta" },
+		{ feed_id: "feed", stop_id: "301487", stop_name: "Beerburrum station", stop_lat: -26.960009, stop_lon: 152.958837, parent_station: "place_bbrsta" },
+		{ feed_id: "feed", stop_id: "place_bbrsta", stop_name: "Beerburrum station", stop_lat: -26.959863, stop_lon: 152.958891, parent_station: "" },
+		// Bus-stop variant with a distinct name shares the parent key.
+		{ feed_id: "feed", stop_id: "301494", stop_name: "Landsborough station, stop B", stop_lat: -26.808127, stop_lon: 152.966176, parent_station: "place_lansta" },
+		{ feed_id: "feed", stop_id: "600487", stop_name: "Landsborough station, platform 1", stop_lat: -26.807956, stop_lon: 152.966377, parent_station: "place_lansta" },
+		{ feed_id: "feed", stop_id: "place_lansta", stop_name: "Landsborough station", stop_lat: -26.808077, stop_lon: 152.966173, parent_station: "" },
+		// Single-platform station: only the platform precedes the parent.
+		{ feed_id: "feed", stop_id: "600491", stop_name: "Palmwoods station, platform 1", stop_lat: -26.688683, stop_lon: 152.960756, parent_station: "place_palsta" },
+		{ feed_id: "feed", stop_id: "place_palsta", stop_name: "Palmwoods station", stop_lat: -26.688513, stop_lon: 152.961031, parent_station: "" },
+		{ feed_id: "feed", stop_id: "d", stop_name: "D", stop_lat: -27, stop_lon: 153.002, parent_station: "" },
+	];
+	const trip = {
+		feed_id: "feed",
+		trip_id: "trip",
+		route_id: "r",
+		direction_id: 0,
+		service_id: "daily",
+		shape_id: null,
+	};
+	const ctx = context();
+	ctx.raw.consideredTrips = [trip];
+	for (const stop of stops) ctx.raw.stopsByKey.set(q("feed", stop.stop_id), stop);
+	ctx.augmented.rawStopTimesCache.set(q("feed", "trip"), [
+		{ feed_id: "feed", trip_id: "trip", stop_id: "600482", stop_sequence: 1, shape_dist_traveled: null },
+		{ feed_id: "feed", trip_id: "trip", stop_id: "600487", stop_sequence: 2, shape_dist_traveled: null },
+		{ feed_id: "feed", trip_id: "trip", stop_id: "600491", stop_sequence: 3, shape_dist_traveled: null },
+		{ feed_id: "feed", trip_id: "trip", stop_id: "d", stop_sequence: 4, shape_dist_traveled: null },
+	]);
+	const index = buildCorridorIndex(ctx);
+	assert.equal(index.stationGeometry.get(q("feed", "place_bbrsta"))?.names[0], "Beerburrum station");
+	assert.equal(index.stationGeometry.get(q("feed", "place_lansta"))?.names[0], "Landsborough station");
+	assert.equal(index.stationGeometry.get(q("feed", "place_palsta"))?.names[0], "Palmwoods station");
+}
+
 function testPartialShape() {
 	const coordinates = simpleCoordinates(["a", "b", "c", "d", "x"]);
 	coordinates.x = { lat: -27, lon: 153.0025 };
@@ -1914,6 +1958,7 @@ for (const testCase of [
 	["projection retains self-crossing positions", testSelfCrossingProjection],
 	["near-vertex projection keeps the better segment", testNearVertexProjectionKeepsBetterLaterSegment],
 	["station indexing keeps displaced parent and platform", testDisplacedParent],
+	["station display name prefers the parent station record", testStationDisplayNamePrefersParentStation],
 	["partial shapes fall back only for the suffix", testPartialShape],
 	["disagreeing compatible shapes stay unresolved", testAmbiguousCompatibleShapes],
 	["following anchors can disambiguate compatible shapes", testFollowingAnchorDisambiguatesCompatibleShape],
