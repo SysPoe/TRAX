@@ -16,6 +16,7 @@ const DIRECTORY_CACHE_MS = 6 * 60 * 60 * 1000;
 const SIGNER_CACHE_MS = 6 * 60 * 60 * 1000;
 const INVENTORY_CACHE_MS = 5 * 60 * 1000;
 const MISSING_INVENTORY_CACHE_MS = 60 * 1000;
+const LAST_AVAILABILITY_CACHE_MS = 7 * 24 * 60 * 60 * 1000;
 /** QRT booking searches must begin far enough ahead for the website to accept the journey. */
 export const QRT_BOOKING_CUTOFF_MS = 60 * 60 * 1000;
 
@@ -27,6 +28,7 @@ export type QrtBookingLeg = {
 	departureDate: string;
 };
 type InventoryEntry = { availability: VehicleBookingAvailability | null; expiresAt: number };
+type LastAvailabilityEntry = { availability: VehicleBookingAvailability; expiresAt: number };
 
 type BookingState = {
 	signer: SignerBundle | null;
@@ -36,6 +38,7 @@ type BookingState = {
 	stationsExpiresAt: number;
 	stationsInFlight: Promise<BookingStation[]> | null;
 	inventory: Map<string, InventoryEntry>;
+	lastAvailability: Map<string, LastAvailabilityEntry>;
 	inFlight: Map<string, Promise<VehicleBookingAvailability | null>>;
 };
 
@@ -110,6 +113,7 @@ export function qrtBookingState(ctx: CacheContext): BookingState {
 		stationsExpiresAt: 0,
 		stationsInFlight: null,
 		inventory: new Map(),
+		lastAvailability: new Map(),
 		inFlight: new Map(),
 	}));
 }
@@ -425,30 +429,51 @@ export async function getQrtBookingAvailability(
 	service: QRTTravelTrip,
 	ctx: CacheContext,
 ): Promise<VehicleBookingAvailability | null> {
+	const state = qrtBookingState(ctx);
+	const serviceKey = `${service.serviceId}\0${service.departureDate}`;
+	const previous = state.lastAvailability.get(serviceKey);
+	const lastAvailability = previous && previous.expiresAt > Date.now() ? previous.availability : null;
+	if (previous && !lastAvailability) state.lastAvailability.delete(serviceKey);
 	const leg = selectQrtBookingLeg(service);
 	const travelDate = leg ? bookingDate(leg.departureDate) : null;
-	if (!leg || !travelDate) return null;
-	const state = qrtBookingState(ctx);
+	if (!leg || !travelDate) return lastAvailability;
 	const stations = await qrtBookingStationsFor(ctx, state);
 	const origin = matchQrtBookingStation(leg.origin, stations);
 	const destination = matchQrtBookingStation(leg.destination, stations);
-	if (!origin || !destination) return null;
+	if (!origin || !destination) return lastAvailability;
 	const key = `${service.serviceId}\0${leg.departureDate}\0${origin.id}\0${destination.id}`;
 	const now = Date.now();
 	const cached = state.inventory.get(key);
 	if (cached && cached.expiresAt > now) return cached.availability;
 	const active = state.inFlight.get(key);
-	if (active) return active;
-	const request = queryAvailability(service, leg, ctx, state, origin, destination, travelDate)
-		.catch(() => null)
-		.then((availability) => {
-			state.inventory.set(key, {
-				availability,
-				expiresAt: Date.now() + (availability ? INVENTORY_CACHE_MS : MISSING_INVENTORY_CACHE_MS),
+	const refresh = () =>
+		queryAvailability(service, leg, ctx, state, origin, destination, travelDate)
+			.catch(() => null)
+			.then((availability) => {
+				const retained = availability ?? lastAvailability;
+				if (availability) {
+					const refreshedAt = Date.now();
+					for (const [key, entry] of state.lastAvailability) {
+						if (entry.expiresAt <= refreshedAt) state.lastAvailability.delete(key);
+					}
+					state.lastAvailability.set(serviceKey, {
+						availability,
+						expiresAt: refreshedAt + LAST_AVAILABILITY_CACHE_MS,
+					});
+				}
+				state.inventory.set(key, {
+					availability: retained,
+					expiresAt: Date.now() + (availability ? INVENTORY_CACHE_MS : MISSING_INVENTORY_CACHE_MS),
+				});
+				state.inFlight.delete(key);
+				return retained;
 			});
-			state.inFlight.delete(key);
-			return availability;
-		});
+	if (cached) {
+		if (!active) state.inFlight.set(key, refresh());
+		return cached.availability ?? lastAvailability;
+	}
+	if (active) return active;
+	const request = refresh();
 	state.inFlight.set(key, request);
 	return request;
 }

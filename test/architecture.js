@@ -69,9 +69,11 @@ import { matchRealtimeStopTimeUpdate } from "../dist/utils/augmentedStopTime.js"
 import { inferTfnswRealtimeServiceDate, tfnswPlatformCode } from "../dist/plugins/tfnsw-rail.js";
 import { _test as tfnswRegionalBookingTest } from "../dist/region-specific/AU/NSW/regional-booking.js";
 import {
+	getQrtBookingAvailability,
 	matchQrtBookingStation,
 	parseQrtBookingStations,
 	parseQrtSignerBundle,
+	qrtBookingState,
 	qrtRegularFareClasses,
 	selectQrtBookingLeg,
 	selectQrtRailService,
@@ -236,6 +238,82 @@ assert.deepEqual(qrtRegularFareClasses(qrtRailService), [
 		currency: "AUD",
 	},
 ]);
+
+const qrtBookingContext = {
+	pluginState: new Map(),
+	config: { requestTimeoutMs: 5_000 },
+};
+const qrtBookingCache = qrtBookingState(qrtBookingContext);
+qrtBookingCache.signer = { clientId: "test", keys: ["one", "two", "three", "four"] };
+qrtBookingCache.signerExpiresAt = Number.MAX_SAFE_INTEGER;
+qrtBookingCache.stations = [qrtStations[1], rockhampton];
+qrtBookingCache.stationsExpiresAt = Number.MAX_SAFE_INTEGER;
+const cachedBookingTrip = {
+	serviceId: "Q301-cache-test",
+	trip_number: "Q301",
+	departureDate: "2099-09-12T12:30:00",
+	stops: [
+		{ ...qrtBookingStops[1], trainPosition: "NotArrived", plannedDeparture: "2099-09-12T12:30:00" },
+		{ ...qrtBookingStops[2], trainPosition: "NotArrived", plannedDeparture: "2099-09-12T14:00:00" },
+	],
+};
+const originalFetch = globalThis.fetch;
+let qrtBookingProviderFails = false;
+try {
+	globalThis.fetch = async () => {
+		if (qrtBookingProviderFails) throw new Error("simulated QRT booking outage");
+		return new Response(
+			JSON.stringify({
+				fields: {
+					raiL_SERVICES: [
+						{
+							...qrtRailService,
+							traveL_DATE: "2099-09-12T00:00:00",
+							departurE_TIME: "2099-09-12T12:30:00",
+							startregioncode: "MBJ",
+							endregioncode: "ROK",
+						},
+					],
+				},
+			}),
+			{ status: 200, headers: { "content-type": "application/json" } },
+		);
+	};
+	const availableBooking = await getQrtBookingAvailability(cachedBookingTrip, qrtBookingContext);
+	assert.equal(availableBooking?.fareClasses[0]?.minimumAvailability, 133);
+	for (const entry of qrtBookingCache.inventory.values()) entry.expiresAt = 0;
+	qrtBookingProviderFails = true;
+	assert.equal(
+		await getQrtBookingAvailability(cachedBookingTrip, qrtBookingContext),
+		availableBooking,
+		"QRT booking refresh failures should retain the last observed availability",
+	);
+	assert.equal(
+		await getQrtBookingAvailability(
+			{
+				...cachedBookingTrip,
+				stops: cachedBookingTrip.stops.map((stop) => ({ ...stop, trainPosition: "Passed" })),
+			},
+			qrtBookingContext,
+		),
+		availableBooking,
+		"QRT services should retain their last availability after the final bookable leg",
+	);
+	assert.equal(
+		await getQrtBookingAvailability(
+			{
+				...cachedBookingTrip,
+				departureDate: "2099-09-13T12:30:00",
+				stops: cachedBookingTrip.stops.map((stop) => ({ ...stop, trainPosition: "Passed" })),
+			},
+			qrtBookingContext,
+		),
+		null,
+		"QRT booking snapshots must not cross service occurrences",
+	);
+} finally {
+	globalThis.fetch = originalFetch;
+}
 
 const qrtPublished = parseQrtPublishedFormations(
 	[
