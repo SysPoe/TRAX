@@ -9,6 +9,7 @@ import { buildSeqDiagramTopology } from "../dist/index.js";
 import { _test as refreshCacheTest } from "../dist/cache/refreshCaches.js";
 import { getRawTrips } from "../dist/cache/gtfsReads.js";
 import { _test as srtTest, getStaticFeedFingerprint } from "../dist/utils/SRT.js";
+import { _test as stationTest } from "../dist/utils/stations.js";
 import { propagateBlockHandoffs } from "../dist/region-specific/CA/GTHA/block-handoff.js";
 import { formatTrack, updateSourceB } from "../dist/region-specific/CA/GTHA/realtime.js";
 import { ptvMetroPlugin } from "../dist/plugins/ptv-metro.js";
@@ -82,7 +83,7 @@ function testStaticFingerprintTracksQDFCacheFile() {
 	const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "trax-fingerprint-"));
 	try {
 		const url = "https://example.test/static.zip";
-		const cacheName = crypto.createHash("md5").update(`${url}|{}|`).digest("hex");
+		const cacheName = crypto.createHash("md5").update(`${url}|{}`).digest("hex");
 		const cachePath = path.join(cacheDir, cacheName);
 		fs.writeFileSync(cachePath, "feed-v1");
 
@@ -115,9 +116,38 @@ function testStaticFingerprintTracksQDFCacheFile() {
 		});
 		assert.ok(withPlace);
 		assert.notEqual(withPlace, second);
+
+		const withArchiveEntry = getStaticFeedFingerprint({
+			...config,
+			network: {
+				...config.network,
+				feeds: [{ ...config.network.feeds[0], staticSource: { url, archiveEntry: "rail/google_transit.zip" } }],
+			},
+		});
+		assert.ok(withArchiveEntry);
+		assert.notEqual(withArchiveEntry, second);
 	} finally {
 		fs.rmSync(cacheDir, { recursive: true, force: true });
 	}
+}
+
+function testConsideredStationCacheRequiresCurrentStaticFingerprint() {
+	const feedIds = ["test"];
+	const current = {
+		feedIds,
+		stationIds: ["test\0current-station"],
+		staticFingerprint: "current-static-feed",
+	};
+
+	assert.deepEqual(
+		stationTest.cachedStationIdsIfCurrent(current, feedIds, "current-static-feed"),
+		current.stationIds,
+	);
+	assert.equal(stationTest.cachedStationIdsIfCurrent(current, feedIds, "replacement-static-feed"), null);
+	assert.equal(
+		stationTest.cachedStationIdsIfCurrent({ feedIds, stationIds: ["test\0legacy-station"] }, feedIds, "current-static-feed"),
+		null,
+	);
 }
 
 function testUntimedPassingPointsUseShapeDistance() {
@@ -366,6 +396,7 @@ testSeqDiagramUsesProvidedStopTimes();
 testDisappearingRealtimeUpdateIsChanged();
 await testRealtimeUpdatesMaterializeByFeed();
 testStaticFingerprintTracksQDFCacheFile();
+testConsideredStationCacheRequiresCurrentStaticFingerprint();
 testUntimedPassingPointsUseShapeDistance();
 testExpressPruningDistinguishesParallelCorridors();
 testTopologyStopTimesAreReadInFeedBatches();

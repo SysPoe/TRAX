@@ -3,14 +3,15 @@ import * as cache from "../cache/index.js";
 import { AugmentedStop } from "./augmentedStop.js";
 import * as qdf from "qdf-gtfs";
 import logger from "./logger.js";
-import { cacheFileExists, getCacheFilePath, loadCacheFile, writeCacheFile } from "./fs.js";
-import fs from "fs";
+import { cacheFileExists, loadCacheFile, writeCacheFileAtomic } from "./fs.js";
 import { entityKey, parseEntityKey } from "../identity.js";
 import { isRailLikeRouteType } from "./considered.js";
+import { getStaticFeedFingerprint } from "./SRT.js";
 
 type ConsideredStationsCache = {
 	feedIds: string[];
 	stationIds: string[];
+	staticFingerprint: string | null;
 };
 
 function getConfiguredFeedIds(ctx: CacheContext): string[] {
@@ -19,6 +20,16 @@ function getConfiguredFeedIds(ctx: CacheContext): string[] {
 
 function hasSameFeedIds(cached: string[], configured: string[]): boolean {
 	return cached.length === configured.length && cached.every((feedId, index) => feedId === configured[index]);
+}
+
+function cachedStationIdsIfCurrent(
+	cached: ConsideredStationsCache | string[],
+	configuredFeedIds: string[],
+	staticFingerprint: string | null,
+): string[] | null {
+	if (staticFingerprint === null || Array.isArray(cached)) return null;
+	if (!hasSameFeedIds(cached.feedIds, configuredFeedIds)) return null;
+	return cached.staticFingerprint === staticFingerprint ? cached.stationIds : null;
 }
 
 function getPatternSignature(stopTimes: qdf.StopTime[]): string {
@@ -34,21 +45,15 @@ export function getConsideredStations(ctx: CacheContext): qdf.Stop[] {
 	const gtfs = ctx.gtfs;
 	const cacheDir = ctx.config.cacheDir;
 	const configuredFeedIds = getConfiguredFeedIds(ctx);
+	const staticFingerprint = getStaticFeedFingerprint(ctx.config);
 
 	let stations: string[] | null = null;
 
 	if (cacheFileExists("considered_stations_v2.json", cacheDir)) {
-		const stats = fs.statSync(getCacheFilePath("considered_stations_v2.json", cacheDir));
-		const mtime = new Date(stats.mtime);
-		const ageDays = (Date.now() - mtime.getTime()) / (1000 * 60 * 60 * 24);
-		if (ageDays <= 2) {
-			const cached = JSON.parse(loadCacheFile("considered_stations_v2.json", cacheDir)) as
-				| ConsideredStationsCache
-				| string[];
-			if (!Array.isArray(cached) && hasSameFeedIds(cached.feedIds, configuredFeedIds)) {
-				stations = cached.stationIds;
-			}
-		}
+		const cached = JSON.parse(loadCacheFile("considered_stations_v2.json", cacheDir)) as
+			| ConsideredStationsCache
+			| string[];
+		stations = cachedStationIdsIfCurrent(cached, configuredFeedIds, staticFingerprint);
 	}
 
 	if (stations === null) {
@@ -83,9 +88,13 @@ export function getConsideredStations(ctx: CacheContext): qdf.Stop[] {
 			gtfs.getTrips().forEach(processTrip);
 		}
 
-		writeCacheFile(
+		writeCacheFileAtomic(
 			"considered_stations_v2.json",
-			JSON.stringify({ feedIds: configuredFeedIds, stationIds: stations } satisfies ConsideredStationsCache),
+			JSON.stringify({
+				feedIds: configuredFeedIds,
+				stationIds: stations,
+				staticFingerprint,
+			} satisfies ConsideredStationsCache),
 			cacheDir,
 		);
 
@@ -103,6 +112,8 @@ export function getConsideredStations(ctx: CacheContext): qdf.Stop[] {
 
 	return result;
 }
+
+export const _test = { cachedStationIdsIfCurrent };
 
 export function getAugmentedRailStations(ctx: CacheContext): AugmentedStop[] {
 	return getConsideredStations(ctx)

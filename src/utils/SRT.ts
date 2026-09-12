@@ -553,8 +553,8 @@ export const _test = {
 
 /**
  * Fingerprint the exact QDF static ZIP cache entries plus TRAX's static stop
- * actions. QDF keys those files by md5(url|headers|archiveEntry), so stat identity is cheap
- * to obtain and changes whenever QDF replaces a cached feed.
+ * actions. QDF keys downloads by source URL and headers, then extracts each
+ * configured archive entry from that source.
  */
 export function getStaticFeedFingerprint(config: TraxConfig): string | null {
 	const hash = crypto.createHash("sha256");
@@ -566,7 +566,9 @@ export function getStaticFeedFingerprint(config: TraxConfig): string | null {
 
 	for (const feed of config.network.feeds) {
 		const feedConfig = feed.staticSource;
-		const keySource = `${feedConfig.url}|${JSON.stringify(feedConfig.headers ?? {})}|${feedConfig.archiveEntry ?? ""}`;
+		hash.update(feed.id);
+		hash.update(feedConfig.archiveEntry ?? "");
+		const keySource = `${feedConfig.url}|${JSON.stringify(feedConfig.headers ?? {})}`;
 		const cacheName = crypto.createHash("md5").update(keySource).digest("hex");
 		const cachePath = path.join(config.cacheDir, cacheName);
 		try {
