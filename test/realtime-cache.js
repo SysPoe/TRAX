@@ -378,13 +378,17 @@ for (const category of [
 	assert.equal(timingCategories.has(category), true, `missing timing category: ${category}`);
 }
 
-const streamedTripIds = Array.from({ length: 12 }, (_, index) => `streamed-trip-${index}`);
+const streamedTripIds = Array.from({ length: 26 }, (_, index) => `streamed-trip-${index}`);
 singleStopTimeQueries = 0;
 packedStopTimeQueries = 0;
 updates = streamedTripIds.map((id) => realtimeUpdate({ id, timestamp: 2 }));
 await refreshRealtimeCache(gtfs, config, ctx);
 assert.equal(singleStopTimeQueries, 0, "a cold realtime batch must not query stop times one trip at a time");
-assert.equal(packedStopTimeQueries, 1, "a cold realtime batch should use one packed stop-time query per feed");
+assert.equal(
+	packedStopTimeQueries,
+	2,
+	"realtime priming must bound each synchronous packed stop-time query",
+);
 for (const id of streamedTripIds) {
 	assert.equal(
 		augmented.rawStopTimesCache.has(entityKey({ feedId, localId: id })),

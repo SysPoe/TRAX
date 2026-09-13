@@ -50,7 +50,9 @@ import type { TransitPlugin } from "../plugins/types.js";
 import { expandTfnswChangedTripKeys } from "../region-specific/AU/NSW/tfnsw-cross-feed.js";
 
 type CacheProgressReporter = (info: Parameters<TraxConfig["progressLog"]>[0] & { unit?: "bytes" | "items" }) => void;
-const REALTIME_REAUGMENT_BATCH_SIZE = 250;
+// Native packed reads cannot yield while materializing their result. Keep the
+// batch small enough that large multi-region feeds do not starve HTTP traffic.
+const REALTIME_REAUGMENT_BATCH_SIZE = 25;
 
 /**
  * Thrown when a static snapshot publication lands mid-refresh. The refresh
