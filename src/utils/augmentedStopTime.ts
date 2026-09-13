@@ -147,7 +147,7 @@ function attachStopReferences(
 	ast.scheduled_parent_station = refs.scheduledParent ?? null;
 }
 
-function calculateDelayClass(delaySecs: number): {
+export function calculateDelayClass(delaySecs: number): {
 	str: string;
 	cls: "on-time" | "late" | "very-late" | "early";
 } {

@@ -16,6 +16,7 @@ import {
 	applyAnyTripNswOccupancy,
 	type AnyTripNswOccupancyClientOptions,
 } from "../region-specific/AU/NSW/anytrip-occupancy.js";
+import { buildTfnswCrossFeedIndex } from "../region-specific/AU/NSW/tfnsw-cross-feed.js";
 
 const SYDNEY_TRAINS_FEED_ID = "nsw-sydney-trains";
 const NSW_TRAINLINK_FEED_ID = "nsw-trainlink";
@@ -222,7 +223,13 @@ export function createTfnswRailPlugin(options: TfnswRailPluginOptions = {}): Tra
 			if (descriptor.isPassenger) trip.scheduled_passenger_cars = descriptor.numberOfCars;
 		},
 		enrichRealtimeTripUpdate: enrichTfnswRealtimeTripUpdate,
-		afterRealtime: applyTfnswVehicleAllocations,
+		afterSnapshotBuilt: (ctx) => {
+			buildTfnswCrossFeedIndex(ctx);
+		},
+		afterRealtime: (ctx) => {
+			applyTfnswVehicleAllocations(ctx);
+			buildTfnswCrossFeedIndex(ctx);
+		},
 		vehicleInfoForTrip: (trip, ctx) =>
 			getTfnswVehicleState(ctx).vehicleInfoByInstanceId.get(trip.instance_id) ?? null,
 		api: (ctx) => ({

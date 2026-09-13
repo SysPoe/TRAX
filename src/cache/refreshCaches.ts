@@ -47,6 +47,7 @@ import { buildCorridorIndex } from "../utils/corridor/shapeIndex.js";
 import { YieldBudget } from "../utils/cooperative.js";
 import { runPluginHooks } from "../plugins/concurrency.js";
 import type { TransitPlugin } from "../plugins/types.js";
+import { expandTfnswChangedTripKeys } from "../region-specific/AU/NSW/tfnsw-cross-feed.js";
 
 type CacheProgressReporter = (info: Parameters<TraxConfig["progressLog"]>[0] & { unit?: "bytes" | "items" }) => void;
 const REALTIME_REAUGMENT_BATCH_SIZE = 250;
@@ -754,6 +755,9 @@ export async function refreshRealtimeCache(
 		(tripKey) => augmentedCache.rawTripsRec.has(tripKey),
 	);
 	for (const tripKey of nextRealtimeOnlyTripKeys) if (!augmentedCache.tripsRec.has(tripKey)) updatedTripIds.add(tripKey);
+	// Cross-feed pairs share one passenger presentation: a realtime change on one
+	// side must also refresh the paired trip so the merged realtime stays current.
+	for (const pairedKey of expandTfnswChangedTripKeys(ctx, updatedTripIds)) updatedTripIds.add(pairedKey);
 	const realtimeUpdateKeys = new Set([...augmentedCache.tripUpdateSignatures.keys(), ...nextSignatures.keys()]);
 	for (const tripKey of realtimeUpdateKeys) {
 		const updates = nextUpdatesByTrip.get(tripKey);

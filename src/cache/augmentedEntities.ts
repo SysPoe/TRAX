@@ -22,6 +22,12 @@ import { getRawStopTimes, getStops, getTrips } from "./gtfsReads.js";
 import { decodeTripInstanceId, entityKey } from "../identity.js";
 import { getSeqState } from "../plugins/seq-state.js";
 import { getServiceDatesByTrip } from "../utils/calendar.js";
+import {
+	getTfnswCanonicalTripInstance,
+	getTfnswCrossFeedPair,
+	buildTfnswCrossFeedIndex,
+	reconcileTfnswDepartures,
+} from "../region-specific/AU/NSW/tfnsw-cross-feed.js";
 
 const MAX_LAZY_SERVICE_DATES = 8;
 
@@ -383,6 +389,7 @@ export function ensureStartServiceDateMaterialized(ctx: CacheContext, serviceDat
 
 	touchLazyServiceDate(ctx, serviceDate);
 	refreshDiagramAfterInstanceChange(ctx, affectedTripIds);
+	buildTfnswCrossFeedIndex(ctx);
 }
 
 /** Date-filter index. The previous start date is included for GTFS times beyond 24:00. */
@@ -469,6 +476,9 @@ export function getStopDeparturesCached(
 		}
 	}
 	timer.stop("getStopDeparturesCached:processInstances");
+	// Reconcile before sorting/window filtering so secondary-feed delays cannot
+	// leave a canonical departure outside the requested time window.
+	const reconciled = reconcileTfnswDepartures(ctx, results);
 
 	// Sort by absolute time for fast window queries
 	const serviceDayStartCache = new Map<string, number>();
@@ -482,7 +492,7 @@ export function getStopDeparturesCached(
 	};
 
 	timer.start("getStopDeparturesCached:sort");
-	results.sort((a, b) => getAbsTime(a) - getAbsTime(b));
+	reconciled.sort((a, b) => getAbsTime(a) - getAbsTime(b));
 	timer.stop("getStopDeparturesCached:sort");
 
 	let stopCache = augmented.stopDeparturesCached.get(stopId);
@@ -490,9 +500,9 @@ export function getStopDeparturesCached(
 		stopCache = new Map();
 		augmented.stopDeparturesCached.set(stopId, stopCache);
 	}
-	stopCache.set(serviceDate, results);
+	stopCache.set(serviceDate, reconciled);
 	timer.stop("getStopDeparturesCached");
-	return results;
+	return reconciled;
 }
 
 /**
@@ -535,6 +545,10 @@ export function getAugmentedTrips(ctx: CacheContext, trip?: QualifiedEntityId): 
 }
 
 export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string): AugmentedTripInstance | null {
+	if (getTfnswCrossFeedPair(ctx, instance_id)) {
+		const canonical = getTfnswCanonicalTripInstance(ctx, instance_id);
+		if (canonical) return canonical;
+	}
 	const cached = ctx.augmented.instancesRec.get(instance_id);
 	if (cached) return cached;
 
@@ -542,16 +556,17 @@ export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string)
 		const identity = decodeTripInstanceId(instance_id);
 		if (identity.networkId !== ctx.config.network.id) return null;
 		ensureStartServiceDateMaterialized(ctx, identity.serviceDate);
+		if (getTfnswCrossFeedPair(ctx, instance_id)) return getTfnswCanonicalTripInstance(ctx, instance_id);
 		const tripRef = { feedId: identity.feedId, localId: identity.localId };
 		const trip = ctx.augmented.tripsRec.get(entityKey(tripRef));
 		if (trip) {
 			const inst = trip.instances.find((v) => v.instance_id === instance_id);
 			if (inst) {
 				ctx.augmented.instancesRec.set(instance_id, inst);
-				return inst;
+				return getTfnswCanonicalTripInstance(ctx, inst.instance_id) ?? inst;
 			}
 			const replacement = findUniqueTripInstanceForServiceDate(trip.instances, identity.serviceDate);
-			if (replacement) return replacement;
+			if (replacement) return getTfnswCanonicalTripInstance(ctx, replacement.instance_id) ?? replacement;
 		}
 
 		// Fallback for lazily materialized or replaced instance identifiers.

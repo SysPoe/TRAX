@@ -104,7 +104,6 @@ function mapDepartureResults(stopTimes: AugmentedStopTime[], ctx: cache.CacheCon
 		if (seenVisits.has(departureVisitKey(st))) continue;
 		const inst =
 			instanceCache.get(st.instance_id) ??
-			ctx.augmented.instancesRec.get(st.instance_id) ??
 			cache.getAugmentedTripInstance(ctx, st.instance_id);
 		if (!inst) continue;
 		instanceCache.set(st.instance_id, inst);
