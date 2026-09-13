@@ -85,6 +85,7 @@ export interface RuntimeOptions {
 	cacheMaxAgeMs?: number;
 	requestTimeoutMs?: number;
 	maxDownloadBytes?: number;
+	maxExtractedEntryBytes?: number;
 	corridor?: CorridorResolutionOverrides;
 }
 
@@ -101,6 +102,7 @@ export interface TraxConfig {
 	cacheMaxAgeMs: number;
 	requestTimeoutMs: number;
 	maxDownloadBytes: number;
+	maxExtractedEntryBytes: number;
 	/** Populated and validated from agency_timezone after the static feed loads. */
 	feedTimeZones: Map<string, string>;
 	/** O(1) lookup for the cross-feed place containing a station member. */
@@ -255,6 +257,7 @@ export function resolveConfig(network: NetworkDefinition, options: RuntimeOption
 		cacheMaxAgeMs: options.cacheMaxAgeMs ?? 24 * 60 * 60 * 1000,
 		requestTimeoutMs: options.requestTimeoutMs ?? 30_000,
 		maxDownloadBytes: options.maxDownloadBytes ?? 256 * 1024 * 1024,
+		maxExtractedEntryBytes: options.maxExtractedEntryBytes ?? 128 * 1024 * 1024,
 		feedTimeZones: new Map(),
 		placeByMember,
 		places,

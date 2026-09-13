@@ -432,12 +432,15 @@ function makeStop(feed_id, stop_id, extra = {}) {
 {
 	const defaultConfig = resolveConfig(baseNetwork(), quiet);
 	assert.equal(defaultConfig.maxDownloadBytes, 256 * 1024 * 1024);
+	assert.equal(defaultConfig.maxExtractedEntryBytes, 128 * 1024 * 1024);
 
 	const largeFeedConfig = resolveConfig(baseNetwork(), {
 		...quiet,
 		maxDownloadBytes: 512 * 1024 * 1024,
+		maxExtractedEntryBytes: 256 * 1024 * 1024,
 	});
 	assert.equal(largeFeedConfig.maxDownloadBytes, 512 * 1024 * 1024);
+	assert.equal(largeFeedConfig.maxExtractedEntryBytes, 256 * 1024 * 1024);
 }
 
 console.log("Feed/config identity tests passed.");
