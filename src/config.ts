@@ -84,6 +84,7 @@ export interface RuntimeOptions {
 	updateStopActions?: { feedId: string; stop_id: string; new: Partial<Stop> }[];
 	cacheMaxAgeMs?: number;
 	requestTimeoutMs?: number;
+	maxDownloadBytes?: number;
 	corridor?: CorridorResolutionOverrides;
 }
 
@@ -99,6 +100,7 @@ export interface TraxConfig {
 	updateStopActions: { feedId: string; stop_id: string; new: Partial<Stop> }[];
 	cacheMaxAgeMs: number;
 	requestTimeoutMs: number;
+	maxDownloadBytes: number;
 	/** Populated and validated from agency_timezone after the static feed loads. */
 	feedTimeZones: Map<string, string>;
 	/** O(1) lookup for the cross-feed place containing a station member. */
@@ -252,6 +254,7 @@ export function resolveConfig(network: NetworkDefinition, options: RuntimeOption
 		updateStopActions: options.updateStopActions ?? [],
 		cacheMaxAgeMs: options.cacheMaxAgeMs ?? 24 * 60 * 60 * 1000,
 		requestTimeoutMs: options.requestTimeoutMs ?? 30_000,
+		maxDownloadBytes: options.maxDownloadBytes ?? 256 * 1024 * 1024,
 		feedTimeZones: new Map(),
 		placeByMember,
 		places,

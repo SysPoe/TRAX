@@ -125,6 +125,7 @@ export async function createGtfs(config: TraxConfig, doRealtime = true, report?:
 		cacheDir: config.cacheDir,
 		cacheMaxAgeMs: config.cacheMaxAgeMs,
 		requestTimeoutMs: config.requestTimeoutMs,
+		maxDownloadBytes: config.maxDownloadBytes,
 	});
 	await loadStatic(gtfs, config, report);
 	if (doRealtime) {

@@ -428,4 +428,16 @@ function makeStop(feed_id, stop_id, extra = {}) {
 	assert.equal(betaUrls.length, 1, "healthy beta feed must be loaded exactly once");
 }
 
+// 7. Networks can raise the bounded static download limit for known large feeds.
+{
+	const defaultConfig = resolveConfig(baseNetwork(), quiet);
+	assert.equal(defaultConfig.maxDownloadBytes, 256 * 1024 * 1024);
+
+	const largeFeedConfig = resolveConfig(baseNetwork(), {
+		...quiet,
+		maxDownloadBytes: 512 * 1024 * 1024,
+	});
+	assert.equal(largeFeedConfig.maxDownloadBytes, 512 * 1024 * 1024);
+}
+
 console.log("Feed/config identity tests passed.");
