@@ -82,19 +82,33 @@ function mergeDepartureSlices(slices: readonly DepartureSlice[]): AugmentedStopT
 	return merged;
 }
 
+/**
+ * One row per visit, not per trip instance. Loop services call at the same
+ * station several times with distinct stop sequences; collapsing on
+ * instance_id alone drops every revisit after the first. Parent/child
+ * duplicates of a single visit share the same stop sequence, so they still
+ * collapse. Rows without a sequence (synthetic/test rows) keep the legacy
+ * instance-level dedup.
+ */
+function departureVisitKey(stopTime: AugmentedStopTime): string {
+	const sequence = stopTime._stopTime?.stop_sequence;
+	if (sequence != null) return `${stopTime.instance_id}:${sequence}`;
+	return stopTime.instance_id;
+}
+
 function mapDepartureResults(stopTimes: AugmentedStopTime[], ctx: cache.CacheContext): DepartureResult[] {
 	const instanceCache = new Map<string, AugmentedTripInstance>();
-	const seenInstanceIds = new Set<string>();
+	const seenVisits = new Set<string>();
 	const results: DepartureResult[] = [];
 	for (const st of stopTimes) {
-		if (seenInstanceIds.has(st.instance_id)) continue;
+		if (seenVisits.has(departureVisitKey(st))) continue;
 		const inst =
 			instanceCache.get(st.instance_id) ??
 			ctx.augmented.instancesRec.get(st.instance_id) ??
 			cache.getAugmentedTripInstance(ctx, st.instance_id);
 		if (!inst) continue;
 		instanceCache.set(st.instance_id, inst);
-		seenInstanceIds.add(st.instance_id);
+		seenVisits.add(departureVisitKey(st));
 		results.push({
 			...st,
 			express_string: findExpressString(
