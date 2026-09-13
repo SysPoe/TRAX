@@ -112,7 +112,7 @@ export interface ManualCorridorNode {
 
 	kind: "station" | "waypoint";
 	/** Distinguishes a provider's inferred node kind from explicit declarative knowledge. */
-	classification?: "passenger" | "operational" | "unknown";
+	classification?: "passenger" | "passing" | "operational" | "unknown";
 }
 
 export interface ManualCorridor {

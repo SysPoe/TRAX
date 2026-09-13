@@ -58,7 +58,7 @@ function loadSrtEntries(): SRTEntry[] {
 function manualNodeClassification(
 	name: string,
 	passengerNames: ReadonlySet<string>,
-): { kind: "station" | "waypoint"; classification: "passenger" | "operational" | "unknown" } {
+): { kind: "station" | "waypoint"; classification: "passenger" | "passing" | "operational" } {
 	const normalized = normalizeStationName(name);
 	if (passengerNames.has(normalized)) return { kind: "station", classification: "passenger" };
 	if (
@@ -66,7 +66,7 @@ function manualNodeClassification(
 		/yard|siding|fork points|depot|new leg|old leg|marshall|coal siding|^qnip|qr.?x|^off$|^wyr$/i.test(name)
 	)
 		return { kind: "waypoint", classification: "operational" };
-	return { kind: "waypoint", classification: "unknown" };
+	return { kind: "station", classification: "passing" };
 }
 
 export function manualNodeKind(name: string, passengerNames: ReadonlySet<string>): "station" | "waypoint" {
@@ -142,6 +142,6 @@ export function getQrtManualNetwork(): ManualNetwork {
 		})),
 		priority: "fallback",
 		sourceIds: [QRT_SOURCE_ID],
-		version: "srt-2",
+		version: "srt-3",
 	};
 }

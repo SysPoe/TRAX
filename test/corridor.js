@@ -1464,12 +1464,13 @@ function testSkippedOverlay() {
 	assert.equal(expanded.at(-1)._isSkipped, true);
 }
 
-function testQrtWaypointClassification() {
-	assert.equal(manualNodeKind("Eagle Junction", new Set()), "waypoint");
+function testQrtManualNodeClassification() {
+	assert.equal(manualNodeKind("Eagle Junction", new Set()), "station");
 	assert.equal(manualNodeKind("Eagle Junction", new Set(["eagle junction"])), "station");
+	assert.equal(manualNodeKind("Parana", new Set()), "station");
 	assert.equal(manualNodeKind("Airport Junction", new Set()), "waypoint");
 	assert.equal(manualNodeKind("Mayne Junction", new Set()), "waypoint");
-	assert.equal(manualNodeKind("Unknown operational location", new Set()), "waypoint");
+	assert.equal(manualNodeKind("Boggo Road Yard", new Set()), "waypoint");
 	assert.equal(qrtSrtTest.qrtDate("7/4/2025 12:00:00 AM"), "20250704");
 	assert.equal(qrtSrtTest.qrtDate("2025-07-04T00:00:00"), "20250704");
 }
@@ -1532,6 +1533,64 @@ function testUnknownQrtNodePromotesFromGtfsStationGeometry() {
 	assert.equal(result.gaps[0].nodes[1].stationId, q("seq", "eagle"));
 	assert.equal(result.gaps[0].nodes[1].kind, "station");
 	assert.equal(result.gaps[0].nodes[1].passing, true);
+}
+
+function testUnknownQrtNodeIgnoresUnborrowedStationGeometry() {
+	const index = createEmptyCorridorIndex("test");
+	const station = (feedId, id, name) => ({
+		stationId: q(feedId, id),
+		coordinates: [],
+		names: [name],
+	});
+	index.stationGeometry = new Map([
+		[q("translink-seq", "start"), station("translink-seq", "start", "Start")],
+		[q("nsw-rail", "242110"), station("nsw-rail", "242110", "Paterson")],
+		[q("translink-seq", "end"), station("translink-seq", "end", "End")],
+	]);
+	const network = {
+		id: "qrt-feed-scope",
+		feedId: "QRT",
+		nodes: [
+			{ id: "start", stationId: q("translink-seq", "start"), name: "Start", kind: "station" },
+			{ id: "paterson", name: "Paterson", kind: "waypoint", classification: "unknown" },
+			{ id: "end", stationId: q("translink-seq", "end"), name: "End", kind: "station" },
+		],
+		corridors: [{ id: "line", nodes: ["start", "paterson", "end"] }],
+		priority: "fallback",
+		sourceIds: ["qrt"],
+	};
+	const result = resolveJourneyCorridor(
+		{
+			sourceId: "qrt",
+			feedId: "QRT",
+			tripId: "trip",
+			routeId: null,
+			direction: null,
+			shapeId: null,
+			serviceDate: null,
+			anchors: [
+				{
+					id: "start-anchor",
+					stationId: q("translink-seq", "start"),
+					name: "Start",
+					sequence: 0,
+					scheduled: true,
+				},
+				{ id: "end-anchor", stationId: q("translink-seq", "end"), name: "End", sequence: 1, scheduled: true },
+			],
+			geometryFeedIds: ["translink-seq"],
+		},
+		context({
+			feedIds: ["QRT", "translink-seq", "nsw-rail"],
+			index,
+			geometrySources: [{ feedId: "QRT", borrowFromFeedIds: ["translink-seq"] }],
+			manualNetworks: [network],
+		}),
+	);
+	assert.equal(result.gaps[0].status, "resolved");
+	assert.equal(result.gaps[0].nodes[1].stationId, null);
+	assert.equal(result.gaps[0].nodes[1].kind, "waypoint");
+	assert.equal(result.gaps[0].nodes[1].passing, false);
 }
 
 function testQrtSrtExpandsPassingStations() {
@@ -1607,6 +1666,101 @@ function testQrtSrtExpandsPassingStations() {
 		reverse.filter((stop) => !stop.isStop).map((stop) => stop.placeName),
 		["Woombye", "Palmwoods", "Eudlo", "Mooloolah", "Beerwah", "Glass House Mountains", "Beerburrum", "Elimbah"],
 	);
+}
+
+function testQrtSrtExpandsQ992ManualPassingPoints() {
+	const index = createEmptyCorridorIndex("test");
+	index.stationGeometry = new Map([
+		[
+			q("translink-seq", "Maryborough West"),
+			{ stationId: q("translink-seq", "Maryborough West"), coordinates: [], names: ["Maryborough West"] },
+		],
+		[q("nsw-rail", "242110"), { stationId: q("nsw-rail", "242110"), coordinates: [], names: ["Paterson"] }],
+		[
+			q("translink-seq", "Gympie North"),
+			{ stationId: q("translink-seq", "Gympie North"), coordinates: [], names: ["Gympie North"] },
+		],
+	]);
+	const ctx = context({
+		feedIds: ["QRT", "translink-seq", "nsw-rail"],
+		index,
+		geometrySources: [{ feedId: "QRT", borrowFromFeedIds: ["translink-seq"] }],
+		manualNetworks: [qrtSrtTest.getQrtManualNetwork()],
+	});
+	ctx.config.feedTimeZones.set("QRT", "Australia/Brisbane");
+	ctx.gtfs = {};
+	for (const name of ["Maryborough West", "Gympie North"])
+		ctx.raw.stopsByKey.set(q("translink-seq", name), {
+			feed_id: "translink-seq",
+			stop_id: name,
+			stop_name: name,
+			stop_lat: null,
+			stop_lon: null,
+			parent_station: null,
+		});
+	const movement = (placeName, plannedArrival, plannedDeparture = plannedArrival) => ({
+		PlaceCode: "",
+		PlaceName: placeName,
+		sourceStopId: placeName,
+		KStation: false,
+		Status: "Scheduled",
+		TrainPosition: "NotArrived",
+		PlannedArrival: `2026-09-13T${plannedArrival}:00`,
+		PlannedDeparture: `2026-09-13T${plannedDeparture}:00`,
+		ActualArrival: "0001-01-01T00:00:00",
+		ActualDeparture: "0001-01-01T00:00:00",
+	});
+	const expanded = expandWithSRTPassingStops(
+		[
+			movement("Gladstone", "08:12", "08:21"),
+			movement("Miriam Vale", "08:57", "09:02"),
+			movement("Bundaberg", "10:01", "10:10"),
+			movement("Howard", "10:42", "10:45"),
+			movement("Maryborough West", "10:59", "11:04"),
+			movement("Gympie North", "12:22", "12:24"),
+		],
+		ctx,
+		{ serviceId: "Q992", serviceDate: "20260913", line: "Tilt Train", direction: "Southbound" },
+	);
+	assert.deepEqual(
+		expanded.filter((stop) => !stop.isStop).map((stop) => stop.placeName),
+		[
+			"Parana",
+			"Benaraby",
+			"Iveragh",
+			"Bororen",
+			"Netley",
+			"Irkanda",
+			"Baffle",
+			"Berajondo",
+			"Flinders",
+			"Littabella",
+			"Avondale",
+			"Meadowvale",
+			"Elliott",
+			"Kinkuna",
+			"Goodwood",
+			"Isis Junction",
+			"Wokka",
+			"Torbanlea",
+			"Colton",
+			"Yengarie",
+			"Mungar",
+			"Owanyilla",
+			"Tiaro",
+			"Netherby",
+			"Gundiah",
+			"Paterson",
+			"Theebine",
+			"Curra",
+			"Tamaree",
+		],
+	);
+	assert.equal(
+		expanded.some((stop) => stop.placeName === "Harvey's Siding"),
+		false,
+	);
+	assert.equal(expanded.find((stop) => stop.placeName === "Paterson")?.sourceStopId, null);
 }
 
 function testTimingCannotChangeCorridor() {
@@ -1980,9 +2134,11 @@ for (const testCase of [
 	["replacement relationships use their realtime stop sequence", testReplacementUsesRealtimeStopSequence],
 	["identical shape IDs stay isolated by feed", testFeedIsolation],
 	["skipped anchors remain in the physical overlay", testSkippedOverlay],
-	["QRT unknown nodes stay waypoints without station evidence", testQrtWaypointClassification],
+	["QRT manual nodes distinguish passing stations from operational waypoints", testQrtManualNodeClassification],
 	["unknown QRT nodes promote from GTFS station geometry", testUnknownQrtNodePromotesFromGtfsStationGeometry],
+	["unknown QRT nodes ignore unborrowed station geometry", testUnknownQrtNodeIgnoresUnborrowedStationGeometry],
 	["QRT SRT expands every passing station between calls", testQrtSrtExpandsPassingStations],
+	["QRT SRT expands Q992 manual passing points", testQrtSrtExpandsQ992ManualPassingPoints],
 	["timing records stay attached after filtering", testTimingRecordsStayAttachedAfterFiltering],
 	["contextual findExpress uses the journey shape", testContextualFindExpressUsesJourneyShape],
 	["QRT uses the operating service date", testQrtUsesOperatingServiceDate],

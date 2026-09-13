@@ -43,15 +43,22 @@ function manualStationId(network: ManualNetwork, node: ManualCorridorNode): stri
 	}
 }
 
-function nodeStationId(network: ManualNetwork, node: ManualCorridorNode, index: CorridorIndex): string | null {
+function nodeStationId(
+	network: ManualNetwork,
+	node: ManualCorridorNode,
+	index: CorridorIndex,
+	geometryFeedIds: readonly string[],
+): string | null {
 	const configuredStationId = manualStationId(network, node);
 	if (configuredStationId) return configuredStationId;
 	const nodeNames = [node.name, ...(node.aliases ?? [])]
 		.filter((name): name is string => Boolean(name))
 		.map(normalizeStationName);
 	return (
-		[...index.stationGeometry.entries()].find(([, geometry]) =>
-			geometry.names.some((name) => nodeNames.includes(normalizeStationName(name))),
+		[...index.stationGeometry.entries()].find(
+			([stationId, geometry]) =>
+				geometryFeedIds.includes(parseEntityKey(stationId).feedId) &&
+				geometry.names.some((name) => nodeNames.includes(normalizeStationName(name))),
 		)?.[0] ?? null
 	);
 }
@@ -60,9 +67,10 @@ function resolvedNodeKind(
 	network: ManualNetwork,
 	node: ManualCorridorNode,
 	index: CorridorIndex,
+	geometryFeedIds: readonly string[],
 ): "station" | "waypoint" {
 	if (node.classification !== "unknown") return node.kind;
-	return nodeStationId(network, node, index) ? "station" : "waypoint";
+	return nodeStationId(network, node, index, geometryFeedIds) ? "station" : "waypoint";
 }
 
 function scopeMatches(
@@ -130,12 +138,13 @@ function pathStationSignature(
 	nodes: readonly string[],
 	byId: ReadonlyMap<string, ManualCorridorNode>,
 	index: CorridorIndex,
+	geometryFeedIds: readonly string[],
 ): string {
 	const stationIds = nodes
 		.map((key) => {
 			const node = byId.get(key)!;
-			if (resolvedNodeKind(network, node, index) === "waypoint") return null;
-			const stationId = nodeStationId(network, node, index);
+			if (resolvedNodeKind(network, node, index, geometryFeedIds) === "waypoint") return null;
+			const stationId = nodeStationId(network, node, index, geometryFeedIds);
 			if (stationId) return stationId;
 			return key;
 		})
@@ -176,7 +185,9 @@ function explicitPath(
 		if (corridor.bidirectional) paths.push(...findSlices([...path].reverse()));
 	}
 	if (paths.length === 0) return null;
-	const signatures = new Set(paths.map((path) => pathStationSignature(network, path, nodesByKey, index)));
+	const signatures = new Set(
+		paths.map((path) => pathStationSignature(network, path, nodesByKey, index, journey.geometryFeedIds)),
+	);
 	if (signatures.size > 1) return "ambiguous";
 	const selected = paths[0];
 	return {
@@ -237,7 +248,7 @@ function topologyPath(
 		const current = path.at(-1)!;
 		if (ends.has(current)) {
 			paths.push(path);
-			signatures.add(pathStationSignature(network, path, nodesByKey, index));
+			signatures.add(pathStationSignature(network, path, nodesByKey, index, journey.geometryFeedIds));
 			if (signatures.size > 1) return "ambiguous";
 			continue;
 		}
@@ -320,11 +331,12 @@ function toNode(
 	index: CorridorIndex,
 	evidence: ManualPath["evidence"],
 	confidence: CorridorConfidence,
+	geometryFeedIds: readonly string[],
 ): CorridorNode {
 	const configuredStationId = manualStationId(network, node);
 	const geometryStation = configuredStationId ? index.stationGeometry.get(configuredStationId) : undefined;
-	const stationId = anchor?.stationId ?? nodeStationId(network, node, index);
-	const kind = anchor ? "station" : resolvedNodeKind(network, node, index);
+	const stationId = anchor?.stationId ?? nodeStationId(network, node, index, geometryFeedIds);
+	const kind = anchor ? "station" : resolvedNodeKind(network, node, index, geometryFeedIds);
 	return {
 		id: nodeKey(network, node.id),
 		stationId,
@@ -356,6 +368,7 @@ function resolveNetworkGap(
 			index,
 			path.evidence,
 			confidence,
+			journey.geometryFeedIds,
 		),
 	);
 	return { path, nodes };
