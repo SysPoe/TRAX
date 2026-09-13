@@ -33,22 +33,18 @@ export function asGtfsTime(value: number): GtfsTime {
 }
 
 export function timeDiff(t1: string, t2: string): string {
-	const [h1, m1] = t1.split(":").map(Number);
-	const [h2, m2] = t2.split(":").map(Number);
-	let total1 = h1 * 60 + m1;
-	let total2 = h2 * 60 + m2;
-	let diff = total1 - total2;
-	if (diff < 0) diff += 24 * 60;
-	const hours = Math.floor(diff / 60);
-	const mins = diff % 60;
-	return `${hours}h ${mins}m`;
+	const diff = secTimeDiff(t1, t2);
+	const hours = Math.floor(diff / 3600);
+	const mins = Math.floor((diff % 3600) / 60);
+	const seconds = diff % 60;
+	return `${hours}h ${mins}m${seconds ? ` ${seconds}s` : ""}`;
 }
 
 export function secTimeDiff(t1: string, t2: string): number {
-	const [h1, m1] = t1.split(":").map(Number);
-	const [h2, m2] = t2.split(":").map(Number);
-	let total1 = h1 * 3600 + m1 * 60;
-	let total2 = h2 * 3600 + m2 * 60;
+	const [h1, m1, s1 = 0] = t1.split(":").map(Number);
+	const [h2, m2, s2 = 0] = t2.split(":").map(Number);
+	let total1 = h1 * 3600 + m1 * 60 + s1;
+	let total2 = h2 * 3600 + m2 * 60 + s2;
 	let diff = total1 - total2;
 	if (diff < 0) diff += 24 * 3600;
 	return diff;
@@ -107,12 +103,9 @@ export function getTimezoneOffsetSeconds(timezone: string, date: Date = new Date
 
 export function getServiceDayStart(serviceDate: string, timezone: string): number {
 	if (!/^\d{8}$/.test(serviceDate)) return 0;
-	const localNoon = `${serviceDate.slice(0, 4)}-${serviceDate.slice(4, 6)}-${serviceDate.slice(6, 8)}T12:00:00`;
-	const noonMs = parseTimeWithConfig(localNoon, timezone);
-	if (!Number.isFinite(noonMs) || noonMs === 0) return 0;
-	// GTFS defines a service day relative to local noon minus 12 elapsed hours.
-	// This deliberately differs from civil midnight on DST transition dates.
-	return noonMs / 1000 - 12 * 60 * 60;
+	const localMidnight = `${serviceDate.slice(0, 4)}-${serviceDate.slice(4, 6)}-${serviceDate.slice(6, 8)}T00:00:00`;
+	const midnightMs = parseTimeWithConfig(localMidnight, timezone);
+	return Number.isFinite(midnightMs) && midnightMs !== 0 ? midnightMs / 1000 : 0;
 }
 
 export function serviceTimeToInstant(serviceDate: ServiceDate | string, serviceTime: GtfsTime | number, timezone: string): Instant {
@@ -173,10 +166,30 @@ export function parseTimeWithConfig(dateStr: string, timezone: string): number {
 	}
 	const wallClockAsUtc = new Date(`${dateStr}Z`).getTime();
 	if (!Number.isFinite(wallClockAsUtc)) return 0;
-	let candidate = wallClockAsUtc - getTimezoneOffsetSeconds(timezone, new Date(wallClockAsUtc)) * 1000;
-	const resolvedOffset = getTimezoneOffsetSeconds(timezone, new Date(candidate));
-	candidate = wallClockAsUtc - resolvedOffset * 1000;
-	return candidate;
+
+	// A wall time may have two matching instants during a fall-back transition,
+	// or none during a spring-forward gap. Sample offsets on both sides of the
+	// date, then use the compatible policy: the earlier instant for an overlap
+	// and the first corresponding wall time after a gap.
+	const offsets = new Set<number>();
+	for (const deltaHours of [-36, -12, 0, 12, 36]) {
+		offsets.add(getTimezoneOffsetSeconds(timezone, new Date(wallClockAsUtc + deltaHours * 3_600_000)));
+	}
+	const candidates = [...offsets]
+		.map((offset) => wallClockAsUtc - offset * 1000)
+		.map((instant) => ({
+			instant,
+			localAsUtc: new Date(`${getLocalISOString(new Date(instant), timezone)}Z`).getTime(),
+		}))
+		.filter((candidate) => Number.isFinite(candidate.localAsUtc));
+	const exact = candidates
+		.filter((candidate) => candidate.localAsUtc === wallClockAsUtc)
+		.sort((left, right) => left.instant - right.instant);
+	if (exact.length) return exact[0].instant;
+	const afterGap = candidates
+		.filter((candidate) => candidate.localAsUtc > wallClockAsUtc)
+		.sort((left, right) => left.localAsUtc - right.localAsUtc || left.instant - right.instant);
+	return afterGap[0]?.instant ?? 0;
 }
 
 export function getToday(timezone: string): string {

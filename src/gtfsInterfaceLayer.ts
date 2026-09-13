@@ -14,12 +14,28 @@ export type SourceReporter = (report: SourceReport) => void;
 
 export async function loadStatic(gtfs: GTFS, config: TraxConfig, report?: SourceReporter): Promise<void> {
 	logger.info(`Loading static GTFS data for ${config.network.id}...`);
-	const feeds: GTFSFeedConfig[] = config.network.feeds.map((feed) => ({
-		id: feed.id,
-		url: feed.staticSource.url,
-		headers: feed.staticSource.headers,
-		archiveEntry: feed.staticSource.archiveEntry,
-	}));
+	// Delegate per-feed fallbacks to QDF in a single loadStatic call. QDF tries
+	// each source's primary then its fallbacks independently, so a failing feed
+	// never forces a healthy feed to reload. Never mutate the configured sources.
+	const feeds: GTFSFeedConfig[] = config.network.feeds.map((feed) => {
+		const seen = new Set<string>([feed.staticSource.url]);
+		const fallbackUrls: string[] = [];
+		for (const url of feed.staticSource.fallbackUrls ?? []) {
+			if (typeof url !== "string") continue;
+			// Config validation rejects empty URLs; skip blanks defensively so a
+			// misconfigured fallback can never become a silent empty fetch.
+			if (url.trim().length === 0 || seen.has(url)) continue;
+			seen.add(url);
+			fallbackUrls.push(url);
+		}
+		return {
+			id: feed.id,
+			url: feed.staticSource.url,
+			headers: feed.staticSource.headers,
+			archiveEntry: feed.staticSource.archiveEntry,
+			...(fallbackUrls.length > 0 ? { fallbackUrls } : {}),
+		};
+	});
 	for (const feed of config.network.feeds)
 		report?.({ id: `${feed.id}:static`, feedId: feed.id, kind: "static", state: "loading" });
 	try {
@@ -32,17 +48,18 @@ export async function loadStatic(gtfs: GTFS, config: TraxConfig, report?: Source
 				state: result.source === "stale-cache" ? "stale" : "healthy",
 				transport: result.source,
 			});
+		for (const action of config.mergeStops) gtfs.actions.mergeStops(action.to, action.from, action.feedId);
+		for (const action of config.updateStopActions) {
+			gtfs.actions.updateStop(action.stop_id, action.new, action.feedId);
+		}
+		logger.info(`Static GTFS data loaded for ${config.network.id}.`);
+		return;
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		for (const feed of config.network.feeds)
 			report?.({ id: `${feed.id}:static`, feedId: feed.id, kind: "static", state: "error", error: message });
 		throw error;
 	}
-	for (const action of config.mergeStops) gtfs.actions.mergeStops(action.to, action.from, action.feedId);
-	for (const action of config.updateStopActions) {
-		gtfs.actions.updateStop(action.stop_id, action.new, action.feedId);
-	}
-	logger.info(`Static GTFS data loaded for ${config.network.id}.`);
 }
 
 export async function loadRealtime(gtfs: GTFS, config: TraxConfig, report?: SourceReporter): Promise<void> {
@@ -58,15 +75,34 @@ export async function loadRealtime(gtfs: GTFS, config: TraxConfig, report?: Sour
 	logger.info(`Loading realtime data for ${config.network.id}...`);
 	for (const source of sources)
 		report?.({ id: source.id, feedId: source.targetFeedId, kind: source.kind, state: "loading" });
-	const results = await gtfs.updateRealtimeFromUrl(sources);
+	let results: Awaited<ReturnType<GTFS["updateRealtimeFromUrl"]>>;
+	try {
+		results = await gtfs.updateRealtimeFromUrl(sources);
+	} catch (error) {
+		// A transport-level throw must still try per-source fallbacks safely
+		// instead of aborting the whole realtime cycle.
+		const message = error instanceof Error ? error.message : String(error);
+		results = sources.map((source) => ({ id: source.id, ok: false as const, error: message }));
+	}
 	for (let result of results) {
 		const source = sources.find((candidate) => candidate.id === result.id)!;
 		const definition = definitions.find((candidate) => candidate.id === result.id)!;
 		if (!result.ok) {
+			const seen = new Set([source.url]);
 			for (const fallbackUrl of definition.source.fallbackUrls ?? []) {
-				const [fallbackResult] = await gtfs.updateRealtimeFromUrl([{ ...source, url: fallbackUrl }]);
-				result = fallbackResult;
-				if (result.ok) break;
+				if (typeof fallbackUrl !== "string" || fallbackUrl.trim().length === 0 || seen.has(fallbackUrl)) continue;
+				seen.add(fallbackUrl);
+				try {
+					const [fallbackResult] = await gtfs.updateRealtimeFromUrl([{ ...source, url: fallbackUrl }]);
+					result = fallbackResult;
+					if (result.ok) break;
+				} catch (error) {
+					result = {
+						id: source.id,
+						ok: false as const,
+						error: error instanceof Error ? error.message : String(error),
+					};
+				}
 			}
 		}
 		report?.({

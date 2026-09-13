@@ -60,12 +60,14 @@ function anchorFromStopTime(tripId: string, stopTime: StopTime, ctx: CacheContex
 		stop ?? { feed_id: stopTime.feed_id, stop_id: stopTime.stop_id, parent_station: null },
 	);
 	const parent = stop?.parent_station ? getStop(ctx, stop.feed_id, stop.parent_station) : stop;
+	const lat = stop?.stop_lat ?? parent?.stop_lat ?? null;
+	const lon = stop?.stop_lon ?? parent?.stop_lon ?? null;
 	return {
 		id: qualifiedKey(stopTime.feed_id, `${tripId}\0${stopTime.stop_sequence}`),
 		stationId,
 		name: parent?.stop_name ?? stop?.stop_name,
-		lat: stop?.stop_lat ?? parent?.stop_lat ?? null,
-		lon: stop?.stop_lon ?? parent?.stop_lon ?? null,
+		lat: typeof lat === "number" && Number.isFinite(lat) ? lat : null,
+		lon: typeof lon === "number" && Number.isFinite(lon) ? lon : null,
 		sequence: stopTime.stop_sequence,
 		shapeDistTraveled: stopTime.shape_dist_traveled,
 		scheduled: true,
@@ -109,24 +111,65 @@ export function createRealtimeJourneyContext(
 		}))
 		.filter(({ stopTime }) => Boolean(stopTime.stop_id))
 		.sort((a, b) => a.sequence - b.sequence || a.index - b.index);
-	const anchors = orderedUpdates.map(({ stopTime, index, sequence }) => {
+	// Dedupe exact duplicate calls while preserving repeated visits (same
+	// station, different sequences). Conflicting same-sequence stops (same
+	// sequence, different stations) are ambiguous: preserving both would let
+	// the corridor guess between two physical locations for one sequence.
+	// Fail to a single deterministic winner per sequence (smallest qualified
+	// station, then smallest qualified stop) so feed order cannot change the
+	// journey.
+	const seenCalls = new Set<string>();
+	const dedupedUpdates = orderedUpdates.filter(({ stopTime, sequence }) => {
+		const key = `${sequence}\0${stopTime.stop_id}`;
+		if (seenCalls.has(key)) return false;
+		seenCalls.add(key);
+		return true;
+	});
+	const anchored = dedupedUpdates.map(({ stopTime, index, sequence }) => {
 		const stop = getStop(ctx, update.feed_id, stopTime.stop_id);
 		const stationId = stationKey(
 			ctx,
 			stop ?? { feed_id: update.feed_id, stop_id: stopTime.stop_id, parent_station: null },
 		);
 		const parent = stop?.parent_station ? getStop(ctx, stop.feed_id, stop.parent_station) : stop;
+		const lat = stop?.stop_lat ?? parent?.stop_lat ?? null;
+		const lon = stop?.stop_lon ?? parent?.stop_lon ?? null;
 		return {
-			id: qualifiedKey(update.feed_id, `${update.trip.trip_id}\0realtime\0${index}`),
-			stationId,
-			name: parent?.stop_name ?? stop?.stop_name,
-			lat: stop?.stop_lat ?? parent?.stop_lat ?? null,
-			lon: stop?.stop_lon ?? parent?.stop_lon ?? null,
+			stopTime,
+			index,
 			sequence,
-			shapeDistTraveled: null,
-			scheduled: true,
-		} satisfies JourneyAnchor;
+			stationId,
+			anchor: {
+				id: qualifiedKey(update.feed_id, `${update.trip.trip_id}\0realtime\0${index}`),
+				stationId,
+				name: parent?.stop_name ?? stop?.stop_name,
+				lat: typeof lat === "number" && Number.isFinite(lat) ? lat : null,
+				lon: typeof lon === "number" && Number.isFinite(lon) ? lon : null,
+				sequence,
+				shapeDistTraveled: null,
+				scheduled: true,
+			} satisfies JourneyAnchor,
+		};
 	});
+	const winnersBySequence = new Map<number, typeof anchored>();
+	for (const entry of anchored) {
+		const group = winnersBySequence.get(entry.sequence) ?? [];
+		group.push(entry);
+		winnersBySequence.set(entry.sequence, group);
+	}
+	const dedupedAnchors: JourneyAnchor[] = [];
+	for (const sequence of [...winnersBySequence.keys()].sort((a, b) => a - b)) {
+		const group = winnersBySequence.get(sequence)!;
+		group.sort((a, b) => {
+			if (a.stationId !== b.stationId) return a.stationId < b.stationId ? -1 : 1;
+			const aStop = qualifiedKey(update.feed_id, a.stopTime.stop_id);
+			const bStop = qualifiedKey(update.feed_id, b.stopTime.stop_id);
+			if (aStop !== bStop) return aStop < bStop ? -1 : 1;
+			return a.index - b.index;
+		});
+		dedupedAnchors.push(group[0].anchor);
+	}
+	const anchors = dedupedAnchors;
 	return {
 		sourceId,
 		feedId: update.feed_id,
@@ -306,7 +349,7 @@ function resolveCompatibleGap(
 	ctx: CacheContext,
 	candidates: readonly CompatibleShapeCandidate[],
 	validationContext: CorridorValidationContext,
-): CorridorGapResolution | null {
+): CorridorGapResolution | "ambiguous" | null {
 	const resolved: Array<{
 		gap: CorridorGapResolution;
 		contextAlignment: ShapeAlignment | null;
@@ -386,7 +429,7 @@ function resolveCompatibleGap(
 	// clearly lower projection cost). Otherwise preserve the conservative
 	// unresolved result instead of choosing the highest-ranked shape arbitrarily.
 	const contextual = resolved.filter((candidate) => candidate.contextAlignment);
-	if (contextual.length < 2) return null;
+	if (contextual.length < 2) return "ambiguous";
 	contextual.sort(
 		(a, b) =>
 			b.contextAlignment!.matchedCount - a.contextAlignment!.matchedCount ||
@@ -398,7 +441,7 @@ function resolveCompatibleGap(
 	const runnerAlignment = runnerUp.contextAlignment!;
 	if (bestAlignment.matchedCount > runnerAlignment.matchedCount || bestAlignment.score + 25 < runnerAlignment.score)
 		return best.gap;
-	return null;
+	return "ambiguous";
 }
 
 function scheduledNode(
@@ -473,7 +516,22 @@ function resolveOneGap(
 		compatibleCandidates(),
 		validationContext,
 	);
+	if (compatible === "ambiguous")
+		return emptyGap(from, to, "Competing shapes disagree on this gap.");
 	if (compatible) return compatible;
+
+	const anchorCompatible = resolveCompatibleGap(
+		from,
+		to,
+		fromIndex,
+		journey,
+		index,
+		ctx,
+		anchorCompatibleCandidates(),
+		validationContext,
+	);
+	if (anchorCompatible === "ambiguous")
+		return emptyGap(from, to, "Competing shapes disagree on this gap.");
 
 	const fallbackManual = resolveFallbackManualGap(from, to, journey, index, ctx.config.corridor);
 	if (fallbackManual && "resolution" in fallbackManual) {
@@ -488,16 +546,6 @@ function resolveOneGap(
 	if (fallbackManual && "ambiguous" in fallbackManual)
 		return emptyGap(from, to, "Manual topology has multiple plausible station paths.");
 
-	const anchorCompatible = resolveCompatibleGap(
-		from,
-		to,
-		fromIndex,
-		journey,
-		index,
-		ctx,
-		anchorCompatibleCandidates(),
-		validationContext,
-	);
 	if (anchorCompatible) return anchorCompatible;
 
 	const pattern = resolvePatternGap(from, to, journey, index, ctx);

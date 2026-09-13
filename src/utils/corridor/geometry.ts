@@ -1,5 +1,11 @@
 const METERS_PER_DEGREE_LATITUDE = 111_320;
 
+/** Wrap a longitude difference to the shortest signed path across the dateline. */
+export function wrapLongitudeDelta(deltaLongitude: number): number {
+	if (!Number.isFinite(deltaLongitude)) return deltaLongitude;
+	return ((((deltaLongitude + 540) % 360) + 360) % 360) - 180;
+}
+
 /** Convert a latitude difference to metres. */
 export function latitudeDistanceMeters(deltaLatitude: number): number {
 	return Math.abs(deltaLatitude) * METERS_PER_DEGREE_LATITUDE;
@@ -7,14 +13,19 @@ export function latitudeDistanceMeters(deltaLatitude: number): number {
 
 /** Convert a longitude difference to metres at a latitude. */
 export function longitudeDistanceMeters(deltaLongitude: number, latitude: number): number {
-	return Math.abs(deltaLongitude) * METERS_PER_DEGREE_LATITUDE * Math.cos((latitude * Math.PI) / 180);
+	return (
+		Math.abs(wrapLongitudeDelta(deltaLongitude)) *
+		METERS_PER_DEGREE_LATITUDE *
+		Math.cos((latitude * Math.PI) / 180)
+	);
 }
 
 /** Return the approximate distance between two WGS84 coordinates. */
 export function coordinateDistanceMeters(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
 	const latitude = (a.lat + b.lat) / 2;
 	const north = (b.lat - a.lat) * METERS_PER_DEGREE_LATITUDE;
-	const east = (b.lon - a.lon) * METERS_PER_DEGREE_LATITUDE * Math.cos((latitude * Math.PI) / 180);
+	const east =
+		wrapLongitudeDelta(b.lon - a.lon) * METERS_PER_DEGREE_LATITUDE * Math.cos((latitude * Math.PI) / 180);
 	return Math.hypot(north, east);
 }
 

@@ -4,7 +4,8 @@ import { performance } from "node:perf_hooks";
 import { createEmptyAugmentedCache, createEmptyRawCache, createRuntimeState } from "../dist/cache/factories.js";
 import { resolveConfig } from "../dist/config.js";
 import { entityKey } from "../dist/identity.js";
-import { getDeparturesForStop, getServiceDateDeparturesForStop } from "../dist/utils/departures.js";
+import { getDeparturesForInstantWindow, getDeparturesForStop, getServiceDateDeparturesForStop } from "../dist/utils/departures.js";
+import { getServiceDayStart } from "../dist/utils/time.js";
 import { ServiceCapacity } from "../dist/utils/serviceCapacity.js";
 
 const FEED_ID = "test";
@@ -316,10 +317,171 @@ function testCrossMidnightWindows() {
 	}
 }
 
+function testInstantWindowAgreesWithNormalSelection() {
+	// Normal selection prefers scheduled_departure over actual_arrival when
+	// actual_departure is missing. The instant window must use the same
+	// fallback or the two APIs disagree on the same absolute window.
+	const row = makeStopTime("fallback", SERVICE_DATE, 8 * 3600, "station");
+	row.scheduled_departure_time = 8 * 3600;
+	row.scheduled_arrival_time = 8 * 3600 - 300;
+	row.actual_departure_time = null;
+	row.actual_arrival_time = 9 * 3600;
+	const { ctx } = makeContext({ station: { [SERVICE_DATE]: [row] } });
+	const stop = makeStationStop("station");
+	const dayStart = getServiceDayStart(SERVICE_DATE, TIME_ZONE);
+
+	const normal = getDeparturesForStop(stop, SERVICE_DATE, "07:55:00", "08:05:00", ctx);
+	assert.deepEqual(ids(normal), ["fallback"], "normal window covers the scheduled 08:00 departure");
+	const instant = getDeparturesForInstantWindow(stop, dayStart + 7 * 3600 + 55 * 60, dayStart + 8 * 3600 + 5 * 60, ctx);
+	assert.deepEqual(ids(instant), ["fallback"], "instant window must agree with normal fallback selection");
+
+	const lateNormal = getDeparturesForStop(stop, SERVICE_DATE, "08:55:00", "09:05:00", ctx);
+	assert.deepEqual(ids(lateNormal), [], "normal window must not match the unused 09:00 arrival fallback");
+	const lateInstant = getDeparturesForInstantWindow(stop, dayStart + 8 * 3600 + 55 * 60, dayStart + 9 * 3600 + 5 * 60, ctx);
+	assert.deepEqual(ids(lateInstant), [], "instant window must not match the unused 09:00 arrival fallback");
+}
+
+function testEarlyWindowIncludesPreviousDaySpillover() {
+	const prevDate = "20260827";
+	const prevRow = makeStopTime("prev-spill", prevDate, 25 * 3600, "station");
+	const currRow = makeStopTime("curr-early", SERVICE_DATE, 1.5 * 3600, "station");
+	const { ctx } = makeContext({ station: { [prevDate]: [prevRow], [SERVICE_DATE]: [currRow] } });
+	ctx.runtimeState.maxTripLookbackDays = 2;
+	const stop = makeStationStop("station");
+
+	// Absolute window SERVICE_DATE 00:00-02:00 covers prev 25:00 (= 01:00) and curr 01:30.
+	const normal = getDeparturesForStop(stop, SERVICE_DATE, "00:00:00", "02:00:00", ctx);
+	assert.deepEqual(ids(normal), ["prev-spill", "curr-early"]);
+
+	const dayStart = getServiceDayStart(SERVICE_DATE, TIME_ZONE);
+	const instant = getDeparturesForInstantWindow(stop, dayStart, dayStart + 2 * 3600, ctx);
+	assert.deepEqual(ids(instant), ["prev-spill", "curr-early"], "instant and normal windows must agree on spillover");
+}
+
+function testMultiDaySpilloverNeedsLookback() {
+	const twoDaysAgo = "20260826";
+	const spillRow = makeStopTime("two-day-spill", twoDaysAgo, 49 * 3600, "station");
+	const { ctx } = makeContext({ station: { [twoDaysAgo]: [spillRow] } });
+	ctx.runtimeState.maxTripLookbackDays = 3;
+	const stop = makeStationStop("station");
+
+	const normal = getDeparturesForStop(stop, SERVICE_DATE, "00:00:00", "02:00:00", ctx);
+	assert.deepEqual(ids(normal), ["two-day-spill"], "49:00 from two days ago lands at 01:00 today");
+
+	const dayStart = getServiceDayStart(SERVICE_DATE, TIME_ZONE);
+	const instant = getDeparturesForInstantWindow(stop, dayStart, dayStart + 2 * 3600, ctx);
+	assert.deepEqual(ids(instant), ["two-day-spill"]);
+}
+
+function testInvalidInstantWindowThrows() {
+	const { ctx } = makeContext({ station: { [SERVICE_DATE]: [] } });
+	const stop = makeStationStop("station");
+	assert.throws(() => getDeparturesForInstantWindow(stop, Number.NaN, 100, ctx), /Invalid departure instant window/);
+	assert.throws(() => getDeparturesForInstantWindow(stop, 200, 100, ctx), /Invalid departure instant window/);
+	assert.throws(() => getDeparturesForInstantWindow(stop, Number.POSITIVE_INFINITY, 100, ctx), /Invalid departure instant window/);
+}
+
+function testInvalidTimeStringsThrow() {
+	const row = makeStopTime("timed", SERVICE_DATE, 8 * 3600, "station");
+	const { ctx } = makeContext({ station: { [SERVICE_DATE]: [row] } });
+	const stop = makeStationStop("station");
+	assert.throws(() => getDeparturesForStop(stop, SERVICE_DATE, "not-a-time", "08:30:00", ctx), /Invalid departure/);
+	assert.throws(() => getDeparturesForStop(stop, SERVICE_DATE, "08:00:00", "bad", ctx), /Invalid departure/);
+	assert.throws(() => getDeparturesForStop(stop, SERVICE_DATE, "", "08:30:00", ctx), /Invalid departure/);
+}
+
+function testNullTimesDoNotSortAsMidnight() {
+	const nullRow = makeStopTime("null-time", SERVICE_DATE, 8 * 3600, "station");
+	nullRow.scheduled_arrival_time = null;
+	nullRow.scheduled_departure_time = null;
+	nullRow.actual_arrival_time = null;
+	nullRow.actual_departure_time = null;
+	const earlyRow = makeStopTime("early", SERVICE_DATE, 1 * 3600 + 30 * 60, "station");
+	// Cached rows arrive sorted with null-time last (Infinity), matching the
+	// production sort in getStopDeparturesCached.
+	const { ctx } = makeContext({ station: { [SERVICE_DATE]: [earlyRow, nullRow] } });
+	const stop = makeStationStop("station");
+	// Null-time rows must not masquerade as midnight departures in a 00:00-02:00 window.
+	const result = getDeparturesForStop(stop, SERVICE_DATE, "00:00:00", "02:00:00", ctx);
+	assert.deepEqual(
+		ids(result),
+		["early"],
+		"null-time rows must not sort as midnight",
+	);
+}
+
+function testOversizedStringWindowThrowsRangeError() {
+	const row = makeStopTime("timed", SERVICE_DATE, 8 * 3600, "station");
+	const { ctx } = makeContext({ station: { [SERVICE_DATE]: [row] } });
+	const stop = makeStationStop("station");
+	// 100000:00:00 would materialize thousands of service dates without a cap.
+	assert.throws(() => getDeparturesForStop(stop, SERVICE_DATE, "00:00:00", "100000:00:00", ctx), RangeError);
+	assert.throws(() => getDeparturesForStop(stop, SERVICE_DATE, "00:00:00", "100000:00:00", ctx), /Invalid departure/);
+	// Far-future absolute clock times must also be rejected even with a small span.
+	assert.throws(() => getDeparturesForStop(stop, SERVICE_DATE, "100000:00:00", "100000:30:00", ctx), RangeError);
+	// Conservative max span is 24h (covers all callers: GUI hours 1..24,
+	// string windows 00:00-23:59:59, benchmarks <=8h). Anything larger is oversized.
+	assert.throws(() => getDeparturesForStop(stop, SERVICE_DATE, "00:00:00", "48:00:00", ctx), RangeError);
+	// Boundary: exact 24h span and cross-midnight 23:30-25:00 (1.5h span) stay valid.
+	getDeparturesForStop(stop, SERVICE_DATE, "00:00:00", "23:59:59", ctx);
+	getDeparturesForStop(stop, SERVICE_DATE, "23:30:00", "25:00:00", ctx);
+}
+
+function testOversizedInstantWindowThrowsRangeError() {
+	const { ctx } = makeContext({ station: { [SERVICE_DATE]: [] } });
+	const stop = makeStationStop("station");
+	const dayStart = getServiceDayStart(SERVICE_DATE, TIME_ZONE);
+	assert.throws(() => getDeparturesForInstantWindow(stop, dayStart, dayStart + 100000 * 3600, ctx), RangeError);
+	assert.throws(
+		() => getDeparturesForInstantWindow(stop, dayStart, dayStart + 100000 * 3600, ctx),
+		/Invalid departure instant window/,
+	);
+	assert.throws(() => getDeparturesForInstantWindow(stop, dayStart, dayStart + 48 * 3600, ctx), RangeError);
+	// Boundary: exact 24h span stays valid and must not throw.
+	getDeparturesForInstantWindow(stop, dayStart, dayStart + 24 * 3600, ctx);
+}
+
+function testOversizedServiceDateWindowThrowsRangeError() {
+	const row = makeStopTime("timed", SERVICE_DATE, 8 * 3600, "station");
+	const { ctx } = makeContext({ station: { [SERVICE_DATE]: [row] } });
+	const stop = makeStationStop("station");
+	assert.throws(() => getServiceDateDeparturesForStop(stop, SERVICE_DATE, 0, 100000 * 3600, ctx), RangeError);
+	assert.throws(() => getServiceDateDeparturesForStop(stop, SERVICE_DATE, 0, 48 * 3600, ctx), RangeError);
+	// Boundary: exact 24h span stays valid.
+	getServiceDateDeparturesForStop(stop, SERVICE_DATE, 0, 24 * 3600, ctx);
+}
+
+function testInvalidWindowsThrowRangeError() {
+	const row = makeStopTime("timed", SERVICE_DATE, 8 * 3600, "station");
+	const { ctx } = makeContext({ station: { [SERVICE_DATE]: [row] } });
+	const stop = makeStationStop("station");
+	// Invalid strings, reversed, and non-finite numerics must all be RangeError (synchronous).
+	assert.throws(() => getDeparturesForStop(stop, SERVICE_DATE, "not-a-time", "08:30:00", ctx), RangeError);
+	assert.throws(() => getDeparturesForStop(stop, SERVICE_DATE, "08:30:00", "08:00:00", ctx), RangeError);
+	assert.throws(() => getDeparturesForInstantWindow(stop, Number.NaN, 100, ctx), RangeError);
+	assert.throws(() => getDeparturesForInstantWindow(stop, 200, 100, ctx), RangeError);
+	assert.throws(() => getDeparturesForInstantWindow(stop, Number.POSITIVE_INFINITY, 100, ctx), RangeError);
+	assert.throws(() => getDeparturesForInstantWindow(stop, 100, Number.POSITIVE_INFINITY, ctx), RangeError);
+	assert.throws(() => getServiceDateDeparturesForStop(stop, SERVICE_DATE, Number.NaN, 100, ctx), RangeError);
+	assert.throws(() => getServiceDateDeparturesForStop(stop, SERVICE_DATE, 200, 100, ctx), RangeError);
+	assert.throws(() => getServiceDateDeparturesForStop(stop, SERVICE_DATE, Number.NEGATIVE_INFINITY, 100, ctx), RangeError);
+	assert.throws(() => getServiceDateDeparturesForStop(stop, SERVICE_DATE, -100, 100, ctx), RangeError);
+}
+
 function runTests() {
 	testRangeMergeAndEarlyDeduplication();
 	testServiceDateRangeMergeAndEarlyDeduplication();
 	testCrossMidnightWindows();
+	testInstantWindowAgreesWithNormalSelection();
+	testEarlyWindowIncludesPreviousDaySpillover();
+	testMultiDaySpilloverNeedsLookback();
+	testInvalidInstantWindowThrows();
+	testInvalidTimeStringsThrow();
+	testNullTimesDoNotSortAsMidnight();
+	testOversizedStringWindowThrowsRangeError();
+	testOversizedInstantWindowThrowsRangeError();
+	testOversizedServiceDateWindowThrowsRangeError();
+	testInvalidWindowsThrowRangeError();
 	console.log("departure range tests passed");
 }
 

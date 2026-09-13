@@ -38,6 +38,7 @@ import { getOnboardReachableStops, type ReachabilityOrigin } from "./utils/passe
 
 export interface TRAXEvent {
 	"realtime-update-start": [];
+	/** Emitted only after a realtime refresh completes successfully. */
 	"realtime-update-end": [];
 	"static-update-start": [];
 	/** Emitted only after a static generation publishes successfully. */
@@ -208,14 +209,13 @@ export class TRAX {
 				this.realtimeInterval = null;
 				this.events.emit("realtime-update-start");
 				try {
-					await this.updateRealtime();
+					if (await this.updateRealtime()) this.events.emit("realtime-update-end");
 				} catch (error: any) {
 					logger.error("Error updating realtime GTFS data: " + (error.message ?? error), {
 						module: "index",
 						function: "loadGTFS - scheduleNextRealtime",
 					});
 				} finally {
-					this.events.emit("realtime-update-end");
 					scheduleNextRealtime();
 				}
 			}, realtimeIntervalMs);
@@ -228,18 +228,12 @@ export class TRAX {
 				this.events.emit("static-update-start");
 				try {
 					await this.refreshStatic();
-					// The realtime tail is part of the static cycle: bracket it
-					// with the same pair the realtime timer emits, so consumers
-					// (GUI revisions, telemetry snapshots, cache invalidation)
-					// observe the tail's completion exactly once. updateRealtime
-					// swallows its own errors, so end always fires here.
+					// The realtime tail is part of the static cycle. Use the same
+					// events as the realtime timer, but publish completion only if
+					// the refresh succeeds.
 					if (this.hasRealtimeSources()) {
 						this.events.emit("realtime-update-start");
-						try {
-							await this.updateRealtime();
-						} finally {
-							this.events.emit("realtime-update-end");
-						}
+						if (await this.updateRealtime()) this.events.emit("realtime-update-end");
 					}
 					this.events.emit("static-update-end");
 				} catch (error: any) {
@@ -308,7 +302,6 @@ export class TRAX {
 				return;
 			}
 			const retainedState = cache.retainStaticRefreshState(this.ctx);
-			const previousCtx = this.ctx;
 			const previousGtfs = this.gtfs;
 			let nextGtfs: import("qdf-gtfs").GTFS | null = null;
 			let nextCtx: cache.CacheContext | null = null;
@@ -318,15 +311,25 @@ export class TRAX {
 				this.validateFeedTimeZones(nextGtfs);
 				nextCtx = await cache.refreshStaticCache(nextGtfs, this.config, retainedState);
 			} catch (error) {
-				logger.error(`Static refresh failed, retaining previous generation: ${error instanceof Error ? error.message : String(error)}`, { module:"index", function:"refreshStatic" });
-				if (nextGtfs) try { nextGtfs.clearStatic(); } catch {}
+				logger.error(
+					`Static refresh failed, retaining previous generation: ${error instanceof Error ? error.message : String(error)}`,
+					{ module: "index", function: "refreshStatic" },
+				);
+				if (nextGtfs)
+					try {
+						nextGtfs.clearStatic();
+					} catch {}
 				throw error;
 			}
 			this.gtfs = nextGtfs!;
 			this.config = nextCtx!.config;
 			this.ctx = nextCtx!;
 			this.publishStaticGeneration();
-			setTimeout(() => { try { previousGtfs.clearStatic(); } catch {} }, 30_000).unref?.();
+			setTimeout(() => {
+				try {
+					previousGtfs.clearStatic();
+				} catch {}
+			}, 30_000).unref?.();
 		}).finally(() => {
 			this.staticRefreshInFlight = null;
 		});
@@ -427,15 +430,17 @@ export class TRAX {
 			this.ctx.augmented.timer.stop("refreshRealtime");
 	}
 
-	public async updateRealtime(): Promise<void> {
-		if (!this.hasRealtimeSources()) return;
+	public async updateRealtime(): Promise<boolean> {
+		if (!this.hasRealtimeSources()) return true;
 		try {
 			await this.refreshRealtime();
+			return true;
 		} catch (error: any) {
 			logger.error("Error updating realtime GTFS data: " + (error.message ?? error), {
 				module: "index",
 				function: "updateRealtime",
 			});
+			return false;
 		}
 	}
 

@@ -179,9 +179,10 @@ async function getToken(state: ViaConsistState): Promise<string> {
 
 	if (!res.ok) throw new Error(`Failed to get VIA token: HTTP ${res.status}`);
 	const data: TokenRes = await res.json();
+	const ttlMs = Number.isFinite(data.expires_in) && data.expires_in > 0 ? data.expires_in * 1000 : 0;
 	state.cachedToken = {
 		token: data.access_token,
-		expiry: Date.now() + data.expires_in * 1000,
+		expiry: Date.now() + ttlMs,
 	};
 	return data.access_token;
 }

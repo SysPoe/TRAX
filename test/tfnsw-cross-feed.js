@@ -617,4 +617,83 @@ for (const variant of ["layover", "opposite", "partial", "different-run", "diffe
 		"singleton per-feed queries canonicalize",
 	);
 }
+
+// Frequency runs share trip/date/run-number but are distinct instances: canonical
+// identity must include normalized frequency_start_time or runs collide.
+{
+	const ctx = makeCtx();
+	const date = SERVICE_DATE;
+	function addFreqTrip({ feedId, tripId, runNumber, freqStart }) {
+		const instanceId = encodeTripInstanceId({
+			networkId: NETWORK_ID,
+			feedId,
+			kind: "trip",
+			localId: tripId,
+			serviceDate: date,
+			realtimeStartTime: `${String(Math.floor(freqStart / 3600)).padStart(2, "0")}:${String(Math.floor((freqStart % 3600) / 60)).padStart(2, "0")}:00`,
+		});
+		const base = freqStart;
+		const calls = [
+			{ station: "200060", time: base },
+			{ station: "242040", time: base + 3600 },
+			{ station: "242020", time: base + 5400 },
+			{ station: "242010", time: base + 7200 },
+		];
+		const stopTimes = calls.map((call, index) =>
+			makeStopTime({ feedId, tripId, instanceId, serviceDate: date, station: call.station, time: call.time, seq: index + 1 }),
+		);
+		for (const st of stopTimes) {
+			st.instance_id = instanceId;
+			st.service_date = date;
+		}
+		const instance = {
+			feed_id: feedId,
+			trip_id: tripId,
+			instance_id: instanceId,
+			serviceDate: date,
+			schedule_relationship: "SCHEDULED",
+			stopTimes,
+			realtime_update: null,
+			expressInfo: [],
+			vehicle_model: null,
+			vehicle_id: null,
+			passenger_cars: null,
+			scheduled_passenger_cars: null,
+			consist: null,
+			nonRevenue: false,
+			scheduledTripDates: [date],
+			actualTripDates: [date],
+			trip_number: runNumber,
+			rt_start_date: null,
+			frequency_start_time: freqStart,
+			frequency_headway_secs: 900,
+			frequency_exact: true,
+			seq_diagram_prev_trip_id: null,
+			seq_diagram_next_trip_id: null,
+			seq_diagram_block_id: null,
+			seq_diagram_prev_instance_id: null,
+			seq_diagram_next_instance_id: null,
+			seq_diagram_prev_link_broken: false,
+			seq_diagram_next_link_broken: false,
+		};
+		const tripKey = entityKey({ feedId, localId: tripId });
+		let trip = ctx.augmented.tripsRec.get(tripKey);
+		if (!trip) {
+			trip = { feed_id: feedId, trip_id: tripId, route_id: "hunter", service_id: "daily", trip_headsign: null, trip_short_name: null, direction_id: 0, block_id: null, shape_id: null, wheelchair_accessible: null, bikes_allowed: null, scheduledStartServiceDates: [date], instances: [] };
+			ctx.augmented.tripsRec.set(tripKey, trip);
+		}
+		trip.instances.push(instance);
+		ctx.augmented.instancesRec.set(instanceId, instance);
+		return instance;
+	}
+	const a1 = addFreqTrip({ feedId: SYD, tripId: "FREQ.syd", runNumber: "ST21", freqStart: 21_600 });
+	const a2 = addFreqTrip({ feedId: SYD, tripId: "FREQ.syd", runNumber: "ST21", freqStart: 22_500 });
+	addFreqTrip({ feedId: TL, tripId: "FREQ.tl", runNumber: "ST21", freqStart: 21_660 });
+	addFreqTrip({ feedId: TL, tripId: "FREQ.tl", runNumber: "ST21", freqStart: 22_560 });
+	const index = buildTfnswCrossFeedIndex(ctx);
+	assert.equal(index.pairs.length, 2, "two frequency runs must pair separately without colliding");
+	const c1 = resolveTfnswCanonicalInstanceId(ctx, a1.instance_id);
+	const c2 = resolveTfnswCanonicalInstanceId(ctx, a2.instance_id);
+	assert.notEqual(c1, c2, "canonical IDs must include normalized run identity");
+}
 console.log("TfNSW cross-feed reconciliation tests passed.");

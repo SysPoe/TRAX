@@ -17,6 +17,7 @@ const SINGLE = new Set([
 /** Conservative last-resort platform guess. Callers must label this inferred. */
 export function inferVLinePlatform(stationName: string, directionId: number | null): string | null {
 	const name = stationName.replace(/\s+(Railway\s+)?Station.*$/i, "").trim();
+	if (directionId == null) return SINGLE.has(name) ? "1" : null;
 	const up = directionId === 1;
 	if (SINGLE.has(name)) return "1";
 	if (UP_ONE_DOWN_TWO.has(name)) return up ? "1" : "2";
@@ -24,4 +25,3 @@ export function inferVLinePlatform(stationName: string, directionId: number | nu
 	if (name === "Geelong") return up ? "3" : "1";
 	return null;
 }
-

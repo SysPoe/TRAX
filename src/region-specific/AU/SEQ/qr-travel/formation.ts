@@ -12,8 +12,8 @@ export async function getQrtFormation(service: QRTTravelTrip, ctx: CacheContext)
 	return {
 		vehicleId: null,
 		model: published?.matchName ?? service.line ?? service.serviceName ?? null,
-		passengerCars: published?.units.length ?? null,
-		scheduledPassengerCars: published?.units.length ?? null,
+		passengerCars: published?.units.length ? published.units.length : null,
+		scheduledPassengerCars: published?.units.length ? published.units.length : null,
 		units:
 			published?.units.map((unit) => ({
 				...unit,

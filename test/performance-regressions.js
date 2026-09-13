@@ -15,6 +15,9 @@ import { formatTrack, updateSourceB } from "../dist/region-specific/CA/GTHA/real
 import { ptvMetroPlugin } from "../dist/plugins/ptv-metro.js";
 import { isConsideredRoute } from "../dist/utils/considered.js";
 import { _test as vlineEnrichmentTest, applyVLineEnrichment } from "../dist/region-specific/AU/VIC/enrichment.js";
+import { createEmptyAugmentedCache } from "../dist/cache/factories.js";
+import { getTripUpdates, primeRawStopTimes } from "../dist/cache/gtfsReads.js";
+import { setRunSeries } from "../dist/cache/augmentedEntities.js";
 
 function testSeqDiagramUsesProvidedStopTimes() {
 	const trips = [
@@ -367,7 +370,7 @@ function testBlockHandoffPropagation() {
 		stop({ actual_parent_station_id: "CL", actual_stop_id: "CL", scheduled_parent_station_id: "CL", scheduled_stop_id: "CL", scheduled_arrival_time: 19_200, scheduled_departure_time: 19_200, actual_arrival_time: 19_200, actual_departure_time: 19_200 }),
 	] };
 	propagateBlockHandoffs(new Map([["block", [outgoing, incoming]]]), "2026-08-13T21:00:00.000Z");
-	assert.equal(outgoing.stopTimes[0].actual_platform_code, "5");
+	assert.equal(outgoing.stopTimes[0].actual_platform_code, "7 & 8", "an inferred handoff must not overwrite actual platform data");
 	assert.equal(outgoing.stopTimes[0].actual_departure_boarding_locations[0].confidence, "inferred");
 	assert.equal(outgoing.stopTimes[0].actual_departure_time, 18_000);
 	assert.equal(outgoing.stopTimes[0].realtime_info.delay_secs, 300);
@@ -392,6 +395,130 @@ function testGthaTrackFormatting() {
 	assert.equal(formatTrack("11 & 12"), "11 & 12");
 }
 
+function testCorridorPatternCachesAreBounded() {
+	const cache = createEmptyAugmentedCache();
+	for (let index = 0; index < 1500; index += 1) {
+		cache.corridorActivePatternsCache.set(`route-${index}\0date`, []);
+		cache.corridorPatternEdgeMinutesCache.set(`route-${index}\0date`, new Map());
+	}
+	assert.ok(
+		cache.corridorActivePatternsCache.size <= 1000,
+		`active-pattern cache must stay bounded, got ${cache.corridorActivePatternsCache.size}`,
+	);
+	assert.ok(
+		cache.corridorPatternEdgeMinutesCache.size <= 1000,
+		`pattern timing cache must stay bounded, got ${cache.corridorPatternEdgeMinutesCache.size}`,
+	);
+	assert.equal(
+		cache.corridorActivePatternsCache.get("route-0\0date"),
+		undefined,
+		"bounded pattern caches must evict the oldest route/date entries",
+	);
+}
+
+function testPrimeRawStopTimesSkipsCachedTrips() {
+	const cachedKey = "4:feedtrip-a";
+	const requestedTripIds = [];
+	const cachedRows = [{ feed_id: "feed", trip_id: "trip-a", stop_id: "a", stop_sequence: 1 }];
+	const strings = ["", "feed", "trip-b", "b"];
+	const ctx = {
+		augmented: { rawStopTimesCache: new Map([[cachedKey, cachedRows]]) },
+		gtfs: {
+			getStopTimesPacked(query) {
+				requestedTripIds.push([...query.trip_ids].sort());
+				if (query.trip_ids.includes("trip-b")) {
+					return {
+						strings,
+						tripIds: new Uint32Array([2]),
+						stopIds: new Uint32Array([3]),
+						arrivalTimes: new Int32Array([60]),
+						departureTimes: new Int32Array([60]),
+						stopSequences: new Int32Array([1]),
+						stopHeadsigns: new Uint32Array([0xffffffff]),
+						pickupTypes: new Uint8Array([0]),
+						dropOffTypes: new Uint8Array([0]),
+						shapeDistances: new Float64Array([NaN]),
+						timepoints: new Int8Array([1]),
+						continuousPickups: new Int8Array([-1]),
+						continuousDropOffs: new Int8Array([-1]),
+						feedIds: new Uint32Array([1]),
+					};
+				}
+				return {
+					strings: [],
+					tripIds: new Uint32Array(),
+					stopIds: new Uint32Array(),
+					arrivalTimes: new Int32Array(),
+					departureTimes: new Int32Array(),
+					stopSequences: new Int32Array(),
+					stopHeadsigns: new Uint32Array(),
+					pickupTypes: new Uint8Array(),
+					dropOffTypes: new Uint8Array(),
+					shapeDistances: new Float64Array(),
+					timepoints: new Int8Array(),
+					continuousPickups: new Int8Array(),
+					continuousDropOffs: new Int8Array(),
+					feedIds: new Uint32Array(),
+				};
+			},
+		},
+	};
+	const trips = [
+		{ feed_id: "feed", trip_id: "trip-a" },
+		{ feed_id: "feed", trip_id: "trip-b" },
+	];
+	primeRawStopTimes(ctx, trips);
+	assert.deepEqual(requestedTripIds, [["trip-b"]], "changed-trip priming must not re-query cached trips");
+	assert.strictEqual(
+		ctx.augmented.rawStopTimesCache.get(cachedKey),
+		cachedRows,
+		"changed-trip priming must preserve already-cached stop times",
+	);
+	assert.equal(ctx.augmented.rawStopTimesCache.get("4:feedtrip-b")?.length, 1);
+}
+
+function testFilteredTripUpdatesAvoidOtherFeeds() {
+	const filters = [];
+	const ctx = {
+		augmented: { tripUpdatesCache: new Map() },
+		raw: { injectedTripUpdates: [] },
+		config: { network: { plugins: [] } },
+		gtfs: {
+			getRealtimeTripUpdates(filter) {
+				filters.push(filter);
+				if (filter?.feed_id === "feed-a") return [{ feed_id: "feed-a", trip: { trip_id: "trip-a" } }];
+				return [{ feed_id: "feed-a" }, { feed_id: "feed-b" }];
+			},
+		},
+	};
+	const result = getTripUpdates(ctx, { feedId: "feed-a", localId: "trip-a" });
+	assert.ok(
+		filters.length === 1 && filters[0]?.feed_id === "feed-a",
+		`filtered trip updates must query one feed, got ${JSON.stringify(filters)}`,
+	);
+	assert.ok(
+		result.every((update) => update.feed_id === "feed-a"),
+		"filtered trip updates must not materialize other feeds",
+	);
+}
+
+function testRunSeriesCacheIsBounded() {
+	const ctx = { augmented: { runSeriesCache: new Map() }, runtimeState: {} };
+	for (let index = 0; index < 50; index += 1) {
+		const date = `202601${String((index % 28) + 1).padStart(2, "0")}-extra-${index}`;
+		setRunSeries(date, "series", { trips: [], vehicle_sightings: [], series: "SERIES", date }, ctx);
+	}
+	assert.ok(
+		ctx.augmented.runSeriesCache.size <= 32,
+		`run-series cache must stay bounded, got ${ctx.augmented.runSeriesCache.size}`,
+	);
+	assert.equal(
+		ctx.augmented.runSeriesCache.has("20260101-extra-0"),
+		false,
+		"bounded run-series cache must evict the oldest dates",
+	);
+}
+
 testSeqDiagramUsesProvidedStopTimes();
 testDisappearingRealtimeUpdateIsChanged();
 await testRealtimeUpdatesMaterializeByFeed();
@@ -407,4 +534,8 @@ await testGthaSourceBYieldsToRequests();
 testRawTripsUsesTheStaticSnapshot();
 testBlockHandoffPropagation();
 testGthaTrackFormatting();
+testCorridorPatternCachesAreBounded();
+testPrimeRawStopTimesSkipsCachedTrips();
+testFilteredTripUpdatesAvoidOtherFeeds();
+testRunSeriesCacheIsBounded();
 console.log("Performance regression tests passed.");

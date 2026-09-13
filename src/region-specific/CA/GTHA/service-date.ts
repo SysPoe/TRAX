@@ -42,7 +42,8 @@ export function normalizeGthaRealtimeServiceDate(identity: GthaRealtimeTripIdent
 	if (scheduledDayOffset <= 0) return identity.startDate;
 	const realtimeStart = parseGtfsTime(identity.startTime);
 	if (realtimeStart === null || realtimeStart >= SECONDS_PER_DAY) return identity.startDate;
-	if (realtimeStart !== scheduledStart % SECONDS_PER_DAY) return identity.startDate;
+	const scheduledWallTime = scheduledStart % SECONDS_PER_DAY;
+	if (Math.abs(realtimeStart - scheduledWallTime) > 5 * 60) return identity.startDate;
 
 	return addDaysToServiceDate(identity.startDate, -scheduledDayOffset);
 }

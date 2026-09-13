@@ -81,7 +81,7 @@ export function buildGthaOperatingScheduleUpdates(
 			trip_id: trip.trip_id,
 			route_id: trip.route_id,
 			direction_id: trip.direction_id,
-			start_time: firstTime ? `${firstTime}:00`.replace(/:00:00$/, ":00") : "",
+			start_time: firstTime && /^\d+:\d{2}$/.test(firstTime) ? `${firstTime}:00` : firstTime,
 			start_date: serviceDate,
 			schedule_relationship: allCancelled
 				? qdf.TripScheduleRelationship.CANCELED

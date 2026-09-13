@@ -1,8 +1,65 @@
-import { StopTimeScheduleRelationship } from "qdf-gtfs";
+import { StopTimeScheduleRelationship, TripScheduleRelationship } from "qdf-gtfs";
 import type { AugmentedStopTime, BoardingLocation } from "../../../utils/augmentedStopTime.js";
 import type { AugmentedTripInstance } from "../../../utils/augmentedTrip.js";
+import { getEpochDayFromServiceDate } from "../../../utils/time.js";
 
 type PlatformEvidence = { location: BoardingLocation; direct: boolean };
+
+function isCanceledTripInstance(instance: { schedule_relationship?: unknown } | null | undefined): boolean {
+	return (
+		(instance as { schedule_relationship?: unknown } | null)?.schedule_relationship ===
+		TripScheduleRelationship.CANCELED
+	);
+}
+
+function isSkippedStopTime(
+	stopTime: { passing?: boolean; realtime?: boolean; realtime_info?: { schedule_relationship?: unknown } | null } | null | undefined,
+): boolean {
+	if (!stopTime || stopTime.passing) return Boolean(stopTime?.passing);
+	if (!stopTime.realtime || !stopTime.realtime_info) return false;
+	const relationship = (stopTime.realtime_info as { schedule_relationship?: unknown }).schedule_relationship;
+	return (
+		relationship === StopTimeScheduleRelationship.SKIPPED ||
+		relationship === StopTimeScheduleRelationship.NO_DATA
+	);
+}
+
+/** Absolute service instant for block ordering without requiring cache context. */
+function blockAbsoluteTime(
+	serviceDate: string | null | undefined,
+	secs: number | null | undefined,
+	dateOffset?: number | null,
+): number | null {
+	if (secs == null || !Number.isFinite(secs)) return null;
+	const offset = Number.isFinite(dateOffset as number) ? (dateOffset as number) : 0;
+	if (serviceDate != null && /^\d{8}$/.test(serviceDate)) {
+		try {
+			const day = getEpochDayFromServiceDate(serviceDate);
+			if (Number.isFinite(day)) {
+				// Raw already encodes overflow (>=86400); trust it to avoid
+				// double-counting a relative offset. Normalized wall times use the
+				// explicit offset for their calendar day.
+				const raw = secs >= 86400 ? secs : secs + (offset || 0) * 86400;
+				return day * 86400 + raw;
+			}
+		} catch {
+			// Fall through to raw below.
+		}
+	}
+	if (offset) return secs + offset * 86400;
+	return secs;
+}
+
+function tripDepartureAbsolute(trip: AugmentedTripInstance): number | null {
+	const first = trip.stopTimes[0];
+	if (!first) return null;
+	const secs = first.scheduled_departure_time ?? first.actual_departure_time;
+	const offset =
+		first.scheduled_departure_date_offset ?? first.actual_departure_date_offset ?? 0;
+	const abs = blockAbsoluteTime((trip as { serviceDate?: string }).serviceDate, secs, offset);
+	if (abs != null) return abs;
+	return secs ?? null;
+}
 
 function stopPlaceId(stopTime: AugmentedStopTime): string | null {
 	return (
@@ -70,7 +127,6 @@ function applyInferredPlatform(
 		observed_at: platform.observed_at,
 		confidence: "inferred",
 	};
-	stopTime.actual_platform_code = inferred.value;
 	if (event === "arrival") stopTime.actual_arrival_boarding_locations = [inferred, ...locations];
 	else stopTime.actual_departure_boarding_locations = [inferred, ...locations];
 }
@@ -98,14 +154,22 @@ function inferredRealtimeInfo(stopTime: AugmentedStopTime, delaySecs: number) {
 function applyMinimumTripDelay(trip: AugmentedTripInstance, minimumDelaySecs: number): void {
 	let carriedDelay = minimumDelaySecs;
 	for (const stopTime of trip.stopTimes) {
-		if (stopTime.realtime_info?.schedule_relationship === StopTimeScheduleRelationship.SKIPPED) continue;
+		const relationship = stopTime.realtime_info?.schedule_relationship;
+		if (
+			relationship === StopTimeScheduleRelationship.SKIPPED ||
+			relationship === StopTimeScheduleRelationship.NO_DATA
+		)
+			continue;
 
 		if (
 			stopTime.rt_arrival_updated &&
 			stopTime.scheduled_arrival_time != null &&
 			stopTime.actual_arrival_time != null
 		) {
-			carriedDelay = stopTime.actual_arrival_time - stopTime.scheduled_arrival_time;
+			const directDelay = stopTime.actual_arrival_time - stopTime.scheduled_arrival_time;
+			// Enforce the handoff minimum even when a direct observation exists:
+			// a later direct call must not run before the delayed vehicle.
+			carriedDelay = Math.max(carriedDelay, directDelay);
 		} else if (stopTime.scheduled_arrival_time != null) {
 			stopTime.actual_arrival_time = Math.max(
 				stopTime.actual_arrival_time ?? Number.NEGATIVE_INFINITY,
@@ -119,7 +183,8 @@ function applyMinimumTripDelay(trip: AugmentedTripInstance, minimumDelaySecs: nu
 			stopTime.scheduled_departure_time != null &&
 			stopTime.actual_departure_time != null
 		) {
-			carriedDelay = stopTime.actual_departure_time - stopTime.scheduled_departure_time;
+			const directDelay = stopTime.actual_departure_time - stopTime.scheduled_departure_time;
+			carriedDelay = Math.max(carriedDelay, directDelay);
 			continue;
 		}
 		if (stopTime.scheduled_departure_time != null) {
@@ -145,18 +210,26 @@ export function propagateBlockHandoffs(
 	observedAt = new Date().toISOString(),
 ): void {
 	for (const trips of blockMap.values()) {
-		const ordered = [...trips].sort(
-			(a, b) =>
+		const ordered = [...trips].sort((a, b) => {
+			const aAbs = tripDepartureAbsolute(a);
+			const bAbs = tripDepartureAbsolute(b);
+			if (aAbs != null && bAbs != null && aAbs !== bAbs) return aAbs - bAbs;
+			return (
 				(a.stopTimes[0]?.scheduled_departure_time ?? Number.POSITIVE_INFINITY) -
-				(b.stopTimes[0]?.scheduled_departure_time ?? Number.POSITIVE_INFINITY),
-		);
+				(b.stopTimes[0]?.scheduled_departure_time ?? Number.POSITIVE_INFINITY)
+			);
+		});
 		for (let index = 0; index < ordered.length - 1; index++) {
 			const incoming = ordered[index];
 			const outgoing = ordered[index + 1];
+			// Canceled trips break the handoff chain without resurrecting predictions.
+			if (isCanceledTripInstance(incoming) || isCanceledTripInstance(outgoing)) continue;
 			const arrival = incoming.stopTimes.at(-1);
 			const departure = outgoing.stopTimes[0];
 			if (!arrival || !departure || !stopPlaceId(arrival) || stopPlaceId(arrival) !== stopPlaceId(departure))
 				continue;
+			// Skipped or non-data calls carry no platform or timing to share.
+			if (isSkippedStopTime(arrival) || isSkippedStopTime(departure)) continue;
 
 			const arrivalPlatform = platformEvidence(arrival, "arrival", observedAt);
 			const departurePlatform = platformEvidence(departure, "departure", observedAt);
@@ -172,15 +245,31 @@ export function propagateBlockHandoffs(
 
 			const scheduledDeparture = departure.scheduled_departure_time;
 			const actualArrival = arrival.actual_arrival_time;
-			if (
-				(!arrival.realtime && !arrival.rt_arrival_updated) ||
+			// A propagated arrival is a valid chained source; a direct departure
+			// must never be overwritten. Check propagated separately so inferred
+			// realtime is not conflated with authoritative observations.
+			const arrivalHasRealtime = arrival.realtime || arrival.rt_arrival_updated;
+			const departureHasDirect =
 				departure.rt_arrival_updated ||
 				departure.rt_departure_updated ||
+				(departure.realtime && !departure.realtime_info?.propagated);
+			if (
+				!arrivalHasRealtime ||
+				departureHasDirect ||
 				scheduledDeparture == null ||
 				actualArrival == null
 			)
 				continue;
-			const minimumDelay = actualArrival - scheduledDeparture;
+			const incomingServiceDate = (incoming as { serviceDate?: string }).serviceDate;
+			const outgoingServiceDate = (outgoing as { serviceDate?: string }).serviceDate;
+			const arrivalOffset =
+				arrival.actual_arrival_date_offset ?? arrival.scheduled_arrival_date_offset ?? 0;
+			const departureOffset =
+				departure.scheduled_departure_date_offset ?? departure.actual_departure_date_offset ?? 0;
+			const arrivalAbs = blockAbsoluteTime(incomingServiceDate, actualArrival, arrivalOffset);
+			const scheduledDepAbs = blockAbsoluteTime(outgoingServiceDate, scheduledDeparture, departureOffset);
+			if (arrivalAbs == null || scheduledDepAbs == null) continue;
+			const minimumDelay = arrivalAbs - scheduledDepAbs;
 			if (minimumDelay > 0) applyMinimumTripDelay(outgoing, minimumDelay);
 		}
 	}

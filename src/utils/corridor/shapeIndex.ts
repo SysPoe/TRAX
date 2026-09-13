@@ -162,13 +162,16 @@ function shapePointValues(points: IndexedShape["points"], index: number) {
 }
 
 function shapePoints(rows: Shape[]): PackedShapePoints {
-	rows.sort((a, b) => a.shape_pt_sequence - b.shape_pt_sequence);
-	const latitudes = new Float64Array(rows.length);
-	const longitudes = new Float64Array(rows.length);
-	const geometricDistances = new Float64Array(rows.length);
-	const nativeDistances = new Float64Array(rows.length);
-	for (let index = 0; index < rows.length; index++) {
-		const row = rows[index];
+	const finiteRows = rows.filter(
+		(row) => Number.isFinite(row.shape_pt_lat) && Number.isFinite(row.shape_pt_lon),
+	);
+	finiteRows.sort((a, b) => a.shape_pt_sequence - b.shape_pt_sequence);
+	const latitudes = new Float64Array(finiteRows.length);
+	const longitudes = new Float64Array(finiteRows.length);
+	const geometricDistances = new Float64Array(finiteRows.length);
+	const nativeDistances = new Float64Array(finiteRows.length);
+	for (let index = 0; index < finiteRows.length; index++) {
+		const row = finiteRows[index];
 		latitudes[index] = row.shape_pt_lat;
 		longitudes[index] = row.shape_pt_lon;
 		nativeDistances[index] = finite(row.shape_dist_traveled) ?? Number.NaN;
@@ -181,7 +184,7 @@ function shapePoints(rows: Shape[]): PackedShapePoints {
 				);
 		}
 	}
-	return { length: rows.length, latitudes, longitudes, geometricDistances, nativeDistances };
+	return { length: finiteRows.length, latitudes, longitudes, geometricDistances, nativeDistances };
 }
 
 function appendProjection(
@@ -246,6 +249,15 @@ function indexShapeProjections(
 	for (let index = 0; index < shape.points.length - 1; index++) {
 		const from = shapePointValues(shape.points, index);
 		const to = shapePointValues(shape.points, index + 1);
+		if (
+			!Number.isFinite(from.lat) ||
+			!Number.isFinite(from.lon) ||
+			!Number.isFinite(to.lat) ||
+			!Number.isFinite(to.lon) ||
+			!Number.isFinite(from.geometricDistanceMeters) ||
+			!Number.isFinite(to.geometricDistanceMeters)
+		)
+			continue;
 		const candidates = grid.querySegmentCoordinates(
 			from.lat,
 			from.lon,
@@ -254,7 +266,9 @@ function indexShapeProjections(
 			config.geometry.endpointSnapMaxMeters,
 		);
 		const segmentLength = to.geometricDistanceMeters - from.geometricDistanceMeters;
+		if (!Number.isFinite(segmentLength) || segmentLength < 0) continue;
 		for (const candidate of candidates) {
+			if (!Number.isFinite(candidate.lat) || !Number.isFinite(candidate.lon)) continue;
 			const { stationId, source: coordinateSource } = candidate.id;
 			const projected = projectCoordinatesOnSegment(
 				candidate.lat,
@@ -264,12 +278,17 @@ function indexShapeProjections(
 				to.lat,
 				to.lon,
 			);
+			if (!Number.isFinite(projected.segmentFraction) || !Number.isFinite(projected.lateralDistanceMeters))
+				continue;
 			const nativeStart = from.nativeShapeDistance;
 			const nativeEnd = to.nativeShapeDistance;
 			const nativeShapeDistance =
 				nativeStart != null && nativeEnd != null && nativeEnd > nativeStart
 					? nativeStart + projected.segmentFraction * (nativeEnd - nativeStart)
 					: null;
+			const distanceAlongMeters =
+				from.geometricDistanceMeters + projected.segmentFraction * segmentLength;
+			if (!Number.isFinite(distanceAlongMeters)) continue;
 			appendProjection(
 				shape.projections,
 				stationId,
@@ -277,7 +296,7 @@ function indexShapeProjections(
 					stationId,
 					segmentIndex: index,
 					segmentFraction: projected.segmentFraction,
-					distanceAlongMeters: from.geometricDistanceMeters + projected.segmentFraction * segmentLength,
+					distanceAlongMeters,
 					lateralDistanceMeters: projected.lateralDistanceMeters,
 					coordinateSource,
 					nativeShapeDistance,
@@ -346,12 +365,14 @@ export function buildCorridorIndex(ctx: CacheContext, trips: readonly Trip[] = c
 			if (!shape) {
 				const rows = ctx.gtfs.getShapes({ feed_id: trip.feed_id, shape_id: trip.shape_id });
 				const points = shapePoints(rows);
+				const lengthMeters = points.geometricDistances.at(-1) ?? 0;
+				if (points.length < 2 || !Number.isFinite(lengthMeters) || lengthMeters <= 0) return;
 				shape = {
 					key: shapeKey,
 					feedId: trip.feed_id,
 					shapeId: trip.shape_id,
 					points,
-					lengthMeters: points.geometricDistances.at(-1) ?? 0,
+					lengthMeters,
 					routeDirections: new Set(),
 					scheduledStations: new Set(),
 					tripIds: new Set(),

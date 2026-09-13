@@ -187,8 +187,18 @@ function getDayType(dateStr: string, state: SeqCapacityState): string {
 	const y = parseInt(dateStr.slice(0, 4));
 	const m = parseInt(dateStr.slice(4, 6)) - 1;
 	const d = parseInt(dateStr.slice(6, 8));
+	// A malformed service date must not produce an undefined day type that
+	// poisons downstream lookups. Fall back to unknown so callers return UNKNOWN.
+	if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
+		state.dayTypeCache.set(dateStr, "Unknown");
+		return "Unknown";
+	}
 	const date = new Date(y, m, d);
 	const day = date.getDay();
+	if (!Number.isFinite(day)) {
+		state.dayTypeCache.set(dateStr, "Unknown");
+		return "Unknown";
+	}
 
 	let res = "";
 	if (day === 0) res = "Sunday/Public Holiday";
@@ -203,6 +213,10 @@ function getDayType(dateStr: string, state: SeqCapacityState): string {
 }
 
 function formatTimeBucket(seconds: number): string {
+	// A non-finite time (for example NaN from a missing stop time) must not
+	// produce a "NaN:NaN" bucket that could match a capacity row. Return an
+	// empty bucket so lookups miss and resolve to UNKNOWN.
+	if (!Number.isFinite(seconds)) return "";
 	const minutesTotal = Math.round(seconds / 60);
 	const remainder = minutesTotal % 15;
 	let roundedMinutes = minutesTotal;
@@ -353,9 +367,10 @@ export function getServiceCapacity(
 		stopTime.actual_arrival_time ??
 		stopTime.scheduled_departure_time ??
 		stopTime.scheduled_arrival_time;
-	if (departureTime === null) return ServiceCapacity.UNKNOWN;
+	if (departureTime == null || !Number.isFinite(departureTime)) return ServiceCapacity.UNKNOWN;
 
 	const timeBucket = formatTimeBucket(departureTime);
+	if (!timeBucket) return ServiceCapacity.UNKNOWN;
 
 	for (const lineName of candidateLines) {
 		const rMap = state.capacityIndex.get(lineName);

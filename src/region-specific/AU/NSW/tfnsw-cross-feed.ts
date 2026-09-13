@@ -33,10 +33,44 @@ function state(ctx: CacheContext): { index: Index | null } {
 export function normalizeTfnswRunNumber(value: string | null | undefined): string | null {
 	return value?.trim().toUpperCase() || null;
 }
+
+function formatRunClock(seconds: number): string {
+	const total = Math.floor(seconds);
+	const hh = Math.floor(total / 3600);
+	const mm = Math.floor((total % 3600) / 60);
+	const ss = total % 60;
+	return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
+
+/**
+ * Normalized run identity for canonical instance IDs. Frequency runs share
+ * trip/date/run-number but are distinct instances; without the frequency
+ * start time their canonical IDs collide. Raw start_time forms (6:00:00 vs
+ * 06:00:00) normalize to one canonical clock.
+ */
+function normalizedTfnswRunIdentity(instance: Instance): string {
+	const freq = (instance as { frequency_start_time?: number | null }).frequency_start_time;
+	if (typeof freq === "number" && Number.isFinite(freq)) return formatRunClock(freq);
+	const raw = instance.realtime_update?.trip.start_time;
+	if (raw != null && String(raw).trim() !== "") {
+		const trimmed = String(raw).trim();
+		const match = /^(\d+):(\d{2})(?::(\d{2}))?$/.exec(trimmed);
+		if (match) {
+			const h = Number(match[1]);
+			const m = Number(match[2]);
+			const s = Number(match[3] ?? "0");
+			if (Number.isFinite(h) && Number.isFinite(m) && Number.isFinite(s) && m <= 59 && s <= 59 && h >= 0) {
+				return formatRunClock(h * 3600 + m * 60 + s);
+			}
+		}
+		return trimmed;
+	}
+	return "";
+}
 function station(ctx: CacheContext, row: Row): string {
 	const localId = row.scheduled_parent_station_id ?? row.scheduled_stop_id;
 	const place = localId && getPlaceForStation(ctx.config, { feedId: row.feed_id, localId });
-	return place ? `place:${place.id}` : `${row.feed_id}:${localId}`;
+	return place ? `place:${place.id}` : entityKey({ feedId: row.feed_id, localId: localId ?? "" });
 }
 function scheduled(row: Row, terminal = false): number | null {
 	return terminal
@@ -106,7 +140,7 @@ export function buildTfnswCrossFeedIndex(ctx: CacheContext): Index {
 					kind: "trip",
 					localId: a.trip_id,
 					serviceDate: a.serviceDate,
-					realtimeStartTime: "",
+					realtimeStartTime: normalizedTfnswRunIdentity(a),
 				}),
 				primaryTripKey: entityKey({ feedId: a.feed_id, localId: a.trip_id }),
 				secondaryTripKey: entityKey({ feedId: b.feed_id, localId: b.trip_id }),

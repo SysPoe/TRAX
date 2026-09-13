@@ -238,12 +238,9 @@ export function createTfnswRailPlugin(options: TfnswRailPluginOptions = {}): Tra
 				if (!trip || !anyTripClient) return 0;
 				const now = Date.now();
 				for (const stopTime of trip.stopTimes) {
-					if (
-						stopTime.occupancy?.source === "anytrip-nsw" &&
-						stopTime.occupancy.expires_at &&
-						Date.parse(stopTime.occupancy.expires_at) <= now
-					)
-						stopTime.occupancy = null;
+					if (stopTime.occupancy?.source !== "anytrip-nsw") continue;
+					const expiry = stopTime.occupancy.expires_at ? Date.parse(stopTime.occupancy.expires_at) : NaN;
+					if (!Number.isFinite(expiry) || expiry <= now) stopTime.occupancy = null;
 				}
 				if (
 					trip.stopTimes.every(

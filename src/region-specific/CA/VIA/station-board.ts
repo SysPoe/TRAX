@@ -205,6 +205,12 @@ export function viaTrainKey(trainNumber: string, scheduleDate: string): string {
 	return `${canonicalTrainNumber}|${scheduleDate.replaceAll("-", "")}`;
 }
 
+/** A CIS board older than the stale window must not resurrect residual platforms. */
+export function isCisSnapshotFresh(snapshot: CisBoardSnapshot, nowMs: number): boolean {
+	if (!Number.isFinite(snapshot.fetchedAt) || !Number.isFinite(nowMs)) return false;
+	return nowMs - snapshot.fetchedAt <= CIS_STALE_MS;
+}
+
 function serviceLocations(
 	service: CisService,
 	activeFields: readonly CisBoardingField[],
@@ -226,9 +232,13 @@ function serviceLocations(
 export function buildCisBoardingAssignments(
 	boards: ReadonlyMap<string, CisBoardSnapshot>,
 	tripMatches: ReadonlyMap<string, ViaTripMatch>,
+	nowMs?: number,
 ): ViaBoardingAssignment[] {
 	const assignments: ViaBoardingAssignment[] = [];
 	for (const snapshot of boards.values()) {
+		// When the caller supplies the current clock, quarantine boards that
+		// outlived the stale window instead of re-applying residual tracks.
+		if (nowMs !== undefined && !isCisSnapshotFresh(snapshot, nowMs)) continue;
 		const observedAt = new Date(snapshot.fetchedAt).toISOString();
 		for (const [event, services] of [
 			["arrival", snapshot.board.Arrivals],

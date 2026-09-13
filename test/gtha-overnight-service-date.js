@@ -79,11 +79,19 @@ assert.equal(
 );
 assert.equal(
 	canonicalizeRealtimeTripUpdate(
-		{ ...update, trip: { ...descriptor, start_time: "00:21:00" } },
+		{ ...update, trip: { ...descriptor, start_time: "00:26:00" } },
 		context,
 	).trip.start_date,
 	"20260826",
-	"a realtime clock that does not match the static trip start must not be shifted",
+	"a realtime clock outside the provider tolerance must not be shifted",
+);
+assert.equal(
+	canonicalizeRealtimeTripUpdate(
+		{ ...update, trip: { ...descriptor, start_time: "00:22:00" } },
+		context,
+	).trip.start_date,
+	"20260825",
+	"small provider clock drift must still map an overnight run to its static service date",
 );
 
 const plugin = network.plugins.find((candidate) => candidate.id === "ca-gtha");

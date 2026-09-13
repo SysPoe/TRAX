@@ -63,7 +63,10 @@ function observation<T>(
 	observedAt: string,
 	rawIdentifier?: string,
 ): Observation<T> {
-	return { value, source, confidence, observedAt, expiresAt: new Date(Date.parse(observedAt) + LIVE_TTL_MS).toISOString(), rawIdentifier };
+	const parsed = Date.parse(observedAt);
+	const safeObservedAt = Number.isFinite(parsed) ? observedAt : new Date().toISOString();
+	const safeParsed = Number.isFinite(parsed) ? parsed : Date.parse(safeObservedAt);
+	return { value, source, confidence, observedAt: safeObservedAt, expiresAt: new Date(safeParsed + LIVE_TTL_MS).toISOString(), rawIdentifier };
 }
 
 export function createEmptyVLineDetails(tdn: string): VLineTripDetails {
@@ -97,15 +100,43 @@ function normalizeStation(value: string | null | undefined): string {
 	return stationName.replace(/\b(railway|station)\b/g, "").replace(/[^a-z0-9]/g, "");
 }
 
+function isValidServiceDate(value: unknown): value is string {
+	if (typeof value !== "string" || !/^\d{8}$/.test(value)) return false;
+	const year = Number(value.slice(0, 4));
+	const month = Number(value.slice(4, 6));
+	const day = Number(value.slice(6, 8));
+	if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+	const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+	const daysInMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+	return day <= daysInMonth;
+}
+
 function scheduledInstant(trip: AugmentedTripInstance, seconds: number | null | undefined): number | null {
-	if (seconds == null) return null;
+	if (seconds == null || !Number.isFinite(seconds)) return null;
+	// serviceTimeToInstant falls back to epoch 0 for a malformed service date,
+	// which would resolve to a finite 1970 instant. Reject invalid service
+	// dates here so they resolve to null. Seconds are intentionally left
+	// unbounded so extended GTFS times past 24h keep working.
+	if (!isValidServiceDate(trip.serviceDate)) return null;
 	let instants = scheduledInstantsByTrip.get(trip);
 	if (!instants) {
 		instants = new Map();
 		scheduledInstantsByTrip.set(trip, instants);
 	}
 	if (instants.has(seconds)) return instants.get(seconds)!;
-	const instant = Date.parse(serviceTimeToInstant(trip.serviceDate, seconds, "Australia/Melbourne"));
+	let instant: number;
+	try {
+		instant = Date.parse(serviceTimeToInstant(trip.serviceDate, seconds, "Australia/Melbourne"));
+	} catch {
+		instants.set(seconds, null as unknown as number);
+		return null;
+	}
+	// A NaN instant (for example an invalid service date) must not poison the
+	// cache or produce a NaN booking-snapshot expiry that never expires.
+	if (!Number.isFinite(instant)) {
+		instants.set(seconds, null as unknown as number);
+		return null;
+	}
 	instants.set(seconds, instant);
 	return instant;
 }
@@ -284,6 +315,8 @@ function applyPlatform(trip: AugmentedTripInstance, platform: VLinePlatformObser
 		stop.scheduled_parent_station_id === platform.stopId || stop.scheduled_stop_id === platform.stopId,
 	);
 	if (!stopTime) return;
+	// A canceled trip quarantines residual platforms instead of re-applying them.
+	if ((trip.schedule_relationship as unknown) === TripScheduleRelationship.CANCELED) return;
 	const existingLocations = [
 		...stopTime.actual_arrival_boarding_locations,
 		...stopTime.actual_departure_boarding_locations,
@@ -298,8 +331,22 @@ function applyPlatform(trip: AugmentedTripInstance, platform: VLinePlatformObser
 		confidence: platform.confidence,
 		expires_at: platform.expiresAt,
 	};
+	// Inferred platforms retain non-authoritative provenance: they never set
+	// the authoritative platform code and never overwrite an authoritative
+	// boarding location.
+	if (platform.confidence === "inferred") {
+		const hasAuthoritative = existingLocations.some(
+			(existing) =>
+				(existing.kind === "track" || existing.kind === "platform") && existing.confidence !== "inferred",
+		);
+		if (hasAuthoritative) return;
+		stopTime.rt_platform_code_updated = false;
+		if (platform.event !== "arrival" && !stopTime.actual_departure_boarding_locations.some((existing) => existing.confidence !== "inferred")) stopTime.actual_departure_boarding_locations = [location];
+		if (platform.event !== "departure" && !stopTime.actual_arrival_boarding_locations.some((existing) => existing.confidence !== "inferred")) stopTime.actual_arrival_boarding_locations = [location];
+		return;
+	}
 	stopTime.actual_platform_code = platform.value;
-	stopTime.rt_platform_code_updated = platform.confidence !== "inferred";
+	stopTime.rt_platform_code_updated = true;
 	if (platform.event !== "arrival") stopTime.actual_departure_boarding_locations = [location];
 	if (platform.event !== "departure") stopTime.actual_arrival_boarding_locations = [location];
 }
@@ -312,8 +359,15 @@ function platformPriority(platform: VLinePlatformObservation): number {
 }
 
 function applyStoredPlatforms(trip: AugmentedTripInstance, details: VLineTripDetails, now = Date.now()): void {
+	// Expired observations are quarantined, including inferred heuristics. A
+	// stale inferred guess must not linger with an old observed_at after its
+	// TTL, and expired authoritative platforms must not resurrect.
 	for (const platform of [...details.platforms]
-		.filter((value) => !value.expiresAt || Date.parse(value.expiresAt) > now || value.confidence === "inferred")
+		.filter((value) => {
+			if (!value.expiresAt) return true;
+			const expiry = Date.parse(value.expiresAt);
+			return Number.isFinite(expiry) && expiry > now;
+		})
 		.sort((a, b) => platformPriority(a) - platformPriority(b))) applyPlatform(trip, platform);
 }
 
@@ -801,13 +855,28 @@ export async function refreshVLineOfficialSources(ctx: CacheContext, options: VL
 			const services = matchScsServices(trips, rows, observedAt);
 			for (const [instanceId, platform] of matches) {
 				const trip = ctx.augmented.instancesRec.get(instanceId), details = trip ? detailsFor(ctx, trip) : null;
-				if (!details) continue;
+				if (!trip || !details) continue;
+				// A canceled SCS service quarantines residual platforms: never
+				// store a new platform for it and drop any previously stored
+				// SCS platforms for the same stop.
+				const service = services.get(instanceId);
+				if (service?.cancelled || (trip.schedule_relationship as unknown) === TripScheduleRelationship.CANCELED) {
+					details.platforms = details.platforms.filter(
+						(value) => !(value.source === "vline-scs-html" && value.stopId === platform.stopId),
+					);
+					continue;
+				}
 				if (!details.platforms.some((value) => value.stopId === platform.stopId && value.confidence === "confirmed")) details.platforms.push(platform);
 			}
 			for (const [instanceId, row] of services) {
 				const trip = ctx.augmented.instancesRec.get(instanceId), details = trip ? detailsFor(ctx, trip) : null;
 				if (!trip || !details) continue;
-				if (row.cancelled) trip.schedule_relationship = TripScheduleRelationship.CANCELED;
+				if (row.cancelled) {
+					trip.schedule_relationship = TripScheduleRelationship.CANCELED;
+					// Quarantine stale SCS platforms for the canceled run so a
+					// later board without the cancellation does not resurrect them.
+					details.platforms = details.platforms.filter((value) => value.source !== "vline-scs-html");
+				}
 				details.scsService = observation({
 					boardGroup: row.boardGroup,
 					scheduledTime: row.time,
@@ -825,7 +894,46 @@ export async function refreshVLineOfficialSources(ctx: CacheContext, options: VL
 	if (options.journeyPlanner) scheduleVLineBookingPrefetches(ctx, options, trips);
 }
 
-export const _test = { applyStoredPlatforms, currentInstances, platformPriority };
+/**
+ * Quarantine residual supplemental platforms for a canceled run. Returns true
+ * when the trip was canceled and its boarding locations were cleared.
+ */
+export function quarantineCanceledVLineTrip(trip: AugmentedTripInstance): boolean {
+	if ((trip.schedule_relationship as unknown) !== TripScheduleRelationship.CANCELED) return false;
+	let cleared = false;
+	for (const stop of trip.stopTimes) {
+		const before =
+			stop.actual_arrival_boarding_locations.length + stop.actual_departure_boarding_locations.length;
+		stop.actual_arrival_boarding_locations = stop.actual_arrival_boarding_locations.filter(
+			(location) => location.source !== "vline-scs-html" && location.source !== "anytrip-v3" && location.source !== "static-platform-heuristic" && location.source !== "vline-platform-services",
+		);
+		stop.actual_departure_boarding_locations = stop.actual_departure_boarding_locations.filter(
+			(location) => location.source !== "vline-scs-html" && location.source !== "anytrip-v3" && location.source !== "static-platform-heuristic" && location.source !== "vline-platform-services",
+		);
+		if (before !== stop.actual_arrival_boarding_locations.length + stop.actual_departure_boarding_locations.length) cleared = true;
+		// An inferred heuristic never sets the authoritative code, but a stale
+		// confirmed platform could have. Reset to scheduled when no
+		// authoritative boarding location remains.
+		const hasAuthoritative = [...stop.actual_arrival_boarding_locations, ...stop.actual_departure_boarding_locations].some(
+			(location) => (location.kind === "track" || location.kind === "platform") && location.confidence !== "inferred",
+		);
+		if (!hasAuthoritative && stop.rt_platform_code_updated) {
+			stop.actual_platform_code = stop.scheduled_platform_code;
+			stop.rt_platform_code_updated = false;
+			cleared = true;
+		}
+	}
+	return cleared;
+}
+
+export const _test = {
+	applyStoredPlatforms,
+	currentInstances,
+	platformPriority,
+	bookingSnapshotExpiry,
+	scheduledInstant,
+	quarantineCanceledVLineTrip,
+};
 
 export function applyVLineEnrichment(ctx: CacheContext, options: VLinePluginOptions): void {
 	const now = Date.now();
@@ -841,6 +949,11 @@ export function applyVLineEnrichment(ctx: CacheContext, options: VLinePluginOpti
 		if (trip.feed_id !== "vic-vline") continue;
 		const details = detailsFor(ctx, trip);
 		if (!details) continue;
+		// Canceled runs quarantine stale platforms instead of re-applying them.
+		if ((trip.schedule_relationship as unknown) === TripScheduleRelationship.CANCELED) {
+			quarantineCanceledVLineTrip(trip);
+			continue;
+		}
 		const vehicle = vehiclesByTripId.get(trip.trip_id)?.find((position) =>
 			(!position.trip.start_date || position.trip.start_date === trip.serviceDate),
 		);
@@ -914,10 +1027,15 @@ function bookingSnapshotKeyForTrip(
 	);
 }
 
-function bookingSnapshotExpiry(trip: AugmentedTripInstance): number {
+function bookingSnapshotExpiry(trip: AugmentedTripInstance, now = Date.now()): number {
 	const last = lastScheduledCall(trip);
 	const finalTime = last?.scheduled_arrival_time ?? last?.scheduled_departure_time;
-	return (scheduledInstant(trip, finalTime) ?? Date.now() + DAY_MS) + BOOKING_SNAPSHOT_GRACE_MS;
+	const instant = scheduledInstant(trip, finalTime);
+	// scheduledInstant returns null for missing times and for NaN instants
+	// (invalid service dates). A NaN expiry would never satisfy `<= now` and
+	// would retain stale booking availability in memory forever.
+	if (instant == null || !Number.isFinite(instant)) return now + DAY_MS + BOOKING_SNAPSHOT_GRACE_MS;
+	return instant + BOOKING_SNAPSHOT_GRACE_MS;
 }
 
 function restoreBookingSnapshot(ctx: CacheContext, details: VLineTripDetails, key: string): void {
@@ -1012,13 +1130,30 @@ function vlineDiagramKind(subtype: string | null | undefined): VehicleFormationU
 	return "coach";
 }
 
+/**
+ * Realistic provider maximum for V/Line formation expansion. V/Line reports
+ * a Vlocity unit as 3 cars (see vlinePassengerCars); the longest credible
+ * coupled formation is 3 units (9 cars), so 12 retains headroom. Counts
+ * beyond this (or non-finite/negative) clamp instead of allocating
+ * Array(1e6), and healthy trips in the batch are unaffected.
+ */
+export const VLINE_MAX_FORMATION_CARS = 12;
+
 /** Expand reported type/count into every physical car, retaining only identifiers the provider actually supplies. */
 export function vlineFormationUnits(
 	trip: AugmentedTripInstance,
 	details: VLineTripDetails,
 ): VehicleFormationUnit[] {
-	const knownConsist = details.fullConsist?.value?.filter(Boolean) ?? [];
-	const carCount = Math.max(knownConsist.length, trip.passenger_cars ?? 0, details.leadingUnit ? 1 : 0);
+	const knownConsist = (details.fullConsist?.value?.filter(Boolean) ?? []).slice(0, VLINE_MAX_FORMATION_CARS);
+	const reportedCars = trip.passenger_cars;
+	const saneReportedCars =
+		typeof reportedCars === "number" && Number.isFinite(reportedCars) && reportedCars > 0
+			? Math.floor(reportedCars)
+			: 0;
+	const carCount = Math.min(
+		Math.max(knownConsist.length, saneReportedCars, details.leadingUnit ? 1 : 0),
+		VLINE_MAX_FORMATION_CARS,
+	);
 	if (carCount === 0) return [];
 	const model = vlineVehicleModel(details.subtype?.value);
 	const kind = vlineDiagramKind(model);

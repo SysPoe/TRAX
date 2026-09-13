@@ -126,8 +126,10 @@ export function haversineM(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 function bearingDiff(a: number | null | undefined, b: number | null | undefined): number | null {
   if (a == null || b == null) return null;
+  // Non-finite bearings carry no signal: degrade to neutral instead of poisoning scores with NaN.
+  if (typeof a !== "number" || typeof b !== "number" || !Number.isFinite(a) || !Number.isFinite(b)) return null;
   const diff = Math.abs(((a - b + 540) % 360) - 180); // 0..180
-  return diff;
+  return Number.isFinite(diff) ? diff : null;
 }
 
 function parseInstant(value: string): number {
@@ -138,14 +140,20 @@ function parseInstant(value: string): number {
 function normalizeTripStartDate(value: string | null | undefined): string | null {
   if (!value) return null;
   const digits = value.replace(/\D/g, "");
-  if (/^\d{8}$/.test(digits)) return digits;
-  return null;
+  if (!/^\d{8}$/.test(digits)) return null;
+  const year = Number(digits.slice(0, 4));
+  const month = Number(digits.slice(4, 6));
+  const day = Number(digits.slice(6, 8));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+    ? digits
+    : null;
 }
 
 function normalizeTripStartTime(value: string | null | undefined): string | null {
   if (!value) return null;
   const m = value.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
-  if (!m) return value;
+  if (!m || Number(m[2]) > 59 || Number(m[3] ?? "0") > 59) return null;
   const h = String(Number(m[1])).padStart(2, "0");
   const mm = m[2];
   const ss = m[3] ?? "00";
@@ -172,22 +180,36 @@ function scoreCandidate(
   timeDeltaSec: number,
   continuityVehicleId: string | null | undefined,
 ): { score: number; components: { distance: number; time: number; bearing: number; alias: number; continuity: number }; reasons: string[] } {
-  const distanceScore = Math.max(0, 1 - distanceM / radiusM);
-  const timeScore = Math.max(0, 1 - Math.abs(timeDeltaSec) / config.timeWindowSeconds);
+  // All adjacent scoring branches must stay finite: any non-finite input degrades
+  // to no-signal (0, or 0.5 for bearing) instead of NaN-poisoning the total score
+  // and bypassing threshold/margin comparisons (NaN < x is always false).
+  const distanceRaw =
+    Number.isFinite(distanceM) && Number.isFinite(radiusM) && radiusM > 0 ? 1 - distanceM / radiusM : NaN;
+  const distanceScore = Number.isFinite(distanceRaw) ? Math.max(0, distanceRaw) : 0;
+  const timeRaw =
+    Number.isFinite(timeDeltaSec) && Number.isFinite(config.timeWindowSeconds) && config.timeWindowSeconds > 0
+      ? 1 - Math.abs(timeDeltaSec) / config.timeWindowSeconds
+      : NaN;
+  const timeScore = Number.isFinite(timeRaw) ? Math.max(0, timeRaw) : 0;
   const bDiff = bearingDiff(observation.bearingDeg, candidate.bearing);
-  const bearingScore = bDiff == null ? 0.5 : Math.max(0, 1 - bDiff / 180);
-  const aliasScore = candidate.aliasConfidence != null ? Math.max(0, Math.min(1, candidate.aliasConfidence)) : 0;
+  const bearingRaw = bDiff == null ? 0.5 : 1 - bDiff / 180;
+  const bearingScore = Number.isFinite(bearingRaw) ? Math.max(0, bearingRaw) : 0.5;
+  const aliasInput = candidate.aliasConfidence;
+  const aliasScore =
+    typeof aliasInput === "number" && Number.isFinite(aliasInput) ? Math.max(0, Math.min(1, aliasInput)) : 0;
   const continuityScore =
     continuityVehicleId && candidate.vehicleId && continuityVehicleId === candidate.vehicleId ? 1 : 0;
 
   const { distance: wD, time: wT, bearing: wB, alias: wA, continuity: wC } = config.weights;
-  const score = wD * distanceScore + wT * timeScore + wB * bearingScore + wA * aliasScore + wC * continuityScore;
+  const rawScore = wD * distanceScore + wT * timeScore + wB * bearingScore + wA * aliasScore + wC * continuityScore;
+  // Corrupt weights must not yield NaN/Infinity scores that bypass decision branches.
+  const score = Number.isFinite(rawScore) ? rawScore : 0;
 
   const reasons: string[] = [];
   if (aliasScore > 0) reasons.push("ALIAS_MATCH");
   if (continuityScore > 0) reasons.push("SESSION_CONTINUITY");
-  if (bDiff != null && bDiff < 30) reasons.push("BEARING_AGREEMENT");
-  if (bDiff != null && bDiff > 90) reasons.push("BEARING_DISAGREEMENT");
+  if (bDiff != null && Number.isFinite(bDiff) && bDiff < 30) reasons.push("BEARING_AGREEMENT");
+  if (bDiff != null && Number.isFinite(bDiff) && bDiff > 90) reasons.push("BEARING_DISAGREEMENT");
 
   return { score, components: { distance: distanceScore, time: timeScore, bearing: bearingScore, alias: aliasScore, continuity: continuityScore }, reasons };
 }
@@ -195,6 +217,7 @@ function scoreCandidate(
 function synthesizeTripInstanceId(candidate: VehicleObservationCandidate, networkId: string): string | null {
   const date = normalizeTripStartDate(candidate.tripStartDate ?? null);
   const time = normalizeTripStartTime(candidate.tripStartTime ?? null);
+  if (!date || (candidate.tripStartTime && !time)) return null;
   // For feed-qualified collisions we use the feed in the instance id via TRAX identity codec; fallback to synthesize with feed prefix
   try {
     return encodeTripInstanceId({
@@ -202,7 +225,7 @@ function synthesizeTripInstanceId(candidate: VehicleObservationCandidate, networ
       feedId: candidate.feedId,
       kind: "trip" as const,
       localId: candidate.tripId,
-      serviceDate: date ?? "19700101",
+      serviceDate: date,
       realtimeStartTime: time ?? "",
     });
   } catch {
@@ -236,7 +259,35 @@ export function resolveVehicleObservation(
     };
   }
 
-  if (!Number.isFinite(observation.accuracyM) || observation.accuracyM <= 0) {
+  // Non-finite observation coordinates carry no position signal: reject deterministically
+  // instead of letting haversine NaN bypass the radius check (NaN > x is false).
+  if (
+    typeof observation.latitude !== "number" ||
+    typeof observation.longitude !== "number" ||
+    !Number.isFinite(observation.latitude) ||
+    !Number.isFinite(observation.longitude)
+  ) {
+    return {
+      status: "unmatched",
+      tripInstanceId: null,
+      tripId: null,
+      vehicleId: null,
+      gtfsBlockId: null,
+      seqDiagramBlockId: null,
+      effectiveBlockId: null,
+      blockIdSource: null,
+      confidence: 0,
+      distanceM: null,
+      candidateCount: 0,
+      reasons: ["INVALID_OBSERVATION_COORDINATES"],
+    };
+  }
+
+  if (
+    typeof observation.accuracyM !== "number" ||
+    !Number.isFinite(observation.accuracyM) ||
+    observation.accuracyM <= 0
+  ) {
     return {
       status: "unmatched",
       tripInstanceId: null,
@@ -255,6 +306,20 @@ export function resolveVehicleObservation(
 
   if (observation.accuracyM > config.maxAccuracyM) {
     reasons.push("GPS_ACCURACY_LOW");
+    return {
+      status: "unmatched",
+      tripInstanceId: null,
+      tripId: null,
+      vehicleId: null,
+      gtfsBlockId: null,
+      seqDiagramBlockId: null,
+      effectiveBlockId: null,
+      blockIdSource: null,
+      confidence: 0,
+      distanceM: null,
+      candidateCount: 0,
+      reasons,
+    };
   }
 
   if (candidates.length === 0) {
@@ -275,26 +340,109 @@ export function resolveVehicleObservation(
     };
   }
 
+  // Corrupt resolver config must not let NaN/Infinity bypass time/radius/threshold
+  // comparisons (any comparison against NaN is false). Reject deterministically.
+  const weightsFinite =
+    Number.isFinite(config.weights.distance) &&
+    Number.isFinite(config.weights.time) &&
+    Number.isFinite(config.weights.bearing) &&
+    Number.isFinite(config.weights.alias) &&
+    Number.isFinite(config.weights.continuity);
+  if (
+    !Number.isFinite(config.timeWindowSeconds) ||
+    config.timeWindowSeconds <= 0 ||
+    !Number.isFinite(config.baseRadiusM) ||
+    !Number.isFinite(config.accuracyMultiplier) ||
+    !Number.isFinite(config.maxAccuracyM) ||
+    !Number.isFinite(config.matchThreshold) ||
+    !Number.isFinite(config.marginThreshold) ||
+    !weightsFinite
+  ) {
+    return {
+      status: "unmatched",
+      tripInstanceId: null,
+      tripId: null,
+      vehicleId: null,
+      gtfsBlockId: null,
+      seqDiagramBlockId: null,
+      effectiveBlockId: null,
+      blockIdSource: null,
+      confidence: 0,
+      distanceM: null,
+      candidateCount: 0,
+      reasons: ["INVALID_RESOLVER_CONFIG"],
+    };
+  }
+
   const radiusM = Math.max(config.baseRadiusM, observation.accuracyM * config.accuracyMultiplier);
+  if (!Number.isFinite(radiusM) || radiusM <= 0) {
+    return {
+      status: "unmatched",
+      tripInstanceId: null,
+      tripId: null,
+      vehicleId: null,
+      gtfsBlockId: null,
+      seqDiagramBlockId: null,
+      effectiveBlockId: null,
+      blockIdSource: null,
+      confidence: 0,
+      distanceM: null,
+      candidateCount: 0,
+      reasons: ["INVALID_RESOLVER_CONFIG"],
+    };
+  }
   const continuityVehicleId = options.sessionContinuity?.vehicleId ?? null;
 
-  const scored = candidates
+  const scoredCandidates = candidates
     .map((candidate) => {
       const posMs = parseInstant(candidate.positionAsOf);
       if (!Number.isFinite(posMs)) return null;
       const deltaSec = (posMs - observedMs) / 1000;
+      if (!Number.isFinite(deltaSec)) return null;
       if (Math.abs(deltaSec) > config.timeWindowSeconds) return null;
+      // Non-finite candidate coordinates carry no position signal: drop deterministically
+      // instead of letting haversine NaN bypass the radius check.
+      if (
+        typeof candidate.latitude !== "number" ||
+        typeof candidate.longitude !== "number" ||
+        !Number.isFinite(candidate.latitude) ||
+        !Number.isFinite(candidate.longitude)
+      )
+        return null;
       const distanceM = haversineM(observation.latitude, observation.longitude, candidate.latitude, candidate.longitude);
+      if (!Number.isFinite(distanceM)) return null;
       if (distanceM > radiusM) return null;
       // stale snapshot check: snapshotAt far from positionAsOf suggests stale feed
       const snapMs = parseInstant(candidate.snapshotAt);
-      const stalenessSec = Number.isFinite(snapMs) ? Math.abs(snapMs - posMs) / 1000 : 0;
+      if (!Number.isFinite(snapMs)) return null;
+      const stalenessSec = Math.abs(snapMs - posMs) / 1000;
+      if (!Number.isFinite(stalenessSec)) return null;
       const stale = stalenessSec > 180; // heuristic
+      if (stale) return null;
       const { score, components, reasons: candReasons } = scoreCandidate(observation, candidate, config, distanceM, radiusM, deltaSec, continuityVehicleId);
+      // Non-finite intermediate scores must never bypass threshold/margin comparisons.
+      if (!Number.isFinite(score)) return null;
       return { candidate, distanceM, deltaSec, stalenessSec, stale, score, components, candReasons };
     })
-    .filter((v): v is NonNullable<typeof v> => v !== null)
-    .sort((a, b) => b.score - a.score);
+    .filter((v): v is NonNullable<typeof v> => v !== null);
+
+  // Repeated snapshots of one vehicle are observations of the same option,
+  // not competing options. Keep the best sample so duplicate capture ticks do
+  // not force an otherwise unique match below the margin threshold.
+  const byVehicleTrip = new Map<string, (typeof scoredCandidates)[number]>();
+  for (const scoredCandidate of scoredCandidates) {
+    const candidate = scoredCandidate.candidate;
+    const key = JSON.stringify([
+      candidate.feedId,
+      candidate.tripId,
+      candidate.tripStartDate ?? null,
+      candidate.tripStartTime ?? null,
+      candidate.vehicleId ?? null,
+    ]);
+    const previous = byVehicleTrip.get(key);
+    if (!previous || scoredCandidate.score > previous.score) byVehicleTrip.set(key, scoredCandidate);
+  }
+  const scored = [...byVehicleTrip.values()].sort((a, b) => b.score - a.score);
 
   if (scored.length === 0) {
     // distinguish no candidate within radius vs stale vs time
@@ -327,6 +475,25 @@ export function resolveVehicleObservation(
   const top = scored[0]!;
   const second = scored[1] ?? null;
   const margin = second ? top.score - second.score : 1;
+
+  // Defense-in-depth: non-finite intermediates must never bypass decision branches
+  // or yield matched/ambiguous with non-finite values.
+  if (!Number.isFinite(top.score) || !Number.isFinite(top.distanceM) || !Number.isFinite(margin)) {
+    return {
+      status: "unmatched",
+      tripInstanceId: null,
+      tripId: null,
+      vehicleId: null,
+      gtfsBlockId: null,
+      seqDiagramBlockId: null,
+      effectiveBlockId: null,
+      blockIdSource: null,
+      confidence: 0,
+      distanceM: null,
+      candidateCount: 0,
+      reasons: [...reasons, "INVALID_CANDIDATE_DATA"],
+    };
+  }
 
   // Decision
   if (top.score < config.matchThreshold) {
@@ -450,6 +617,26 @@ export function resolveVehicleObservation(
 
   reasons.push(...top.candReasons);
 
+  // Never yield matched with non-finite values, even if instance resolution corrupted state.
+  const confidence = Number.isFinite(top.score) ? top.score : 0;
+  const distanceM = Number.isFinite(top.distanceM) ? top.distanceM : null;
+  if (!Number.isFinite(confidence) || distanceM === null || !Number.isFinite(distanceM)) {
+    return {
+      status: "unmatched",
+      tripInstanceId: null,
+      tripId: null,
+      vehicleId: null,
+      gtfsBlockId: null,
+      seqDiagramBlockId: null,
+      effectiveBlockId: null,
+      blockIdSource: null,
+      confidence: 0,
+      distanceM: null,
+      candidateCount: 0,
+      reasons: [...reasons, "INVALID_CANDIDATE_DATA"],
+    };
+  }
+
   return {
     status: "matched",
     tripInstanceId,
@@ -459,8 +646,8 @@ export function resolveVehicleObservation(
     seqDiagramBlockId,
     effectiveBlockId: block.effective,
     blockIdSource: block.source,
-    confidence: top.score,
-    distanceM: top.distanceM,
+    confidence,
+    distanceM,
     candidateCount,
     reasons,
   };
@@ -468,5 +655,5 @@ export function resolveVehicleObservation(
 
 // Helper for tests: deterministic normalization of nasid (same as server would do)
 export function normalizeNasid(raw: string): string {
-  return raw.trim().toUpperCase();
+  return raw.trim().toUpperCase().replace(/\s+/g, " ");
 }

@@ -6,10 +6,10 @@ import {
 	getTripUpdates,
 	replaceInjectedTripUpdates,
 } from "../../../cache/index.js";
-import { GTFS, type RealtimeVehiclePosition } from "qdf-gtfs";
+import { GTFS, StopTimeScheduleRelationship, TripScheduleRelationship, type RealtimeVehiclePosition } from "qdf-gtfs";
 import { type GthaOperatingScheduleResponse, GTHADeparturesResponse, UPEDeparturesResponse } from "./types.js";
 import logger from "../../../utils/logger.js";
-import { addDaysToServiceDate, getServiceDayStart, getServiceDate } from "../../../utils/time.js";
+import { addDaysToServiceDate, getEpochDayFromServiceDate, getServiceDayStart, getServiceDate } from "../../../utils/time.js";
 import { getDefaultTimeZone } from "../../../config.js";
 import { entityKey } from "../../../identity.js";
 import { getPluginState } from "../../../plugins/types.js";
@@ -163,6 +163,7 @@ export function applyGthaVehicleBearing(
 	supplementalBearing: number | null,
 ): RealtimeVehiclePosition {
 	if (vehicle.feed_id !== "go" && vehicle.feed_id !== "up") return vehicle;
+	if (!vehicle.position) return vehicle;
 	const bearing = supplementalBearing ?? (vehicle.position.bearing === 0 ? null : vehicle.position.bearing);
 	if (bearing === vehicle.position.bearing) return vehicle;
 	return { ...vehicle, position: { ...vehicle.position, bearing } };
@@ -300,6 +301,199 @@ export function stopTimeMatchesStopId(
 	);
 }
 
+/** A canceled trip must not receive platform assignments that would resurrect predictions. */
+export function isGthaCanceledTripInstance(instance: { schedule_relationship?: unknown } | null | undefined): boolean {
+	return (instance as { schedule_relationship?: unknown } | null)?.schedule_relationship === TripScheduleRelationship.CANCELED;
+}
+
+/** A skipped or non-data call carries no platform to report. */
+export function isGthaSkippedStopTime(
+	stopTime: { passing?: boolean; realtime?: boolean; realtime_info?: { schedule_relationship?: unknown } | null } | null | undefined,
+): boolean {
+	if (!stopTime || stopTime.passing) return Boolean(stopTime?.passing);
+	if (!stopTime.realtime || !stopTime.realtime_info) return false;
+	const relationship = (stopTime.realtime_info as { schedule_relationship?: unknown }).schedule_relationship;
+	return (
+		relationship === StopTimeScheduleRelationship.SKIPPED ||
+		relationship === StopTimeScheduleRelationship.NO_DATA
+	);
+}
+
+/**
+ * Match a provider wall-clock date (YYYY-MM-DD) to a GTFS service date,
+ * accounting for after-midnight calls whose service date is the prior day.
+ * Uses calendar-day arithmetic on compact YYYYMMDD strings so Toronto wall
+ * dates never shift through UTC.
+ */
+export type GthaServiceDateMatchable = {
+	serviceDate: string;
+	stopTimes?: readonly {
+		scheduled_departure_date_offset?: number | null;
+		scheduled_arrival_date_offset?: number | null;
+	}[];
+};
+
+export function gthaServiceDateMatchesWallDate(
+	instance: GthaServiceDateMatchable,
+	wallDateTime: string,
+	stopId?: string,
+	findStop?: (instance: GthaServiceDateMatchable) => {
+		scheduled_departure_date_offset?: number | null;
+		scheduled_arrival_date_offset?: number | null;
+	} | undefined,
+): boolean {
+	// A malformed provider timestamp must return false so one bad Source-D
+	// row cannot throw and abort the batch.
+	if (typeof wallDateTime !== "string") return false;
+	const wallCompact = wallDateTime.slice(0, 10).replaceAll("-", "");
+	if (!/^\d{8}$/.test(wallCompact)) return false;
+	// An explicit date offset is authoritative: an after-midnight wall date
+	// belongs to the prior service date even when it equals the wall date.
+	const stop = findStop?.(instance);
+	const offset = stop?.scheduled_departure_date_offset ?? stop?.scheduled_arrival_date_offset ?? 0;
+	if (offset) {
+		try {
+			return addDaysToServiceDate(wallCompact, -offset) === instance.serviceDate;
+		} catch {
+			return false;
+		}
+	}
+	return instance.serviceDate === wallCompact;
+}
+
+/**
+ * Compare block times as absolute service instants so an overnight handoff
+ * does not compare a 25:xx departure against a 00:xx wall clock. Each side is
+ * resolved as its own service-day start plus raw seconds, with an explicit
+ * date offset for wall-clock times that carry their calendar day separately.
+ * Supports same-day (serviceDate, leftSecs, rightSecs, leftOffset?, rightOffset?),
+ * cross-day (leftServiceDate, leftSecs, rightServiceDate, rightSecs, leftOffset?, rightOffset?),
+ * and object ({ serviceDate, secs, dateOffset }) calling conventions. Falls
+ * back to raw comparison when the service-day start is unavailable.
+ */
+export type GthaBlockInstant = {
+	serviceDate: string;
+	secs: number | null | undefined;
+	dateOffset?: number | null;
+};
+
+function gthaBlockAbsoluteTime(
+	ctx: CacheContext,
+	serviceDate: string,
+	secs: number | null | undefined,
+	dateOffset?: number | null,
+): number | null {
+	if (secs == null || !Number.isFinite(secs)) return null;
+	if (!/^\d{8}$/.test(serviceDate)) return secs;
+	const offset = Number.isFinite(dateOffset as number) ? (dateOffset as number) : 0;
+	try {
+		const timezone = getDefaultTimeZone(ctx.config);
+		if (offset && secs < 86400) {
+			try {
+				const date = addDaysToServiceDate(serviceDate, offset);
+				const base = getServiceDayStart(date, timezone);
+				if (Number.isFinite(base)) {
+					const normalized = ((secs % 86400) + 86400) % 86400;
+					return base + normalized;
+				}
+			} catch {
+				// Fall through to raw+offset fallback below.
+			}
+			const base = getServiceDayStart(serviceDate, timezone);
+			if (!Number.isFinite(base)) return secs + offset * 86400;
+			return base + secs + offset * 86400;
+		}
+		const base = getServiceDayStart(serviceDate, timezone);
+		if (!Number.isFinite(base)) return offset ? secs + offset * 86400 : secs;
+		// Raw already encodes overflow (>=86400); trust it to avoid
+		// double-counting a relative offset. An explicit absolute offset with
+		// overflow agrees with raw outside DST, so raw stays correct.
+		return base + secs;
+	} catch {
+		return offset ? secs + offset * 86400 : secs;
+	}
+}
+
+export function gthaBlockTimeGte(
+	ctx: CacheContext,
+	serviceDateOrLeft: string | GthaBlockInstant,
+	leftSecsOrRight: number | GthaBlockInstant | string | null | undefined,
+	rightSecsOrServiceDate?: number | string | null,
+	rightSecsOrLeftOffset?: number | string | null,
+	leftOffsetOrRightSecs?: number | null,
+	rightOffset?: number | null,
+): boolean {
+	try {
+		// Object style: (ctx, { serviceDate, secs, dateOffset }, { serviceDate, secs, dateOffset })
+		if (
+			typeof serviceDateOrLeft === "object" &&
+			serviceDateOrLeft !== null &&
+			typeof leftSecsOrRight === "object" &&
+			leftSecsOrRight !== null
+		) {
+			const left = serviceDateOrLeft as GthaBlockInstant;
+			const right = leftSecsOrRight as GthaBlockInstant;
+			const leftAbs = gthaBlockAbsoluteTime(ctx, left.serviceDate, left.secs, left.dateOffset);
+			const rightAbs = gthaBlockAbsoluteTime(ctx, right.serviceDate, right.secs, right.dateOffset);
+			if (leftAbs == null || rightAbs == null) return false;
+			return leftAbs >= rightAbs;
+		}
+		// Cross-day style: (ctx, leftServiceDate, leftSecs, rightServiceDate, rightSecs, leftOffset?, rightOffset?)
+		if (
+			typeof serviceDateOrLeft === "string" &&
+			(typeof leftSecsOrRight === "number" || leftSecsOrRight == null) &&
+			typeof rightSecsOrServiceDate === "string" &&
+			/^\d{8}$/.test(rightSecsOrServiceDate)
+		) {
+			const leftServiceDate = serviceDateOrLeft;
+			const leftSecs = leftSecsOrRight as number | null | undefined;
+			const rightServiceDate = rightSecsOrServiceDate;
+			const rightSecs = rightSecsOrLeftOffset as unknown as number | null | undefined;
+			// 5th position is leftOffset and 6th is rightOffset for 7-arg cross-day calls.
+			const leftDateOffset = (leftOffsetOrRightSecs as number | null | undefined) ?? 0;
+			const rightDateOffset = rightOffset ?? 0;
+			// When the 5th arg is actually rightSecs (4-arg cross-day call), the
+			// variables above already hold the correct values; leftOffset defaults to 0.
+			const leftAbs = gthaBlockAbsoluteTime(ctx, leftServiceDate, leftSecs, leftDateOffset);
+			const rightAbs = gthaBlockAbsoluteTime(ctx, rightServiceDate, rightSecs, rightDateOffset);
+			if (leftAbs == null || rightAbs == null) return false;
+			if (leftAbs < 1_000_000_000 && rightAbs < 1_000_000_000) {
+				// Timezone unavailable: both sides fell back to raw+offset. Order via
+				// calendar days so cross-day blocks still compare as absolute instants.
+				const leftDay = getEpochDayFromServiceDate(leftServiceDate);
+				const rightDay = getEpochDayFromServiceDate(rightServiceDate);
+				if (Number.isFinite(leftDay) && Number.isFinite(rightDay)) {
+					const leftFallback =
+						leftDay * 86400 + (leftSecs ?? 0) + (leftDateOffset ?? 0) * 86400;
+					const rightFallback =
+						rightDay * 86400 + (rightSecs ?? 0) + (rightDateOffset ?? 0) * 86400;
+					return leftFallback >= rightFallback;
+				}
+			}
+			return leftAbs >= rightAbs;
+		}
+		// Same-day style: (ctx, serviceDate, leftSecs, rightSecs, leftOffset?, rightOffset?)
+		const serviceDate = serviceDateOrLeft as string;
+		const leftSecs = leftSecsOrRight as number | null | undefined;
+		const rightSecs = rightSecsOrServiceDate as number | null | undefined;
+		if (leftSecs == null || rightSecs == null || !Number.isFinite(leftSecs) || !Number.isFinite(rightSecs))
+			return false;
+		// 5th arg is leftOffset, 6th (leftOffsetOrRightSecs) is rightOffset when present,
+		// otherwise 7th (rightOffset) is rightOffset for legacy 7-arg calls.
+		const leftDateOffset = (rightSecsOrLeftOffset as number | null | undefined) ?? 0;
+		const rightDateOffset = (leftOffsetOrRightSecs as number | null | undefined) ?? rightOffset ?? 0;
+		const leftAbs = gthaBlockAbsoluteTime(ctx, serviceDate, leftSecs, leftDateOffset);
+		const rightAbs = gthaBlockAbsoluteTime(ctx, serviceDate, rightSecs, rightDateOffset);
+		if (leftAbs == null || rightAbs == null) return false;
+		return leftAbs >= rightAbs;
+	} catch {
+		const left = leftSecsOrRight as number;
+		const right = rightSecsOrServiceDate as number;
+		if (left == null || right == null || !Number.isFinite(left) || !Number.isFinite(right)) return false;
+		return left >= right;
+	}
+}
+
 function applyPlatformUpdate(
 	ctx: CacheContext,
 	stopTime: AugmentedStopTime,
@@ -309,12 +503,15 @@ function applyPlatformUpdate(
 	source: string,
 	blockMap?: Map<string, any[]>,
 ) {
+	if (isGthaSkippedStopTime(stopTime)) return;
+	const owningInstance = getAugmentedTripInstance(ctx, stopTime.instance_id);
+	if (isGthaCanceledTripInstance(owningInstance as unknown as { schedule_relationship?: unknown } | null)) return;
 	const state = getState(ctx);
 	const priority = SOURCE_PRIORITIES[source] ?? -1;
 	const currentPriority = (stopTime as any).platformPriority ?? -1;
 
 	const newActual = platform ?? stopTime.actual_platform_code ?? scheduledPlatform ?? null;
-	const newScheduled = scheduledPlatform ?? stopTime.scheduled_platform_code ?? platform ?? null;
+	const newScheduled = scheduledPlatform ?? stopTime.scheduled_platform_code ?? null;
 
 	if (currentPriority > priority) return;
 
@@ -363,10 +560,20 @@ function propagatePlatformToNextTripInBlock(
 	blockMap?: Map<string, any[]>,
 ) {
 	if (!currentInst.block_id) return;
+	if (isGthaCanceledTripInstance(currentInst)) return;
+
+	const arrivalSt = currentInst.stopTimes.at(-1);
+	if (!arrivalSt || isGthaSkippedStopTime(arrivalSt)) return;
+	const useActualArrival = arrivalSt.actual_arrival_time != null;
+	const currentEndTime = useActualArrival
+		? arrivalSt.actual_arrival_time
+		: arrivalSt.scheduled_arrival_time;
+	const currentEndOffset = useActualArrival
+		? (arrivalSt.actual_arrival_date_offset ?? arrivalSt.scheduled_arrival_date_offset ?? 0)
+		: (arrivalSt.scheduled_arrival_date_offset ?? arrivalSt.actual_arrival_date_offset ?? 0);
 
 	let nextTrip: any = null;
-	const currentEndTime =
-		currentInst.stopTimes.at(-1)?.actual_arrival_time ?? currentInst.stopTimes.at(-1)?.scheduled_arrival_time;
+	let nextTripAbs: number | null = null;
 
 	const blockTrips = blockMap
 		? blockMap.get(currentInst.block_id) || []
@@ -377,14 +584,34 @@ function propagatePlatformToNextTripInBlock(
 
 	for (const inst of blockTrips) {
 		if (inst.block_id !== currentInst.block_id || inst.instance_id === currentInst.instance_id) continue;
+		if (isGthaCanceledTripInstance(inst)) continue;
 
 		const firstSt = inst.stopTimes[0];
-		const startTime = (firstSt?.actual_departure_time ?? firstSt?.scheduled_departure_time) as number | null;
-		if (startTime !== null && currentEndTime !== null && startTime >= (currentEndTime as number)) {
-			const nextTripStartTime = (nextTrip?.stopTimes[0]?.actual_departure_time ??
-				nextTrip?.stopTimes[0]?.scheduled_departure_time) as number | null;
-			if (!nextTrip || startTime < (nextTripStartTime ?? Infinity)) {
+		if (!firstSt || isGthaSkippedStopTime(firstSt)) continue;
+		const useActualStart = firstSt.actual_departure_time != null;
+		const startTime = useActualStart ? firstSt.actual_departure_time : firstSt.scheduled_departure_time;
+		const startOffset = useActualStart
+			? (firstSt.actual_departure_date_offset ?? firstSt.scheduled_departure_date_offset ?? 0)
+			: (firstSt.scheduled_departure_date_offset ?? firstSt.actual_departure_date_offset ?? 0);
+		if (
+			startTime !== null &&
+			startTime !== undefined &&
+			currentEndTime !== null &&
+			currentEndTime !== undefined &&
+			gthaBlockTimeGte(
+				ctx,
+				inst.serviceDate,
+				startTime,
+				currentInst.serviceDate,
+				currentEndTime as number,
+				startOffset,
+				currentEndOffset,
+			)
+		) {
+			const startAbs = gthaBlockAbsoluteTime(ctx, inst.serviceDate, startTime, startOffset);
+			if (nextTrip == null || (startAbs != null && (nextTripAbs == null || startAbs < nextTripAbs))) {
 				nextTrip = inst;
+				nextTripAbs = startAbs;
 			}
 		}
 	}
@@ -437,16 +664,32 @@ function propagateVehicleInfoToBlock(
 
 	if (blockTrips.length === 0) return;
 
-	// Sort trips by time
-	blockTrips = [...blockTrips].sort((a, b) => {
-		const aTime = a.stopTimes[0]?.scheduled_departure_time ?? 0;
-		const bTime = b.stopTimes[0]?.scheduled_departure_time ?? 0;
-		return aTime - bTime;
-	});
+	// Sort trips by absolute service instant so midnight blocks order across
+	// date offsets instead of raw wall-clock seconds.
+	const blockTripSortKey = (inst: any): number => {
+		const first = inst.stopTimes?.[0];
+		const secs = first?.scheduled_departure_time ?? 0;
+		const offset = first?.scheduled_departure_date_offset ?? 0;
+		const abs = gthaBlockAbsoluteTime(ctx, inst.serviceDate, secs, offset);
+		if (abs != null && abs >= 1_000_000_000) return abs;
+		try {
+			const day = getEpochDayFromServiceDate(inst.serviceDate);
+			if (Number.isFinite(day)) {
+				const raw = secs >= 86400 ? secs : secs + (offset || 0) * 86400;
+				return day * 86400 + raw;
+			}
+		} catch {
+			// Fall through to raw below.
+		}
+		return secs;
+	};
+	blockTrips = [...blockTrips].sort((a, b) => blockTripSortKey(a) - blockTripSortKey(b));
 
 	const sourceIndex = sourceTripId ? blockTrips.findIndex((inst) => inst.trip_id === sourceTripId) : -1;
 
 	const updateInst = (inst: any, currentConsist: string[] | null) => {
+		// Canceled trips carry no vehicle to propagate.
+		if (isGthaCanceledTripInstance(inst)) return;
 		const info = {
 			vehicle_id: vehicleId,
 			vehicle_model: vehicleId ? getModelFromId(vehicleId) : null,
@@ -583,7 +826,7 @@ async function getUniqueStopTimesForRange(
 	for (const value of staticStopTimes) {
 		if (isConsideredTripId({ feedId: value.feed_id, localId: value.trip_id }, ctx)) {
 			const st = { feed_id: value.feed_id, stop_id: value.stop_id, trip_id: value.trip_id };
-			const key = `${st.feed_id}:${st.stop_id}-${st.trip_id}`;
+			const key = `${entityKey({ feedId: st.feed_id, localId: st.stop_id })}\0${entityKey({ feedId: st.feed_id, localId: st.trip_id })}`;
 			if (!map.has(key)) map.set(key, st);
 		}
 		if (++processed % 250 === 0) await new Promise((resolve) => setImmediate(resolve));
@@ -592,7 +835,7 @@ async function getUniqueStopTimesForRange(
 		for (const stu of update.stop_time_updates ?? []) {
 			if ((!stopId || stu.stop_id === stopId) && inWindow(stu.departure_time ?? stu.arrival_time)) {
 				const st = { feed_id: update.feed_id, stop_id: stu.stop_id, trip_id: update.trip.trip_id };
-				const key = `${st.feed_id}:${st.stop_id}-${st.trip_id}`;
+				const key = `${entityKey({ feedId: st.feed_id, localId: st.stop_id })}\0${entityKey({ feedId: st.feed_id, localId: st.trip_id })}`;
 				if (!map.has(key)) map.set(key, st);
 			}
 			if (++processed % 250 === 0) await new Promise((resolve) => setImmediate(resolve));
@@ -746,10 +989,14 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	const now = new Date();
 	const serviceDateStr = getServiceDate(now, getDefaultTimeZone(ctx.config));
 
-	// Re-apply previous state (prevents UI flicker if context was reset but module state remains)
+	// Re-apply previous state (prevents UI flicker if context was reset but module state remains).
+	// Canceled trips and skipped calls never retain platforms: a cancellation
+	// must quarantine residual assignments instead of resurrecting them.
 	for (const v of state.prevs.values()) {
 		const ti = getAugmentedTripInstance(ctx, v.tripInstanceId);
+		if (isGthaCanceledTripInstance(ti as unknown as { schedule_relationship?: unknown } | null)) continue;
 		const st = ti?.stopTimes.find((st) => stopTimeMatchesStopId(st, v.stopId));
+		if (!st || isGthaSkippedStopTime(st)) continue;
 		if (st) {
 			st.actual_platform_code = v.actualPlatform;
 			st.scheduled_platform_code = v.scheduledPlatform;
@@ -786,6 +1033,20 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	const serviceDayStart = getServiceDayStart(serviceDateStr, getDefaultTimeZone(ctx.config));
 	const nowSecs = Math.floor(now.getTime() / 1000 - serviceDayStart);
 	const nowMs = Date.now();
+	let activeSupplementalFetches = 0;
+	const supplementalFetchQueue: Array<() => void> = [];
+	const limitedFetch = <T>(task: () => Promise<T>): Promise<T> =>
+		new Promise<T>((resolve, reject) => {
+			const start = () => {
+				activeSupplementalFetches++;
+				task().then(resolve, reject).finally(() => {
+					activeSupplementalFetches--;
+					supplementalFetchQueue.shift()?.();
+				});
+			};
+			if (activeSupplementalFetches < 8) start();
+			else supplementalFetchQueue.push(start);
+		});
 
 	timer.start("updateSourceF");
 	await updateSourceF(ctx, serviceDateStr, blockMap);
@@ -796,7 +1057,6 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	// Source A
 	let sourceAPromise: Promise<any> | null = null;
 	if (nowMs - state.lastSourceAFetchMs >= SOURCE_A_THROTTLE_MS) {
-		state.lastSourceAFetchMs = nowMs;
 		sourceAPromise = fetchWithTimeout(ctx, SOURCE_A_URL, { headers: GO_TRACKER_HEADERS })
 			.then((r) => (r.ok ? r.json() : null))
 			.catch(() => null);
@@ -805,11 +1065,11 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	// Source C
 	const sourceCFetches = SOURCE_C_IDS.filter((stop_id) => {
 		if (nowMs - (state.lastSourceCFetchMs[stop_id] ?? 0) < SOURCE_CD_THROTTLE_MS) return false;
-		state.lastSourceCFetchMs[stop_id] = nowMs;
 		return true;
 	}).map((stop_id) => ({
+		throttleKey: stop_id,
 		stop_id,
-		promise: fetchWithTimeout(ctx, SOURCE_C_URL_TEMPLATE(stop_id))
+		promise: limitedFetch(() => fetchWithTimeout(ctx, SOURCE_C_URL_TEMPLATE(stop_id)))
 			.then(async (r) => (r.ok ? ((await r.json()) as UPEDeparturesResponse) : null))
 			.catch((e) => {
 				logger.error(`Failed to update Source C platforms for stop ${stop_id}: ${e.message ?? e}`, {
@@ -834,12 +1094,12 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	const sourceDFetches = sourceDStopIds
 		.filter((stop_id) => {
 			if (nowMs - (state.lastSourceDFetchMs[stop_id] ?? 0) < SOURCE_CD_THROTTLE_MS) return false;
-			state.lastSourceDFetchMs[stop_id] = nowMs;
 			return true;
 		})
 		.map((stop_id) => ({
+			throttleKey: stop_id,
 			stop_id: mergeId(ctx, stop_id),
-			promise: fetchWithTimeout(ctx, SOURCE_D_URL_TEMPLATE(stop_id))
+			promise: limitedFetch(() => fetchWithTimeout(ctx, SOURCE_D_URL_TEMPLATE(stop_id)))
 				.then(async (r) => (r.ok ? ((await r.json()) as GTHADeparturesResponse) : null))
 				.catch((e) => {
 					logger.error(`Failed to update Source D platforms for stop ${stop_id}: ${e.message ?? e}`, {
@@ -875,18 +1135,18 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	const sourceEFetches = sourceEStopIds
 		.filter((stop_id) => {
 			if (nowMs - (state.lastSourceEFetchMs[stop_id] ?? 0) < SOURCE_E_THROTTLE_MS) return false;
-			state.lastSourceEFetchMs[stop_id] = nowMs;
 			return true;
 		})
 		.map((stop_id) => {
 			const corridor_codes = SOURCE_E_STOP_CONVERSION[stop_id] ?? [];
 			return {
+				throttleKey: stop_id,
 				stop_id: mergeId(ctx, stop_id),
 				corridors: corridor_codes.map((code) => ({
 					code,
-					promise: fetchWithTimeout(ctx, SOURCE_E_URL_TEMPLATE(code, stop_id), {
+					promise: limitedFetch(() => fetchWithTimeout(ctx, SOURCE_E_URL_TEMPLATE(code, stop_id), {
 						headers: GO_TRACKER_HEADERS,
-					})
+					}))
 						.then((r) => (r.ok ? r.json() : null))
 						.catch((e) => {
 							logger.error(
@@ -910,33 +1170,41 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	for (const item of sourceDFetches) {
 		const data = await item.promise;
 		if (!data) continue;
+		state.lastSourceDFetchMs[item.throttleKey] = nowMs;
 
-		for (const departure of data.trainDepartures.items) {
-			await new Promise((resolve) => setImmediate(resolve));
-			const tripNumber = departure.tripNumber;
-			const platform = formatTrack(departure.platform);
-			const scheduledPlatform = formatTrack(departure.scheduledPlatform);
+		for (const departure of data.trainDepartures?.items ?? []) {
+			try {
+				await new Promise((resolve) => setImmediate(resolve));
+				const tripNumber = departure.tripNumber;
+				const platform = formatTrack(departure.platform);
+				const scheduledPlatform = formatTrack(departure.scheduledPlatform);
 
-			if (platform === null && scheduledPlatform === null) continue;
+				if (platform === null && scheduledPlatform === null) continue;
 
-			for (const st of uniqueStopTimesSourceD) {
-				if (!st.trip_id.endsWith(tripNumber)) continue;
-				const instance = getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances.find(
-					(v) => {
-						if (v.serviceDate === departure.scheduledDateTime.slice(0, 10).replace(/-/g, "")) return true;
-						const offset = v.stopTimes.find((fst) =>
-							stopTimeMatchesStopId(fst, item.stop_id),
-						)?.scheduled_departure_date_offset;
-						if (!offset) return false;
+				for (const st of uniqueStopTimesSourceD) {
+					if (!st.trip_id.endsWith(tripNumber)) continue;
+					const instance = getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances.find(
+						(v) =>
+							gthaServiceDateMatchesWallDate(
+								v,
+								departure.scheduledDateTime,
+								item.stop_id,
+								(candidate) =>
+									candidate.stopTimes?.find((fst: { scheduled_departure_date_offset?: number | null }) =>
+										stopTimeMatchesStopId(fst as { actual_stop_id?: string | null; scheduled_stop_id?: string | null }, item.stop_id),
+									),
+							),
+					);
 
-						const prevDate = new Date(departure.scheduledDateTime.slice(0, 10));
-						prevDate.setDate(prevDate.getDate() - offset);
-						return prevDate.toISOString().slice(0, 10).replace(/-/g, "") === v.serviceDate;
-					},
+					const ast = instance?.stopTimes.find((ast) => stopTimeMatchesStopId(ast, item.stop_id));
+					if (ast) applyPlatformUpdate(ctx, ast, item.stop_id, platform, scheduledPlatform, "Source D", blockMap);
+				}
+			} catch (error) {
+				logger.warn(
+					`Skipping malformed Source D departure for stop ${item.stop_id}: ${error instanceof Error ? error.message : String(error)}`,
+					{ module: "CA/GTHA", function: "updateAllSources" },
 				);
-
-				const ast = instance?.stopTimes.find((ast) => stopTimeMatchesStopId(ast, item.stop_id));
-				if (ast) applyPlatformUpdate(ctx, ast, item.stop_id, platform, scheduledPlatform, "Source D", blockMap);
+				continue;
 			}
 		}
 	}
@@ -955,6 +1223,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 	for (const item of sourceCFetches) {
 		const data = await item.promise;
 		if (!data) continue;
+		state.lastSourceCFetchMs[item.throttleKey] = nowMs;
 		const dateStr = data.metadata.timeStamp.slice(0, 10).replace(/-/g, "");
 
 		for (const departure of data.departures) {
@@ -964,10 +1233,14 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 
 			for (const st of uniqueStopTimesSourceC) {
 				if (!st.trip_id.endsWith(departure.tripNumber)) continue;
+				const candidates = getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances ?? [];
+				// Prefer the exact service date; when several instances share a
+				// trip number across midnight, never fall back to an arbitrary
+				// first instance. A single-instance trip keeps the legacy
+				// fallback for provider timestamps without a service date.
 				const instance =
-					getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances.find(
-						(v) => v.serviceDate === dateStr,
-					) ?? getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances[0];
+					candidates.find((v) => v.serviceDate === dateStr) ??
+					(candidates.length === 1 ? candidates[0] : undefined);
 
 				const ast = instance?.stopTimes.find((ast) => stopTimeMatchesStopId(ast, mergeId(ctx, item.stop_id)));
 				if (ast)
@@ -981,6 +1254,7 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 		const results = await Promise.all(item.corridors.map((c) => c.promise));
 		const validResults = results.filter(Boolean);
 		if (validResults.length > 0) {
+			state.lastSourceEFetchMs[item.throttleKey] = nowMs;
 			processSourceEUpdates(
 				item.stop_id,
 				validResults,
@@ -1011,7 +1285,11 @@ export async function updateAllSources(ctx: CacheContext, gtfs: GTFS) {
 
 	if (sourceAPromise) {
 		timer.start("updateAllSources:SourceA");
-		await updateSourceA(ctx, tripNumberToIds, serviceDateStr, blockMap, await sourceAPromise);
+		const sourceAData = await sourceAPromise;
+		if (sourceAData) {
+			state.lastSourceAFetchMs = nowMs;
+			await updateSourceA(ctx, tripNumberToIds, serviceDateStr, blockMap, sourceAData);
+		}
 		timer.stop("updateAllSources:SourceA");
 	}
 
@@ -1349,15 +1627,27 @@ function processSourceEUpdates(
 		const platform = trip.track?.toString()?.trim();
 		if (!platform) continue;
 
-		const targetServiceDate = trip.scheduled?.slice(0, 10).replace(/-/g, "") ?? serviceDateStr;
+		const wallServiceDate = trip.scheduled?.slice(0, 10).replace(/-/g, "") ?? serviceDateStr;
+		// Provider wall dates are calendar days; an after-midnight call belongs
+		// to the prior service date. Try the wall date first, then the prior
+		// day, so overnight signage does not drop its platform update.
+		const candidateServiceDates = [wallServiceDate];
+		try {
+			const prior = addDaysToServiceDate(wallServiceDate, -1);
+			if (prior !== wallServiceDate) candidateServiceDates.push(prior);
+		} catch {
+			// Keep the wall date when it is not a compact service date.
+		}
+		const targetServiceDate = wallServiceDate;
 
 		// Optimization: build a map of st to trip_id for the current trip name to avoid inner loop overhead
 		const relevantSts = stopTimes.filter((st) => st.trip_id.endsWith(trip.tripName));
 
 		for (const st of relevantSts) {
-			const instance = getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances.find(
-				(v) => v.serviceDate === targetServiceDate,
-			);
+			const candidates = getAugmentedTrips(ctx, { feedId: st.feed_id, localId: st.trip_id })[0]?.instances ?? [];
+			const instance = candidateServiceDates
+				.map((serviceDate) => candidates.find((v) => v.serviceDate === serviceDate))
+				.find(Boolean);
 
 			if (!instance) continue;
 			const ast = instance.stopTimes.find((f_ast) => stopTimeMatchesStopId(f_ast, st.stop_id));
@@ -1373,7 +1663,7 @@ function processSourceEUpdates(
 
 			propagateVehicleInfoToBlock(
 				ctx,
-				targetServiceDate,
+				instance.serviceDate,
 				instance.block_id,
 				instance.vehicle_id,
 				instance.passenger_cars,
@@ -1390,12 +1680,12 @@ export async function updateSourceF(ctx: CacheContext, serviceDateStr: string, b
 	const state = getState(ctx);
 	const now = Date.now();
 	if (now - state.lastSourceFFetchMs < SOURCE_F_THROTTLE_MS) return;
-	state.lastSourceFFetchMs = now;
 
 	try {
 		const response = await fetchWithTimeout(ctx, SOURCE_F_URL);
 		if (!response.ok) return;
 		const html = await response.text();
+		state.lastSourceFFetchMs = now;
 
 		const root = parse(html);
 		const trainParagraphs = root.querySelectorAll("p[id]");

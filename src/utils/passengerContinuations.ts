@@ -11,7 +11,13 @@ const INFERRED_MIN_GAP_SECONDS = 90;
 
 export type ReachabilityOrigin = {
 	stopIds: readonly string[];
-	/** GTFS service-day seconds for the departure event, used to disambiguate loop calls. */
+	/**
+	 * GTFS service-day seconds for the departure event, used to disambiguate loop calls.
+	 * When omitted for a loop station with several visits, the first occurrence in
+	 * stop-sequence order is used deterministically (earliest boarding opportunity,
+	 * maximal reachable set) so public callers never see a silent empty. Pass an
+	 * explicit time to select a later loop visit.
+	 */
 	departureTime?: number | null;
 };
 
@@ -91,18 +97,18 @@ function absoluteEventSeconds(
 	const scheduledTime = event === "arrival" ? stopTime.scheduled_arrival_time : stopTime.scheduled_departure_time;
 	const seconds = actualTime ?? scheduledTime;
 	if (seconds == null) return null;
-	const offset =
-		event === "arrival"
-			? actualTime != null
-				? stopTime.actual_arrival_date_offset
-				: stopTime.scheduled_arrival_date_offset
-			: actualTime != null
-				? stopTime.actual_departure_date_offset
-				: stopTime.scheduled_departure_date_offset;
+	// The augmented value retains raw GTFS service-day seconds. Values above
+	// 24:00 already contain their day offset.
+	return getServiceDayStart(stopTime.service_date, getFeedTimeZone(ctx.config, stopTime.feed_id)) + seconds;
+}
+
+/** Passenger-usable calls can form a handoff: not passing and neither SKIPPED nor NO_DATA. */
+function isPassengerUsable(stopTime: AugmentedStopTime): boolean {
+	const relationship = stopTime.realtime_info?.schedule_relationship;
 	return (
-		getServiceDayStart(stopTime.service_date, getFeedTimeZone(ctx.config, stopTime.feed_id)) +
-		offset * 86400 +
-		seconds
+		!stopTime.passing &&
+		relationship !== qdf.StopTimeScheduleRelationship.SKIPPED &&
+		relationship !== qdf.StopTimeScheduleRelationship.NO_DATA
 	);
 }
 
@@ -111,8 +117,8 @@ function handoffGapSeconds(
 	current: AugmentedTripInstance,
 	next: AugmentedTripInstance,
 ): number | null {
-	const currentLast = current.stopTimes.at(-1);
-	const nextFirst = next.stopTimes[0];
+	const currentLast = handoffStop(current, "last");
+	const nextFirst = handoffStop(next, "first");
 	if (!currentLast || !nextFirst) return null;
 	const arrival =
 		absoluteEventSeconds(ctx, currentLast, "arrival") ?? absoluteEventSeconds(ctx, currentLast, "departure");
@@ -143,7 +149,7 @@ function findNextInstance(
 ): AugmentedTripInstance | null {
 	const trip = ctx.augmented.tripsRec.get(entityKey({ feedId: current.feed_id, localId: tripId }));
 	if (!trip) return null;
-	const currentLast = current.stopTimes.at(-1);
+	const currentLast = handoffStop(current, "last");
 	const currentEnd = currentLast
 		? (absoluteEventSeconds(ctx, currentLast, "arrival") ?? absoluteEventSeconds(ctx, currentLast, "departure"))
 		: null;
@@ -165,11 +171,11 @@ function transferMatchesHandoff(
 	current: AugmentedTripInstance,
 	next: AugmentedTripInstance,
 ): boolean {
-	const currentLast = current.stopTimes.at(-1);
-	const nextFirst = next.stopTimes[0];
+	const currentLast = handoffStop(current, "last");
+	const nextFirst = handoffStop(next, "first");
 	if (!currentLast || !nextFirst) return false;
-	if (transfer.from_stop_id && !platformStopIds(currentLast).includes(transfer.from_stop_id)) return false;
-	if (transfer.to_stop_id && !platformStopIds(nextFirst).includes(transfer.to_stop_id)) return false;
+	if (transfer.from_stop_id && !localStopIds(currentLast).includes(transfer.from_stop_id)) return false;
+	if (transfer.to_stop_id && !localStopIds(nextFirst).includes(transfer.to_stop_id)) return false;
 	return true;
 }
 
@@ -191,22 +197,30 @@ function explicitContinuationEdges(
 	}
 
 	const edges: ContinuationEdge[] = [];
+	let matchedRule = false;
 	for (const [nextTripId, candidates] of byNextTrip) {
-		if (candidates.some((transfer) => transfer.transfer_type === qdf.TransferType.NoInSeat)) continue;
-		const allowed = candidates.find((transfer) => transfer.transfer_type === qdf.TransferType.InSeat);
-		if (!allowed) continue;
 		const next = findNextInstance(ctx, instance, nextTripId);
-		if (!next || !transferMatchesHandoff(allowed, instance, next)) continue;
+		if (!next) continue;
+		const matching = candidates.filter((transfer) => transferMatchesHandoff(transfer, instance, next));
+		if (matching.length) matchedRule = true;
+		if (matching.some((transfer) => transfer.transfer_type === qdf.TransferType.NoInSeat)) continue;
+		const allowed = matching.find((transfer) => transfer.transfer_type === qdf.TransferType.InSeat);
+		if (!allowed) continue;
 		const gap = handoffGapSeconds(ctx, instance, next);
-		if (gap != null && gap < 0) continue;
+		if (gap != null && (gap < 0 || (allowed.min_transfer_time != null && gap < allowed.min_transfer_time))) continue;
 		edges.push({ next, source: "gtfs-transfer" });
 	}
-	return { authoritative: true, edges };
+	return { authoritative: matchedRule, edges };
+}
+
+function handoffStop(instance: AugmentedTripInstance, which: "first" | "last"): AugmentedStopTime | undefined {
+	const usable = instance.stopTimes.filter((stopTime) => isPassengerUsable(stopTime));
+	return which === "first" ? usable[0] : usable.at(-1);
 }
 
 function sameCanonicalHandoff(ctx: CacheContext, current: AugmentedTripInstance, next: AugmentedTripInstance): boolean {
-	const currentLast = current.stopTimes.at(-1);
-	const nextFirst = next.stopTimes[0];
+	const currentLast = handoffStop(current, "last");
+	const nextFirst = handoffStop(next, "first");
 	if (!currentLast || !nextFirst) return false;
 	const currentKey = canonicalStopKey(ctx, currentLast);
 	return currentKey != null && currentKey === canonicalStopKey(ctx, nextFirst);
@@ -218,18 +232,16 @@ function rawBlockContinuationEdge(ctx: CacheContext, instance: AugmentedTripInst
 	const blockTrips = ctx.gtfs
 		.getTrips({ feed_id: instance.feed_id, block_id: rawTrip.block_id, date: instance.serviceDate })
 		.map((trip) => findInstanceForDate(ctx, trip.feed_id, trip.trip_id, instance.serviceDate))
-		.filter((candidate): candidate is AugmentedTripInstance => candidate != null)
-		.sort(
-			(a, b) =>
-				(a.stopTimes[0]?.scheduled_departure_time ?? Number.POSITIVE_INFINITY) -
-				(b.stopTimes[0]?.scheduled_departure_time ?? Number.POSITIVE_INFINITY),
-		);
-	const currentIndex = blockTrips.findIndex((candidate) => candidate.instance_id === instance.instance_id);
-	const next = currentIndex >= 0 ? blockTrips[currentIndex + 1] : null;
-	if (!next || !sameCanonicalHandoff(ctx, instance, next)) return null;
-	const gap = handoffGapSeconds(ctx, instance, next);
-	if (gap == null || gap < 0 || gap > FALLBACK_MAX_GAP_SECONDS) return null;
-	return { next, source: "gtfs-block" };
+		.filter((candidate): candidate is AugmentedTripInstance => candidate != null);
+	const next = blockTrips
+		.filter((candidate) => candidate.instance_id !== instance.instance_id && sameCanonicalHandoff(ctx, instance, candidate))
+		.map((candidate) => ({ candidate, gap: handoffGapSeconds(ctx, instance, candidate) }))
+		.filter(
+			(entry): entry is { candidate: AugmentedTripInstance; gap: number } =>
+				entry.gap != null && entry.gap >= 0 && entry.gap <= FALLBACK_MAX_GAP_SECONDS,
+		)
+		.sort((left, right) => left.gap - right.gap)[0]?.candidate;
+	return next ? { next, source: "gtfs-block" } : null;
 }
 
 function tripIdNumericPrefix(tripId: string): number | null {
@@ -242,8 +254,8 @@ function inferredSeqContinuationEdge(ctx: CacheContext, instance: AugmentedTripI
 	if (!instance.seq_diagram_next_instance_id || instance.seq_diagram_next_link_broken) return null;
 	const next = ctx.augmented.instancesRec.get(instance.seq_diagram_next_instance_id);
 	if (!next) return null;
-	const currentLast = instance.stopTimes.at(-1);
-	const nextFirst = next.stopTimes[0];
+	const currentLast = handoffStop(instance, "last");
+	const nextFirst = handoffStop(next, "first");
 	if (!currentLast || !nextFirst) return null;
 	if (!platformStopIds(currentLast).some((id) => platformStopIds(nextFirst).includes(id))) return null;
 	const currentNumber = tripIdNumericPrefix(instance.trip_id);
@@ -264,11 +276,15 @@ function continuationEdges(ctx: CacheContext, instance: AugmentedTripInstance): 
 }
 
 function canAlight(stopTime: AugmentedStopTime): boolean {
-	return (
-		!stopTime.passing &&
-		stopTime.drop_off_type !== qdf.DropOffType.None &&
-		stopTime.realtime_info?.schedule_relationship !== qdf.StopTimeScheduleRelationship.SKIPPED
-	);
+	return isPassengerUsable(stopTime) && stopTime.drop_off_type !== qdf.DropOffType.None;
+}
+
+function canBoard(stopTime: AugmentedStopTime): boolean {
+	return isPassengerUsable(stopTime) && stopTime.pickup_type !== qdf.PickupType.None;
+}
+
+function isSkippedOrPassing(stopTime: AugmentedStopTime): boolean {
+	return !isPassengerUsable(stopTime);
 }
 
 function findOriginIndex(instance: AugmentedTripInstance, origin: ReachabilityOrigin): number {
@@ -277,6 +293,11 @@ function findOriginIndex(instance: AugmentedTripInstance, origin: ReachabilityOr
 		.map((stopTime, index) => ({ stopTime, index }))
 		.filter(({ stopTime }) => localStopIds(stopTime).some((id) => ids.has(id)));
 	if (matches.length === 0) return -1;
+	// Deterministic safe occurrence for loops without a time: the first visit in
+	// sequence order. It is the earliest boarding opportunity and yields the
+	// maximal reachable set, so omitting departureTime never produces a silent
+	// empty for public raw callers (e.g. TRAX.getOnboardReachableStops). Callers
+	// that need a later loop visit must pass departureTime explicitly.
 	if (origin.departureTime == null) return matches[0]!.index;
 	return matches.reduce((best, candidate) => {
 		const bestTime = departureSeconds(best.stopTime);
@@ -304,7 +325,9 @@ export function getOnboardReachableStops(
 	if (!initial) return [];
 	const originIndex = findOriginIndex(initial, origin);
 	if (originIndex < 0) return [];
-	const originKey = canonicalStopKey(ctx, initial.stopTimes[originIndex]!);
+	const originStopTime = initial.stopTimes[originIndex]!;
+	if (!canBoard(originStopTime)) return [];
+	const originKey = canonicalStopKey(ctx, originStopTime);
 	if (!originKey) return [];
 
 	const destinations = new Map<string, OnboardReachableStop>();
@@ -333,19 +356,25 @@ export function getOnboardReachableStops(
 
 	while (pending.length > 0) {
 		const state = pending.pop()!;
-		let repeatedStation = false;
 		for (let index = state.startIndex; index < state.instance.stopTimes.length; index++) {
 			const stopTime = state.instance.stopTimes[index]!;
+			// Passing, SKIPPED, and NO_DATA calls never had an alighting opportunity,
+			// so they must not claim station identity or truncate later reachable stops.
+			if (isSkippedOrPassing(stopTime)) continue;
 			const key = canonicalStopKey(ctx, stopTime);
 			if (!key) continue;
 			if (key === state.lastStation) continue;
 			if (state.visitedStations.has(key)) {
-				repeatedStation = true;
-				break;
+				state.lastStation = key;
+				continue;
 			}
-			state.visitedStations.add(key);
 			state.lastStation = key;
-			if (!canAlight(stopTime) || destinations.has(key)) continue;
+			// Only alightable calls occupy loop identity. A pickup-only (or other
+			// non-alightable) visit must not block a later alightable visit of the
+			// same station via a continuation.
+			if (!canAlight(stopTime)) continue;
+			state.visitedStations.add(key);
+			if (destinations.has(key)) continue;
 			destinations.set(key, {
 				feed_id: stopTime.feed_id,
 				instance_id: state.instance.instance_id,
@@ -357,8 +386,6 @@ export function getOnboardReachableStops(
 				continuation_source: state.continuationSource,
 			});
 		}
-		if (repeatedStation) continue;
-
 		for (const edge of continuationEdges(ctx, state.instance)) {
 			const fallback = edge.source !== "gtfs-transfer";
 			if ((fallback && state.usedFallback) || state.visitedInstances.has(edge.next.instance_id)) continue;

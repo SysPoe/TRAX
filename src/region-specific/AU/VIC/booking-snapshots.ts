@@ -55,8 +55,12 @@ export function vlineBookingSnapshotKey(
 	return JSON.stringify([serviceDate, tdn, scheduledDepartureTime, origin, destination]);
 }
 
-export function loadVLineBookingSnapshots(cacheDir: string, now = Date.now()): Map<string, VLineBookingSnapshot> {
+export function loadVLineBookingSnapshots(
+	cacheDir: string | null | undefined,
+	now = Date.now(),
+): Map<string, VLineBookingSnapshot> {
 	const snapshots = new Map<string, VLineBookingSnapshot>();
+	if (typeof cacheDir !== "string" || cacheDir.length === 0) return snapshots;
 	try {
 		if (!cacheFileExists(BOOKING_SNAPSHOT_FILE, cacheDir)) return snapshots;
 		const parsed: unknown = JSON.parse(loadCacheFile(BOOKING_SNAPSHOT_FILE, cacheDir));

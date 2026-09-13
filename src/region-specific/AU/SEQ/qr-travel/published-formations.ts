@@ -269,9 +269,16 @@ export function matchQrtPublishedFormation(
 	service: Pick<QRTTravelTrip, "line" | "serviceName">,
 	formations: readonly PublishedFormation[],
 ): PublishedFormation | null {
-	const serviceName = normalizeName(`${service.line} ${service.serviceName}`);
-	const matches = formations.filter((formation) => serviceName.includes(normalizeName(formation.matchName)));
-	return matches.length === 1 ? matches[0] : null;
+	const line = normalizeName(service.line);
+	const exactLine = formations.filter((formation) => normalizeName(formation.matchName) === line);
+	if (exactLine.length === 1) return exactLine[0];
+	const serviceName = normalizeName(service.serviceName);
+	const matches = formations
+		.filter((formation) => serviceName.includes(normalizeName(formation.matchName)))
+		.sort((left, right) => normalizeName(right.matchName).length - normalizeName(left.matchName).length);
+	if (!matches[0]) return null;
+	const longest = normalizeName(matches[0].matchName).length;
+	return matches.filter((match) => normalizeName(match.matchName).length === longest).length === 1 ? matches[0] : null;
 }
 
 export async function getQrtPublishedFormation(

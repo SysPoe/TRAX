@@ -234,6 +234,17 @@ function topologyPath(
 	}
 	if (network.pathSelection === "shortest") {
 		const shortest = shortestTopologyPath(networkKey(network), start, ends, adjacency);
+		if (!shortest) return null;
+		const shortestSignature = pathStationSignature(
+			network,
+			shortest.nodes,
+			nodesByKey,
+			index,
+			journey.geometryFeedIds,
+		);
+		const shortestDistance = manualPathDistance(shortest.nodes, adjacency);
+		if (hasEquallyShortAlternative(network, shortest, shortestSignature, shortestDistance, nodesByKey, index, journey, start, ends, adjacency))
+			return "ambiguous";
 		return shortest ? { ...shortest, minutes: pathMinutes(network, shortest.nodes) } : null;
 	}
 
@@ -274,6 +285,56 @@ interface ManualQueueEntry {
 	distance: number;
 	hops: number;
 	order: number;
+}
+
+/** Resolve explicitly opted-in weighted topology without weakening default ambiguity checks. */
+function manualPathDistance(
+	nodes: readonly string[],
+	adjacency: ReadonlyMap<string, readonly ManualEdge[]>,
+): number {
+	let distance = 0;
+	for (let index = 1; index < nodes.length; index++) {
+		const edge = adjacency.get(nodes[index - 1])?.find((candidate) => candidate.to === nodes[index]);
+		distance += edge?.minutes != null && edge.minutes > 0 ? edge.minutes : 1;
+	}
+	return distance;
+}
+
+/** An equally-short distinct station path must stay ambiguous even for weighted topology. */
+function hasEquallyShortAlternative(
+	network: ManualNetwork,
+	shortest: ManualPath,
+	shortestSignature: string,
+	shortestDistance: number,
+	nodesByKey: ReadonlyMap<string, ManualCorridorNode>,
+	index: CorridorIndex,
+	journey: JourneyContext,
+	start: readonly string[],
+	ends: ReadonlySet<string>,
+	adjacency: ReadonlyMap<string, readonly ManualEdge[]>,
+): boolean {
+	const queue: Array<{ path: string[]; distance: number }> = start.map((key) => ({ path: [key], distance: 0 }));
+	let queueIndex = 0;
+	const maxExploredPaths = 5_000;
+	while (queueIndex < queue.length) {
+		if (queueIndex >= maxExploredPaths) return true;
+		const { path, distance } = queue[queueIndex++];
+		const current = path.at(-1)!;
+		if (ends.has(current)) {
+			if (distance <= shortestDistance + 1e-9) {
+				const signature = pathStationSignature(network, path, nodesByKey, index, journey.geometryFeedIds);
+				if (signature !== shortestSignature) return true;
+			}
+			continue;
+		}
+		for (const edge of adjacency.get(current) ?? []) {
+			if (path.includes(edge.to)) continue;
+			const nextDistance = distance + (edge.minutes != null && edge.minutes > 0 ? edge.minutes : 1);
+			if (nextDistance > shortestDistance + 1e-9) continue;
+			queue.push({ path: [...path, edge.to], distance: nextDistance });
+		}
+	}
+	return false;
 }
 
 /** Resolve explicitly opted-in weighted topology without weakening default ambiguity checks. */

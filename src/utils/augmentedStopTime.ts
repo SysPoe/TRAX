@@ -12,6 +12,27 @@ import { getFeedTimeZone } from "../config.js";
 import { isPassingStopTime } from "./considered.js";
 import { Timer } from "./timer.js";
 import { getSeqState } from "../plugins/seq-state.js";
+import { entityKey } from "../identity.js";
+
+/** Explicit safe rule for null-sequence updates on repeated stations.
+ * A stop-id-only realtime update is only safe to apply by stop_id when the
+ * static trip visits that stop (or its parent) exactly once. Repeated
+ * stations would otherwise apply the delay to the wrong visit, so they are
+ * marked ambiguous and skipped. VIA produces null-sequence updates, so this
+ * is the VIA repeated-station rule. */
+export function isAmbiguousNullSequenceStation(
+	stopId: string,
+	stopTimes: readonly { scheduled_stop_id?: string | null; scheduled_parent_station_id?: string | null }[],
+): boolean {
+	let visits = 0;
+	for (const row of stopTimes) {
+		if (row.scheduled_stop_id === stopId || row.scheduled_parent_station_id === stopId) {
+			visits += 1;
+			if (visits > 1) return true;
+		}
+	}
+	return visits !== 1;
+}
 
 export type BoardingLocationKind = "track" | "platform" | "gate" | "door" | "letter";
 
@@ -42,6 +63,8 @@ export type AugmentedStopTime = {
 	passing: boolean;
 	pickup_type: qdf.PickupType;
 	drop_off_type: qdf.DropOffType;
+	continuous_pickup: qdf.ContinuousPickup | null;
+	continuous_drop_off: qdf.ContinuousDropOff | null;
 
 	instance_id: string;
 	service_date: string;
@@ -119,17 +142,27 @@ export function matchRealtimeStopTimeUpdate(input: {
 	const parentMatch = input.parentStationId
 		? input.byParentStationId.get(input.parentStationId)
 		: undefined;
+	// One-hop boarding-area children are indexed by their GTFS parent. A
+	// realtime boarding area matches its scheduled platform when the parent
+	// contract points exactly one hop up, and nothing further.
+	const childMatch = input.byParentStationId.get(input.stopId);
 	if (
 		sequenceMatch &&
 		(!sequenceMatch.stop_id ||
 			sequenceMatch.stop_id === input.stopId ||
 			sequenceMatch.stop_id === input.parentStationId ||
-			sequenceMatch === parentMatch)
+			sequenceMatch === parentMatch ||
+			sequenceMatch === childMatch)
 	) {
 		return sequenceMatch;
 	}
 
-	return input.byStopId.get(input.stopId) ?? parentMatch;
+	return (
+		input.byStopId.get(input.stopId) ??
+		childMatch ??
+		(input.parentStationId ? input.byStopId.get(input.parentStationId) : undefined) ??
+		parentMatch
+	);
 }
 
 function attachStopReferences(
@@ -258,8 +291,12 @@ function assignPlatformSides(st: IntermediateAST[], platformDataMap: PlatformDat
 			if (!actPlat) prevActualTrack = "";
 			if (!schPlat) prevScheduledTrack = "";
 		} else {
-			actPlat = actData?.find((v) => v.platform_code === parseInt(item.actual_platform_code ?? "0")) ?? null;
-			schPlat = schData?.find((v) => v.platform_code === parseInt(item.scheduled_platform_code ?? "0")) ?? null;
+			const actualCode = /^\d+$/.test(item.actual_platform_code ?? "") ? Number(item.actual_platform_code) : null;
+			const scheduledCode = /^\d+$/.test(item.scheduled_platform_code ?? "")
+				? Number(item.scheduled_platform_code)
+				: null;
+			actPlat = actualCode == null ? null : (actData?.find((v) => v.platform_code === actualCode) ?? null);
+			schPlat = scheduledCode == null ? null : (schData?.find((v) => v.platform_code === scheduledCode) ?? null);
 		}
 
 		if (actPlat?.trackCode === prevActualTrack && schPlat?.trackCode === prevScheduledTrack) {
@@ -337,6 +374,19 @@ export function augmentStopTimes(
 	const rtBySeq = new Map<number, qdf.RealtimeStopTimeUpdate>();
 	const rtByStopId = new Map<string, qdf.RealtimeStopTimeUpdate>();
 	const rtByParentStationId = new Map<string, qdf.RealtimeStopTimeUpdate>();
+	const ambiguousRealtimeStopIds = new Set<string>();
+	const staticStopMatchCounts = new Map<string, number>();
+	const staticStopBySequence = new Map((staticStopTimes ?? []).map((stopTime) => [stopTime.stop_sequence, stopTime]));
+	for (const stopTime of staticStopTimes ?? []) {
+		staticStopMatchCounts.set(stopTime.stop_id, (staticStopMatchCounts.get(stopTime.stop_id) ?? 0) + 1);
+		const rawStop = cache.getRawStops(ctx, { feed_id: feedId, stop_id: stopTime.stop_id })[0];
+		if (rawStop?.parent_station) {
+			staticStopMatchCounts.set(
+				rawStop.parent_station,
+				(staticStopMatchCounts.get(rawStop.parent_station) ?? 0) + 1,
+			);
+		}
+	}
 	const orderedRealtimeUpdates = stopTimeUpdates
 		.map((rt, index) => ({ rt, index, sequence: rt.stop_sequence ?? index + 1 }))
 		.filter(({ rt }) => Boolean(rt.stop_id))
@@ -347,20 +397,71 @@ export function augmentStopTimes(
 	}
 	for (const [index, rt] of stopTimeUpdates.entries()) {
 		if (rt.stop_sequence != null) {
-			rtBySeq.set(rt.stop_sequence, rt);
+			const scheduled = staticStopBySequence.get(rt.stop_sequence);
+			const matchRank = (candidate: qdf.RealtimeStopTimeUpdate | undefined): number => {
+				if (!candidate) return Number.NEGATIVE_INFINITY;
+				if (!scheduled || !candidate.stop_id) return 0;
+				if (candidate.stop_id === scheduled.stop_id) return 2;
+				const scheduledRaw = cache.getRawStops(ctx, { feed_id: feedId, stop_id: scheduled.stop_id })[0];
+				if (candidate.stop_id === scheduledRaw?.parent_station) return 1;
+				const candidateRaw = cache.getRawStops(ctx, { feed_id: feedId, stop_id: candidate.stop_id })[0];
+				if (candidateRaw?.parent_station === scheduled.stop_id) return 1;
+				return -1;
+			};
+			const previous = rtBySeq.get(rt.stop_sequence);
+			const curRank = matchRank(rt);
+			const prevRank = matchRank(previous);
+			if (curRank > prevRank) {
+				rtBySeq.set(rt.stop_sequence, rt);
+			} else if (curRank === prevRank && previous && rt.stop_id !== previous.stop_id) {
+				// Same-sequence conflict: fail to a deterministic winner using
+				// qualified stop identities so feed order cannot change the result.
+				const curKey = rt.stop_id ? entityKey({ feedId, localId: rt.stop_id }) : "";
+				const prevKey = previous.stop_id ? entityKey({ feedId, localId: previous.stop_id }) : "";
+				if (curKey < prevKey) rtBySeq.set(rt.stop_sequence, rt);
+				else if (curKey === prevKey && JSON.stringify(rt) < JSON.stringify(previous)) {
+					rtBySeq.set(rt.stop_sequence, rt);
+				}
+			} else if (curRank === prevRank && previous && rt.stop_id === previous.stop_id) {
+				if (JSON.stringify(rt) < JSON.stringify(previous)) rtBySeq.set(rt.stop_sequence, rt);
+			} else if (!previous) {
+				rtBySeq.set(rt.stop_sequence, rt);
+			}
 		}
-		if (rt.stop_id) {
-			if (!rtByStopId.has(rt.stop_id)) rtByStopId.set(rt.stop_id, rt);
+		if (rt.stop_id && rt.stop_sequence == null && (staticStopMatchCounts.get(rt.stop_id) ?? 0) === 1) {
+			const existing = rtByStopId.get(rt.stop_id);
+			if (existing) {
+				// Duplicate null-sequence updates for a single-visit stop: deduplicate
+				// identical payloads deterministically, but keep genuinely conflicting
+				// updates rejected. Same deterministic JSON pattern as same-sequence
+				// conflicts above so feed order cannot change the result.
+				if (JSON.stringify(existing) !== JSON.stringify(rt)) {
+					ambiguousRealtimeStopIds.add(rt.stop_id);
+				}
+			} else {
+				rtByStopId.set(rt.stop_id, rt);
+			}
 			const rawStop = cache.getRawStops(ctx, { feed_id: feedId, stop_id: rt.stop_id })[0];
 			const parentStationId = rawStop?.parent_station;
-			if (parentStationId && !rtByParentStationId.has(parentStationId)) {
-				rtByParentStationId.set(parentStationId, rt);
+			if (parentStationId && (staticStopMatchCounts.get(parentStationId) ?? 0) === 1) {
+				const existingParent = rtByParentStationId.get(parentStationId);
+				if (existingParent) {
+					if (JSON.stringify(existingParent) !== JSON.stringify(rt)) {
+						ambiguousRealtimeStopIds.add(parentStationId);
+					}
+				} else {
+					rtByParentStationId.set(parentStationId, rt);
+				}
 			}
 		}
 		if (!staticStopTimes) {
 			const sequence = realtimeOnlySequences.get(index);
 			if (sequence != null) rtBySeq.set(sequence, rt);
 		}
+	}
+	for (const stopId of ambiguousRealtimeStopIds) {
+		rtByStopId.delete(stopId);
+		rtByParentStationId.delete(stopId);
 	}
 
 	const sequenceMap = new Map<number, { static?: qdf.StopTime; rt?: qdf.RealtimeStopTimeUpdate }>();
@@ -379,7 +480,33 @@ export function augmentStopTimes(
 		if (seq !== undefined && seq !== null) {
 			if (!rt.stop_id) continue;
 			if (!sequenceMap.has(seq)) sequenceMap.set(seq, {});
-			sequenceMap.get(seq)!.rt = rt;
+			const entry = sequenceMap.get(seq)!;
+			if (entry.rt && staticStopTimes) {
+				const scheduled = staticStopBySequence.get(seq);
+				const rank = (candidate: qdf.RealtimeStopTimeUpdate | undefined): number => {
+					if (!candidate) return Number.NEGATIVE_INFINITY;
+					if (!scheduled || !candidate.stop_id) return 0;
+					if (candidate.stop_id === scheduled.stop_id) return 2;
+					const scheduledRaw = cache.getRawStops(ctx, { feed_id: feedId, stop_id: scheduled.stop_id })[0];
+					if (candidate.stop_id === scheduledRaw?.parent_station) return 1;
+					const candidateRaw = cache.getRawStops(ctx, { feed_id: feedId, stop_id: candidate.stop_id })[0];
+					if (candidateRaw?.parent_station === scheduled.stop_id) return 1;
+					return -1;
+				};
+				const curRank = rank(rt);
+				const prevRank = rank(entry.rt);
+				if (curRank < prevRank) continue;
+				if (curRank === prevRank) {
+					// Deterministic winner for same-sequence conflicts: smallest
+					// qualified stop identity, then smallest payload. Feed order
+					// alone must not decide which realtime anchor survives.
+					const curKey = rt.stop_id ? entityKey({ feedId, localId: rt.stop_id }) : "";
+					const prevKey = entry.rt.stop_id ? entityKey({ feedId, localId: entry.rt.stop_id }) : "";
+					if (curKey > prevKey) continue;
+					if (curKey === prevKey && JSON.stringify(rt) >= JSON.stringify(entry.rt)) continue;
+				}
+			}
+			entry.rt = rt;
 		}
 	}
 	ctx.augmented.timer.stop("augmentStopTimes:mergeStaticAndRealtime");
@@ -438,8 +565,8 @@ export function augmentStopTimes(
 			drop_off_type: s?.drop_off_type ?? 0,
 			shape_dist_traveled: s?.shape_dist_traveled ?? 0,
 			timepoint: s?.timepoint ?? 1,
-			continuous_pickup: 0,
-			continuous_drop_off: 0,
+			continuous_pickup: s?.continuous_pickup ?? null,
+			continuous_drop_off: s?.continuous_drop_off ?? null,
 			_rtUpdate: r,
 			_isSkipped: isSkipped,
 		});
@@ -510,8 +637,20 @@ export function augmentStopTimes(
 		let platformCode: string | null = null;
 		let actualStop = scheduledStop;
 		let actualParent = scheduledParent;
+		if (rtUpdate?.stop_id && rtUpdate.stop_id !== stopId) {
+			actualStop = cache.getAugmentedStops(ctx, { feedId, localId: rtUpdate.stop_id })[0];
+			actualParent = actualStop?.parent_station
+				? cache.getAugmentedStops(ctx, { feedId, localId: actualStop.parent_station })[0]
+				: null;
+			rtFlags.stop = true;
+			rtFlags.parent = true;
+		}
 
-		if (rtUpdate) {
+		const updateCarriesTimes =
+			rtUpdate != null &&
+			currentScheduleRelationship !== qdf.StopTimeScheduleRelationship.SKIPPED &&
+			currentScheduleRelationship !== qdf.StopTimeScheduleRelationship.NO_DATA;
+		if (updateCarriesTimes) {
 			propagated = false;
 			if (rtUpdate.departure_delay !== null && rtUpdate.departure_delay !== undefined) {
 				actDep = (schedDep ?? 0) + rtUpdate.departure_delay;
@@ -548,15 +687,7 @@ export function augmentStopTimes(
 				rtFlags.platform = true;
 			}
 
-			if (rtUpdate.stop_id && rtUpdate.stop_id !== stopId) {
-				actualStop = cache.getAugmentedStops(ctx, { feedId, localId: rtUpdate.stop_id })[0];
-				actualParent = actualStop?.parent_station
-					? cache.getAugmentedStops(ctx, { feedId, localId: actualStop.parent_station })[0]
-					: null;
-				rtFlags.stop = true;
-				rtFlags.parent = true;
-			}
-		} else {
+		} else if (!rtUpdate) {
 			if (lastDelay !== 0) {
 				if (schedArr !== null) actArr = schedArr + lastDelay;
 				if (schedDep !== null) actDep = schedDep + lastDelay;
@@ -658,6 +789,8 @@ export function augmentStopTimes(
 			passing: stopPassing,
 			pickup_type: stopTime.pickup_type,
 			drop_off_type: stopTime.drop_off_type,
+			continuous_pickup: stopTime.continuous_pickup,
+			continuous_drop_off: stopTime.continuous_drop_off,
 			instance_id: "",
 			service_date: "",
 			schedule_relationship: qdf.TripScheduleRelationship.SCHEDULED,
@@ -677,13 +810,13 @@ export function augmentStopTimes(
 
 			actual_arrival_time: actArr ?? null,
 			actual_departure_time: actDep ?? null,
-			actual_stop_id: actualStop?.stop_id ?? stopId ?? null,
-			actual_parent_station_id:
-				actualParent?.stop_id ??
-				actualStop?.parent_stop_id ??
-				scheduledParent?.stop_id ??
-				scheduledStop?.parent_stop_id ??
-				null,
+			// A realtime stop_id without a feed-qualified stop record must not be
+			// claimed as an actual stop. Unknown IDs yield null so indexes and
+			// departures never reference a nonexistent stop.
+			actual_stop_id: actualStop?.stop_id ?? null,
+			actual_parent_station_id: rtFlags.parent
+				? (actualParent?.stop_id ?? actualStop?.parent_stop_id ?? null)
+				: (actualParent?.stop_id ?? actualStop?.parent_stop_id ?? scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null),
 			actual_platform_code: isPassing ? null : (platformCode ?? scheduledStop?.platform_code ?? null),
 			actual_arrival_boarding_locations: [],
 			actual_departure_boarding_locations: [],
@@ -756,7 +889,7 @@ export function augmentStopTimes(
 			pendingPassingRows.push(augmented);
 			const segmentEmu = (stopTime as qdf.StopTime & { _segmentEmus?: number[] })._segmentEmus;
 			if (segmentEmu?.length && !pendingEmus) pendingEmus = segmentEmu;
-		} else {
+		} else if (currentScheduleRelationship !== qdf.StopTimeScheduleRelationship.SKIPPED) {
 			lastNonPassingActDepRaw = actDep;
 		}
 	}

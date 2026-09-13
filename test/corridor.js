@@ -1,11 +1,20 @@
 import assert from "node:assert/strict";
 import "./corridor-alignment.js";
-import { RouteType, TripScheduleRelationship } from "qdf-gtfs";
+import {
+	DropOffType,
+	PickupType,
+	RouteType,
+	StopTimeScheduleRelationship,
+	TransferType,
+	TripScheduleRelationship,
+} from "qdf-gtfs";
+import { getOnboardReachableStops } from "../dist/utils/passengerContinuations.js";
+import { entityKey } from "../dist/identity.js";
 import { createEmptyAugmentedCache, createEmptyRawCache, createRuntimeState } from "../dist/cache/factories.js";
 import { resolveConfig } from "../dist/config.js";
 import { qualifiedKey, qualifiedRouteDirectionKey } from "../dist/utils/corridor/keys.js";
-import { cumulativePolylineDistance } from "../dist/utils/corridor/geometry.js";
-import { projectPointOnPolyline } from "../dist/utils/corridor/projection.js";
+import { coordinateDistanceMeters, cumulativePolylineDistance } from "../dist/utils/corridor/geometry.js";
+import { projectCoordinatesOnSegment, projectPointOnPolyline } from "../dist/utils/corridor/projection.js";
 import {
 	buildCorridorIndex,
 	createEmptyCorridorIndex,
@@ -1306,6 +1315,33 @@ function testReplacementUsesRealtimeStopSequence() {
 		["a", "x", "c"],
 	);
 	assert.equal(malformedResult.instances[0].stopTimes[0].actual_arrival_time, 3_660);
+
+	ctx.augmented.rawStopTimesCache.set(q("feed", "trip"), [
+		{ feed_id: "feed", trip_id: "trip", stop_id: "a", stop_sequence: 1, arrival_time: 60, departure_time: 60 },
+		{ feed_id: "feed", trip_id: "trip", stop_id: "b", stop_sequence: 2, arrival_time: 120, departure_time: 120 },
+		{ feed_id: "feed", trip_id: "trip", stop_id: "a", stop_sequence: 3, arrival_time: 180, departure_time: 180 },
+	]);
+	const ambiguousBareStopUpdate = {
+		...update,
+		trip: { ...update.trip, schedule_relationship: 0 },
+		stop_time_updates: [{ stop_id: "a", stop_sequence: null, arrival_delay: 600, departure_delay: 600 }],
+	};
+	const loopResult = augmentTrip(
+		{
+			feed_id: "feed", trip_id: "trip", route_id: "r", service_id: "daily", direction_id: 0,
+			shape_id: null, trip_headsign: null, trip_short_name: null, block_id: null,
+			wheelchair_accessible: null, bikes_allowed: null,
+		},
+		ctx,
+		new Map([[q("feed", "trip"), [ambiguousBareStopUpdate]]]),
+		undefined,
+		{ serviceDates: ["20260827"], realtimeDates: ["20260827"] },
+	);
+	assert.deepEqual(
+		loopResult.instances[0].stopTimes.map((stopTime) => stopTime.actual_arrival_time),
+		[60, 120, 180],
+		"a stop-id-only update must not be applied to every visit of a loop stop",
+	);
 }
 
 function testTimingRecordsStayAttachedAfterFiltering() {
@@ -1376,6 +1412,11 @@ function testQrtUsesOperatingServiceDate() {
 			QRTServiceDisruption: { Status: "Scheduled" },
 			TrainMovements: [
 				{
+					PlaceCode: "BROKEN",
+					PlaceName: null,
+					PlannedDeparture: "2026-08-27T09:00:00",
+				},
+				{
 					PlaceCode: "A",
 					PlaceName: "A",
 					sourceStopId: "a",
@@ -1395,6 +1436,7 @@ function testQrtUsesOperatingServiceDate() {
 	);
 	assert.equal(trip.serviceDate, "20260827");
 	assert.equal(trip.sourceModifiedAt, "2026-08-28T12:00:00Z");
+	assert.equal(trip.stops.length, 1, "a malformed movement must not discard the remaining service");
 }
 
 function testFeedIsolation() {
@@ -2098,6 +2140,695 @@ function testLocalGapsSkipPatternTimingWork() {
 	assert.equal(ctx.augmented.corridorPatternEdgeMinutesCache.size, 0);
 }
 
+function testSyntheticStopSequencesStayInteger() {
+	const coordinates = simpleCoordinates(["a", "b", "c", "d"]);
+	const index = createEmptyCorridorIndex("test");
+	index.stationGeometry = stationGeometry("feed", ["a", "b", "c", "d"], coordinates);
+	addShapes(index, [
+		indexedShape("feed", "shape", ["a", "b", "c", "d"], coordinates, { scheduledStations: ["a", "d"] }),
+	]);
+	const ctx = context({ index });
+	ctx.runtimeState.srtNetworkData = { matrix: {}, adjacency: {}, lastUpdated: Date.now() };
+	const journeyContext = journey("feed", ["a", "d"], coordinates, { shapeId: "shape" });
+	const corridor = resolveJourneyCorridor(journeyContext, ctx);
+	assert.equal(corridor.gaps[0].status, "resolved");
+
+	const assertIntegerSequencing = (expanded, staticSequences, expectedStopIds) => {
+		assert.deepEqual(
+			expanded.map((stopTime) => stopTime.stop_id),
+			expectedStopIds,
+		);
+		const sequences = expanded.map((stopTime) => stopTime.stop_sequence);
+		assert.ok(
+			sequences.every((sequence) => Number.isInteger(sequence)),
+			`synthetic stop_sequence values must stay integers, got ${sequences}`,
+		);
+		assert.equal(new Set(sequences).size, sequences.length, "stop_sequence values must not collide");
+		const staticRows = expanded.filter((stopTime) => !stopTime._passing);
+		assert.deepEqual(
+			staticRows.map((stopTime) => stopTime.stop_sequence),
+			staticSequences,
+			"static stop_sequence values must be preserved for realtime matching",
+		);
+		const syntheticRows = expanded.filter((stopTime) => stopTime._passing);
+		assert.ok(syntheticRows.length > 0, "expected synthetic passing rows");
+		for (const synthetic of syntheticRows) {
+			assert.ok(
+				!staticSequences.includes(synthetic.stop_sequence),
+				`synthetic stop_sequence ${synthetic.stop_sequence} must not collide with static rows`,
+			);
+		}
+	};
+
+	// Adjacent integer sequences have no integer strictly between them. The
+	// previous interpolation emitted 1.5 here, breaking integer consumers.
+	const adjacent = expandStopTimesWithCorridor(
+		[
+			{ feed_id: "feed", trip_id: "trip", stop_id: "a", stop_sequence: 1, arrival_time: 0, departure_time: 0 },
+			{ feed_id: "feed", trip_id: "trip", stop_id: "d", stop_sequence: 2, arrival_time: 1_200, departure_time: 1_200 },
+		],
+		journeyContext,
+		corridor,
+		ctx,
+	);
+	assertIntegerSequencing(adjacent, [1, 2], ["a", "b", "c", "d"]);
+
+	// When the static gap has integer room, synthetics must fit between the
+	// preserved static sequences without colliding.
+	const roomy = expandStopTimesWithCorridor(
+		[
+			{ feed_id: "feed", trip_id: "trip", stop_id: "a", stop_sequence: 1, arrival_time: 0, departure_time: 0 },
+			{ feed_id: "feed", trip_id: "trip", stop_id: "d", stop_sequence: 5, arrival_time: 1_200, departure_time: 1_200 },
+		],
+		journeyContext,
+		corridor,
+		ctx,
+	);
+	assertIntegerSequencing(roomy, [1, 5], ["a", "b", "c", "d"]);
+	const roomySynthetic = roomy.filter((stopTime) => stopTime._passing).map((stopTime) => stopTime.stop_sequence);
+	assert.deepEqual([...roomySynthetic].sort((left, right) => left - right), roomySynthetic);
+	assert.ok(roomySynthetic.every((sequence) => sequence > 1 && sequence < 5));
+}
+
+function passengerStop({ id, arr, dep, pickup = 0, drop = 0, passing = false, skipped = false, noData = false }) {
+	return {
+		feed_id: "feed",
+		actual_stop_id: id,
+		actual_parent_station_id: null,
+		scheduled_stop_id: id,
+		scheduled_parent_station_id: null,
+		actual_parent_station: null,
+		actual_stop: null,
+		scheduled_parent_station: null,
+		scheduled_stop: null,
+		actual_departure_time: null,
+		scheduled_departure_time: dep,
+		actual_arrival_time: null,
+		scheduled_arrival_time: arr,
+		service_date: "20260101",
+		passing,
+		pickup_type: pickup,
+		drop_off_type: drop,
+		realtime_info: skipped
+			? { schedule_relationship: StopTimeScheduleRelationship.SKIPPED }
+			: noData
+				? { schedule_relationship: StopTimeScheduleRelationship.NO_DATA }
+				: null,
+	};
+}
+
+function passengerInstance({ tripId, instanceId, stops, nextId = null, broken = false }) {
+	return {
+		feed_id: "feed",
+		trip_id: tripId,
+		instance_id: instanceId,
+		serviceDate: "20260101",
+		service_date: "20260101",
+		actualTripDates: ["20260101"],
+		stopTimes: stops,
+		seq_diagram_next_instance_id: nextId,
+		seq_diagram_next_link_broken: broken,
+	};
+}
+
+function passengerCtx(instances, { transfers = new Map(), rawTrips = new Map(), gtfsTrips = [] } = {}) {
+	const ctx = context({ index: createEmptyCorridorIndex("test") });
+	ctx.config.feedTimeZones.set("feed", "Australia/Brisbane");
+	for (const inst of instances) {
+		ctx.augmented.instancesRec.set(inst.instance_id, inst);
+		const key = entityKey({ feedId: "feed", localId: inst.trip_id });
+		const existing = ctx.augmented.tripsRec.get(key);
+		if (existing) existing.instances.push(inst);
+		else ctx.augmented.tripsRec.set(key, { instances: [inst] });
+	}
+	ctx.augmented.linkedTransfersFromTrip = transfers;
+	ctx.augmented.rawTripsRec = rawTrips;
+	ctx.gtfs = { getTrips: () => gtfsTrips };
+	return ctx;
+}
+
+function passengerStopIds(result) {
+	return result.map((entry) => entry.stop_id);
+}
+
+function testPassengerLoopKeepsLaterStops() {
+	const inst = passengerInstance({
+		tripId: "loop",
+		instanceId: "loop-1",
+		stops: [
+			passengerStop({ id: "origin", arr: 36000, dep: 36000 }),
+			passengerStop({ id: "mid", arr: 36300, dep: 36300 }),
+			passengerStop({ id: "origin", arr: 36600, dep: 36600 }),
+			passengerStop({ id: "after", arr: 36900, dep: 36900 }),
+		],
+	});
+	const ctx = passengerCtx([inst]);
+	const result = getOnboardReachableStops(ctx, "loop-1", { stopIds: ["origin"], departureTime: 36000 });
+	assert.deepEqual(passengerStopIds(result), ["mid", "after"]);
+}
+
+function testExplicitChainCascadesButFallbackOneHop() {
+	const a = passengerInstance({
+		tripId: "exa",
+		instanceId: "exa-1",
+		stops: [passengerStop({ id: "o", arr: 36000, dep: 36000 }), passengerStop({ id: "h", arr: 36300, dep: 36300 })],
+	});
+	const b = passengerInstance({
+		tripId: "exb",
+		instanceId: "exb-1",
+		stops: [passengerStop({ id: "h", arr: 36600, dep: 36600 }), passengerStop({ id: "m", arr: 36900, dep: 36900 })],
+	});
+	const c = passengerInstance({
+		tripId: "exc",
+		instanceId: "exc-1",
+		stops: [passengerStop({ id: "m", arr: 37200, dep: 37200 }), passengerStop({ id: "z", arr: 37500, dep: 37500 })],
+	});
+	const transfers = new Map([
+		[entityKey({ feedId: "feed", localId: "exa" }), [{ from_stop_id: "h", to_stop_id: "h", from_trip_id: "exa", to_trip_id: "exb", transfer_type: TransferType.InSeat }]],
+		[entityKey({ feedId: "feed", localId: "exb" }), [{ from_stop_id: "m", to_stop_id: "m", from_trip_id: "exb", to_trip_id: "exc", transfer_type: TransferType.InSeat }]],
+	]);
+	const explicit = getOnboardReachableStops(passengerCtx([a, b, c], { transfers }), "exa-1", {
+		stopIds: ["o"],
+		departureTime: 36000,
+	});
+	assert.deepEqual(passengerStopIds(explicit), ["h", "m", "z"]);
+
+	const ba = passengerInstance({
+		tripId: "ba",
+		instanceId: "ba-1",
+		stops: [passengerStop({ id: "o", arr: 36000, dep: 36000 }), passengerStop({ id: "h", arr: 36300, dep: 36300 })],
+	});
+	const bb = passengerInstance({
+		tripId: "bb",
+		instanceId: "bb-1",
+		stops: [passengerStop({ id: "h", arr: 36600, dep: 36600 }), passengerStop({ id: "m", arr: 36900, dep: 36900 })],
+	});
+	const bc = passengerInstance({
+		tripId: "bc",
+		instanceId: "bc-1",
+		stops: [passengerStop({ id: "m", arr: 37200, dep: 37200 }), passengerStop({ id: "z", arr: 37500, dep: 37500 })],
+	});
+	const rawTrips = new Map([
+		[entityKey({ feedId: "feed", localId: "ba" }), { block_id: "blk" }],
+		[entityKey({ feedId: "feed", localId: "bb" }), { block_id: "blk" }],
+		[entityKey({ feedId: "feed", localId: "bc" }), { block_id: "blk" }],
+	]);
+	const gtfsTrips = [{ feed_id: "feed", trip_id: "ba" }, { feed_id: "feed", trip_id: "bb" }, { feed_id: "feed", trip_id: "bc" }];
+	const fallback = getOnboardReachableStops(passengerCtx([ba, bb, bc], { rawTrips, gtfsTrips }), "ba-1", {
+		stopIds: ["o"],
+		departureTime: 36000,
+	});
+	assert.deepEqual(passengerStopIds(fallback), ["h", "m"]);
+}
+
+function testSkippedTerminalKeepsHandoff() {
+	const a = passengerInstance({
+		tripId: "ska",
+		instanceId: "ska-1",
+		stops: [
+			passengerStop({ id: "o", arr: 36000, dep: 36000 }),
+			passengerStop({ id: "h", arr: 36300, dep: 36300 }),
+			passengerStop({ id: "s", arr: 36600, dep: 36600, skipped: true }),
+		],
+	});
+	const b = passengerInstance({
+		tripId: "skb",
+		instanceId: "skb-1",
+		stops: [passengerStop({ id: "h", arr: 36900, dep: 36900 }), passengerStop({ id: "z", arr: 37200, dep: 37200 })],
+	});
+	const transfers = new Map([
+		[entityKey({ feedId: "feed", localId: "ska" }), [{ from_stop_id: "h", to_stop_id: "h", from_trip_id: "ska", to_trip_id: "skb", transfer_type: TransferType.InSeat }]],
+	]);
+	const result = getOnboardReachableStops(passengerCtx([a, b], { transfers }), "ska-1", {
+		stopIds: ["o"],
+		departureTime: 36000,
+	});
+	assert.deepEqual(passengerStopIds(result), ["h", "z"]);
+}
+
+function testSkippedIntermediateDoesNotClaimLaterVisit() {
+	const a = passengerInstance({
+		tripId: "sia",
+		instanceId: "sia-1",
+		stops: [
+			passengerStop({ id: "o", arr: 36000, dep: 36000 }),
+			passengerStop({ id: "x", arr: 36100, dep: 36100, skipped: true }),
+			passengerStop({ id: "h", arr: 36300, dep: 36300 }),
+		],
+	});
+	const b = passengerInstance({
+		tripId: "sib",
+		instanceId: "sib-1",
+		stops: [
+			passengerStop({ id: "h", arr: 36600, dep: 36600 }),
+			passengerStop({ id: "x", arr: 36900, dep: 36900 }),
+			passengerStop({ id: "z", arr: 37200, dep: 37200 }),
+		],
+	});
+	const transfers = new Map([
+		[entityKey({ feedId: "feed", localId: "sia" }), [{ from_stop_id: "h", to_stop_id: "h", from_trip_id: "sia", to_trip_id: "sib", transfer_type: TransferType.InSeat }]],
+	]);
+	const result = getOnboardReachableStops(passengerCtx([a, b], { transfers }), "sia-1", {
+		stopIds: ["o"],
+		departureTime: 36000,
+	});
+	assert.deepEqual(passengerStopIds(result), ["h", "x", "z"]);
+}
+
+function testRepeatedOccurrenceNeedsDepartureTime() {
+	const inst = passengerInstance({
+		tripId: "rep",
+		instanceId: "rep-1",
+		stops: [
+			passengerStop({ id: "origin", arr: 36000, dep: 36000 }),
+			passengerStop({ id: "mid", arr: 36300, dep: 36300 }),
+			passengerStop({ id: "origin", arr: 36600, dep: 36600 }),
+			passengerStop({ id: "after", arr: 36900, dep: 36900 }),
+		],
+	});
+	const ctx = passengerCtx([inst]);
+	// Loop origins without departureTime resolve to the deterministic first
+	// occurrence (earliest boarding opportunity, maximal reachable set) so
+	// public callers that omit the time never see a silent empty.
+	assert.deepEqual(passengerStopIds(getOnboardReachableStops(ctx, "rep-1", { stopIds: ["origin"] })), [
+		"mid",
+		"after",
+	]);
+	assert.deepEqual(
+		passengerStopIds(getOnboardReachableStops(ctx, "rep-1", { stopIds: ["origin"], departureTime: 36000 })),
+		["mid", "after"],
+	);
+}
+
+function testNoDataOriginCannotBoard() {
+	const noDataOrigin = passengerInstance({
+		tripId: "nodata-orig",
+		instanceId: "nodata-orig-1",
+		stops: [
+			passengerStop({ id: "o", arr: 36000, dep: 36000, noData: true }),
+			passengerStop({ id: "n", arr: 36300, dep: 36300 }),
+		],
+	});
+	assert.deepEqual(
+		passengerStopIds(
+			getOnboardReachableStops(passengerCtx([noDataOrigin]), "nodata-orig-1", {
+				stopIds: ["o"],
+				departureTime: 36000,
+			}),
+		),
+		[],
+		"NO_DATA origin must not be boardable",
+	);
+}
+
+function testNoDataDestinationNotReachable() {
+	const inst = passengerInstance({
+		tripId: "nodata-dest",
+		instanceId: "nodata-dest-1",
+		stops: [
+			passengerStop({ id: "o", arr: 36000, dep: 36000 }),
+			passengerStop({ id: "nodata", arr: 36300, dep: 36300, noData: true }),
+			passengerStop({ id: "normal", arr: 36600, dep: 36600 }),
+		],
+	});
+	const result = getOnboardReachableStops(passengerCtx([inst]), "nodata-dest-1", {
+		stopIds: ["o"],
+		departureTime: 36000,
+	});
+	assert.deepEqual(
+		passengerStopIds(result),
+		["normal"],
+		"NO_DATA calls must not be treated as alightable",
+	);
+}
+
+function testLoopOriginWithoutDepartureTimeUsesFirstOccurrence() {
+	const inst = passengerInstance({
+		tripId: "loop-notime",
+		instanceId: "loop-notime-1",
+		stops: [
+			passengerStop({ id: "origin", arr: 36000, dep: 36000 }),
+			passengerStop({ id: "mid", arr: 36300, dep: 36300 }),
+			passengerStop({ id: "origin", arr: 36600, dep: 36600 }),
+			passengerStop({ id: "after", arr: 36900, dep: 36900 }),
+		],
+	});
+	const result = getOnboardReachableStops(passengerCtx([inst]), "loop-notime-1", { stopIds: ["origin"] });
+	assert.deepEqual(
+		passengerStopIds(result),
+		["mid", "after"],
+		"loop origin without departureTime must resolve to the first occurrence, not silent empty",
+	);
+}
+
+function testDropOnlyOriginCannotBoard() {
+	const inst = passengerInstance({
+		tripId: "drop",
+		instanceId: "drop-1",
+		stops: [
+			passengerStop({ id: "o", arr: 36000, dep: 36000, pickup: PickupType.None, drop: DropOffType.Regular }),
+			passengerStop({ id: "n", arr: 36300, dep: 36300 }),
+		],
+	});
+	const result = getOnboardReachableStops(passengerCtx([inst]), "drop-1", { stopIds: ["o"], departureTime: 36000 });
+	assert.deepEqual(passengerStopIds(result), []);
+}
+
+function testNonBoardableOriginCannotBoard() {
+	const passing = passengerInstance({
+		tripId: "pass",
+		instanceId: "pass-1",
+		stops: [
+			passengerStop({ id: "o", arr: 36000, dep: 36000, pickup: PickupType.None, drop: DropOffType.None, passing: true }),
+			passengerStop({ id: "n", arr: 36300, dep: 36300 }),
+		],
+	});
+	assert.deepEqual(
+		passengerStopIds(getOnboardReachableStops(passengerCtx([passing]), "pass-1", { stopIds: ["o"], departureTime: 36000 })),
+		[],
+	);
+	const skipped = passengerInstance({
+		tripId: "skor",
+		instanceId: "skor-1",
+		stops: [
+			passengerStop({ id: "o", arr: 36000, dep: 36000, skipped: true }),
+			passengerStop({ id: "n", arr: 36300, dep: 36300 }),
+		],
+	});
+	assert.deepEqual(
+		passengerStopIds(getOnboardReachableStops(passengerCtx([skipped]), "skor-1", { stopIds: ["o"], departureTime: 36000 })),
+		[],
+	);
+}
+
+function testPickupOnlyDestinationNotReachable() {
+	const inst = passengerInstance({
+		tripId: "pick",
+		instanceId: "pick-1",
+		stops: [
+			passengerStop({ id: "o", arr: 36000, dep: 36000 }),
+			passengerStop({ id: "pickonly", arr: 36300, dep: 36300, pickup: PickupType.Regular, drop: DropOffType.None }),
+			passengerStop({ id: "normal", arr: 36600, dep: 36600 }),
+		],
+	});
+	const result = getOnboardReachableStops(passengerCtx([inst]), "pick-1", { stopIds: ["o"], departureTime: 36000 });
+	assert.deepEqual(passengerStopIds(result), ["normal"]);
+}
+
+function testMidnightHandoffUsesRawTimes() {
+	const a = passengerInstance({
+		tripId: "na",
+		instanceId: "na-1",
+		stops: [
+			passengerStop({ id: "o", arr: 23 * 3600 + 20 * 60, dep: 23 * 3600 + 20 * 60 }),
+			passengerStop({ id: "h", arr: 25 * 3600 + 10 * 60, dep: 25 * 3600 + 10 * 60 }),
+		],
+	});
+	const b = passengerInstance({
+		tripId: "nb",
+		instanceId: "nb-1",
+		stops: [
+			passengerStop({ id: "h", arr: 25 * 3600 + 20 * 60, dep: 25 * 3600 + 20 * 60 }),
+			passengerStop({ id: "z", arr: 26 * 3600, dep: 26 * 3600 }),
+		],
+	});
+	const rawTrips = new Map([
+		[entityKey({ feedId: "feed", localId: "na" }), { block_id: "night" }],
+		[entityKey({ feedId: "feed", localId: "nb" }), { block_id: "night" }],
+	]);
+	const result = getOnboardReachableStops(
+		passengerCtx([a, b], { rawTrips, gtfsTrips: [{ feed_id: "feed", trip_id: "na" }, { feed_id: "feed", trip_id: "nb" }] }),
+		"na-1",
+		{ stopIds: ["o"], departureTime: 23 * 3600 + 20 * 60 },
+	);
+	assert.deepEqual(passengerStopIds(result), ["h", "z"]);
+}
+
+function testNonFiniteShapeCoordinatesAreSkipped() {
+	const trip = {
+		feed_id: "feed",
+		trip_id: "trip",
+		route_id: "r",
+		direction_id: 0,
+		service_id: "daily",
+		shape_id: "shape",
+	};
+	const ctx = context();
+	ctx.raw.consideredTrips = [trip];
+	ctx.raw.stopsByKey.set(q("feed", "a"), {
+		feed_id: "feed",
+		stop_id: "a",
+		stop_name: "A",
+		stop_lat: 0,
+		stop_lon: 179,
+		parent_station: "",
+	});
+	ctx.augmented.rawStopTimesCache.set(q("feed", "trip"), [
+		{ feed_id: "feed", trip_id: "trip", stop_id: "a", stop_sequence: 1, shape_dist_traveled: null },
+	]);
+	ctx.gtfs = {
+		getShapes: () => [
+			{ feed_id: "feed", shape_id: "shape", shape_pt_lat: 0, shape_pt_lon: 179, shape_pt_sequence: 1 },
+			{ feed_id: "feed", shape_id: "shape", shape_pt_lat: NaN, shape_pt_lon: Infinity, shape_pt_sequence: 2 },
+			{ feed_id: "feed", shape_id: "shape", shape_pt_lat: 0, shape_pt_lon: -179, shape_pt_sequence: 3 },
+		],
+	};
+	const index = buildCorridorIndex(ctx);
+	const shape = [...index.shapes.values()][0];
+	assert.ok(shape, "a shape with one bad point should still be indexed from its finite points");
+	assert.equal(shape.points.length, 2, "non-finite shape points must be skipped before indexing");
+	assert.ok(
+		Number.isFinite(shape.lengthMeters) && shape.lengthMeters > 0,
+		"shape length must stay finite",
+	);
+}
+
+function testAntimeridianProjectionUsesShortPath() {
+	const across = coordinateDistanceMeters({ lat: 0, lon: 179 }, { lat: 0, lon: -179 });
+	assert.ok(across < 500000, "antimeridian neighbours must use the short path");
+	assert.ok(across > 100000, "antimeridian distance must not collapse to zero");
+	const projection = projectCoordinatesOnSegment(0, 180, 0, 179, 0, -179);
+	assert.ok(
+		Math.abs(projection.segmentFraction - 0.5) < 0.2,
+		"dateline midpoint must project near the segment middle",
+	);
+	assert.ok(
+		projection.lateralDistanceMeters < 20000,
+		"dateline midpoint must sit near the segment",
+	);
+}
+
+function testShortestManualTopologyTieStaysUnresolved() {
+	const coordinates = simpleCoordinates(["a", "b", "c", "d"]);
+	const index = createEmptyCorridorIndex("test");
+	index.stationGeometry = stationGeometry("feed", ["a", "b", "c", "d"], coordinates);
+	const network = {
+		id: "shortest-tie",
+		feedId: "feed",
+		nodes: ["a", "b", "c", "d"].map((id) => ({ id, stationId: q("feed", id), name: id, kind: "station" })),
+		edges: [
+			{ from: "a", to: "b", bidirectional: true, minutes: 5 },
+			{ from: "b", to: "d", bidirectional: true, minutes: 5 },
+			{ from: "a", to: "c", bidirectional: true, minutes: 5 },
+			{ from: "c", to: "d", bidirectional: true, minutes: 5 },
+		],
+		priority: "fallback",
+		pathSelection: "shortest",
+	};
+	const result = resolveJourneyCorridor(
+		journey("feed", ["a", "d"], coordinates),
+		context({ index, manualNetworks: [network] }),
+	);
+	assert.equal(result.gaps[0].status, "unresolved", "an equally-short manual tie must not pick a branch");
+	assert.deepEqual(result.gaps[0].nodes, []);
+}
+
+function testFallbackManualDoesNotMaskShapeAmbiguity() {
+	const coordinates = {
+		a: { lat: -27, lon: 153 },
+		b: { lat: -26.995, lon: 153.001 },
+		c: { lat: -27.005, lon: 153.001 },
+		d: { lat: -27, lon: 153.002 },
+	};
+	const index = createEmptyCorridorIndex("test");
+	index.stationGeometry = stationGeometry("feed", ["a", "b", "c", "d"], coordinates);
+	addShapes(index, [
+		indexedShape("feed", "branch-b", ["a", "b", "d"], coordinates, {
+			scheduledStations: ["a", "d"],
+			routeId: "stored-b",
+		}),
+		indexedShape("feed", "branch-c", ["a", "c", "d"], coordinates, {
+			scheduledStations: ["a", "d"],
+			routeId: "stored-c",
+		}),
+	]);
+	const fallback = {
+		id: "fallback-line",
+		feedId: "feed",
+		nodes: ["a", "b", "c", "d"].map((id) => ({ id, stationId: q("feed", id), name: id, kind: "station" })),
+		corridors: [{ id: "line", nodes: ["a", "b", "c", "d"], bidirectional: true }],
+		priority: "fallback",
+	};
+	const result = resolveJourneyCorridor(
+		journey("feed", ["a", "d"], coordinates, { routeId: "provider-only-route", direction: null }),
+		context({ index, manualNetworks: [fallback] }),
+	);
+	assert.equal(
+		result.gaps[0].status,
+		"unresolved",
+		"a fallback manual path must not paper over disagreeing shape branches",
+	);
+	assert.deepEqual(result.gaps[0].nodes, []);
+}
+
+function testRepeatedVisitSequenceUpdateStaysOnItsVisit() {
+	const coordinates = {
+		a: { lat: -27, lon: 153 },
+		b: { lat: -27, lon: 153.001 },
+	};
+	const index = createEmptyCorridorIndex("test");
+	index.stationGeometry = stationGeometry("feed", ["a", "b"], coordinates);
+	const ctx = context({ index });
+	ctx.config.feedTimeZones.set("feed", "Australia/Brisbane");
+	const repeatedStops = ["a", "b"].map((localId) => ({
+		feed_id: "feed",
+		stop_id: localId,
+		stop_name: localId.toUpperCase(),
+		stop_lat: coordinates[localId].lat,
+		stop_lon: coordinates[localId].lon,
+		parent_station: null,
+	}));
+	for (const stop of repeatedStops) ctx.raw.stopsByKey.set(q("feed", stop.stop_id), stop);
+	ctx.raw.routesByKey.set(q("feed", "r"), {
+		feed_id: "feed",
+		route_id: "r",
+		route_type: RouteType.Rail,
+		route_short_name: "R",
+		route_long_name: "Rail",
+	});
+	ctx.gtfs = {
+		getStops: (filter = {}) =>
+			repeatedStops.filter(
+				(stop) =>
+					(!filter.feed_id || filter.feed_id === stop.feed_id) &&
+					(!filter.stop_id || filter.stop_id === stop.stop_id),
+			),
+		getStaticOccupancies: () => [],
+	};
+	ctx.augmented.rawStopTimesCache.set(q("feed", "trip"), [
+		{ feed_id: "feed", trip_id: "trip", stop_id: "a", stop_sequence: 1, arrival_time: 60, departure_time: 60 },
+		{ feed_id: "feed", trip_id: "trip", stop_id: "b", stop_sequence: 2, arrival_time: 120, departure_time: 120 },
+		{ feed_id: "feed", trip_id: "trip", stop_id: "a", stop_sequence: 3, arrival_time: 180, departure_time: 180 },
+	]);
+	ctx.runtimeState.srtNetworkData = { matrix: {}, adjacency: {}, lastUpdated: Date.now() };
+	const trip = {
+		feed_id: "feed",
+		trip_id: "trip",
+		route_id: "r",
+		service_id: "daily",
+		direction_id: 0,
+		shape_id: null,
+		trip_headsign: null,
+		trip_short_name: null,
+		block_id: null,
+		wheelchair_accessible: null,
+		bikes_allowed: null,
+	};
+	const secondVisitUpdate = {
+		feed_id: "feed",
+		source_id: "test",
+		trip: {
+			trip_id: "trip",
+			route_id: "r",
+			direction_id: 0,
+			start_date: "20260827",
+			start_time: "10:00:00",
+			schedule_relationship: TripScheduleRelationship.SCHEDULED,
+		},
+		stop_time_updates: [{ stop_id: "a", stop_sequence: 3, arrival_delay: 600, departure_delay: 600 }],
+	};
+	const result = augmentTrip(trip, ctx, new Map([[q("feed", "trip"), [secondVisitUpdate]]]), undefined, {
+		serviceDates: ["20260827"],
+		realtimeDates: ["20260827"],
+	});
+	assert.deepEqual(
+		result.instances[0].stopTimes.map((stopTime) => stopTime.actual_arrival_time),
+		[60, 120, 780],
+		"a sequence-qualified update must affect only its own visit of a repeated stop",
+	);
+}
+
+function testSequenceOnlyUpdateAppliesBySequence() {
+	const coordinates = simpleCoordinates(["a", "b", "c"]);
+	const index = createEmptyCorridorIndex("test");
+	index.stationGeometry = stationGeometry("feed", ["a", "b", "c"], coordinates);
+	const ctx = context({ index });
+	ctx.config.feedTimeZones.set("feed", "Australia/Brisbane");
+	const sequenceStops = ["a", "b", "c"].map((localId) => ({
+		feed_id: "feed",
+		stop_id: localId,
+		stop_name: localId.toUpperCase(),
+		stop_lat: coordinates[localId].lat,
+		stop_lon: coordinates[localId].lon,
+		parent_station: null,
+	}));
+	for (const stop of sequenceStops) ctx.raw.stopsByKey.set(q("feed", stop.stop_id), stop);
+	ctx.raw.routesByKey.set(q("feed", "r"), {
+		feed_id: "feed",
+		route_id: "r",
+		route_type: RouteType.Rail,
+		route_short_name: "R",
+		route_long_name: "Rail",
+	});
+	ctx.gtfs = {
+		getStops: (filter = {}) =>
+			sequenceStops.filter(
+				(stop) =>
+					(!filter.feed_id || filter.feed_id === stop.feed_id) &&
+					(!filter.stop_id || filter.stop_id === stop.stop_id),
+			),
+		getStaticOccupancies: () => [],
+	};
+	ctx.augmented.rawStopTimesCache.set(q("feed", "trip"), [
+		{ feed_id: "feed", trip_id: "trip", stop_id: "a", stop_sequence: 1, arrival_time: 3600, departure_time: 3600 },
+		{ feed_id: "feed", trip_id: "trip", stop_id: "b", stop_sequence: 2, arrival_time: 4200, departure_time: 4200 },
+		{ feed_id: "feed", trip_id: "trip", stop_id: "c", stop_sequence: 3, arrival_time: 4800, departure_time: 4800 },
+	]);
+	ctx.runtimeState.srtNetworkData = { matrix: {}, adjacency: {}, lastUpdated: Date.now() };
+	const trip = {
+		feed_id: "feed",
+		trip_id: "trip",
+		route_id: "r",
+		service_id: "daily",
+		direction_id: 0,
+		shape_id: null,
+		trip_headsign: null,
+		trip_short_name: null,
+		block_id: null,
+		wheelchair_accessible: null,
+		bikes_allowed: null,
+	};
+	const sequenceOnlyUpdate = {
+		feed_id: "feed",
+		source_id: "test",
+		trip: {
+			trip_id: "trip",
+			route_id: "r",
+			direction_id: 0,
+			start_date: "20260827",
+			start_time: "10:00:00",
+			schedule_relationship: TripScheduleRelationship.SCHEDULED,
+		},
+		stop_time_updates: [{ stop_id: "", stop_sequence: 2, arrival_delay: 600, departure_delay: 600 }],
+	};
+	const result = augmentTrip(trip, ctx, new Map([[q("feed", "trip"), [sequenceOnlyUpdate]]]), undefined, {
+		serviceDates: ["20260827"],
+		realtimeDates: ["20260827"],
+	});
+	assert.equal(result.instances[0].stopTimes[0].actual_arrival_time, 3600);
+	assert.equal(result.instances[0].stopTimes[1].actual_arrival_time, 4800);
+}
+
 for (const testCase of [
 	["qualified keys isolate identical local entities", testQualifiedKeys],
 	["exact shape expands a physical corridor", testExactShape],
@@ -2149,6 +2880,25 @@ for (const testCase of [
 	["compatible search skips shapes without anchor overlap", testCompatibleSearchSkipsShapesWithoutAnchorOverlap],
 	["pattern index collapses equivalent trips", testPatternIndexCollapsesEquivalentTrips],
 	["local gaps skip pattern timing work", testLocalGapsSkipPatternTimingWork],
+	["synthetic stop sequences stay integer", testSyntheticStopSequencesStayInteger],
+	["non-finite shape coordinates are skipped", testNonFiniteShapeCoordinatesAreSkipped],
+	["antimeridian projection uses the short path", testAntimeridianProjectionUsesShortPath],
+	["shortest manual tie stays unresolved", testShortestManualTopologyTieStaysUnresolved],
+	["fallback manual does not mask shape ambiguity", testFallbackManualDoesNotMaskShapeAmbiguity],
+	["repeated-visit update stays on its visit", testRepeatedVisitSequenceUpdateStaysOnItsVisit],
+	["sequence-only update applies by sequence", testSequenceOnlyUpdateAppliesBySequence],
+	["passenger loops keep later stops", testPassengerLoopKeepsLaterStops],
+	["explicit chains cascade but fallback is one-hop", testExplicitChainCascadesButFallbackOneHop],
+	["skipped terminal keeps handoff", testSkippedTerminalKeepsHandoff],
+	["skipped intermediates do not claim later visits", testSkippedIntermediateDoesNotClaimLaterVisit],
+	["repeated occurrence needs departure time", testRepeatedOccurrenceNeedsDepartureTime],
+	["NO_DATA origin cannot board", testNoDataOriginCannotBoard],
+	["NO_DATA destination not reachable", testNoDataDestinationNotReachable],
+	["loop origin without departureTime uses first occurrence", testLoopOriginWithoutDepartureTimeUsesFirstOccurrence],
+	["drop-only origin cannot board", testDropOnlyOriginCannotBoard],
+	["non-boardable origin cannot board", testNonBoardableOriginCannotBoard],
+	["pickup-only destination not reachable", testPickupOnlyDestinationNotReachable],
+	["midnight handoff uses raw times", testMidnightHandoffUsesRawTimes],
 ]) {
 	try {
 		testCase[1]();

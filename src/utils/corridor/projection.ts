@@ -1,4 +1,4 @@
-import { coordinateDistanceMeters } from "./geometry.js";
+import { coordinateDistanceMeters, wrapLongitudeDelta } from "./geometry.js";
 
 export interface SegmentProjection {
 	segmentFraction: number;
@@ -13,12 +13,21 @@ export function projectCoordinatesOnSegment(
 	bLat: number,
 	bLon: number,
 ): SegmentProjection {
+	if (
+		!Number.isFinite(pointLat) ||
+		!Number.isFinite(pointLon) ||
+		!Number.isFinite(aLat) ||
+		!Number.isFinite(aLon) ||
+		!Number.isFinite(bLat) ||
+		!Number.isFinite(bLon)
+	)
+		return { segmentFraction: 0, lateralDistanceMeters: Number.POSITIVE_INFINITY };
 	const latitude = (pointLat + aLat + bLat) / 3;
 	const longitudeScale = Math.max(0.01, Math.cos((latitude * Math.PI) / 180));
 	const scale = 111_320;
-	const px = (pointLon - aLon) * scale * longitudeScale;
+	const px = wrapLongitudeDelta(pointLon - aLon) * scale * longitudeScale;
 	const py = (pointLat - aLat) * scale;
-	const bx = (bLon - aLon) * scale * longitudeScale;
+	const bx = wrapLongitudeDelta(bLon - aLon) * scale * longitudeScale;
 	const by = (bLat - aLat) * scale;
 	const denominator = bx * bx + by * by;
 	if (denominator <= Number.EPSILON) {
@@ -50,15 +59,24 @@ export function projectPointOnPolyline(
 	maxResults = 3,
 ): Array<SegmentProjection & { segmentIndex: number; distanceAlongMeters: number }> {
 	const candidates: Array<SegmentProjection & { segmentIndex: number; distanceAlongMeters: number }> = [];
+	if (!Number.isFinite(point.lat) || !Number.isFinite(point.lon)) return [];
 	for (let segmentIndex = 0; segmentIndex < polyline.length - 1; segmentIndex++) {
 		const start = polyline[segmentIndex];
 		const end = polyline[segmentIndex + 1];
+		if (!Number.isFinite(start.lat) || !Number.isFinite(start.lon) || !Number.isFinite(end.lat) || !Number.isFinite(end.lon))
+			continue;
 		const projection = projectPointOnSegment(point, start, end);
+		if (!Number.isFinite(projection.lateralDistanceMeters) || !Number.isFinite(projection.segmentFraction))
+			continue;
 		const segmentLength = coordinateDistanceMeters(start, end);
+		if (!Number.isFinite(segmentLength)) continue;
+		const distanceAlongMeters =
+			cumulativeMeters[segmentIndex] + projection.segmentFraction * segmentLength;
+		if (!Number.isFinite(distanceAlongMeters) || !Number.isFinite(cumulativeMeters[segmentIndex])) continue;
 		candidates.push({
 			...projection,
 			segmentIndex,
-			distanceAlongMeters: cumulativeMeters[segmentIndex] + projection.segmentFraction * segmentLength,
+			distanceAlongMeters,
 		});
 	}
 	candidates.sort((a, b) => a.lateralDistanceMeters - b.lateralDistanceMeters);

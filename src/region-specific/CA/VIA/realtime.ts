@@ -166,6 +166,22 @@ const MOBILE_DATA_URL = "https://tsimobile.viarail.ca/data/allData.json";
 const MOBILE_FETCH_TIMEOUT_MS = 10_000;
 const UPDATE_THROTTLE_MS = 30_000;
 
+/**
+ * Conservative sane bound for VIA `diffMin` (minutes of delay). VIA's
+ * long-distance trains can run many hours late, so the bound is generous
+ * (48h); anything outside it (or non-finite/wrong-typed) is treated as
+ * missing for that stop so one malformed value cannot poison the train or
+ * the batch with a 1e9-minute delay.
+ */
+export const VIA_MAX_DIFF_MIN = 2880;
+
+/** Validate one provider `diffMin`; return null when malformed or out of range. */
+export function sanitizeViaDiffMin(value: unknown): number | null {
+	if (typeof value !== "number" || !Number.isFinite(value)) return null;
+	if (Math.abs(value) > VIA_MAX_DIFF_MIN) return null;
+	return value;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -303,24 +319,27 @@ export async function updateRealtime(ctx: CacheContext) {
 			serviceDate: startDate,
 		});
 
-		const stopTimeUpdates: qdf.RealtimeStopTimeUpdate[] = train.times.map((time) => ({
-			stop_sequence: null,
-			stop_id: codeIdMap.get(time.code) ?? time.code,
-			trip_id: gtfsTrip.trip_id,
-			start_date: startDate,
-			start_time: null,
-			arrival_delay: time.diffMin !== undefined ? time.diffMin * 60 : null,
-			arrival_time: estimatedEpochSeconds(time.arrival?.estimated),
-			arrival_uncertainty: null,
-			departure_delay: time.diffMin !== undefined ? time.diffMin * 60 : null,
-			departure_time: estimatedEpochSeconds(time.departure?.estimated),
-			departure_uncertainty: null,
-			schedule_relationship: time.cancelled
-				? qdf.StopTimeScheduleRelationship.SKIPPED
-				: qdf.StopTimeScheduleRelationship.SCHEDULED,
-			feed_id: VIA_STATIC_FEED_ID,
-			source_id: VIA_INJECTED_SOURCE_ID,
-		}));
+		const stopTimeUpdates: qdf.RealtimeStopTimeUpdate[] = train.times.map((time) => {
+			const delayMin = sanitizeViaDiffMin(time.diffMin);
+			return {
+				stop_sequence: null,
+				stop_id: codeIdMap.get(time.code) ?? time.code,
+				trip_id: gtfsTrip.trip_id,
+				start_date: startDate,
+				start_time: null,
+				arrival_delay: delayMin !== null ? delayMin * 60 : null,
+				arrival_time: estimatedEpochSeconds(time.arrival?.estimated),
+				arrival_uncertainty: null,
+				departure_delay: delayMin !== null ? delayMin * 60 : null,
+				departure_time: estimatedEpochSeconds(time.departure?.estimated),
+				departure_uncertainty: null,
+				schedule_relationship: time.cancelled
+					? qdf.StopTimeScheduleRelationship.SKIPPED
+					: qdf.StopTimeScheduleRelationship.SCHEDULED,
+				feed_id: VIA_STATIC_FEED_ID,
+				source_id: VIA_INJECTED_SOURCE_ID,
+			};
+		});
 
 		const tripInfo: qdf.RealtimeUpdateTripInfo = {
 			trip_id: gtfsTrip.trip_id,
@@ -335,6 +354,7 @@ export async function updateRealtime(ctx: CacheContext) {
 			feed_id: VIA_STATIC_FEED_ID,
 		};
 		const sourceTimestamp = estimatedEpochSeconds(train.poll) ?? Math.floor(now / 1000);
+		const headDelayMin = sanitizeViaDiffMin(train.times[0]?.diffMin);
 
 		tripUpdates.push({
 			update_id: `VIA_${tripNumber}_${startDate}`,
@@ -343,7 +363,7 @@ export async function updateRealtime(ctx: CacheContext) {
 			vehicle: { id: tripNumber, label: tripNumber, license_plate: "" },
 			stop_time_updates: stopTimeUpdates,
 			timestamp: sourceTimestamp,
-			delay: train.times[0]?.diffMin !== undefined ? train.times[0].diffMin * 60 : null,
+			delay: headDelayMin !== null ? headDelayMin * 60 : null,
 			feed_id: VIA_STATIC_FEED_ID,
 			source_id: VIA_INJECTED_SOURCE_ID,
 		});
@@ -399,7 +419,11 @@ function sameLocation(a: { kind: string; value: string }, b: { kind: string; val
 }
 
 /** Attach CIS locations after the generic GTFS-RT cache has rebuilt the affected trip instances. */
-export function applyCisBoardingLocations(ctx: CacheContext): void {
+export function applyCisBoardingLocations(
+	ctx: CacheContext,
+	nowMsOrChangedKeys: number | ReadonlySet<string> = Date.now(),
+): void {
+	const nowMs = typeof nowMsOrChangedKeys === "number" ? nowMsOrChangedKeys : Date.now();
 	const state = getState(ctx);
 	const codeIdMap = state.codeIdMap;
 	if (!codeIdMap) return;
@@ -429,10 +453,12 @@ export function applyCisBoardingLocations(ctx: CacheContext): void {
 		}
 	}
 
-	for (const assignment of buildCisBoardingAssignments(state.cisBoards, state.tripMatches)) {
+	for (const assignment of buildCisBoardingAssignments(state.cisBoards, state.tripMatches, nowMs)) {
 		const trip = ctx.augmented.tripsRec.get(entityKey({ feedId: VIA_STATIC_FEED_ID, localId: assignment.tripId }));
 		const instance = trip?.instances.find((candidate) => candidate.serviceDate === assignment.serviceDate);
 		if (!instance) continue;
+		// A canceled trip quarantines residual CIS tracks instead of re-applying them.
+		if ((instance.schedule_relationship as unknown) === qdf.TripScheduleRelationship.CANCELED) continue;
 		const stopId = codeIdMap.get(assignment.stationCode) ?? assignment.stationCode;
 		const stopTime = instance.stopTimes.find((candidate) => {
 			const ids = [

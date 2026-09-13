@@ -62,6 +62,15 @@ export class CoordinateGridIndex<T = string> {
 		bLon: number,
 		expandedMeters: number,
 	): SpatialPoint<T>[] {
+		if (
+			!Number.isFinite(aLat) ||
+			!Number.isFinite(aLon) ||
+			!Number.isFinite(bLat) ||
+			!Number.isFinite(bLon) ||
+			!Number.isFinite(expandedMeters) ||
+			expandedMeters < 0
+		)
+			return [];
 		const latitude = (aLat + bLat) / 2;
 		const latExpansion = expandedMeters / 111_320;
 		const lonScale = Math.max(0.01, Math.cos((latitude * Math.PI) / 180));

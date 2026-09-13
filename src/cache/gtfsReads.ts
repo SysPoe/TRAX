@@ -126,7 +126,11 @@ export function primeRawStopTimes(ctx: CacheContext, trips: readonly Trip[]): vo
 	const tripIdsByFeed = new Map<string, Set<string>>();
 	for (const trip of trips) {
 		const key = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
-		if (!ctx.augmented.rawStopTimesCache.has(key)) ctx.augmented.rawStopTimesCache.set(key, []);
+		// Changed-trip batches routinely include trips whose rows are already
+		// cached. Only the uncached tail needs a native query; re-querying the
+		// cached head repeats native work and would clobber retained rows.
+		if (ctx.augmented.rawStopTimesCache.has(key)) continue;
+		ctx.augmented.rawStopTimesCache.set(key, []);
 		let ids = tripIdsByFeed.get(trip.feed_id);
 		if (!ids) {
 			ids = new Set();
@@ -158,7 +162,12 @@ export function getTripUpdates(ctx: CacheContext, trip?: QualifiedEntityId): Rea
 	}
 
 	const gtfs = requireGtfs(ctx);
-	const updates = gtfs.getRealtimeTripUpdates();
+	// A single-trip caller must not materialize every feed's realtime table.
+	// Filter natively by feed only: canonical trip-id aliases are resolved in
+	// JS below, so a native trip_id filter could miss provider-side aliases.
+	// Replacement precedence only compares updates sharing one service key,
+	// so the feed-filtered subset yields the same per-trip result.
+	const updates = trip ? gtfs.getRealtimeTripUpdates({ feed_id: trip.feedId }) : gtfs.getRealtimeTripUpdates();
 	const injected = ctx.raw.injectedTripUpdates ?? [];
 	const allUpdates = applyRealtimeReplacementPrecedence(
 		canonicalizeRealtimeTripUpdates(updates.concat(injected), ctx),
@@ -176,7 +185,10 @@ export function getTripUpdates(ctx: CacheContext, trip?: QualifiedEntityId): Rea
 
 export function getVehiclePositions(ctx: CacheContext, trip?: QualifiedEntityId): RealtimeVehiclePosition[] {
 	const gtfs = requireGtfs(ctx);
-	const positions = gtfs.getRealtimeVehiclePositions();
+	// Narrow natively by feed only; canonical trip-id aliases resolve in JS.
+	const positions = trip
+		? gtfs.getRealtimeVehiclePositions({ feed_id: trip.feedId })
+		: gtfs.getRealtimeVehiclePositions();
 	const injected = ctx.raw.injectedVehiclePositions ?? [];
 	const allPositions = canonicalizeRealtimeVehiclePositions(positions.concat(injected), ctx).map((position) => {
 		let enriched = position;

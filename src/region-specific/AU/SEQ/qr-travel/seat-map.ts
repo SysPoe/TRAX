@@ -151,14 +151,26 @@ function diagramContentType(imageType: unknown): string | null {
 }
 
 /** Content-addressed diagram store shared by every seat map in this runtime. */
+function validDiagramBytes(bytes: Buffer, contentType: string | null): boolean {
+	if (!contentType || bytes.length === 0 || bytes.length > DIAGRAM_CACHE_BYTES) return false;
+	if (contentType === "image/jpeg") return bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8;
+	if (contentType === "image/png") return bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+	if (contentType === "image/gif") return bytes.subarray(0, 6).toString("ascii") === "GIF87a" || bytes.subarray(0, 6).toString("ascii") === "GIF89a";
+	if (contentType === "image/webp") return bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP";
+	return false;
+}
+
 function storeDiagram(state: SeatMapState, imageData: unknown, imageType: unknown): string | null {
 	if (typeof imageData !== "string" || !imageData.trim()) return null;
-	const bytes = Buffer.from(imageData, "base64");
-	if (!bytes.length) return null;
+	const encoded = imageData.replace(/\s+/g, "");
+	if (encoded.length % 4 !== 0 || encoded.length > Math.ceil(DIAGRAM_CACHE_BYTES / 3) * 4) return null;
+	const bytes = Buffer.from(encoded, "base64");
+	if (bytes.toString("base64") !== encoded) return null;
+	const contentType = diagramContentType(imageType);
+	if (!validDiagramBytes(bytes, contentType)) return null;
 	const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 32);
 	if (!state.diagrams.has(hash)) {
-		const contentType = diagramContentType(imageType) ?? "application/octet-stream";
-		state.diagrams.set(hash, { bytes, contentType });
+		state.diagrams.set(hash, { bytes, contentType: contentType! });
 		state.diagramBytes += bytes.length;
 		for (const [key, entry] of state.diagrams) {
 			if (state.diagramBytes <= DIAGRAM_CACHE_BYTES) break;
@@ -247,16 +259,13 @@ export function selectQrtSeatMapFareOption(service: RailService): RailService | 
 	const regular = options
 		.map(record)
 		.filter((option): option is Record<string, unknown> => option !== null)
-		.filter((option) => option.servicE_OPTION_TYPE == null || option.servicE_OPTION_TYPE === 0)
+		.filter((option) => option.servicE_OPTION_TYPE === 0)
 		.filter((option) => {
 			const name = stringValue(option.servicE_OPTION_NAME);
 			return name !== null && regularProduct(name);
 		});
-	const pool = regular.length
-		? regular
-		: options.map(record).filter((option): option is Record<string, unknown> => option !== null);
 	return (
-		pool.sort((left, right) => {
+		regular.sort((left, right) => {
 			const leftPrice = typeof left.adulT_PRICE === "number" ? left.adulT_PRICE : Number.POSITIVE_INFINITY;
 			const rightPrice = typeof right.adulT_PRICE === "number" ? right.adulT_PRICE : Number.POSITIVE_INFINITY;
 			return leftPrice - rightPrice;
@@ -323,7 +332,8 @@ async function fetchSeatMap(
 
 	const key = `${service.serviceId}\0${leg.departureDate}\0${leg.origin.placeCode}\0${leg.destination.placeCode}`;
 	const cachedCandidate = state.candidates.get(key);
-	let candidate: RailService | null = cachedCandidate === undefined ? null : (cachedCandidate?.service ?? null);
+	let candidate: RailService | null =
+		cachedCandidate && cachedCandidate.expiresAt > Date.now() ? cachedCandidate.service : null;
 	if (!cachedCandidate || cachedCandidate.expiresAt <= Date.now()) {
 		const booking = qrtBookingState(ctx);
 		const stations = await qrtBookingStationsFor(ctx, booking);
@@ -347,7 +357,7 @@ async function fetchSeatMap(
 		}
 		state.candidates.set(key, {
 			service: candidate,
-			expiresAt: Date.now() + CANDIDATE_TTL_MS,
+			expiresAt: Date.now() + (candidate ? CANDIDATE_TTL_MS : MISSING_SEAT_MAP_TTL_MS),
 		});
 	}
 	if (!candidate) return null;
@@ -424,3 +434,9 @@ export async function getQrtBookingSeatMap(
 	state.inFlight.set(key, request);
 	return request;
 }
+
+export const _test = {
+	storeDiagram(ctx: CacheContext, imageData: unknown, imageType: unknown): string | null {
+		return storeDiagram(stateFor(ctx), imageData, imageType);
+	},
+};

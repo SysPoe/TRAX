@@ -182,8 +182,8 @@ export async function qrtBookingStationsFor(ctx: CacheContext, state: BookingSta
 	return state.stationsInFlight;
 }
 
-function normalizedStationName(value: string): string {
-	return value
+function normalizedStationName(value: unknown): string {
+	return (stringValue(value) ?? "")
 		.toLowerCase()
 		.replace(/\bst\b/g, "street")
 		.replace(/\brailway\b|\bstation\b/g, "")
@@ -196,10 +196,11 @@ export function matchQrtBookingStation(
 	stop: Pick<QRTTravelStopTime, "placeCode" | "placeName">,
 	stations: readonly BookingStation[],
 ): BookingStation | null {
-	const code = stop.placeCode.trim().toUpperCase();
+	const code = (stringValue(stop.placeCode) ?? "").toUpperCase();
 	const byCode = code ? stations.filter((station) => station.code === code) : [];
 	if (byCode.length === 1) return byCode[0];
 	const wanted = normalizedStationName(stop.placeName);
+	if (!wanted) return null;
 	const exact = stations.filter((station) => normalizedStationName(station.name) === wanted);
 	if (exact.length === 1) return exact[0];
 	const containing = stations.filter((station) => {
@@ -218,7 +219,7 @@ function timeMinute(value: string): string | null {
 }
 
 function stopHasPassed(stop: QRTTravelStopTime): boolean {
-	const position = stop.trainPosition.trim().toLowerCase();
+	const position = (stringValue(stop.trainPosition) ?? "").toLowerCase();
 	return position === "passed" || position === "departed" || position.includes("passed");
 }
 
@@ -234,11 +235,12 @@ export function selectQrtBookingLeg(
 	cutoffMs = QRT_BOOKING_CUTOFF_MS,
 ): QrtBookingLeg | null {
 	const destination = service.stops.at(-1);
-	if (!destination) return null;
+	if (!destination || !stringValue(destination.placeCode) || !stringValue(destination.placeName)) return null;
 	const earliestDeparture = now + cutoffMs;
 	const timeZone = "Australia/Brisbane";
 
 	for (const stop of service.stops.slice(0, -1)) {
+		if (!stringValue(stop.placeCode) || !stringValue(stop.placeName) || !stringValue(stop.trainPosition)) continue;
 		if (stopHasPassed(stop)) continue;
 		const departureDate = stop.plannedDeparture;
 		if (!departureDate || departureDate === "0001-01-01T00:00:00") continue;
@@ -436,11 +438,13 @@ export async function getQrtBookingAvailability(
 	if (previous && !lastAvailability) state.lastAvailability.delete(serviceKey);
 	const leg = selectQrtBookingLeg(service);
 	const travelDate = leg ? bookingDate(leg.departureDate) : null;
-	if (!leg || !travelDate) return lastAvailability;
+	// No remaining valid leg means the journey is no longer bookable. A stale
+	// result from an earlier origin must not survive after the train passes it.
+	if (!leg || !travelDate) return null;
 	const stations = await qrtBookingStationsFor(ctx, state);
 	const origin = matchQrtBookingStation(leg.origin, stations);
 	const destination = matchQrtBookingStation(leg.destination, stations);
-	if (!origin || !destination) return lastAvailability;
+	if (!origin || !destination) return null;
 	const key = `${service.serviceId}\0${leg.departureDate}\0${origin.id}\0${destination.id}`;
 	const now = Date.now();
 	const cached = state.inventory.get(key);

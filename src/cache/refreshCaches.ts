@@ -117,13 +117,41 @@ export function retainStaticRefreshState(ctx: CacheContext): RetainedStaticRefre
 }
 
 function tripUpdateSignature(updates: readonly unknown[]): string {
-	return JSON.stringify(
-		updates.map((update) => {
-			if (update === null || typeof update !== "object" || Array.isArray(update)) return update;
-			const { timestamp: _timestamp, update_id: _updateId, ...materialized } = update as Record<string, unknown>;
-			return materialized;
-		}),
-	);
+	const materialized = updates.map((update) => {
+		if (update === null || typeof update !== "object" || Array.isArray(update)) return update;
+		const { timestamp: _timestamp, update_id: _updateId, ...materialized } = update as Record<string, unknown>;
+		return materialized;
+	});
+	// The feed order of a semantically identical update set is not meaningful.
+	// Sort canonically so a permutation reuses the previous signature instead
+	// of triggering needless re-augmentation. Sorting keeps duplicates (length
+	// still matters) and timestamp/update_id stay stripped for metadata-only
+	// refreshes.
+	materialized.sort((left, right) => {
+		const leftText = JSON.stringify(left) ?? "";
+		const rightText = JSON.stringify(right) ?? "";
+		return leftText < rightText ? -1 : leftText > rightText ? 1 : 0;
+	});
+	return JSON.stringify(materialized);
+}
+
+function normalizeClockForKey(value: string | null | undefined): string {
+	if (value == null) return "";
+	const trimmed = String(value).trim();
+	if (trimmed === "") return "";
+	const match = /^(\d+):(\d{2})(?::(\d{2}))?$/.exec(trimmed);
+	if (!match) return trimmed;
+	const h = Number(match[1]);
+	const m = Number(match[2]);
+	const s = Number(match[3] ?? "0");
+	if (!Number.isFinite(h) || !Number.isFinite(m) || !Number.isFinite(s)) return trimmed;
+	if (m > 59 || s > 59 || h < 0) return trimmed;
+	const total = h * 3600 + m * 60 + s;
+	if (!Number.isFinite(total) || total < 0) return trimmed;
+	const hh = Math.floor(total / 3600);
+	const mm = Math.floor((total % 3600) / 60);
+	const ss = total % 60;
+	return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
 }
 
 function realtimeInstanceKey(update: RealtimeTripUpdate): string {
@@ -132,7 +160,7 @@ function realtimeInstanceKey(update: RealtimeTripUpdate): string {
 		update.source_id,
 		update.trip.trip_id,
 		update.trip.start_date,
-		update.trip.start_time,
+		normalizeClockForKey(update.trip.start_time),
 		update.trip.schedule_relationship,
 	]);
 }
@@ -160,6 +188,7 @@ function isRealtimeOnlyRelationship(relationship: TripScheduleRelationship): boo
 	return (
 		relationship === TripScheduleRelationship.ADDED ||
 		relationship === TripScheduleRelationship.UNSCHEDULED ||
+		relationship === TripScheduleRelationship.DUPLICATED ||
 		relationship === TripScheduleRelationship.REPLACEMENT
 	);
 }
@@ -456,15 +485,59 @@ export async function refreshStaticCache(
 	ctx.augmented.timer.stop("refreshStaticCache:loadTrips");
 
 	ctx.augmented.timer.start("refreshStaticCache:loadTripStopTimeBounds");
+	const MAX_LOOKBACK_DAYS = 7;
+	const applyLookbackEndTime = (endTime: unknown): void => {
+		if (typeof endTime !== "number" || !Number.isFinite(endTime) || endTime < 0) return;
+		const days = Math.ceil(endTime / 86_400) + 1;
+		if (!Number.isFinite(days)) return;
+		const bounded = Math.min(MAX_LOOKBACK_DAYS, Math.max(1, days));
+		if (Number.isFinite(bounded)) {
+			ctx.runtimeState.maxTripLookbackDays = Math.min(
+				MAX_LOOKBACK_DAYS,
+				Math.max(ctx.runtimeState.maxTripLookbackDays, bounded),
+			);
+		}
+	};
 	for (const bounds of gtfs.getTripStopTimeBounds()) {
 		const key = entityKey({ feedId: bounds.feed_id, localId: bounds.trip_id });
 		newRawCache.tripStopTimeBoundsByKey.set(key, bounds);
-		ctx.runtimeState.maxTripLookbackDays = Math.max(
-			ctx.runtimeState.maxTripLookbackDays,
-			Math.ceil(bounds.end_time / 86_400),
-		);
+		applyLookbackEndTime(bounds.end_time);
 	}
 	ctx.augmented.timer.stop("refreshStaticCache:loadTripStopTimeBounds");
+
+	ctx.augmented.timer.start("refreshStaticCache:loadFrequencies");
+	for (const frequency of gtfs.getFrequencies()) {
+		const key = entityKey({ feedId: frequency.feed_id, localId: frequency.trip_id });
+		const rows = newRawCache.frequenciesByTripKey.get(key);
+		if (rows) rows.push(frequency);
+		else newRawCache.frequenciesByTripKey.set(key, [frequency]);
+	}
+	for (const rows of newRawCache.frequenciesByTripKey.values()) {
+		rows.sort((left, right) => {
+			const l = Number.isFinite(left.start_time) ? left.start_time : 0;
+			const r = Number.isFinite(right.start_time) ? right.start_time : 0;
+			return l - r;
+		});
+	}
+	for (const [tripKey, rows] of newRawCache.frequenciesByTripKey) {
+		const bounds = newRawCache.tripStopTimeBoundsByKey.get(tripKey);
+		if (!bounds || rows.length === 0) continue;
+		if (!Number.isFinite(bounds.end_time) || !Number.isFinite(bounds.start_time)) continue;
+		// Iterate with finite validation: spread would stack-overflow on huge
+		// feeds and a single NaN would poison the max.
+		let maxFrequencyEnd: number | null = null;
+		for (const row of rows) {
+			const end = row.end_time;
+			if (typeof end !== "number" || !Number.isFinite(end)) continue;
+			if (maxFrequencyEnd === null || end > maxFrequencyEnd) maxFrequencyEnd = end;
+		}
+		if (maxFrequencyEnd === null) continue;
+		const duration = bounds.end_time - bounds.start_time;
+		const safeDuration = Number.isFinite(duration) ? Math.max(0, duration) : 0;
+		const effectiveEnd = maxFrequencyEnd + safeDuration;
+		applyLookbackEndTime(effectiveEnd);
+	}
+	ctx.augmented.timer.stop("refreshStaticCache:loadFrequencies");
 
 	for (const trip of allTrips) {
 		newRawCache.tripServiceIds!.set(
@@ -641,16 +714,47 @@ export async function refreshStaticCache(
 
 	ctx.augmented.timer.start("refreshStaticCache:augmentTrips");
 	const tripUpdatesCache = ctx.augmented.tripUpdatesCache;
-	newAugmentedCache.trips = await processWithProgress(
+	const augmentedResults = await processWithProgress(
 		tripsToAugment,
 		"Augmenting trips",
 		(trip) => {
 			const tripKey = entityKey({ feedId: trip.feed_id, localId: trip.trip_id });
+			const reentrantTrip = newAugmentedCache.tripsRec.get(tripKey);
+			const serviceDates = new Set(operationalServiceDatesByTrip.get(tripKey) ?? []);
+			// A plugin callback can request a lazy date while this static batch is
+			// still being built. Preserve any such instances when the main batch
+			// later reaches the same trip, otherwise the lazy-date marker survives
+			// while its instances are overwritten.
+			for (const date of reentrantTrip?.scheduledStartServiceDates ?? []) {
+				if (ctx.runtimeState.lazyServiceDates.has(date)) serviceDates.add(date);
+			}
 			let augmentedTrip;
 			try {
-				augmentedTrip = augmentTrip(trip, ctx, tripUpdatesCache, undefined, {
-					serviceDates: operationalServiceDatesByTrip.get(tripKey) ?? [],
+				augmentedTrip = augmentTrip(trip, ctx, tripUpdatesCache, reentrantTrip, {
+					serviceDates: [...serviceDates].sort(),
 				});
+			} catch (error) {
+				// Quarantine a single pathological trip (e.g. >10k exact frequency
+				// runs) so one invalid template cannot abort the healthy network.
+				// Publish healthy data with a useful per-trip error.
+				const message = error instanceof Error ? error.message : String(error);
+				logger.error(
+					`Skipping invalid trip ${trip.feed_id}/${trip.trip_id} during static refresh: ${message}`,
+					{
+						module: "cache",
+						function: "refreshStaticCache",
+					},
+				);
+				newAugmentedCache.rawTripsRec.delete(tripKey);
+				newAugmentedCache.staticTemplates.delete(tripKey);
+				const tripNumber = newAugmentedCache.tripNumberByTrip.get(tripKey);
+				if (tripNumber !== undefined) {
+					const keys = newAugmentedCache.tripNumberTrips.get(tripNumber);
+					keys?.delete(tripKey);
+					if (keys?.size === 0) newAugmentedCache.tripNumberTrips.delete(tripNumber);
+					newAugmentedCache.tripNumberByTrip.delete(tripKey);
+				}
+				return null;
 			} finally {
 				if (!tripUpdatesCache.has(tripKey)) newAugmentedCache.rawStopTimesCache.delete(tripKey);
 			}
@@ -666,6 +770,7 @@ export async function refreshStaticCache(
 		(batch) => primeRawStopTimes(ctx, batch),
 		yieldBudget,
 	);
+	newAugmentedCache.trips = augmentedResults.filter((trip): trip is import("../utils/augmentedTrip.js").AugmentedTrip => trip !== null);
 	ctx.augmented.timer.stop("refreshStaticCache:augmentTrips");
 
 	rebuildAugmentedTripArrayIndex(ctx);
@@ -766,22 +871,13 @@ export async function refreshRealtimeCache(
 				refreshRealtimeMetadata(ctx, tripKey, updates);
 			}
 			augmentedCache.tripUpdatesCache.set(tripKey, updates);
-			augmentedCache.tripUpdateSignatures.set(tripKey, nextSignatures.get(tripKey)!);
 		} else {
 			augmentedCache.tripUpdatesCache.delete(tripKey);
-			augmentedCache.tripUpdateSignatures.delete(tripKey);
 		}
 	}
-	augmentedCache.lastRealtimeChangedHandles.clear();
-	const { tripHandleFor } = await import("./handles.js");
+	augmentedCache.lastRealtimeChangedTripKeys.clear();
 	for (const key of updatedTripIds) {
-		const colon = key.indexOf(":");
-		if (colon < 0) continue;
-		const feedIdLength = Number.parseInt(key.slice(0, colon), 10);
-		const identity = key.slice(colon + 1);
-		augmentedCache.lastRealtimeChangedHandles.add(
-			tripHandleFor(identity.slice(0, feedIdLength), identity.slice(feedIdLength)),
-		);
+		augmentedCache.lastRealtimeChangedTripKeys.add(key);
 	}
 	timer.stop("refreshRealtimeCache:collectChangedIds");
 
@@ -858,15 +954,29 @@ export async function refreshRealtimeCache(
 					timer.stop("refreshRealtimeCache:fetchRawChangedTrips");
 
 					if (rawTrip) {
-						timer.start("refreshRealtimeCache:reaugmentChangedTrips");
-						const updatedTrip = augmentTrip(rawTrip, ctx, ctx.augmented.tripUpdatesCache, reusableTrip);
-						timer.stop("refreshRealtimeCache:reaugmentChangedTrips");
+						try {
+							timer.start("refreshRealtimeCache:reaugmentChangedTrips");
+							const updatedTrip = augmentTrip(rawTrip, ctx, ctx.augmented.tripUpdatesCache, reusableTrip);
+							timer.stop("refreshRealtimeCache:reaugmentChangedTrips");
 
-						timer.start("refreshRealtimeCache:reregisterIndexes");
-						augmentedCache.tripsRec.set(tripKey, updatedTrip);
-						registerAugmentedTrip(ctx, updatedTrip);
-						replaceAugmentedTripInArray(ctx, updatedTrip);
-						timer.stop("refreshRealtimeCache:reregisterIndexes");
+							timer.start("refreshRealtimeCache:reregisterIndexes");
+							augmentedCache.tripsRec.set(tripKey, updatedTrip);
+							registerAugmentedTrip(ctx, updatedTrip);
+							replaceAugmentedTripInArray(ctx, updatedTrip);
+							timer.stop("refreshRealtimeCache:reregisterIndexes");
+						} catch (error) {
+							try {
+								timer.stop("refreshRealtimeCache:reaugmentChangedTrips");
+							} catch {}
+							try {
+								timer.stop("refreshRealtimeCache:reregisterIndexes");
+							} catch {}
+							const message = error instanceof Error ? error.message : String(error);
+							logger.error(`Skipping invalid trip ${tripKey} during realtime refresh: ${message}`, {
+								module: "cache",
+								function: "refreshRealtimeCache",
+							});
+						}
 					}
 
 					const current = index + 1;
@@ -905,6 +1015,14 @@ export async function refreshRealtimeCache(
 			module: "cache",
 			function: "refreshRealtimeCache",
 		});
+	}
+
+	// A signature is a commit marker for a completely augmented generation.
+	// Keeping the previous markers on StaleGenerationError makes the guarded
+	// retry see and rebuild the unprocessed tail.
+	augmentedCache.tripUpdateSignatures.clear();
+	for (const [tripKey, signature] of nextSignatures) {
+		augmentedCache.tripUpdateSignatures.set(tripKey, signature);
 	}
 
 	const hookTasks: { plugin: TransitPlugin; isSeqPlugin: boolean }[] = [];

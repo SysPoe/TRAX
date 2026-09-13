@@ -47,6 +47,7 @@ export type PlatformPredictionDiagnostics = {
 	observations: number;
 	pending: number;
 	evaluated: number;
+	expired: number;
 	lastEvaluatedAt: string | null;
 	byRoute: PlatformAccuracyByRoute[];
 	byServiceId: PlatformAccuracyByService[];
@@ -132,6 +133,23 @@ export class PlatformPredictionShadow {
 				actual_platform TEXT NOT NULL,
 				observed_at INTEGER NOT NULL
 			);
+
+			CREATE TABLE IF NOT EXISTS platform_prediction_expired (
+				event_key TEXT PRIMARY KEY,
+				feed_id TEXT NOT NULL,
+				route_id TEXT NOT NULL,
+				route_label TEXT NOT NULL,
+				direction_id INTEGER,
+				service_id TEXT NOT NULL,
+				stop_id TEXT NOT NULL,
+				day_of_week INTEGER NOT NULL,
+				scheduled_at INTEGER NOT NULL,
+				route_prediction TEXT,
+				service_prediction TEXT,
+				service_day_prediction TEXT,
+				created_at INTEGER NOT NULL,
+				expired_at INTEGER NOT NULL
+			);
 		`);
 	}
 
@@ -166,6 +184,9 @@ export class PlatformPredictionShadow {
 		);
 		const outcomeExists = this.db.prepare(
 			"SELECT 1 AS present FROM platform_prediction_outcomes WHERE event_key = ?",
+		);
+		const expiredExists = this.db.prepare(
+			"SELECT 1 AS present FROM platform_prediction_expired WHERE event_key = ?",
 		);
 		const upsertObservation = this.db.prepare(`
 			INSERT INTO platform_observations (
@@ -210,6 +231,25 @@ export class PlatformPredictionShadow {
 		try {
 			this.db.prepare("DELETE FROM platform_observations WHERE scheduled_at < ?").run(cutoff);
 			this.db.prepare("DELETE FROM platform_prediction_outcomes WHERE scheduled_at < ?").run(cutoff);
+			this.db.prepare("DELETE FROM platform_prediction_expired WHERE scheduled_at < ?").run(cutoff);
+			// Retain expired pending predictions as expired outcomes instead of
+			// silently deleting them, so accuracy stays scoped to observed events.
+			this.db
+				.prepare(
+					`
+					INSERT OR IGNORE INTO platform_prediction_expired (
+						event_key, feed_id, route_id, route_label, direction_id, service_id, stop_id,
+						day_of_week, scheduled_at, route_prediction, service_prediction,
+						service_day_prediction, created_at, expired_at
+					)
+					SELECT
+						event_key, feed_id, route_id, route_label, direction_id, service_id, stop_id,
+						day_of_week, scheduled_at, route_prediction, service_prediction,
+						service_day_prediction, created_at, ?
+					FROM platform_pending_predictions WHERE scheduled_at < ?
+				`,
+				)
+				.run(now, now - PENDING_GRACE_MS);
 			this.db
 				.prepare("DELETE FROM platform_pending_predictions WHERE scheduled_at < ?")
 				.run(now - PENDING_GRACE_MS);
@@ -267,7 +307,8 @@ export class PlatformPredictionShadow {
 					event.scheduledAt <= now ||
 					event.scheduledAt > now + PREDICTION_LOOKAHEAD_MS ||
 					pendingForEvent.get(event.eventKey) ||
-					outcomeExists.get(event.eventKey)
+					outcomeExists.get(event.eventKey) ||
+					expiredExists.get(event.eventKey)
 				)
 					continue;
 
@@ -370,6 +411,7 @@ export class PlatformPredictionShadow {
 			observations: count("platform_observations"),
 			pending: count("platform_pending_predictions"),
 			evaluated: count("platform_prediction_outcomes"),
+			expired: count("platform_prediction_expired"),
 			lastEvaluatedAt: latest.observed_at == null ? null : new Date(Number(latest.observed_at)).toISOString(),
 			byRoute: byRoute.map((row) => ({
 				feedId: row.feed_id,

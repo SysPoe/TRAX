@@ -10,6 +10,7 @@ import type {
 	Trip,
 	TripStopTimeBounds,
 	Transfer,
+	Frequency,
 	GTFS,
 } from "qdf-gtfs";
 import type { AugmentedStop } from "../utils/augmentedStop.js";
@@ -34,6 +35,8 @@ export type RawCache = {
 	consideredTrips?: Trip[];
 	/** Compact native extents used to select eager trip instances without loading stop-time rows. */
 	tripStopTimeBoundsByKey: Map<string, TripStopTimeBounds>;
+	/** Feed-qualified frequency rows, grouped by their template trip. */
+	frequenciesByTripKey: Map<string, Frequency[]>;
 	/** Feed-qualified trips created from ADDED/UNSCHEDULED realtime updates. */
 	realtimeOnlyTripKeys: Set<string>;
 	stopsByKey: Map<string, Stop>;
@@ -83,12 +86,12 @@ export type AugmentedCache = {
 	serviceDateTrips: Map<string, string[]>;
 	/** Canonical service-date membership index. */
 	serviceDateTripsSet: Map<string, Set<string>>;
-	/** Integer-handle compact index: date -> trip handles (high-volume). */
-	serviceDateTripHandles: Map<string, Set<number>>;
+	/** Qualified-key compact index: date -> trips (high-volume). */
+	serviceDateTripHandles: Map<string, Set<string>>;
 	/** Service-date buckets owned by each feed-qualified trip. */
 	serviceDatesByTrip: Map<string, Set<string>>;
-	/** Integer handles for trip -> service dates (compact). */
-	serviceDatesByTripHandle: Map<number, Set<string>>;
+	/** Qualified trip keys -> service dates. */
+	serviceDatesByTripHandle: Map<string, Set<string>>;
 	/** Materialized array views for callers that explicitly need arrays. */
 	passingTrips: Map<string, string[]>;
 	/** Canonical passing-stop membership index. */
@@ -106,9 +109,9 @@ export type AugmentedCache = {
 	/** Fully exact physical plans shared across qualified trip/date instances. */
 	corridorPhysicalResolutionCache: LRUCache<string, CorridorResolution>;
 	/** Median pattern timings indexed once per route, direction, and service date. */
-	corridorPatternEdgeMinutesCache: Map<string, Map<string, number>>;
+	corridorPatternEdgeMinutesCache: LRUCache<string, Map<string, number>>;
 	/** Active patterns shared by every gap on the same route, direction, and date. */
-	corridorActivePatternsCache: Map<string, RoutePattern[]>;
+	corridorActivePatternsCache: LRUCache<string, RoutePattern[]>;
 
 	expressInfoCache: LRUCache<string, ExpressInfo[]>;
 	passingStopsCache: LRUCache<string, PassingStop[]>;
@@ -121,14 +124,14 @@ export type AugmentedCache = {
 	tripArrayIndex: Map<string, number>;
 
 	tripsStoppingAt: Map<string, Set<string>>;
-	/** Compact handle index: stop handle -> trip handles */
-	tripsStoppingAtHandles: Map<number, Set<number>>;
+	/** Qualified stop keys -> qualified trip keys. */
+	tripsStoppingAtHandles: Map<string, Set<string>>;
 	stopDeparturesCached: Map<string, Map<string, AugmentedStopTime[]>>;
 	instancesRec: Map<string, AugmentedTripInstance>;
 	tripUpdatesCache: Map<string, qdf.RealtimeTripUpdate[]>;
 	tripUpdateSignatures: Map<string, string>;
-	/** Sparse realtime overlay index: changed trip handles from last QDF revision */
-	lastRealtimeChangedHandles: Set<number>;
+	/** Sparse realtime overlay index from the last QDF revision. */
+	lastRealtimeChangedTripKeys: Set<string>;
 	timer: Timer;
 	/** AU/SEQ: inferred trip chains (prev/next) from static topology + realtime gate */
 	seqDiagram?: SeqDiagramTopology;
@@ -151,9 +154,9 @@ export type CacheContext = {
 		serviceCalendarLoaded: boolean;
 		serviceCalendarRules: Map<string, Array<{ startEpochDay: number; endEpochDay: number; weekdayMask: number }>>;
 		serviceCalendarExceptions: Map<string, Map<number, 1 | 2>>;
-		// Inverse indexes for lazy date materialisation (date -> service handles, service -> trip handles)
-		servicesByDateHandle: Map<string, Set<number>>;
-		tripsByServiceHandle: Map<number, Set<number>>;
+		// Inverse indexes for lazy date materialisation.
+		servicesByDateHandle: Map<string, Set<string>>;
+		tripsByServiceHandle: Map<string, Set<string>>;
 		serviceDayStarts: Map<string, number>;
 		availableServiceDates: string[] | null;
 		operationalServiceDates: Set<string>;

@@ -80,3 +80,47 @@ test("shadow predictions are scored only after a later reported platform arrives
 		await rm(cacheDir, { recursive: true, force: true });
 	}
 });
+
+test("expired pending predictions are retained as expired instead of silently dropped", async () => {
+	const cacheDir = await mkdtemp(join(tmpdir(), "trax-platform-shadow-expiry-"));
+	const databasePath = join(cacheDir, "shadow.sqlite");
+	const now = Date.parse("2026-08-31T08:00:00Z");
+	try {
+		const shadow = new PlatformPredictionShadow(databasePath);
+		shadow.update(
+			[
+				event("history-1", now - 21 * 86_400_000, 1, "5 & 6"),
+				event("history-2", now - 14 * 86_400_000, 1, "5 & 6"),
+				event("history-3", now - 7 * 86_400_000, 1, "5 & 6"),
+			],
+			now,
+		);
+
+		const scheduledAt = now + 60 * 60_000;
+		shadow.update([event("future-expiry", scheduledAt, 1, null)], now);
+		assert.equal(shadow.diagnostics().pending, 1);
+		assert.equal(shadow.diagnostics().evaluated, 0);
+		assert.equal(shadow.diagnostics().expired, 0);
+
+		// Controlled clock: advance past the pending grace window without any
+		// observation arriving. The prediction must not vanish without a trace.
+		const afterGrace = scheduledAt + 6 * 60 * 60_000 + 60_000;
+		shadow.update([], afterGrace);
+		const expired = shadow.diagnostics();
+		assert.equal(expired.pending, 0);
+		assert.equal(expired.evaluated, 0);
+		assert.equal(expired.expired, 1);
+		// Expired predictions are unobserved, so they stay out of the
+		// correct/total accuracy denominator instead of biasing it.
+		assert.equal(expired.byRoute.length, 0);
+		shadow.close();
+
+		const reloaded = new PlatformPredictionShadow(databasePath);
+		assert.equal(reloaded.diagnostics().expired, 1);
+		assert.equal(reloaded.diagnostics().pending, 0);
+		assert.equal(reloaded.diagnostics().evaluated, 0);
+		reloaded.close();
+	} finally {
+		await rm(cacheDir, { recursive: true, force: true });
+	}
+});

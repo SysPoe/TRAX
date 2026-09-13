@@ -11,6 +11,7 @@ export function createEmptyRawCache(): RawCache {
 		routesByKey: new Map(),
 		tripsByKey: new Map(),
 		tripStopTimeBoundsByKey: new Map(),
+		frequenciesByTripKey: new Map(),
 		realtimeOnlyTripKeys: new Set(),
 		stopsByKey: new Map(),
 		stopsByFeed: new Map(),
@@ -45,8 +46,11 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 		corridorResolutionCache: new LRUCache(5000),
 		corridorAlignmentCache: new LRUCache(20000),
 		corridorPhysicalResolutionCache: new LRUCache(20000),
-		corridorPatternEdgeMinutesCache: new Map(),
-		corridorActivePatternsCache: new Map(),
+		// Route/direction/date scoped timing evidence. Plain maps would grow
+		// with every distinct service date ever resolved, so keep the same
+		// bounded LRU contract as the neighbouring corridor caches.
+		corridorPatternEdgeMinutesCache: new LRUCache(1000),
+		corridorActivePatternsCache: new LRUCache(1000),
 		expressInfoCache: new LRUCache<string, ExpressInfo[]>(1000),
 		passingStopsCache: new LRUCache<string, PassingStop[]>(5000),
 		runSeriesCache: new Map(),
@@ -60,7 +64,7 @@ export function createEmptyAugmentedCache(): AugmentedCache {
 		instancesRec: new Map(),
 		tripUpdatesCache: new Map(),
 		tripUpdateSignatures: new Map(),
-		lastRealtimeChangedHandles: new Set(),
+		lastRealtimeChangedTripKeys: new Set(),
 		timer: new Timer(),
 		seqDiagram: undefined,
 		qrtRefreshInFlight: undefined,

@@ -1,8 +1,7 @@
 import type { Calendar, CalendarDate, QualifiedEntityId } from "qdf-gtfs";
 import type { CacheContext } from "../cache/index.js";
 import { getEpochDayFromServiceDate, getServiceDateFromEpochDay } from "./time.js";
-import { entityKey } from "../identity.js";
-import { serviceHandleFor, tripHandleFor } from "../cache/handles.js";
+import { entityKey, parseEntityKey } from "../identity.js";
 
 function serviceKeyForTrip(trip: QualifiedEntityId, ctx: CacheContext): string {
 	const tripKey = entityKey(trip);
@@ -140,24 +139,25 @@ export function loadServiceCalendarRules(
 	ctx.runtimeState.serviceCalendarLoaded = true;
 }
 
-/** Rebuild integer-handle inverse indexes for lazy date resolution. */
+/** Rebuild runtime-scoped inverse indexes for lazy date resolution. */
 export function rebuildServiceInverseIndexes(ctx: CacheContext): void {
 	ctx.runtimeState.servicesByDateHandle.clear();
 	ctx.runtimeState.tripsByServiceHandle.clear();
 	for (const [tripKey, trip] of ctx.raw.tripsByKey) {
-		const serviceHandle = serviceHandleFor(trip.feed_id, trip.service_id);
-		let set = ctx.runtimeState.tripsByServiceHandle.get(serviceHandle);
-		if (!set) { set = new Set(); ctx.runtimeState.tripsByServiceHandle.set(serviceHandle, set); }
-		set.add(tripHandleFor(trip.feed_id, trip.trip_id));
+		const serviceKey = entityKey({ feedId: trip.feed_id, localId: trip.service_id });
+		let set = ctx.runtimeState.tripsByServiceHandle.get(serviceKey);
+		if (!set) { set = new Set(); ctx.runtimeState.tripsByServiceHandle.set(serviceKey, set); }
+		set.add(tripKey);
 	}
 	for (const serviceKey of ctx.runtimeState.serviceCalendarRules.keys()) {
-		const colon = serviceKey.indexOf(":");
-		if (colon < 0) continue;
-		const len = parseInt(serviceKey.slice(0, colon), 10);
-		const rest = serviceKey.slice(colon+1);
-		const feedId = rest.slice(0, len);
-		const localId = rest.slice(len);
-		const serviceHandle = serviceHandleFor(feedId, localId);
+		let feedId: string;
+		let localId: string;
+		try {
+			({ feedId, localId } = parseEntityKey(serviceKey));
+		} catch {
+			continue;
+		}
+		const serviceHandle = entityKey({ feedId, localId });
 		const dates = getServiceDatesByService({ feedId, localId }, ctx);
 		for (const d of dates) {
 			let set = ctx.runtimeState.servicesByDateHandle.get(d);
@@ -166,13 +166,14 @@ export function rebuildServiceInverseIndexes(ctx: CacheContext): void {
 		}
 	}
 	for (const [serviceKey, exceptions] of ctx.runtimeState.serviceCalendarExceptions) {
-		const colon = serviceKey.indexOf(":");
-		if (colon < 0) continue;
-		const len = parseInt(serviceKey.slice(0, colon), 10);
-		const rest = serviceKey.slice(colon+1);
-		const feedId = rest.slice(0, len);
-		const localId = rest.slice(len);
-		const serviceHandle = serviceHandleFor(feedId, localId);
+		let feedId: string;
+		let localId: string;
+		try {
+			({ feedId, localId } = parseEntityKey(serviceKey));
+		} catch {
+			continue;
+		}
+		const serviceHandle = entityKey({ feedId, localId });
 		for (const [epochDay, exc] of exceptions) {
 			if (exc !== 1) continue;
 			const date = getServiceDateFromEpochDay(epochDay);

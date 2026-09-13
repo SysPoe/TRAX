@@ -3,9 +3,11 @@ import test from "node:test";
 import type { CacheContext } from "../src/cache/types.js";
 import {
 	getQrtBookingSeatMap,
+	getQrtSeatMapDiagram,
 	parseQrtSeatMap,
 	qrtSeatMapRequest,
 	selectQrtSeatMapFareOption,
+	_test,
 	type QrtBookingSeatMap,
 } from "../src/region-specific/AU/SEQ/qr-travel/seat-map.js";
 
@@ -147,6 +149,22 @@ test("selectQrtSeatMapFareOption prefers the cheapest regular seat product", () 
 		],
 	};
 	assert.equal(selectQrtSeatMapFareOption(service)?.servicE_OPTION_ID, 30467);
+	assert.equal(
+		selectQrtSeatMapFareOption({
+			raiL_OPTIONS: [{ servicE_OPTION_NAME: "Economy Seat", servicE_OPTION_ID: 1, adulT_PRICE: 10 }],
+		}),
+		null,
+		"seat maps must use the same explicit regular-fare rule as booking availability",
+	);
+});
+
+test("diagram storage rejects malformed and oversized images without returning dangling hashes", () => {
+	const ctx = fakeContext();
+	assert.equal(_test.storeDiagram(ctx, "YQ==", "JPG"), null);
+	assert.equal(_test.storeDiagram(ctx, Buffer.alloc(24 * 1024 * 1024 + 1).toString("base64"), "PNG"), null);
+	const hash = _test.storeDiagram(ctx, JPEG_BYTES.toString("base64"), "JPG");
+	assert.ok(hash);
+	assert.deepEqual(getQrtSeatMapDiagram(ctx, hash), { bytes: JPEG_BYTES, contentType: "image/jpeg" });
 });
 
 test("qrtSeatMapRequest mirrors the InteractiveSeatMap body shape", () => {
@@ -166,25 +184,25 @@ test("getQrtBookingSeatMap serves fresh, then stale-while-revalidate, results", 
 	const ctx = fakeContext();
 	const trip = {
 		serviceId: "PPS-123",
-		departureDate: "2026-08-31T07:05:00",
+		departureDate: "2099-08-31T07:05:00",
 		stops: [
 			{
 				placeCode: "ROM",
 				placeName: "Roma Street",
-				plannedDeparture: "2026-08-31T07:05:00",
+				plannedDeparture: "2099-08-31T07:05:00",
 				trainPosition: "NotArrived",
 			},
 			{
 				placeCode: "BDB",
 				placeName: "Bundaberg",
-				plannedDeparture: "2026-08-31T13:00:00",
+				plannedDeparture: "2099-08-31T13:00:00",
 				trainPosition: "NotArrived",
 			},
 		],
 	} as never;
 	const first: QrtBookingSeatMap = {
 		serviceId: "PPS-123",
-		travelDate: "2026-08-31",
+		travelDate: "2099-08-31",
 		selectedFare: null,
 		source: "Queensland Rail Travel booking",
 		asOf: "2026-08-26T00:00:00.000Z",
@@ -225,25 +243,25 @@ test("getQrtBookingSeatMap keeps the last map when a refresh fails", async () =>
 	const ctx = fakeContext();
 	const trip = {
 		serviceId: "PPS-456",
-		departureDate: "2026-08-31T07:05:00",
+		departureDate: "2099-08-31T07:05:00",
 		stops: [
 			{
 				placeCode: "ROM",
 				placeName: "Roma Street",
-				plannedDeparture: "2026-08-31T07:05:00",
+				plannedDeparture: "2099-08-31T07:05:00",
 				trainPosition: "NotArrived",
 			},
 			{
 				placeCode: "BDB",
 				placeName: "Bundaberg",
-				plannedDeparture: "2026-08-31T13:00:00",
+				plannedDeparture: "2099-08-31T13:00:00",
 				trainPosition: "NotArrived",
 			},
 		],
 	} as never;
 	const map = {
 		serviceId: "PPS-456",
-		travelDate: "2026-08-31",
+		travelDate: "2099-08-31",
 		selectedFare: null,
 		source: "Queensland Rail Travel booking",
 		asOf: "2026-08-26T00:00:00.000Z",

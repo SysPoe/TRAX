@@ -1,4 +1,5 @@
 import * as cache from "../cache/index.js";
+import * as qdf from "qdf-gtfs";
 import { findExpressString } from "./SRT.js";
 import { getServiceCapacity, ServiceCapacity } from "./serviceCapacity.js";
 import { AugmentedStop } from "./augmentedStop.js";
@@ -7,9 +8,39 @@ import { AugmentedTripInstance } from "./augmentedTrip.js";
 import { addDaysToServiceDate, getEpochDayFromServiceDate, getServiceDate, getServiceDayStart } from "./time.js";
 import { getFeedTimeZone } from "../config.js";
 
+/**
+ * Conservative explicit maximum query span for public departure windows.
+ * Consistent with current callers: TRAX-GUI departures caps `hours` at 1..24
+ * (default 8), string windows max out at 00:00:00-23:59:59 (~24h), and
+ * benchmarks use <=8h. Anything larger would loop/materialize thousands of
+ * service dates. Multi-day 49h/78h GTFS spillover still works via
+ * maxTripLookbackDays, not via huge query spans.
+ */
+export const MAX_DEPARTURE_WINDOW_SECONDS = 24 * 3600;
+
+/**
+ * Maximum absolute GTFS clock time accepted in string/numeric window queries.
+ * Allows cross-midnight 25:00 plus multi-day 49h/78h spillover queries with
+ * margin, while rejecting far-future clocks like 100000:00:00 that would
+ * materialize service dates thousands of days out.
+ */
+export const MAX_DEPARTURE_TIME_SECONDS = 7 * 24 * 3600;
+
 function timeSeconds(time: string): number {
-	const [hours, minutes, seconds] = time.split(":").map(Number);
-	return hours * 3600 + minutes * 60 + seconds;
+	if (typeof time !== "string") throw new RangeError(`Invalid departure time window: '${String(time)}'`);
+	const match = /^(\d+):([0-5]\d)(?::([0-5]\d))?$/.exec(time.trim());
+	if (!match) throw new RangeError(`Invalid departure time window: '${time}'`);
+	const hours = Number(match[1]);
+	const minutes = Number(match[2]);
+	const seconds = Number(match[3] ?? "0");
+	const total = hours * 3600 + minutes * 60 + seconds;
+	if (!Number.isFinite(total)) throw new RangeError(`Invalid departure time window: '${time}'`);
+	if (total < 0 || total > MAX_DEPARTURE_TIME_SECONDS) {
+		throw new RangeError(
+			`Invalid departure time window: '${time}' exceeds maximum ${MAX_DEPARTURE_TIME_SECONDS} seconds`,
+		);
+	}
+	return total;
 }
 
 type DepartureResult = AugmentedStopTime & { express_string: string; instance_id: string };
@@ -19,9 +50,19 @@ type DepartureSlice = {
 	dayStart: number;
 };
 
-/** Keep this order in sync with getStopDeparturesCached's sort key. */
+/**
+ * Departure ordering for binary-search windows. Rows without any usable time
+ * sort as Infinity (last), never as midnight, so they cannot masquerade as
+ * 00:00 departures. Keep this order in sync with getStopDeparturesCached's sort key.
+ */
 function departureTimeSeconds(stopTime: AugmentedStopTime): number {
-	return stopTime.actual_departure_time ?? stopTime.scheduled_departure_time ?? stopTime.actual_arrival_time ?? 0;
+	return (
+		stopTime.actual_departure_time ??
+		stopTime.scheduled_departure_time ??
+		stopTime.actual_arrival_time ??
+		stopTime.scheduled_arrival_time ??
+		Number.POSITIVE_INFINITY
+	);
 }
 
 function lowerBound(stopTimes: readonly AugmentedStopTime[], timeSeconds: number): number {
@@ -101,6 +142,7 @@ function mapDepartureResults(stopTimes: AugmentedStopTime[], ctx: cache.CacheCon
 	const seenVisits = new Set<string>();
 	const results: DepartureResult[] = [];
 	for (const st of stopTimes) {
+		if (st.pickup_type === qdf.PickupType.None) continue;
 		if (seenVisits.has(departureVisitKey(st))) continue;
 		const inst =
 			instanceCache.get(st.instance_id) ??
@@ -134,8 +176,19 @@ export function getDeparturesForInstantWindow(
 	windowEndEpochSeconds: number,
 	ctx: cache.CacheContext,
 ): DepartureResult[] {
-	if (!Number.isFinite(windowStartEpochSeconds) || !Number.isFinite(windowEndEpochSeconds) || windowEndEpochSeconds < windowStartEpochSeconds) {
-		throw new Error("Invalid departure instant window");
+	if (
+		!Number.isFinite(windowStartEpochSeconds) ||
+		!Number.isFinite(windowEndEpochSeconds) ||
+		windowEndEpochSeconds < windowStartEpochSeconds
+	) {
+		throw new RangeError(
+			`Invalid departure instant window: '${String(windowStartEpochSeconds)}' to '${String(windowEndEpochSeconds)}'`,
+		);
+	}
+	if (windowEndEpochSeconds - windowStartEpochSeconds > MAX_DEPARTURE_WINDOW_SECONDS) {
+		throw new RangeError(
+			`Invalid departure instant window: span ${windowEndEpochSeconds - windowStartEpochSeconds} seconds exceeds maximum ${MAX_DEPARTURE_WINDOW_SECONDS} seconds`,
+		);
 	}
 	const timeZone = getFeedTimeZone(ctx.config, stop.feed_id);
 	const firstLocalDate = getServiceDate(new Date(windowStartEpochSeconds * 1000), timeZone);
@@ -150,8 +203,7 @@ export function getDeparturesForInstantWindow(
 		const dayStart = getServiceDayStart(serviceDate, timeZone);
 		for (const stopId of validStops) {
 			for (const stopTime of cache.getStopDeparturesCached(ctx, { feedId: stop.feed_id, localId: stopId }, serviceDate)) {
-				const seconds = stopTime.actual_departure_time ?? stopTime.actual_arrival_time ?? stopTime.scheduled_departure_time ?? 0;
-				const at = dayStart + seconds;
+				const at = dayStart + departureTimeSeconds(stopTime);
 				if (at >= windowStartEpochSeconds && at <= windowEndEpochSeconds) candidates.push({ stopTime, at });
 			}
 		}
@@ -168,8 +220,25 @@ export function getDeparturesForStop(
 	ctx: cache.CacheContext,
 ): DepartureResult[] {
 	ctx.augmented.timer.start("getDeparturesForStop");
-	const startSec = timeSeconds(start_time);
-	const endSec = timeSeconds(end_time);
+	let startSec: number;
+	let endSec: number;
+	try {
+		startSec = timeSeconds(start_time);
+		endSec = timeSeconds(end_time);
+	} catch (error) {
+		ctx.augmented.timer.stop("getDeparturesForStop");
+		throw error;
+	}
+	if (!Number.isFinite(startSec) || !Number.isFinite(endSec) || endSec < startSec) {
+		ctx.augmented.timer.stop("getDeparturesForStop");
+		throw new RangeError(`Invalid departure time window: '${start_time}' to '${end_time}'`);
+	}
+	if (endSec - startSec > MAX_DEPARTURE_WINDOW_SECONDS) {
+		ctx.augmented.timer.stop("getDeparturesForStop");
+		throw new RangeError(
+			`Invalid departure time window: '${start_time}' to '${end_time}' exceeds maximum ${MAX_DEPARTURE_WINDOW_SECONDS} seconds`,
+		);
+	}
 	const parentId = stop.parent_stop_id;
 	const childIds = stop.child_stop_ids;
 	const validStops = new Set<string>([stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]);
@@ -183,7 +252,12 @@ export function getDeparturesForStop(
 	ctx.augmented.timer.start("getDeparturesForStop:collect");
 	const slices: DepartureSlice[] = [];
 
-	for (let df = daysForwardStart; df <= daysForwardEnd; df++) {
+	// GTFS trips can spill past midnight (including multi-day 25:00+ times),
+	// so an early absolute window must also scan service dates that started
+	// up to maxTripLookbackDays earlier. Each slice stays DST-safe by
+	// evaluating against its own service day's midnight origin.
+	const lookbackDays = Math.max(0, ctx.runtimeState.maxTripLookbackDays ?? 1);
+	for (let df = daysForwardStart - lookbackDays; df <= daysForwardEnd; df++) {
 		const serviceDateStr = addDaysToServiceDate(date, df);
 		const dayStart = getServiceDayStart(serviceDateStr, getFeedTimeZone(ctx.config, stop.feed_id));
 
@@ -215,6 +289,26 @@ export function getServiceDateDeparturesForStop(
 	ctx: cache.CacheContext,
 ): DepartureResult[] {
 	ctx.augmented.timer.start("getServiceDateDeparturesForStop");
+	if (
+		!Number.isFinite(start_time_secs) ||
+		!Number.isFinite(end_time_secs) ||
+		end_time_secs < start_time_secs ||
+		start_time_secs < 0 ||
+		end_time_secs < 0
+	) {
+		ctx.augmented.timer.stop("getServiceDateDeparturesForStop");
+		throw new RangeError(`Invalid departure time window: '${start_time_secs}' to '${end_time_secs}'`);
+	}
+	if (
+		start_time_secs > MAX_DEPARTURE_TIME_SECONDS ||
+		end_time_secs > MAX_DEPARTURE_TIME_SECONDS ||
+		end_time_secs - start_time_secs > MAX_DEPARTURE_WINDOW_SECONDS
+	) {
+		ctx.augmented.timer.stop("getServiceDateDeparturesForStop");
+		throw new RangeError(
+			`Invalid departure time window: '${start_time_secs}' to '${end_time_secs}' exceeds maximum ${MAX_DEPARTURE_WINDOW_SECONDS} seconds span / ${MAX_DEPARTURE_TIME_SECONDS} seconds absolute`,
+		);
+	}
 	const parentId = stop.parent_stop_id;
 	const childIds = stop.child_stop_ids;
 	const validStops = new Set<string>([stop.stop_id, parentId, ...childIds].filter(Boolean) as string[]);

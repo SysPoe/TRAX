@@ -38,6 +38,7 @@ import {
 	vlinePlatformStationsDue,
 	vlineFormationUnits,
 	vlineServiceBookingAvailability,
+	VLINE_MAX_FORMATION_CARS,
 	_test as vlineEnrichmentTest,
 } from "../dist/region-specific/AU/VIC/enrichment.js";
 import { AnyTripPlatformClient, _test as anyTripTest } from "../dist/region-specific/AU/VIC/anytrip.js";
@@ -82,22 +83,36 @@ import {
 	matchQrtPublishedFormation,
 	parseQrtPublishedFormations,
 } from "../dist/region-specific/AU/SEQ/qr-travel/published-formations.js";
+import { _test as qrtTrackerTest } from "../dist/region-specific/AU/SEQ/qr-travel/qr-travel-tracker.js";
 import { findUniqueTripInstanceForServiceDate, getTripIdsByServiceDate } from "../dist/cache/augmentedEntities.js";
 import { entityKey } from "../dist/identity.js";
 import { DropOffType, GTFS, PickupType, RouteType, TripScheduleRelationship } from "qdf-gtfs";
 import {
 	buildCisBoardingAssignments,
 	collectCisStationCandidates,
+	isCisSnapshotFresh,
 	parseCisStationBoard,
 	viaTrainKey,
 } from "../dist/region-specific/CA/VIA/station-board.js";
 import { selectViaBookingFare } from "../dist/region-specific/CA/VIA/consist.js";
 import {
 	applyGthaVehicleBearing,
+	gthaBlockTimeGte,
+	gthaServiceDateMatchesWallDate,
+	isGthaCanceledTripInstance,
+	isGthaSkippedStopTime,
 	parseGthaCourse,
 	platformSourceServiceWindows,
 	stopTimeMatchesStopId,
 } from "../dist/region-specific/CA/GTHA/realtime.js";
+import { isGthaSkippedPredictionStop } from "../dist/region-specific/CA/GTHA/platform-predictions.js";
+import { sanitizeViaDiffMin, VIA_MAX_DIFF_MIN } from "../dist/region-specific/CA/VIA/realtime.js";
+import {
+	applySeqDiagramToInstances,
+	refreshSeqDiagramAfterRealtimeBatch,
+	revalidateSeqDiagramRealtimeEdges,
+} from "../dist/region-specific/AU/SEQ/seq-diagram.js";
+import { _test as seqCapacityTest } from "../dist/region-specific/AU/SEQ/serviceCapacity.js";
 import {
 	buildGthaOperatingScheduleUpdates,
 	GTHA_OPERATING_SCHEDULE_SOURCE_ID,
@@ -108,6 +123,8 @@ import { SOURCE_C_LOOKAHEAD_SECS } from "../dist/region-specific/CA/GTHA/gtha-re
 const qrtSigner = parseQrtSignerBundle('{id:"client",k1:"one",k2:"two",k3:"three",k4:"four"}');
 assert.deepEqual(qrtSigner, { clientId: "client", keys: ["one", "two", "three", "four"] });
 assert.equal(parseQrtSignerBundle("no client signing values here"), null);
+assert.deepEqual(qrtTrackerTest.parsePossiblyEncodedJson('[{"Title":"Q301"}]'), [{ Title: "Q301" }]);
+assert.deepEqual(qrtTrackerTest.parsePossiblyEncodedJson([{ Title: "Q301" }]), [{ Title: "Q301" }]);
 
 const qrtStations = parseQrtBookingStations({
 	fields: {
@@ -120,6 +137,7 @@ const qrtStations = parseQrtBookingStations({
 });
 assert.equal(qrtStations.length, 2);
 assert.equal(matchQrtBookingStation({ placeCode: "BNE", placeName: "Brisbane - Roma Street" }, qrtStations)?.id, 6002);
+assert.equal(matchQrtBookingStation({ placeCode: null, placeName: null }, qrtStations), null);
 
 const qrtRailService = {
 	traiN_NAME: "Q301 Rockhampton Tilt Train",
@@ -209,6 +227,13 @@ assert.equal(qrtInProgressLeg?.origin.placeCode, "MBJ");
 assert.equal(qrtInProgressLeg?.destination.placeCode, "ROK");
 assert.equal(qrtInProgressLeg?.departureDate, "2026-09-01T12:30:00");
 assert.equal(selectQrtBookingLeg({ stops: qrtBookingStops }, Date.parse("2026-09-01T13:30:00+10:00")), null);
+assert.equal(
+	selectQrtBookingLeg(
+		{ stops: [{ ...qrtBookingStops[0], trainPosition: null }, qrtBookingStops.at(-1)] },
+		Date.parse("2026-09-01T09:00:00+10:00"),
+	),
+	null,
+);
 const rockhampton = { id: 6031, code: "ROK", name: "Rockhampton" };
 assert.equal(
 	selectQrtRailService(
@@ -296,8 +321,8 @@ try {
 			},
 			qrtBookingContext,
 		),
-		availableBooking,
-		"QRT services should retain their last availability after the final bookable leg",
+		null,
+		"QRT services must stop advertising stale availability after the final bookable leg",
 	);
 	assert.equal(
 		await getQrtBookingAvailability(
@@ -345,6 +370,14 @@ assert.equal(
 assert.equal(qrtPublished[0].units[1].seats, 47);
 assert.equal(qrtPublished[0].units[2].type, null);
 assert.equal(matchQrtPublishedFormation({ line: "Tilt Train", serviceName: "Q301" }, qrtPublished), qrtPublished[0]);
+assert.equal(
+	matchQrtPublishedFormation(
+		{ line: "Spirit of Queensland", serviceName: "Q301" },
+		[{ ...qrtPublished[0], matchName: "Spirit" }],
+	),
+	null,
+	"a generic formation name must not substring-match a more specific service line",
+);
 
 assert.deepEqual(
 	selectViaBookingFare({
@@ -966,6 +999,68 @@ const occupancyPriorityTrip = {
 assert.equal(applyAnyTripNswOccupancy(occupancyPriorityTrip, parsedAnyTripOccupancy, "2026-08-22T12:00:00Z"), 1);
 assert.equal(occupancyPriorityTrip.stopTimes[0].occupancy, historicalOccupancy);
 assert.equal(occupancyPriorityTrip.stopTimes[1].occupancy.source, "anytrip-nsw");
+// TfNSW rail occupancy expiry must not retain malformed/non-finite expires_at forever.
+{
+	const { createTfnswRailPlugin } = await import("../dist/plugins/tfnsw-rail.js");
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = async () =>
+		new Response(
+			JSON.stringify({
+				header: { timestamp: 1787367261 },
+				response: {
+					tripInstance: { trip: { id: "au2:st:104B" }, startDate: "20260822" },
+					realtimePattern: [],
+				},
+			}),
+		);
+	try {
+		const refreshWithExpiry = async (expires_at) => {
+			const plugin = createTfnswRailPlugin({
+				anyTripOccupancy: { baseUrl: "https://anytrip.test/api/v3/region/au2" },
+			});
+			const trip = {
+				feed_id: "nsw-sydney-trains",
+				trip_id: "104B.937.150.128.A.8.90926398",
+				trip_number: "104B",
+				serviceDate: "20260822",
+				stopTimes: [
+					{
+						_stopTime: { stop_sequence: 1 },
+						occupancy: {
+							statuses: [1],
+							scope: "vehicle",
+							source: "anytrip-nsw",
+							confidence: "reported",
+							observed_at: "2026-08-22T04:00:00Z",
+							expires_at,
+						},
+					},
+				],
+			};
+			const ctx = { augmented: { instancesRec: new Map([["tfnsw-occupancy-expiry-probe", trip]]) } };
+			await plugin.api(ctx).refreshTripOccupancy("tfnsw-occupancy-expiry-probe");
+			return trip.stopTimes[0].occupancy;
+		};
+		assert.equal(
+			await refreshWithExpiry("not-a-date"),
+			null,
+			"malformed anytrip-nsw expires_at must expire instead of surviving forever",
+		);
+		assert.equal(
+			await refreshWithExpiry(null),
+			null,
+			"missing anytrip-nsw expires_at must expire instead of surviving forever",
+		);
+		const freshExpiry = new Date(Date.now() + 10 * 60_000).toISOString();
+		assert.equal(
+			(await refreshWithExpiry(freshExpiry))?.source,
+			"anytrip-nsw",
+			"unexpired anytrip-nsw occupancy must survive refresh",
+		);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+}
 const trainLinkBookingTrip = {
 	feed_id: "nsw-trainlink",
 	trip_number: "ST21",
@@ -1077,6 +1172,42 @@ assert.equal(
 	"600493",
 );
 assert.equal(
+	matchRealtimeStopTimeUpdate({
+		stopSequence: 2,
+		stopId: "P",
+		parentStationId: "S",
+		bySequence: new Map([[2, { stop_sequence: 2, stop_id: "BA" }]]),
+		byStopId: new Map([["BA", { stop_sequence: 2, stop_id: "BA" }]]),
+		byParentStationId: new Map([["P", { stop_sequence: 2, stop_id: "BA" }]]),
+	})?.stop_id,
+	"BA",
+	"a one-hop boarding-area child must match its scheduled platform via the parent contract",
+);
+assert.equal(
+	matchRealtimeStopTimeUpdate({
+		stopSequence: 2,
+		stopId: "P",
+		parentStationId: "S",
+		bySequence: new Map(),
+		byStopId: new Map([["BA", { stop_sequence: null, stop_id: "BA" }]]),
+		byParentStationId: new Map([["P", { stop_sequence: null, stop_id: "BA" }]]),
+	})?.stop_id,
+	"BA",
+	"a stop-id-only boarding-area update must match its parent platform in one hop",
+);
+assert.equal(
+	matchRealtimeStopTimeUpdate({
+		stopSequence: 2,
+		stopId: "S",
+		parentStationId: null,
+		bySequence: new Map(),
+		byStopId: new Map(),
+		byParentStationId: new Map([["P", { stop_sequence: null, stop_id: "BA" }]]),
+	}),
+	undefined,
+	"a boarding area must not match its grandparent station through two hops",
+);
+assert.equal(
 	tfnswPlugin.considerRoute({
 		feed_id: "nsw-sydney-trains",
 		agency_id: "NSWTrains",
@@ -1096,6 +1227,125 @@ assert.deepEqual(
 	[null, null, null, null, null],
 );
 assert.ok(inferredVLineUnits.every((unit) => unit.diagramKind === "dmu"));
+// Region-specific P1 group: validated malformed-provider hardening.
+// VIA diffMin must reject non-finite/out-of-range values per stop instead of
+// producing 1e9-minute delays that poison the train or batch.
+assert.ok(Number.isFinite(VIA_MAX_DIFF_MIN) && VIA_MAX_DIFF_MIN > 0 && VIA_MAX_DIFF_MIN < 1_000_000);
+assert.equal(sanitizeViaDiffMin(-7), -7);
+assert.equal(sanitizeViaDiffMin(0), 0);
+assert.equal(sanitizeViaDiffMin(VIA_MAX_DIFF_MIN), VIA_MAX_DIFF_MIN);
+assert.equal(sanitizeViaDiffMin(VIA_MAX_DIFF_MIN + 1), null);
+assert.equal(sanitizeViaDiffMin(1e9), null);
+assert.equal(sanitizeViaDiffMin(Number.NaN), null);
+assert.equal(sanitizeViaDiffMin(Number.POSITIVE_INFINITY), null);
+assert.equal(sanitizeViaDiffMin("45"), null);
+assert.equal(sanitizeViaDiffMin(undefined), null);
+// VIC formation expansion must bound malformed passenger-car counts so a bad
+// value cannot allocate Array(1e6) or discard healthy trips in the batch.
+assert.ok(Number.isFinite(VLINE_MAX_FORMATION_CARS) && VLINE_MAX_FORMATION_CARS >= 6);
+assert.ok(
+	vlineFormationUnits({ passenger_cars: 1e6 }, createEmptyVLineDetails("1")).length <=
+		VLINE_MAX_FORMATION_CARS,
+	"a malformed passenger_cars count must clamp instead of OOM",
+);
+assert.equal(vlineFormationUnits({ passenger_cars: -5 }, createEmptyVLineDetails("1")).length, 0);
+assert.equal(vlineFormationUnits({ passenger_cars: NaN }, createEmptyVLineDetails("1")).length, 0);
+const oversizedConsistDetails = createEmptyVLineDetails("1");
+oversizedConsistDetails.fullConsist = {
+	value: Array.from({ length: VLINE_MAX_FORMATION_CARS + 50 }, (_, index) => `CAR${index}`),
+	source: "vline-journey-planner",
+	confidence: "reported",
+	observedAt: "2026-08-12T00:00:00Z",
+};
+assert.ok(
+	vlineFormationUnits({ passenger_cars: 1 }, oversizedConsistDetails).length <= VLINE_MAX_FORMATION_CARS,
+	"a malformed known-consist count must clamp instead of OOM",
+);
+// SEQ diagram must resolve feed identity per trip when SEQ is not feeds[0].
+const seqFeedOrderCtx = {
+	config: {
+		network: {
+			id: "seq-feed-order",
+			feeds: [{ id: "other-feed" }, { id: "translink-seq" }],
+			plugins: [{ id: "au-seq", feedIds: ["translink-seq"] }],
+		},
+		feedTimeZones: new Map([
+			["other-feed", "Australia/Brisbane"],
+			["translink-seq", "Australia/Brisbane"],
+		]),
+	},
+	augmented: { tripsRec: new Map(), instancesRec: new Map(), seqDiagram: null },
+};
+const seqStubStopTime = (service_date, scheduled_departure_time) => ({
+	service_date,
+	feed_id: "translink-seq",
+	scheduled_departure_time,
+	scheduled_arrival_time: scheduled_departure_time,
+	actual_departure_time: null,
+	actual_arrival_time: null,
+});
+const seqStubTrip = (tripId, firstDep, lastDep) => {
+	const instance = {
+		instance_id: entityKey({ feedId: "translink-seq", localId: `${tripId}-20260818` }),
+		trip_id: tripId,
+		feed_id: "translink-seq",
+		serviceDate: "20260818",
+		actualTripDates: ["20260818"],
+		seq_diagram_prev_trip_id: null,
+		seq_diagram_next_trip_id: null,
+		seq_diagram_block_id: null,
+		seq_diagram_prev_instance_id: null,
+		seq_diagram_next_instance_id: null,
+		seq_diagram_prev_link_broken: false,
+		seq_diagram_next_link_broken: false,
+		stopTimes: [
+			seqStubStopTime("20260818", firstDep),
+			seqStubStopTime("20260818", lastDep),
+		],
+	};
+	const trip = { trip_id: tripId, feed_id: "translink-seq", block_id: null, instances: [instance] };
+	seqFeedOrderCtx.augmented.tripsRec.set(
+		entityKey({ feedId: "translink-seq", localId: tripId }),
+		trip,
+	);
+	seqFeedOrderCtx.augmented.instancesRec.set(instance.instance_id, instance);
+	return trip;
+};
+const seqT1 = seqStubTrip("9001", 28_800, 32_400);
+const seqT2 = seqStubTrip("9002", 34_200, 37_800);
+applySeqDiagramToInstances(seqFeedOrderCtx, {
+	prevTripId: new Map([["9002", "9001"]]),
+	nextTripId: new Map([["9001", "9002"]]),
+	blockIdByTripId: new Map([
+		["9001", "7"],
+		["9002", "7"],
+	]),
+	tripCount: 2,
+	linkedPrevCount: 1,
+});
+assert.equal(
+	seqT2.instances[0].seq_diagram_prev_instance_id,
+	seqT1.instances[0].instance_id,
+	"diagram instance links must resolve when SEQ is not feeds[0]",
+);
+assert.equal(seqT1.instances[0].seq_diagram_next_instance_id, seqT2.instances[0].instance_id);
+seqT1.instances[0].seq_diagram_next_link_broken = true;
+revalidateSeqDiagramRealtimeEdges(seqFeedOrderCtx, new Set(["9001"]));
+assert.equal(
+	seqT1.instances[0].seq_diagram_next_link_broken,
+	false,
+	"realtime edge revalidation must resolve trips when SEQ is not feeds[0]",
+);
+seqT2.instances[0].seq_diagram_prev_instance_id = null;
+refreshSeqDiagramAfterRealtimeBatch(
+	seqFeedOrderCtx,
+	new Set([entityKey({ feedId: "translink-seq", localId: "9002" })]),
+);
+assert.equal(
+	seqT2.instances[0].seq_diagram_prev_instance_id,
+	seqT1.instances[0].instance_id,
+	"post-realtime refresh must resolve trips when SEQ is not feeds[0]",
+);
 assert.deepEqual(
 	[ptvMetroFormationUnit("457M"), ptvMetroFormationUnit("1079T")].map((unit) => [
 		unit.type,
@@ -1832,6 +2082,267 @@ assert.deepEqual(cisAssignments, [
 	},
 ]);
 
+// Region-specific realtime correctness: canceled/skipped must not resurrect
+// platforms, stale residual data must be quarantined, inferred provenance
+// stays non-authoritative, midnight comparisons use service dates, and
+// capacity/booking expiries stay finite.
+assert.equal(isGthaCanceledTripInstance({ schedule_relationship: TripScheduleRelationship.CANCELED }), true);
+assert.equal(isGthaCanceledTripInstance({ schedule_relationship: TripScheduleRelationship.SCHEDULED }), false);
+assert.equal(isGthaCanceledTripInstance(null), false);
+assert.equal(
+	isGthaSkippedStopTime({ passing: false, realtime: true, realtime_info: { schedule_relationship: 1 } }),
+	true,
+	"a SKIPPED stop carries no platform",
+);
+assert.equal(
+	isGthaSkippedStopTime({ passing: false, realtime: true, realtime_info: { schedule_relationship: 0 } }),
+	false,
+);
+assert.equal(isGthaSkippedStopTime({ passing: true }), true);
+assert.equal(
+	isGthaSkippedPredictionStop({ passing: false, realtime: true, realtime_info: { schedule_relationship: 1 } }),
+	true,
+	"canceled/skipped calls must not seed platform predictions",
+);
+assert.equal(
+	isGthaSkippedPredictionStop({ passing: false, realtime: false, realtime_info: null }),
+	false,
+);
+// Midnight-safe wall-date matching uses calendar arithmetic, never UTC Date shifts.
+assert.equal(
+	gthaServiceDateMatchesWallDate({ serviceDate: "20260818" }, "2026-08-18T23:50:00-04:00"),
+	true,
+);
+assert.equal(
+	gthaServiceDateMatchesWallDate(
+		{ serviceDate: "20260818" },
+		"2026-08-19T00:10:00-04:00",
+		"UN",
+		() => ({ scheduled_departure_date_offset: 1, scheduled_arrival_date_offset: 1 }),
+	),
+	true,
+	"an after-midnight wall date belongs to the prior service date",
+);
+assert.equal(
+	gthaServiceDateMatchesWallDate(
+		{ serviceDate: "20260819" },
+		"2026-08-19T00:10:00-04:00",
+		"UN",
+		() => ({ scheduled_departure_date_offset: 1, scheduled_arrival_date_offset: 1 }),
+	),
+	false,
+	"the wall date itself must not match when the offset points to the prior day",
+);
+assert.equal(
+	gthaServiceDateMatchesWallDate({ serviceDate: "20260818" }, "not-a-date"),
+	false,
+);
+// A malformed wall date must return false so one bad Source-D row cannot throw
+// and abort the batch.
+assert.equal(gthaServiceDateMatchesWallDate({ serviceDate: "20260818" }, null), false);
+assert.equal(gthaServiceDateMatchesWallDate({ serviceDate: "20260818" }, undefined), false);
+assert.equal(gthaServiceDateMatchesWallDate({ serviceDate: "20260818" }, 20260818), false);
+assert.equal(gthaServiceDateMatchesWallDate({ serviceDate: "20260818" }, ""), false);
+// Block-time comparison stays finite-safe for midnight handoffs.
+assert.equal(
+	gthaBlockTimeGte({ config: { network: { id: "synthetic" } } }, "20260818", 90_000, 89_000),
+	true,
+);
+assert.equal(
+	gthaBlockTimeGte({ config: { network: { id: "synthetic" } } }, "20260818", null, 89_000),
+	false,
+);
+// Stale CIS boards quarantine instead of resurrecting residual tracks.
+assert.equal(isCisSnapshotFresh({ fetchedAt: cisNow } , cisNow), true);
+assert.equal(isCisSnapshotFresh({ fetchedAt: cisNow }, cisNow + 11 * 60_000), false);
+assert.deepEqual(
+	buildCisBoardingAssignments(
+		new Map([["TRTO", { stationCode: "TRTO", stationName: "Toronto", fetchedAt: cisNow, board: cisBoard }]]),
+		new Map([[viaTrainKey("48", "2026-08-11"), { tripId: "trip-48", serviceDate: "20260811" }]]),
+		cisNow + 11 * 60_000,
+	),
+	[],
+	"a stale CIS board must not re-apply residual platforms",
+);
+// Expired VIC platforms quarantine, including inferred heuristics.
+const vicExpiryNow = Date.parse("2026-08-22T05:00:00Z");
+const vicExpiryStop = {
+	scheduled_stop_id: "20043",
+	scheduled_parent_station_id: "vic:rail:SSS",
+	actual_platform_code: null,
+	rt_platform_code_updated: false,
+	actual_arrival_boarding_locations: [],
+	actual_departure_boarding_locations: [],
+};
+vlineEnrichmentTest.applyStoredPlatforms(
+	{ stopTimes: [vicExpiryStop] },
+	{
+		platforms: [
+			{
+				source: "anytrip-v3",
+				value: "9",
+				confidence: "reported",
+				observedAt: "2026-08-22T04:00:00Z",
+				expiresAt: new Date(vicExpiryNow - 60_000).toISOString(),
+				stopId: "20043",
+				event: "both",
+				kind: "platform",
+			},
+		],
+	},
+	vicExpiryNow,
+);
+assert.equal(vicExpiryStop.actual_platform_code, null, "expired authoritative platforms must quarantine");
+assert.deepEqual(vicExpiryStop.actual_departure_boarding_locations, []);
+const vicInferredExpiredStop = {
+	scheduled_stop_id: "20043",
+	scheduled_parent_station_id: "vic:rail:SSS",
+	actual_platform_code: null,
+	rt_platform_code_updated: false,
+	actual_arrival_boarding_locations: [],
+	actual_departure_boarding_locations: [],
+};
+vlineEnrichmentTest.applyStoredPlatforms(
+	{ stopTimes: [vicInferredExpiredStop] },
+	{
+		platforms: [
+			{
+				source: "static-platform-heuristic",
+				value: "1",
+				confidence: "inferred",
+				observedAt: "2026-08-22T04:00:00Z",
+				expiresAt: new Date(vicExpiryNow - 60_000).toISOString(),
+				stopId: "20043",
+				event: "both",
+				kind: "platform",
+			},
+		],
+	},
+	vicExpiryNow,
+);
+assert.deepEqual(
+	vicInferredExpiredStop.actual_departure_boarding_locations,
+	[],
+	"expired inferred guesses must quarantine instead of lingering with stale provenance",
+);
+// Inferred VIC platforms retain non-authoritative provenance and never
+// overwrite an authoritative boarding location.
+const vicProvenanceStop = {
+	scheduled_stop_id: "20043",
+	scheduled_parent_station_id: "vic:rail:SSS",
+	actual_platform_code: null,
+	rt_platform_code_updated: false,
+	actual_arrival_boarding_locations: [],
+	actual_departure_boarding_locations: [],
+};
+vlineEnrichmentTest.applyStoredPlatforms(
+	{ stopTimes: [vicProvenanceStop] },
+	{
+		platforms: [
+			{
+				source: "static-platform-heuristic",
+				value: "2",
+				confidence: "inferred",
+				observedAt: "2026-08-22T04:37:18Z",
+				expiresAt: new Date(vicExpiryNow + 10 * 60_000).toISOString(),
+				stopId: "20043",
+				event: "both",
+				kind: "platform",
+			},
+		],
+	},
+	vicExpiryNow,
+);
+assert.equal(vicProvenanceStop.actual_platform_code, null);
+assert.equal(vicProvenanceStop.rt_platform_code_updated, false);
+assert.equal(vicProvenanceStop.actual_departure_boarding_locations[0]?.confidence, "inferred");
+assert.equal(vicProvenanceStop.actual_departure_boarding_locations[0]?.source, "static-platform-heuristic");
+const vicAuthoritativeStop = {
+	scheduled_stop_id: "20043",
+	scheduled_parent_station_id: "vic:rail:SSS",
+	actual_platform_code: "1",
+	rt_platform_code_updated: true,
+	actual_arrival_boarding_locations: [],
+	actual_departure_boarding_locations: [
+		{
+			kind: "platform",
+			value: "1",
+			source: "anytrip-v3",
+			observed_at: "2026-08-22T04:37:18Z",
+			confidence: "reported",
+		},
+	],
+};
+vlineEnrichmentTest.applyStoredPlatforms(
+	{ stopTimes: [vicAuthoritativeStop] },
+	{
+		platforms: [
+			{
+				source: "static-platform-heuristic",
+				value: "2",
+				confidence: "inferred",
+				observedAt: "2026-08-22T04:37:18Z",
+				expiresAt: new Date(vicExpiryNow + 10 * 60_000).toISOString(),
+				stopId: "20043",
+				event: "both",
+				kind: "platform",
+			},
+			{
+				source: "anytrip-v3",
+				value: "1",
+				confidence: "reported",
+				observedAt: "2026-08-22T04:37:18Z",
+				expiresAt: new Date(vicExpiryNow + 10 * 60_000).toISOString(),
+				stopId: "20043",
+				event: "both",
+				kind: "platform",
+			},
+		],
+	},
+	vicExpiryNow,
+);
+assert.equal(vicAuthoritativeStop.actual_platform_code, "1");
+assert.equal(
+	vicAuthoritativeStop.actual_departure_boarding_locations[0]?.value,
+	"1",
+	"an inferred guess must not overwrite an authoritative platform",
+);
+// Canceled V/Line runs quarantine residual supplemental platforms.
+const vicCanceledTrip = {
+	schedule_relationship: TripScheduleRelationship.CANCELED,
+	stopTimes: [
+		{
+			actual_platform_code: "9",
+			scheduled_platform_code: "9",
+			rt_platform_code_updated: true,
+			actual_arrival_boarding_locations: [
+				{ kind: "platform", value: "9", source: "vline-scs-html", observed_at: "2026-08-22T04:00:00Z", confidence: "confirmed" },
+			],
+			actual_departure_boarding_locations: [
+				{ kind: "platform", value: "9", source: "vline-scs-html", observed_at: "2026-08-22T04:00:00Z", confidence: "confirmed" },
+			],
+		},
+	],
+};
+assert.equal(vlineEnrichmentTest.quarantineCanceledVLineTrip(vicCanceledTrip), true);
+assert.deepEqual(vicCanceledTrip.stopTimes[0].actual_departure_boarding_locations, []);
+assert.equal(vicCanceledTrip.stopTimes[0].rt_platform_code_updated, false);
+// Booking-snapshot expiries stay finite even for trips without a valid final time.
+const vicExpiryTrip = {
+	serviceDate: "not-a-date",
+	trip_id: "01-BGO--10-T0-8021",
+	stopTimes: [{ passing: false, scheduled_arrival_time: 3600, scheduled_departure_time: 3600 }],
+};
+assert.ok(
+	Number.isFinite(vlineEnrichmentTest.bookingSnapshotExpiry(vicExpiryTrip, vicExpiryNow)),
+	"a NaN instant must fall back to a finite booking-snapshot expiry",
+);
+assert.equal(vlineEnrichmentTest.scheduledInstant({ serviceDate: "not-a-date", stopTimes: [] }, 3600), null);
+// SEQ capacity contracts stay finite-safe: NaN times and malformed dates
+// resolve to UNKNOWN instead of NaN buckets or undefined day types.
+assert.equal(seqCapacityTest.formatTimeBucket(Number.NaN), "");
+assert.equal(typeof seqCapacityTest.getDayType("not-a-date", { dayTypeCache: new Map() }), "string");
+
 const crcTable = Array.from({ length: 256 }, (_, value) => {
 	let crc = value;
 	for (let bit = 0; bit < 8; bit++) crc = (crc & 1) !== 0 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
@@ -1888,6 +2399,11 @@ function feed(name, timezone, includeIntermediate = false, includeInactiveTrip =
 	const inactiveStopTimes = includeInactiveTrip
 		? "inactive-trip,12:00:00,12:00:00,shared,1,0,1\ninactive-trip,13:00:00,13:00:00,end,2,1,0\n"
 		: "";
+	const lateFrequencyTrip = includeInactiveTrip ? "shared,shared,late-frequency-trip,End,0,shared\n" : "";
+	const lateFrequencyStopTimes = includeInactiveTrip
+		? "late-frequency-trip,00:00:00,00:00:00,shared,1,0,1\nlate-frequency-trip,00:30:00,00:30:00,end,2,1,0\n"
+		: "";
+	const lateFrequency = includeInactiveTrip ? "late-frequency-trip,78:00:00,79:00:00,900,1\n" : "";
 	const inactiveCalendar = includeInactiveTrip ? "inactive,1,1,1,1,1,1,1,20261201,20261231\n" : "";
 	return createZip({
 		"agency.txt": `agency_id,agency_name,agency_url,agency_timezone\nagency,${name},https://example.test,${timezone}\n`,
@@ -1895,8 +2411,12 @@ function feed(name, timezone, includeIntermediate = false, includeInactiveTrip =
 		"stops.txt": `stop_id,stop_name,stop_lat,stop_lon\nshared,${name} Station,-27.4,153.0\nauto,${name} Auto,-27.45,153.05\n${middleStop}end,${name} End,-27.5,153.1\n`,
 		"trips.txt":
 			"route_id,service_id,trip_id,trip_headsign,direction_id,shape_id\nshared,shared,shared,End,0,shared\n" +
+			"shared,shared,frequency-trip,End,0,shared\n" +
+			lateFrequencyTrip +
 			inactiveTrip,
-		"stop_times.txt": `trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type\nshared,25:30:00,25:30:00,shared,1,0,1\n${middleStopTime}shared,26:00:00,26:00:00,end,${endSequence},1,0\n${inactiveStopTimes}`,
+		"stop_times.txt": `trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type\nshared,25:30:00,25:30:00,shared,1,0,1\n${middleStopTime}shared,26:00:00,26:00:00,end,${endSequence},1,0\nfrequency-trip,00:00:00,00:00:00,shared,1,0,1\nfrequency-trip,00:30:00,00:30:00,end,2,1,0\n${lateFrequencyStopTimes}${inactiveStopTimes}`,
+		"frequencies.txt":
+			`trip_id,start_time,end_time,headway_secs,exact_times\nfrequency-trip,06:00:00,07:00:00,900,1\n${lateFrequency}`,
 		"calendar.txt":
 			"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nshared,1,1,1,1,1,1,1,20260101,20261231\n" +
 			inactiveCalendar,
@@ -1970,7 +2490,10 @@ function continuationFeed() {
 			"rail,daily,500-seq,Flinders Street,0,\n" +
 			"rail,daily,501-seq,Melbourne Central,0,\n" +
 			"rail,daily,600-seq,Flinders Street,0,\n" +
-			"rail,daily,601-seq,Melbourne Central,0,\n",
+			"rail,daily,601-seq,Melbourne Central,0,\n" +
+			"rail,daily,overnight-a,Flinders Street,0,overnight-block\n" +
+			"rail,daily,overnight-b,Melbourne Central,0,overnight-block\n" +
+			"rail,daily,loop-single,Epping,0,\n",
 		"stop_times.txt":
 			"trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type\n" +
 			"southern-flinders,10:00:00,10:00:00,origin,1,0,1\n" +
@@ -2020,7 +2543,15 @@ function continuationFeed() {
 			"600-seq,21:00:00,21:00:00,origin,1,0,1\n" +
 			"600-seq,21:05:00,21:05:00,handoff,2,1,0\n" +
 			"601-seq,21:07:00,21:07:00,handoff,1,0,1\n" +
-			"601-seq,21:12:00,21:12:00,central,2,1,0\n",
+			"601-seq,21:12:00,21:12:00,central,2,1,0\n" +
+			"overnight-a,23:20:00,23:20:00,origin,1,0,1\n" +
+			"overnight-a,25:10:00,25:10:00,handoff,2,1,0\n" +
+			"overnight-b,25:20:00,25:20:00,handoff,1,0,1\n" +
+			"overnight-b,26:00:00,26:00:00,central,2,1,0\n" +
+			"loop-single,22:00:00,22:00:00,origin,1,0,1\n" +
+			"loop-single,22:10:00,22:10:00,random,2,0,0\n" +
+			"loop-single,22:20:00,22:20:00,origin,3,0,0\n" +
+			"loop-single,22:30:00,22:30:00,epping,4,1,0\n",
 		"transfers.txt":
 			"from_stop_id,to_stop_id,from_trip_id,to_trip_id,transfer_type\n" +
 			"handoff,handoff,southern-flinders,flinders-central,4\n" +
@@ -2186,6 +2717,16 @@ try {
 		false,
 		"static refresh must not retain JS stop-time rows for trips outside the operational horizon",
 	);
+	const frequencyTrip = runtime.getAugmentedTrips({ feedId: "alpha", localId: "frequency-trip" })[0];
+	assert.ok(frequencyTrip.instances.length >= 4);
+	for (const serviceDate of new Set(frequencyTrip.instances.map((instance) => instance.serviceDate))) {
+		const runs = frequencyTrip.instances
+			.filter((instance) => instance.serviceDate === serviceDate)
+			.sort((left, right) => left.frequency_start_time - right.frequency_start_time);
+		assert.deepEqual(runs.map((instance) => instance.frequency_start_time), [21_600, 22_500, 23_400, 24_300]);
+		assert.ok(runs.every((instance) => instance.frequency_exact === true));
+		assert.deepEqual(runs.map((instance) => instance.stopTimes[0].scheduled_departure_time), [21_600, 22_500, 23_400, 24_300]);
+	}
 	const vehicleCallsAfterSnapshot = vehicleInfoCalls;
 	runtime.getAugmentedTrips();
 	runtime.getAugmentedTrips({ feedId: "alpha", localId: "shared" });
@@ -2261,7 +2802,7 @@ try {
 	const destinationNames = (tripId, departureTime) =>
 		destinationsFor(tripId, departureTime).map((destination) => destination.station_name);
 	assert.deepEqual(destinationNames("southern-flinders", 10 * 3600), ["Flinders Street", "Sydney Central"]);
-	assert.deepEqual(destinationNames("loop-out", 11 * 3600), ["Random Station"]);
+	assert.deepEqual(destinationNames("loop-out", 11 * 3600), ["Random Station", "Epping"]);
 	assert.deepEqual(destinationNames("must-alight-a", 13 * 3600), ["Flinders Street"]);
 	assert.deepEqual(destinationNames("block-a", 14 * 3600), ["Flinders Street", "Sydney Central"]);
 	assert.equal(destinationsFor("block-a", 14 * 3600)[1].continuation_source, "gtfs-block");
@@ -2285,6 +2826,8 @@ try {
 	assert.deepEqual(destinationNames("400-seq", 19 * 3600), ["Flinders Street"]);
 	assert.deepEqual(destinationNames("500-seq", 20 * 3600), ["Flinders Street"]);
 	assert.deepEqual(destinationNames("600-seq", 21 * 3600), ["Flinders Street"]);
+	assert.deepEqual(destinationNames("overnight-a", 23 * 3600 + 20 * 60), ["Flinders Street", "Sydney Central"]);
+	assert.deepEqual(destinationNames("loop-single", 22 * 3600), ["Random Station", "Epping"]);
 	const failingSupplemental = new TRAX(
 		{
 			...definition,
@@ -2359,7 +2902,20 @@ try {
 	const eagerInstanceCount = alphaTrip.instances.length;
 	assert.ok(runtime.getAvailableServiceDates().includes("20261215"));
 	assert.equal(alphaTrip.instances.length, eagerInstanceCount, "listing calendar dates must not build instances");
-	assert.equal(runtime.getTripIdsByServiceDate("20261215").length, 3);
+	assert.deepEqual(
+		new Set(runtime.getTripIdsByServiceDate("20261215")),
+		new Set(
+			[
+				["alpha", "shared"],
+				["alpha", "frequency-trip"],
+				["alpha", "late-frequency-trip"],
+				["alpha", "inactive-trip"],
+				["beta", "shared"],
+				["beta", "frequency-trip"],
+			].map(([feedId, localId]) => entityKey({ feedId, localId })),
+		),
+		"lazy materialization should index each qualified trip without conflating feeds",
+	);
 	const lazyAlpha = alphaTrip.instances.find((instance) => instance.serviceDate === "20261215");
 	assert.ok(lazyAlpha, "a far service date should materialize on demand");
 	const lazyAlphaId = lazyAlpha.instance_id;
@@ -2399,8 +2955,31 @@ try {
 		{ cacheDir: ".TRAXCACHE/test-other" },
 	);
 	await other.loadGTFS(false, false);
-	assert.equal(other.getRawTrips().length, 2);
-	assert.equal(runtime.getRawTrips().length, 3);
+	assert.deepEqual(
+		new Set(other.getRawTrips().map((trip) => entityKey({ feedId: trip.feed_id, localId: trip.trip_id }))),
+		new Set(
+			["shared", "frequency-trip", "late-frequency-trip", "inactive-trip"].map((localId) =>
+				entityKey({ feedId: "alpha", localId }),
+			),
+		),
+	);
+	assert.ok(
+		other.getTripIdsByServiceDate("20261218").includes(entityKey({ feedId: "alpha", localId: "late-frequency-trip" })),
+		"actual-date lookup must look back to frequency instances starting more than two service days earlier",
+	);
+	assert.deepEqual(
+		new Set(runtime.getRawTrips().map((trip) => entityKey({ feedId: trip.feed_id, localId: trip.trip_id }))),
+		new Set(
+			[
+				["alpha", "shared"],
+				["alpha", "frequency-trip"],
+				["alpha", "late-frequency-trip"],
+				["alpha", "inactive-trip"],
+				["beta", "shared"],
+				["beta", "frequency-trip"],
+			].map(([feedId, localId]) => entityKey({ feedId, localId })),
+		),
+	);
 	assert.notEqual(
 		other.getAugmentedTrips({ feedId: "alpha", localId: "shared" })[0].instances[0].instance_id,
 		alphaTrip.instances[0].instance_id,
@@ -2411,12 +2990,12 @@ try {
 	assert.equal(new Date(winter).toISOString(), "2026-01-15T17:00:00.000Z");
 	assert.equal(new Date(summer).toISOString(), "2026-07-15T16:00:00.000Z");
 	const serviceOriginCases = [
-		["20260308", "America/Toronto", "2026-03-08T04:00:00.000Z"],
-		["20261101", "America/Toronto", "2026-11-01T05:00:00.000Z"],
-		["20260329", "Europe/London", "2026-03-28T23:00:00.000Z"],
-		["20261025", "Europe/London", "2026-10-25T00:00:00.000Z"],
-		["20260405", "Australia/Sydney", "2026-04-04T14:00:00.000Z"],
-		["20261004", "Australia/Sydney", "2026-10-03T13:00:00.000Z"],
+		["20260308", "America/Toronto", "2026-03-08T05:00:00.000Z"],
+		["20261101", "America/Toronto", "2026-11-01T04:00:00.000Z"],
+		["20260329", "Europe/London", "2026-03-29T00:00:00.000Z"],
+		["20261025", "Europe/London", "2026-10-24T23:00:00.000Z"],
+		["20260405", "Australia/Sydney", "2026-04-04T13:00:00.000Z"],
+		["20261004", "Australia/Sydney", "2026-10-03T14:00:00.000Z"],
 		["20260115", "Australia/Brisbane", "2026-01-14T14:00:00.000Z"],
 		["20260715", "Australia/Brisbane", "2026-07-14T14:00:00.000Z"],
 	];

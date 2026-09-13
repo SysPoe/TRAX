@@ -43,6 +43,11 @@ type QRTPlacesDiskCache = {
 	data: QRTPlace[];
 };
 
+function parsePossiblyEncodedJson(value: unknown): unknown {
+	if (typeof value !== "string") return value;
+	return JSON.parse(value);
+}
+
 function loadQRTPlacesFromDisk(config: TraxConfig): QRTPlacesDiskCache | null {
 	try {
 		if (!cacheFileExists(QRT_PLACES_CACHE_FILE, config.cacheDir)) return null;
@@ -131,7 +136,8 @@ export async function trackTrain(
 		);
 		throw new Error(`Failed to fetch: ${response.status} ${response.statusText} ${url}. ${errorText}`);
 	}
-	const jsonObj = await response.json();
+	const jsonObj = parsePossiblyEncodedJson(await response.json());
+	if (!jsonObj || typeof jsonObj !== "object") throw new Error("QRT service response was not an object");
 	return jsonObj as QRTGetServiceResponse;
 }
 
@@ -150,7 +156,9 @@ export async function getPlaces(config: TraxConfig) {
 			OrderByClauses: [{ Field: "Title", Direction: "Asc" }],
 		}),
 	});
-	let json = JSON.parse(await res.json());
+	if (!res.ok) throw new Error(`Failed to fetch QRT places: ${res.status} ${res.statusText}`);
+	const json = parsePossiblyEncodedJson(await res.json());
+	if (!Array.isArray(json)) throw new Error("QRT places response was not an array");
 	return json as QRTPlace[];
 }
 
@@ -164,8 +172,10 @@ export async function getServiceLines(config: TraxConfig) {
 		});
 		throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
 	}
-	let json = await res.json();
-	return json.ServiceLines as QRTServiceLine[];
+	const json = parsePossiblyEncodedJson(await res.json());
+	const serviceLines = json && typeof json === "object" ? (json as { ServiceLines?: unknown }).ServiceLines : null;
+	if (!Array.isArray(serviceLines)) throw new Error("QRT service-lines response was not an array");
+	return serviceLines as QRTServiceLine[];
 }
 
 export async function getAllServices(config: TraxConfig) {
@@ -181,8 +191,9 @@ export async function getAllServices(config: TraxConfig) {
 		},
 		method: "POST",
 	});
-	const responseText = await res.json();
-	const json = JSON.parse(responseText);
+	if (!res.ok) throw new Error(`Failed to fetch QRT services: ${res.status} ${res.statusText}`);
+	const json = parsePossiblyEncodedJson(await res.json());
+	if (!Array.isArray(json)) throw new Error("QRT services response was not an array");
 	logger.debug(`Successfully fetched ${json.length} services`, {
 		module: "qtt",
 		function: "getAllServices",
@@ -197,21 +208,13 @@ export async function getServiceUpdates(
 ): Promise<QRTServiceUpdate[]> {
 	ensureQRTEnabled(config);
 	const now = new Date();
-
-	// Get start of current month in target timezone
-	const startOfMonth = new Date(now);
-	startOfMonth.setDate(1);
-	startOfMonth.setHours(0, 0, 0, 0);
-
-	const defaultStart = getServiceDate(startOfMonth, getDefaultTimeZone(config)).slice(0, 8); // This gives YYYYMMDD
-	// But it seems it wants YYYY-MM-DD for start/end variables in this context
-	const start = startDate ?? getLocalISOString(startOfMonth, getDefaultTimeZone(config)).slice(0, 10);
-
-	const endOfNextYear = new Date(startOfMonth);
-	endOfNextYear.setFullYear(endOfNextYear.getFullYear() + 1);
-	const end = endDate ?? getLocalISOString(endOfNextYear, getDefaultTimeZone(config)).slice(0, 10);
-
-	const offsetSecs = getTimezoneOffsetSeconds(getDefaultTimeZone(config), now);
+	const timezone = getDefaultTimeZone(config);
+	const localMonth = getLocalISOString(now, timezone).slice(0, 7);
+	const [localYear, localMonthNumber] = localMonth.split("-").map(Number);
+	const start = startDate ?? `${localMonth}-01`;
+	const end = endDate ?? `${localYear + 1}-${String(localMonthNumber).padStart(2, "0")}-01`;
+	const startInstant = parseTimeWithConfig(`${start}T00:00:00`, timezone);
+	const offsetSecs = getTimezoneOffsetSeconds(timezone, new Date(startInstant));
 	const isoOffset =
 		(offsetSecs >= 0 ? "+" : "-") +
 		Math.floor(Math.abs(offsetSecs) / 3600)
@@ -257,8 +260,9 @@ export async function getServiceUpdates(
 		}),
 		method: "POST",
 	});
-	const responseText = await res.json();
-	const json = JSON.parse(responseText);
+	if (!res.ok) throw new Error(`Failed to fetch QRT service updates: ${res.status} ${res.statusText}`);
+	const json = parsePossiblyEncodedJson(await res.json());
+	if (!Array.isArray(json)) throw new Error("QRT service updates response was not an array");
 	logger.debug(`Successfully fetched ${json.length} service updates`, {
 		module: "qtt",
 		function: "getServiceUpdates",
@@ -278,7 +282,20 @@ function convertQRTServiceToTravelTrip(
 	const seqState = getSeqState(ctx);
 	const qrtStationsByKey = buildQRTStationLookupMap(seqState.qrtStations);
 	const qrtPlacesByCode = new Map(seqState.qrtPlaces.map((place) => [place.qrt_PlaceCode, place]));
-	const stops: QRTTravelStopTime[] = (serviceResponse.TrainMovements as QRTTrainMovementDTO[]).map((movement) => {
+	const movements = Array.isArray(serviceResponse.TrainMovements) ? serviceResponse.TrainMovements : [];
+	const stops: QRTTravelStopTime[] = (movements as QRTTrainMovementDTO[]).flatMap((movement) => {
+		if (
+			!movement ||
+			typeof movement.PlaceName !== "string" ||
+			!movement.PlaceName.trim() ||
+			typeof movement.PlaceCode !== "string"
+		) {
+			logger.warn(`Skipping malformed QRT movement for service ${serviceMeta.ServiceId}`, {
+				module: "qtt",
+				function: "convertQRTServiceToTravelTrip",
+			});
+			return [];
+		}
 		let arrivalDelaySeconds: number | null = null;
 		let departureDelaySeconds: number | null = null;
 		let delayString = "scheduled";
@@ -378,7 +395,7 @@ function convertQRTServiceToTravelTrip(
 			departureDelayString:
 				actualDeparture === "0001-01-01T00:00:00" ? departureDelayInfo.delayString : undefined,
 		};
-		return toRet;
+		return [toRet];
 	});
 
 	const unresolvedStops = stops.filter((stop) => !stop.sourceStopId && !stop.stationDetails);
@@ -542,16 +559,24 @@ export async function getCurrentQRTravelTrains(ctx: CacheContext, retries = 2): 
 		const [services, serviceLines] = await Promise.all([getAllServices(ctx.config), getServiceLines(ctx.config)]);
 		const gtfsStops = getConsideredStations(ctx);
 
-		const tasks: Promise<QRTTravelTrip | null>[] = [];
+		const tasks: Array<() => Promise<QRTTravelTrip | null>> = [];
 		for (const serviceLine of serviceLines) {
 			for (const direction of serviceLine.Directions) {
 				for (const service of direction.Services) {
-					tasks.push(processService(serviceLine, direction, service, services, gtfsStops, ctx));
+					tasks.push(() => processService(serviceLine, direction, service, services, gtfsStops, ctx));
 				}
 			}
 		}
 
-		const results = await Promise.all(tasks);
+		const results: Array<QRTTravelTrip | null> = new Array(tasks.length).fill(null);
+		let nextTask = 0;
+		const workers = Array.from({ length: Math.min(6, tasks.length) }, async () => {
+			while (nextTask < tasks.length) {
+				const index = nextTask++;
+				results[index] = await tasks[index]();
+			}
+		});
+		await Promise.all(workers);
 		const travelTrips = results.filter((trip): trip is QRTTravelTrip => trip !== null);
 
 		return travelTrips;
@@ -572,4 +597,4 @@ export async function getCurrentQRTravelTrains(ctx: CacheContext, retries = 2): 
 	}
 }
 
-export const _test = { getCurrentQRTravelTrains, convertQRTServiceToTravelTrip };
+export const _test = { getCurrentQRTravelTrains, convertQRTServiceToTravelTrip, parsePossiblyEncodedJson };

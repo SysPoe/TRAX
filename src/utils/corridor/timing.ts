@@ -252,6 +252,12 @@ export function expandStopTimesWithCorridor(
 	if (sorted.length < 2) return sorted.map((stopTime) => ({ ...stopTime, _passing: false }));
 	const index = ctx.augmented.corridorIndex;
 	const result: StopTimeWithPassingMeta[] = [];
+	// Synthetic rows keep integer sequences without colliding with static GTFS
+	// numbering (which realtime matching depends on). When the static gap has
+	// integer room the synthetics sit between the preserved static bounds;
+	// otherwise they use a dedicated negative namespace that can never collide
+	// with static or realtime sequences. Times still interpolate via weights.
+	let syntheticFallback = -1;
 	result.push({ ...sorted[0], _passing: Boolean(sorted[0]._passing) });
 	for (let gapIndex = 0; gapIndex < sorted.length - 1; gapIndex++) {
 		const gap = corridor.gaps[gapIndex];
@@ -265,12 +271,15 @@ export function expandStopTimesWithCorridor(
 				interpolatedTimes(sorted[gapIndex], sorted[gapIndex + 1], timing.weights),
 			);
 			const passingRecords = timed.records.filter(({ node }) => node.passing && node.stationId);
+			const previous = sorted[gapIndex].stop_sequence;
+			const next = sorted[gapIndex + 1].stop_sequence;
+			const hasRoom =
+				Number.isInteger(previous) &&
+				Number.isInteger(next) &&
+				next - previous > passingRecords.length;
 			for (let passingIndex = 0; passingIndex < passingRecords.length; passingIndex++) {
 				const record = passingRecords[passingIndex];
-				const sequence =
-					sorted[gapIndex].stop_sequence +
-					((passingIndex + 1) * (sorted[gapIndex + 1].stop_sequence - sorted[gapIndex].stop_sequence)) /
-						(passingRecords.length + 1);
+				const sequence = hasRoom ? previous + passingIndex + 1 : syntheticFallback--;
 				const synthetic = syntheticStopTime(
 					record.node,
 					sequence,

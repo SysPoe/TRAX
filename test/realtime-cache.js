@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { RouteType, StopTimeScheduleRelationship, TripScheduleRelationship } from "qdf-gtfs";
-import { refreshRealtimeCache } from "../dist/cache/refreshCaches.js";
+import { refreshRealtimeCache, StaleGenerationError } from "../dist/cache/refreshCaches.js";
 import { createEmptyAugmentedCache, createEmptyRawCache, createRuntimeState } from "../dist/cache/factories.js";
 import {
 	getStopDeparturesCached,
@@ -10,6 +10,7 @@ import {
 } from "../dist/cache/augmentedEntities.js";
 import { resolveConfig } from "../dist/config.js";
 import { entityKey } from "../dist/identity.js";
+import { TRAX } from "../dist/index.js";
 
 const feedId = "feed";
 const routeId = "rail";
@@ -408,5 +409,162 @@ config.progressLog = (progress) => {
 updates = streamedTripIds.map((id) => realtimeUpdate({ id, timestamp: 3, delay: 60 }));
 await refreshRealtimeCache(gtfs, config, ctx);
 assert.equal(observedIncrementalCheckpoint, true, "realtime trips must be replaced incrementally");
+config.progressLog = () => {};
+
+const signaturesBeforeStaleAbort = new Map(augmented.tripUpdateSignatures);
+let freshnessChecks = 0;
+updates = streamedTripIds.map((id) => realtimeUpdate({ id, timestamp: 4, delay: 120 }));
+await assert.rejects(
+	refreshRealtimeCache(gtfs, config, ctx, {
+		shouldAbort: () => {
+			freshnessChecks += 1;
+			return freshnessChecks === 3;
+		},
+	}),
+	StaleGenerationError,
+	"a realtime refresh must abort when its static generation becomes stale",
+);
+assert.deepEqual(
+	augmented.tripUpdateSignatures,
+	signaturesBeforeStaleAbort,
+	"an aborted refresh must not publish signatures for a partial generation",
+);
+const timestampsAfterAbort = streamedTripIds.map(
+	(id) => augmented.tripsRec.get(entityKey({ feedId, localId: id }))?.instances[0].realtime_update?.timestamp,
+);
+assert.ok(timestampsAfterAbort.includes(4), "the regression must interrupt after realtime work has begun");
+assert.ok(timestampsAfterAbort.includes(3), "the regression must leave an unprocessed tail for the retry");
+
+await refreshRealtimeCache(gtfs, config, ctx);
+for (const id of streamedTripIds) {
+	assert.equal(
+		augmented.tripsRec.get(entityKey({ feedId, localId: id }))?.instances[0].realtime_update?.timestamp,
+		4,
+		"the retry must heal every trip left by the stale generation",
+	);
+}
+
+const guardedRuntime = Object.create(TRAX.prototype);
+guardedRuntime.realtimeRefreshInFlight = null;
+let guardedAttempts = 0;
+guardedRuntime.refreshRealtimeOnce = async () => {
+	guardedAttempts += 1;
+	if (guardedAttempts === 1) throw new StaleGenerationError();
+};
+await guardedRuntime.refreshRealtime();
+assert.equal(guardedAttempts, 2, "the runtime must retry one stale-generation realtime attempt");
+
+const eventRuntime = new TRAX(
+	{
+		...config.network,
+		id: "realtime-event-test",
+		name: "Realtime event test",
+	},
+	{ progressLog: () => {}, logFunction: () => {} },
+);
+const eventSequence = [];
+eventRuntime.on("realtime-update-start", () => eventSequence.push("start"));
+eventRuntime.on("realtime-update-end", () => eventSequence.push("end"));
+const updateResults = [false, true];
+eventRuntime.updateRealtime = async () => updateResults.shift() ?? true;
+
+const scheduledTimers = [];
+const originalSetTimeout = globalThis.setTimeout;
+const originalClearTimeout = globalThis.clearTimeout;
+globalThis.setTimeout = (callback) => {
+	const timer = {
+		callback,
+		cleared: false,
+		unref() {
+			return this;
+		},
+	};
+	scheduledTimers.push(timer);
+	return timer;
+};
+globalThis.clearTimeout = (timer) => {
+	if (timer) timer.cleared = true;
+};
+try {
+	eventRuntime.startAutoRefresh(true, 1, 1_000);
+	await scheduledTimers[0].callback();
+	assert.deepEqual(eventSequence, ["start"], "a failed realtime attempt must not publish a completion event");
+	await scheduledTimers[2].callback();
+	assert.deepEqual(eventSequence, ["start", "start", "end"], "a successful realtime attempt must publish completion once");
+} finally {
+	eventRuntime.clearIntervals();
+	globalThis.setTimeout = originalSetTimeout;
+	globalThis.clearTimeout = originalClearTimeout;
+}
+
+// Semantically identical update sets in another order must not re-augment,
+// while extra duplicates and metadata-only changes keep their meaning.
+const orderTripId = "order-trip";
+const orderTripKey = entityKey({ feedId, localId: orderTripId });
+const orderUpdateA = (timestamp = 10) =>
+	realtimeUpdate({
+		id: orderTripId,
+		timestamp,
+		stopIds: ["a", "b", "d"],
+		startTime: "10:00:00",
+		startDate: serviceDate,
+	});
+const orderUpdateB = (timestamp = 10) =>
+	realtimeUpdate({
+		id: orderTripId,
+		timestamp,
+		stopIds: ["b", "c"],
+		startTime: "11:00:00",
+		startDate: nextServiceDate,
+	});
+updates = [orderUpdateA(), orderUpdateB()];
+await refreshRealtimeCache(gtfs, config, ctx);
+const orderTripBefore = augmented.tripsRec.get(orderTripKey);
+assert.ok(orderTripBefore, "the order test trip should exist");
+assert.equal(orderTripBefore.instances.length, 2, "the order test trip should have one instance per update");
+
+let orderReaugmented = false;
+config.progressLog = (progress) => {
+	if (progress.task === "Re-augmenting updated trips" && progress.total > 0 && progress.current > 0) {
+		orderReaugmented = true;
+	}
+};
+updates = [orderUpdateB(), orderUpdateA()];
+await refreshRealtimeCache(gtfs, config, ctx);
+assert.equal(orderReaugmented, false, "a reordered but identical update set must not re-augment");
+assert.strictEqual(
+	augmented.tripsRec.get(orderTripKey),
+	orderTripBefore,
+	"a reordered but identical update set must reuse the trip",
+);
+
+orderReaugmented = false;
+updates = [orderUpdateB(11), orderUpdateA(11)];
+await refreshRealtimeCache(gtfs, config, ctx);
+assert.equal(orderReaugmented, false, "timestamp-only changes must not re-augment, even when reordered");
+assert.strictEqual(
+	augmented.tripsRec.get(orderTripKey),
+	orderTripBefore,
+	"metadata-only updates must reuse the trip",
+);
+assert.deepEqual(
+	augmented
+		.tripsRec.get(orderTripKey)
+		.instances.map((instance) => instance.realtime_update?.timestamp)
+		.sort(),
+	[11, 11],
+	"metadata-only updates must still publish the latest realtime records",
+);
+
+orderReaugmented = false;
+updates = [orderUpdateA(11), orderUpdateB(11), orderUpdateA(11)];
+await refreshRealtimeCache(gtfs, config, ctx);
+assert.equal(orderReaugmented, true, "an extra duplicate update must re-augment");
+assert.notStrictEqual(
+	augmented.tripsRec.get(orderTripKey),
+	orderTripBefore,
+	"an extra duplicate update must rebuild the trip",
+);
+config.progressLog = () => {};
 
 console.log("Realtime cache tests passed.");

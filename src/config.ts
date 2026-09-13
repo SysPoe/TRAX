@@ -147,13 +147,37 @@ export function resolveConfig(network: NetworkDefinition, options: RuntimeOption
 	if (!network.id || !network.name) throw new Error("NetworkDefinition requires id and name");
 	if (network.feeds.length === 0) throw new Error(`Network '${network.id}' has no feeds`);
 	const feedIds = new Set<string>();
+	const realtimeSourceIds = new Set<string>();
+	const validRealtimeKinds = new Set(["trip-updates", "vehicles", "alerts"]);
+	const assertSourceUrl = (url: unknown, context: string): void => {
+		if (typeof url !== "string" || url.trim().length === 0) {
+			throw new Error(`${context} has an empty URL`);
+		}
+	};
 	for (const feed of network.feeds) {
-		if (!feed.id) throw new Error(`Network '${network.id}' contains a feed without id`);
+		if (!feed.id || (typeof feed.id === "string" && feed.id.trim().length === 0))
+			throw new Error(`Network '${network.id}' contains a feed without id`);
 		if (feedIds.has(feed.id)) throw new Error(`Network '${network.id}' contains duplicate feed '${feed.id}'`);
 		feedIds.add(feed.id);
+		assertSourceUrl(feed.staticSource?.url, `Static source for feed '${feed.id}'`);
+		for (const fallbackUrl of feed.staticSource?.fallbackUrls ?? []) {
+			assertSourceUrl(fallbackUrl, `Static fallback URL for feed '${feed.id}'`);
+		}
 		for (const source of feed.realtimeSources) {
+			if (!source.id || source.id.trim().length === 0)
+				throw new Error(`Network '${network.id}' contains a realtime source without id`);
+			if (realtimeSourceIds.has(source.id) || feedIds.has(source.id))
+				throw new Error(`Network '${network.id}' contains duplicate feed/source ID '${source.id}'`);
+			realtimeSourceIds.add(source.id);
+			if (!validRealtimeKinds.has(source.kind as string)) {
+				throw new Error(`Realtime source '${source.id}' has invalid kind '${source.kind}'`);
+			}
 			if (source.targetFeedId !== feed.id) {
 				throw new Error(`Realtime source '${source.id}' must target its containing feed '${feed.id}'`);
+			}
+			assertSourceUrl(source.source?.url, `Realtime source '${source.id}'`);
+			for (const fallbackUrl of source.source?.fallbackUrls ?? []) {
+				assertSourceUrl(fallbackUrl, `Realtime fallback URL for source '${source.id}'`);
 			}
 		}
 	}
@@ -274,11 +298,24 @@ function generatedPlaceId(prefix: string, localId: string): string {
 
 /** Materialize feed-derived places without mutating the previous static generation. */
 export function materializeSameStationIdPlaces(config: TraxConfig, stops: Stop[]): TraxConfig {
-	const availableMembers = new Set(stops.map((stop) => entityKey({ feedId: stop.feed_id, localId: stop.stop_id })));
+	// A configured member may reference a station that has no exact stop row:
+	// many feeds publish only platforms with parent_station set. Resolve
+	// members against both exact stop IDs and parent-station identities,
+	// always feed-qualified so one feed never satisfies another's membership.
+	const exactMembers = new Set(stops.map((stop) => entityKey({ feedId: stop.feed_id, localId: stop.stop_id })));
+	const parentMembers = new Set(
+		stops
+			.filter((stop) => stop.parent_station != null && stop.parent_station !== "")
+			.map((stop) => entityKey({ feedId: stop.feed_id, localId: stop.parent_station! })),
+	);
+	const isMemberAvailable = (member: QualifiedEntityId): boolean => {
+		const key = entityKey(member);
+		return exactMembers.has(key) || parentMembers.has(key);
+	};
 	const places = (config.network.places ?? [])
 		.map((place) => ({
 			...place,
-			members: place.members.filter((member) => availableMembers.has(entityKey(member))).map((member) => ({ ...member })),
+			members: place.members.filter(isMemberAvailable).map((member) => ({ ...member })),
 		}))
 		.filter((place) => place.members.length > 0);
 	const placeById = new Map(places.map((place) => [place.id, place]));
@@ -311,9 +348,24 @@ export function materializeSameStationIdPlaces(config: TraxConfig, stops: Stop[]
 
 			let place = [...existingPlaces][0];
 			if (!place) {
-				const id = generatedPlaceId(rule.placeIdPrefix, localId);
+				// Normalized-ID collisions (e.g. "A B" vs "A/B" both yielding
+				// "derived-a-b") must not abort the whole static refresh. Skip
+				// the colliding station with a warning so healthy derived
+				// places still materialize.
+				let id: string;
+				try {
+					id = generatedPlaceId(rule.placeIdPrefix, localId);
+				} catch (error) {
+					logger.error(
+						`Skipping same-station-ID place for station '${localId}': ${error instanceof Error ? error.message : String(error)}`,
+					);
+					continue;
+				}
 				if (!id || placeById.has(id)) {
-					throw new Error(`Derived place '${id}' conflicts in network '${config.network.id}'`);
+					logger.error(
+						`Skipping derived place '${id}' for station '${localId}': normalized ID conflicts in network '${config.network.id}'`,
+					);
+					continue;
 				}
 				const canonicalStop = rule.canonicalFeedId === leftFeedId ? left : right;
 				place = { id, name: canonicalStop.stop_name ?? localId, members: [] };
@@ -327,6 +379,27 @@ export function materializeSameStationIdPlaces(config: TraxConfig, stops: Stop[]
 				placeByMember.set(key, place);
 			}
 		}
+	}
+
+	// Index child platforms under their station's place so lookups by platform
+	// resolve to the configured station identity. Feed qualification is
+	// preserved: only children whose parent_station matches a member in the
+	// same feed are indexed, and conflicting ownership still throws.
+	for (const stop of stops) {
+		if (!stop.parent_station) continue;
+		const parentPlace = placeByMember.get(entityKey({ feedId: stop.feed_id, localId: stop.parent_station }));
+		if (!parentPlace) continue;
+		const childKey = entityKey({ feedId: stop.feed_id, localId: stop.stop_id });
+		const existing = placeByMember.get(childKey);
+		if (existing) {
+			if (existing !== parentPlace) {
+				throw new Error(
+					`Station member '${stop.feed_id}:${stop.stop_id}' belongs to both places '${existing.id}' and '${parentPlace.id}'`,
+				);
+			}
+			continue;
+		}
+		placeByMember.set(childKey, parentPlace);
 	}
 
 	return { ...config, places, placeByMember };
@@ -355,6 +428,48 @@ export function getFeedTimeZone(config: TraxConfig, feedId: string): string {
 
 export function getDefaultTimeZone(config: TraxConfig): string {
 	return getFeedTimeZone(config, config.network.feeds[0].id);
+}
+
+/**
+ * Trip-time timezone for GTFS service-day math. Per the GTFS spec,
+ * stop_times.txt times are in agency_timezone, not stop_timezone, so trip
+ * calculations must always use the feed timezone and ignore per-stop zones.
+ * stop_timezone is display-only (local wall-clock for a station).
+ */
+export function getTripTimeZone(
+	config: TraxConfig,
+	feedId: string,
+	_stop?: { stop_timezone?: string | null } | null,
+): string {
+	return getFeedTimeZone(config, feedId);
+}
+
+function isValidTimeZone(value: string): boolean {
+	try {
+		new Intl.DateTimeFormat("en-US", { timeZone: value });
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Display timezone for a stop following GTFS parent inheritance: a child
+ * stop inherits its parent station's timezone (its own stop_timezone is
+ * ignored when parent_station is set). Stations and parentless stops use
+ * their own stop_timezone, falling back to the feed timezone. Invalid zones
+ * fall back safely instead of breaking trip-time math.
+ */
+export function resolveStopDisplayTimeZone(
+	stop: Pick<Stop, "stop_timezone" | "parent_station"> | null | undefined,
+	parentStop: Pick<Stop, "stop_timezone"> | null | undefined,
+	feedTimeZone: string,
+): string {
+	const inherited = stop?.parent_station ? parentStop?.stop_timezone : stop?.stop_timezone;
+	if (typeof inherited === "string" && inherited.trim().length > 0 && isValidTimeZone(inherited)) {
+		return inherited;
+	}
+	return feedTimeZone;
 }
 
 /** Resolve a trip's run number using its feed rule, or TRAX's shared default. */

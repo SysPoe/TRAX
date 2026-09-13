@@ -30,6 +30,51 @@ import {
 } from "../region-specific/AU/NSW/tfnsw-cross-feed.js";
 
 const MAX_LAZY_SERVICE_DATES = 8;
+/** Run-series entries are keyed by service date. Evict the oldest dates so ad-hoc date queries cannot grow the cache without bound. */
+const MAX_RUN_SERIES_DATES = 32;
+/** Inner per-date run-series entries are bounded so arbitrary series misses cannot grow one date without bound. */
+const MAX_RUN_SERIES_PER_DATE = 32;
+/** Finite bound for trip lookback so non-finite bounds cannot hang date loops. */
+const MAX_TRIP_LOOKBACK_DAYS = 7;
+
+function clampLookbackDays(value: unknown): number {
+	const days = typeof value === "number" ? value : 1;
+	if (!Number.isFinite(days)) return 1;
+	return Math.min(MAX_TRIP_LOOKBACK_DAYS, Math.max(0, Math.floor(days)));
+}
+
+function evictOldestRunSeriesDates(ctx: CacheContext): void {
+	const cache = ctx.augmented.runSeriesCache;
+	while (cache.size > MAX_RUN_SERIES_DATES) {
+		const oldest = cache.keys().next().value as string | undefined;
+		if (oldest === undefined) break;
+		cache.delete(oldest);
+	}
+}
+
+function evictOldestRunSeriesEntries(dateMap: Map<string, { series: string; date: string; trips: string[]; vehicle_sightings: { vehicle_id: string; trip_id: string }[] }>): void {
+	while (dateMap.size > MAX_RUN_SERIES_PER_DATE) {
+		const oldest = dateMap.keys().next().value as string | undefined;
+		if (oldest === undefined) break;
+		dateMap.delete(oldest);
+	}
+}
+
+function parseClockToSeconds(value: string | null | undefined): number | null {
+	if (value == null) return null;
+	const trimmed = String(value).trim();
+	if (trimmed === "") return null;
+	const match = /^(\d+):(\d{2})(?::(\d{2}))?$/.exec(trimmed);
+	if (!match) return null;
+	const h = Number(match[1]);
+	const m = Number(match[2]);
+	const s = Number(match[3] ?? "0");
+	if (!Number.isFinite(h) || !Number.isFinite(m) || !Number.isFinite(s)) return null;
+	if (m > 59 || s > 59 || h < 0) return null;
+	const total = h * 3600 + m * 60 + s;
+	if (!Number.isFinite(total) || total < 0) return null;
+	return total;
+}
 
 function getMembershipSet(
 	membersByBucket: Map<string, Set<string>>,
@@ -394,7 +439,8 @@ export function ensureStartServiceDateMaterialized(ctx: CacheContext, serviceDat
 
 /** Date-filter index. The previous start date is included for GTFS times beyond 24:00. */
 export function getTripIdsByServiceDate(ctx: CacheContext, serviceDate: string): string[] {
-	for (let offset = -ctx.runtimeState.maxTripLookbackDays; offset <= 0; offset++) {
+	const lookback = clampLookbackDays(ctx.runtimeState.maxTripLookbackDays);
+	for (let offset = -lookback; offset <= 0; offset++) {
 		ensureStartServiceDateMaterialized(ctx, addDaysToServiceDate(serviceDate, offset));
 	}
 	return materializeMembershipArray(ctx.augmented.serviceDateTripsSet, ctx.augmented.serviceDateTrips, serviceDate);
@@ -461,17 +507,20 @@ export function getStopDeparturesCached(
 	for (const tripId of relevantTripIds) {
 		const trip = augmented.tripsRec.get(tripId);
 		if (!trip) continue;
-		const instance = trip.instances.find((i) => i.serviceDate === serviceDate);
-		if (!instance) continue;
+		// Frequency templates materialize several distinct instances for one
+		// service date. Index every matching instance, not just the first.
+		for (const instance of trip.instances) {
+			if (instance.serviceDate !== serviceDate) continue;
 
-		for (const st of instance.stopTimes) {
-			if (
-				(st.feed_id === stop.feedId && st.actual_stop_id === stop.localId) ||
-				(st.feed_id === stop.feedId && st.actual_parent_station_id === stop.localId) ||
-				(st.feed_id === stop.feedId && st.scheduled_stop_id === stop.localId) ||
-				(st.feed_id === stop.feedId && st.scheduled_parent_station_id === stop.localId)
-			) {
-				results.push(st);
+			for (const st of instance.stopTimes) {
+				if (
+					(st.feed_id === stop.feedId && st.actual_stop_id === stop.localId) ||
+					(st.feed_id === stop.feedId && st.actual_parent_station_id === stop.localId) ||
+					(st.feed_id === stop.feedId && st.scheduled_stop_id === stop.localId) ||
+					(st.feed_id === stop.feedId && st.scheduled_parent_station_id === stop.localId)
+				) {
+					results.push(st);
+				}
 			}
 		}
 	}
@@ -480,7 +529,9 @@ export function getStopDeparturesCached(
 	// leave a canonical departure outside the requested time window.
 	const reconciled = reconcileTfnswDepartures(ctx, results);
 
-	// Sort by absolute time for fast window queries
+	// Sort by absolute time for fast window queries. Rows without any usable
+	// time sort last (Infinity), never as midnight, in sync with
+	// departures.ts departureTimeSeconds.
 	const serviceDayStartCache = new Map<string, number>();
 	const getAbsTime = (st: AugmentedStopTime) => {
 		let dayStart = serviceDayStartCache.get(st.service_date);
@@ -488,7 +539,13 @@ export function getStopDeparturesCached(
 			dayStart = getServiceDayStart(st.service_date, getFeedTimeZone(ctx.config, st.feed_id));
 			serviceDayStartCache.set(st.service_date, dayStart);
 		}
-		return (st.actual_departure_time ?? st.scheduled_departure_time ?? st.actual_arrival_time ?? 0) + dayStart;
+		const seconds =
+			st.actual_departure_time ??
+			st.scheduled_departure_time ??
+			st.actual_arrival_time ??
+			st.scheduled_arrival_time ??
+			Number.POSITIVE_INFINITY;
+		return seconds === Number.POSITIVE_INFINITY ? Number.POSITIVE_INFINITY : seconds + dayStart;
 	};
 
 	timer.start("getStopDeparturesCached:sort");
@@ -594,7 +651,33 @@ export function getVehicleTripInstance(
 	const startDate = vehicle.trip.start_date;
 	if (startDate) {
 		ensureStartServiceDateMaterialized(ctx, startDate);
-		return augmentedTrip.instances.find((i) => i.serviceDate === startDate) || null;
+		const candidates = augmentedTrip.instances.filter((i) => i.serviceDate === startDate);
+		if (candidates.length === 0) return null;
+		if (candidates.length === 1) return candidates[0];
+		// Frequency templates have several distinct instances for one service
+		// date. Match the vehicle's start_time (normalized so 6:00:00 and
+		// 06:00:00 agree) against each run's frequency identity.
+		const rawVehicleStart = (vehicle.trip as { start_time?: string | null }).start_time;
+		const vehicleStart = parseClockToSeconds(rawVehicleStart);
+		if (vehicleStart !== null) {
+			for (const candidate of candidates) {
+				if (
+					candidate.frequency_start_time !== null &&
+					candidate.frequency_start_time !== undefined &&
+					Number.isFinite(candidate.frequency_start_time) &&
+					candidate.frequency_start_time === vehicleStart
+				) {
+					return candidate;
+				}
+			}
+			// Fall back to normalized realtime start_time encoded in the
+			// instance ID when frequency metadata is absent.
+			for (const candidate of candidates) {
+				const realtime = candidate.realtime_update?.trip.start_time;
+				if (realtime != null && parseClockToSeconds(realtime) === vehicleStart) return candidate;
+			}
+		}
+		return candidates[0];
 	}
 
 	const now = Date.now() / 1000;
@@ -746,30 +829,36 @@ export function getRunSeries(
 	if (!dateMap) {
 		dateMap = new Map();
 		augmented.runSeriesCache.set(date, dateMap);
+		evictOldestRunSeriesDates(ctx);
 	}
 	const tripIdsForDate = getServiceDateTripSet(ctx, date);
-	let matchingTripKey: string | undefined;
 	if (!dateMap.get(runSeries) && calcIfNotFound && tripIdsForDate) {
+		const matchingTripKeys: string[] = [];
 		for (const key of tripIdsForDate) {
 			if (augmented.tripsRec.get(key)?.trip_id.endsWith(runSeries)) {
-				matchingTripKey = key;
-				break;
+				matchingTripKeys.push(key);
+			}
+		}
+		// Index every distinct frequency instance for the series/date, not
+		// just the first trip's first run.
+		for (const key of matchingTripKeys) {
+			const trip = augmented.tripsRec.get(key);
+			if (!trip) continue;
+			for (const instance of trip.instances) {
+				if (instance.serviceDate !== date) continue;
+				calculateRunSeries(instance, context);
 			}
 		}
 	}
-	if (matchingTripKey) {
-		const trip = augmented.tripsRec.get(matchingTripKey)!;
-		const instance = trip.instances.find((i) => i.serviceDate === date);
-		if (instance) {
-			calculateRunSeries(instance, context);
-		}
-	} else if (!dateMap.get(runSeries))
+	if (!dateMap.get(runSeries)) {
 		dateMap.set(runSeries, {
 			trips: [],
 			vehicle_sightings: [],
 			series: runSeries.toUpperCase(),
 			date,
 		});
+		evictOldestRunSeriesEntries(dateMap);
+	}
 	return dateMap.get(runSeries)!;
 }
 
@@ -779,8 +868,10 @@ export function setRunSeries(date: string, runSeries: string, data: RunSeries, c
 	if (!dateMap) {
 		dateMap = new Map();
 		augmented.runSeriesCache.set(date, dateMap);
+		evictOldestRunSeriesDates(ctx);
 	}
 	dateMap.set(runSeries, data);
+	evictOldestRunSeriesEntries(dateMap);
 }
 
 export function SEQgetQRTPlaces(ctx: CacheContext): QRTPlace[] {

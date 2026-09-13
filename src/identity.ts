@@ -26,7 +26,11 @@ export function parseEntityKey(key: string): QualifiedEntityId {
 	if (separator < 1 || !Number.isInteger(feedLength) || feedLength < 0)
 		throw new Error("Invalid qualified entity key");
 	const feedStart = separator + 1;
-	return { feedId: key.slice(feedStart, feedStart + feedLength), localId: key.slice(feedStart + feedLength) };
+	if (feedStart + feedLength > key.length)
+		throw new Error("Invalid qualified entity key: declared feed length beyond key");
+	const localId = key.slice(feedStart + feedLength);
+	if (localId.length === 0) throw new Error("Invalid qualified entity key: empty localId");
+	return { feedId: key.slice(feedStart, feedStart + feedLength), localId };
 }
 
 function encode(value: unknown): string {

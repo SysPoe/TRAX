@@ -9,7 +9,7 @@ import {
 	type PlatformPredictionEvent,
 } from "../../../utils/platformPredictionShadow.js";
 import { entityKey } from "../../../identity.js";
-import { TripScheduleRelationship } from "qdf-gtfs";
+import { StopTimeScheduleRelationship, TripScheduleRelationship } from "qdf-gtfs";
 
 const CACHE_FILE = "region-specific/ca-gtha/platform-prediction-shadow-v1.sqlite";
 
@@ -21,6 +21,18 @@ const CACHE_FILE = "region-specific/ca-gtha/platform-prediction-shadow-v1.sqlite
  * shape despite living behind a different plugin.
  */
 export const PLATFORM_PREDICTION_FEED_IDS: ReadonlySet<string> = new Set(["go", "up", "via"]);
+
+/** A canceled trip or a skipped call must not seed or score platform predictions. */
+export function isGthaSkippedPredictionStop(
+	stopTime: { passing?: boolean; realtime?: boolean; realtime_info?: { schedule_relationship?: unknown } | null },
+): boolean {
+	if (stopTime.passing) return true;
+	if (!stopTime.realtime || !stopTime.realtime_info) return false;
+	return (
+		stopTime.realtime_info.schedule_relationship === StopTimeScheduleRelationship.SKIPPED ||
+		stopTime.realtime_info.schedule_relationship === StopTimeScheduleRelationship.NO_DATA
+	);
+}
 
 function serviceDayOfWeek(serviceDate: string): number {
 	const year = Number(serviceDate.slice(0, 4));
@@ -67,6 +79,7 @@ export function updateGthaPlatformPredictionShadow(ctx: CacheContext, now = Date
 		for (let index = 0; index < instance.stopTimes.length; index++) {
 			const stopTime = instance.stopTimes[index];
 			if (stopTime.passing || stopTime.scheduled_departure_time == null) continue;
+			if (isGthaSkippedPredictionStop(stopTime)) continue;
 			const stopId = stopTime.scheduled_parent_station_id ?? stopTime.scheduled_stop_id;
 			if (!stopId) continue;
 			const reportedLocation = stopTime.actual_departure_boarding_locations.find(

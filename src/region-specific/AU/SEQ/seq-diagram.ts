@@ -361,8 +361,12 @@ function expandSeqDiagramNeighborhood(top: SeqDiagramTopology, seeds: Set<string
 	return out;
 }
 
-function findInstanceIdForDate(ctx: CacheContext, trip_id: string, serviceDate: string): string | null {
-	const feedId = ctx.config.network.feeds[0].id;
+function findInstanceIdForDate(
+	ctx: CacheContext,
+	feedId: string,
+	trip_id: string,
+	serviceDate: string,
+): string | null {
 	const t = ctx.augmented.tripsRec.get(entityKey({ feedId, localId: trip_id }));
 	if (!t) return null;
 	for (const inst of t.instances) {
@@ -370,6 +374,21 @@ function findInstanceIdForDate(ctx: CacheContext, trip_id: string, serviceDate: 
 		if (inst.actualTripDates.includes(serviceDate)) return inst.instance_id;
 	}
 	return null;
+}
+
+/**
+ * Resolve an augmented trip by local id without assuming SEQ is feeds[0].
+ * Trips from other feeds in the same network must never shadow the diagram.
+ */
+function getSeqAugmentedTrip(ctx: CacheContext, localTripId: string): AugmentedTrip | undefined {
+	for (const feed of ctx.config.network.feeds) {
+		const trip = ctx.augmented.tripsRec.get(entityKey({ feedId: feed.id, localId: localTripId }));
+		if (trip) return trip;
+	}
+	for (const trip of ctx.augmented.tripsRec.values()) {
+		if (trip.trip_id === localTripId) return trip;
+	}
+	return undefined;
 }
 
 /** Absolute epoch seconds for first departure or last departure of an instance (handles date offsets on stop times). type only used for first/last discrimination via stop index. */
@@ -380,12 +399,8 @@ function endpointAbsUnix(ctx: CacheContext, inst: AugmentedTripInstance, which: 
 	const sec =
 		st.actual_departure_time ?? st.scheduled_departure_time ?? st.actual_arrival_time ?? st.scheduled_arrival_time;
 	if (sec == null) return null;
-	const off =
-		which === "first"
-			? (st.actual_departure_date_offset ?? st.scheduled_departure_date_offset ?? 0)
-			: (st.actual_departure_date_offset ?? st.scheduled_departure_date_offset ?? 0);
 	const base = getServiceDayStart(st.service_date, getFeedTimeZone(ctx.config, st.feed_id));
-	return base + off * 86400 + sec;
+	return base + sec;
 }
 
 /** Assign diagram + GTFS `block_id` coalesce for one augmented trip (shared trip / instances). */
@@ -408,8 +423,8 @@ function applyDiagramFieldsToAugmentedTrip(
 		inst.seq_diagram_next_trip_id = n;
 		inst.seq_diagram_block_id = bid;
 		inst.block_id = blockForTrip;
-		inst.seq_diagram_prev_instance_id = p ? findInstanceIdForDate(ctx, p, inst.serviceDate) : null;
-		inst.seq_diagram_next_instance_id = n ? findInstanceIdForDate(ctx, n, inst.serviceDate) : null;
+		inst.seq_diagram_prev_instance_id = p ? findInstanceIdForDate(ctx, trip.feed_id, p, inst.serviceDate) : null;
+		inst.seq_diagram_next_instance_id = n ? findInstanceIdForDate(ctx, trip.feed_id, n, inst.serviceDate) : null;
 		if (resetBrokenFlags) {
 			inst.seq_diagram_prev_link_broken = false;
 			inst.seq_diagram_next_link_broken = false;
@@ -453,7 +468,7 @@ export function revalidateSeqDiagramRealtimeEdges(ctx: CacheContext, affectedTri
 	const minGap = SEQ_DIAGRAM_MIN_TURNAROUND_SEC;
 
 	for (const tripId of tripIds) {
-		const trip = ctx.augmented.tripsRec.get(entityKey({ feedId: ctx.config.network.feeds[0].id, localId: tripId }));
+		const trip = getSeqAugmentedTrip(ctx, tripId);
 		if (!trip) continue;
 
 		for (const inst of trip.instances) {
@@ -535,7 +550,7 @@ export function refreshSeqDiagramAfterRealtimeBatch(ctx: CacheContext, updatedTr
 	const neighborhood = expandSeqDiagramNeighborhood(top, localTripIds);
 
 	for (const tripId of neighborhood) {
-		const trip = ctx.augmented.tripsRec.get(entityKey({ feedId: ctx.config.network.feeds[0].id, localId: tripId }));
+		const trip = getSeqAugmentedTrip(ctx, tripId);
 		if (!trip) continue;
 		applyDiagramFieldsToAugmentedTrip(ctx, top, trip, false);
 	}
