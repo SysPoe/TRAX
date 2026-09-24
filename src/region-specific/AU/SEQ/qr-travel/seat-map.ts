@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { CacheContext } from "../../../../cache/types.js";
 import { getPluginState } from "../../../../plugins/types.js";
+import { cacheFileExists, loadCacheFile, writeCacheFileAtomic } from "../../../../utils/fs.js";
 import {
 	QRT_RAIL_SEARCH_URL,
 	bookingDate,
@@ -11,6 +12,7 @@ import {
 	qrtRailServices,
 	qrtSearchRequest,
 	regularProduct,
+	runToken,
 	selectQrtBookingLeg,
 	selectQrtRailService,
 	signedQrtBookingFetch,
@@ -27,6 +29,8 @@ const MISSING_SEAT_MAP_TTL_MS = 60 * 1000;
 /** Candidate provider services rarely change within a schedule day. */
 const CANDIDATE_TTL_MS = 30 * 60 * 1000;
 const DIAGRAM_CACHE_BYTES = 24 * 1024 * 1024;
+const SNAPSHOT_FILE = "qrt-seat-map-snapshots-v1.json";
+const SNAPSHOT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = {
 	JPG: "image/jpeg",
@@ -82,6 +86,8 @@ export type QrtBookingSeatMap = {
 	selectedFare: QrtBookingSeatMapFare | null;
 	source: string;
 	asOf: string;
+	/** True when booking has closed and this is the last collected snapshot. */
+	bookingClosed?: boolean;
 	carriages: QrtBookingSeatMapCarriage[];
 };
 
@@ -96,7 +102,26 @@ type SeatMapState = {
 	/** Content-addressed carriage diagrams; keyed by sha256 of the decoded bytes. */
 	diagrams: Map<string, DiagramEntry>;
 	diagramBytes: number;
+	archive: Map<string, QrtBookingSeatMap>;
 };
+
+type StoredSeatMaps = {
+	maps: [string, QrtBookingSeatMap][];
+	diagrams: [string, { contentType: string; data: string }][];
+};
+
+/** Include the sold destination because a train can have different products for shorter legs. */
+export function qrtSeatMapOccurrenceKey(
+	run: string,
+	date: string,
+	departure: string,
+	destination: string,
+): string | null {
+	const day = isoDate(date);
+	const minute = /T(\d{2}:\d{2})/.exec(departure)?.[1];
+	const number = runToken(run);
+	return day && minute && number && destination ? `${number}\0${day}\0${minute}\0${destination.toUpperCase()}` : null;
+}
 
 function record(value: unknown): Record<string, unknown> | null {
 	return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -155,8 +180,12 @@ function validDiagramBytes(bytes: Buffer, contentType: string | null): boolean {
 	if (!contentType || bytes.length === 0 || bytes.length > DIAGRAM_CACHE_BYTES) return false;
 	if (contentType === "image/jpeg") return bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8;
 	if (contentType === "image/png") return bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
-	if (contentType === "image/gif") return bytes.subarray(0, 6).toString("ascii") === "GIF87a" || bytes.subarray(0, 6).toString("ascii") === "GIF89a";
-	if (contentType === "image/webp") return bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP";
+	if (contentType === "image/gif")
+		return (
+			bytes.subarray(0, 6).toString("ascii") === "GIF87a" || bytes.subarray(0, 6).toString("ascii") === "GIF89a"
+		);
+	if (contentType === "image/webp")
+		return bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP";
 	return false;
 }
 
@@ -301,18 +330,106 @@ function seatMapFare(option: RailService): QrtBookingSeatMapFare {
 }
 
 function stateFor(ctx: CacheContext): SeatMapState {
-	return getPluginState(ctx, STATE_ID, () => ({
-		candidates: new Map(),
-		seatMaps: new Map(),
-		inFlight: new Map(),
-		diagrams: new Map(),
-		diagramBytes: 0,
-	}));
+	return getPluginState(ctx, STATE_ID, () => {
+		const state: SeatMapState = {
+			candidates: new Map(),
+			seatMaps: new Map(),
+			inFlight: new Map(),
+			diagrams: new Map(),
+			diagramBytes: 0,
+			archive: new Map(),
+		};
+		const cacheDir = ctx.config.cacheDir;
+		if (typeof cacheDir !== "string") return state;
+		try {
+			if (!cacheFileExists(SNAPSHOT_FILE, cacheDir)) return state;
+			const saved = JSON.parse(loadCacheFile(SNAPSHOT_FILE, cacheDir)) as StoredSeatMaps;
+			if (!Array.isArray(saved.maps) || !Array.isArray(saved.diagrams)) return state;
+			for (const [key, map] of saved.maps) {
+				if (typeof key === "string" && map && Array.isArray(map.carriages)) state.archive.set(key, map);
+			}
+			for (const [hash, diagram] of saved.diagrams) {
+				if (!/^[0-9a-f]{32}$/.test(hash) || typeof diagram?.data !== "string") continue;
+				const bytes = Buffer.from(diagram.data, "base64");
+				if (!validDiagramBytes(bytes, diagram.contentType)) continue;
+				state.diagrams.set(hash, { bytes, contentType: diagram.contentType });
+				state.diagramBytes += bytes.length;
+			}
+		} catch {
+			// A damaged cache must not prevent live seat-map requests.
+		}
+		return state;
+	});
+}
+
+/** Persist the last successful map and its referenced diagrams for a future QRT run. */
+export function saveQrtSeatMapSnapshot(ctx: CacheContext, service: RailService, map: QrtBookingSeatMap): void {
+	const key = qrtSeatMapOccurrenceKey(
+		String(service.traiN_NAME ?? ""),
+		String(service.traveL_DATE ?? ""),
+		String(service.departurE_TIME ?? ""),
+		String(service.endregioncode ?? ""),
+	);
+	if (!key) return;
+	const state = stateFor(ctx);
+	state.archive.set(key, map);
+	const cutoff = Date.now() - SNAPSHOT_RETENTION_MS;
+	for (const [occurrence, saved] of state.archive) {
+		if (Date.parse(saved.travelDate) < cutoff) state.archive.delete(occurrence);
+	}
+	const cacheDir = ctx.config.cacheDir;
+	if (typeof cacheDir !== "string") return;
+	const maps = [...state.archive].sort((left, right) => left[1].asOf.localeCompare(right[1].asOf));
+	while (maps.length > 128) maps.shift();
+	let diagrams: StoredSeatMaps["diagrams"] = [];
+	for (;;) {
+		const hashes = new Set(
+			maps.flatMap(([, saved]) =>
+				saved.carriages.map((car) => car.diagramHash).filter((hash): hash is string => Boolean(hash)),
+			),
+		);
+		diagrams = [...hashes].flatMap((hash) => {
+			const diagram = state.diagrams.get(hash);
+			return diagram
+				? [
+						[
+							hash,
+							{ contentType: diagram.contentType, data: Buffer.from(diagram.bytes).toString("base64") },
+						] as const,
+					]
+				: [];
+		});
+		const bytes = diagrams.reduce((sum, [, image]) => sum + image.data.length, 0);
+		if (bytes <= DIAGRAM_CACHE_BYTES || maps.length <= 1) break;
+		maps.shift();
+	}
+	state.archive = new Map(maps);
+	try {
+		writeCacheFileAtomic(SNAPSHOT_FILE, JSON.stringify({ maps, diagrams } satisfies StoredSeatMaps), cacheDir);
+	} catch {
+		// The in-memory map remains usable when the cache directory is read-only.
+	}
+}
+
+export function qrtSeatMapSnapshotObservedAt(ctx: CacheContext, key: string): number {
+	const saved = stateFor(ctx).archive.get(key);
+	return saved ? Date.parse(saved.asOf) || 0 : 0;
 }
 
 export function getQrtSeatMapDiagram(ctx: CacheContext, imageHash: string): QrtSeatMapDiagram | null {
 	if (!/^[0-9a-f]{6,64}$/.test(imageHash)) return null;
 	return stateFor(ctx).diagrams.get(imageHash) ?? null;
+}
+
+function archivedSeatMap(service: QRTTravelTrip, state: SeatMapState): QrtBookingSeatMap | null {
+	const key = qrtSeatMapOccurrenceKey(
+		service.trip_number ?? "",
+		service.departureDate,
+		service.departureDate,
+		service.stops.at(-1)?.placeCode ?? "",
+	);
+	const saved = key ? state.archive.get(key) : null;
+	return saved ? { ...saved, serviceId: service.serviceId } : null;
 }
 
 type SeatMapDeps = {
@@ -327,8 +444,7 @@ async function fetchSeatMap(
 ): Promise<QrtBookingSeatMap | null> {
 	const leg = selectQrtBookingLeg(service);
 	const travelDate = leg ? bookingDate(leg.departureDate) : null;
-	const isoTravelDate = leg ? isoDate(leg.departureDate) : null;
-	if (!leg || !travelDate || !isoTravelDate) return null;
+	if (!leg || !travelDate) return null;
 
 	const key = `${service.serviceId}\0${leg.departureDate}\0${leg.origin.placeCode}\0${leg.destination.placeCode}`;
 	const cachedCandidate = state.candidates.get(key);
@@ -346,13 +462,7 @@ async function fetchSeatMap(
 				body: JSON.stringify(qrtSearchRequest(origin, destination, travelDate)),
 			});
 			if (response.ok) {
-				candidate = selectQrtRailService(
-					qrtRailServices(await response.json()),
-					service,
-					origin,
-					destination,
-					leg.departureDate,
-				);
+				candidate = selectQrtRailService(qrtRailServices(await response.json()), service, origin, destination);
 			}
 		}
 		state.candidates.set(key, {
@@ -362,9 +472,20 @@ async function fetchSeatMap(
 	}
 	if (!candidate) return null;
 
+	const map = await fetchQrtSeatMapForCandidate(candidate, service.serviceId, ctx);
+	if (map) saveQrtSeatMapSnapshot(ctx, candidate, map);
+	return map;
+}
+
+/** One provider call after booking search has identified the exact sellable run. */
+export async function fetchQrtSeatMapForCandidate(
+	candidate: RailService,
+	serviceId: string,
+	ctx: CacheContext,
+): Promise<QrtBookingSeatMap | null> {
 	const option = selectQrtSeatMapFareOption(candidate);
 	if (!option) return null;
-
+	const state = stateFor(ctx);
 	const response = await signedQrtBookingFetch(SEAT_MAP_URL, ctx, qrtBookingState(ctx), {
 		method: "POST",
 		headers: { "content-type": "application/json" },
@@ -375,9 +496,11 @@ async function fetchSeatMap(
 		storeDiagram(state, imageData, imageType),
 	);
 	if (!carriages.length) return null;
+	const travelDate = isoDate(String(candidate.traveL_DATE ?? ""));
+	if (!travelDate) return null;
 	return {
-		serviceId: service.serviceId,
-		travelDate: isoTravelDate,
+		serviceId,
+		travelDate,
 		selectedFare: seatMapFare(option),
 		source: "Queensland Rail Travel booking",
 		asOf: new Date().toISOString(),
@@ -395,20 +518,21 @@ export async function getQrtBookingSeatMap(
 	ctx: CacheContext,
 	deps: SeatMapDeps = {},
 ): Promise<QrtBookingSeatMap | null> {
-	const leg = selectQrtBookingLeg(service);
-	if (!leg) return null;
-	const isoTravelDate = isoDate(leg.departureDate);
-	if (!isoTravelDate) return null;
 	const state = stateFor(ctx);
+	const archived = archivedSeatMap(service, state);
+	const leg = selectQrtBookingLeg(service);
+	if (!leg) return archived ? { ...archived, bookingClosed: true } : null;
+	const isoTravelDate = isoDate(leg.departureDate);
+	if (!isoTravelDate) return archived;
 	const fetchMap = deps.fetchMap ?? ((trip, context, seatMapState) => fetchSeatMap(trip, context, seatMapState));
 	const key = `${service.serviceId}\0${leg.departureDate}\0${leg.origin.placeCode}\0${leg.destination.placeCode}`;
 
-	const cached = state.seatMaps.get(key);
+	const cached = state.seatMaps.get(key) ?? (archived ? { map: archived, expiresAt: 0 } : undefined);
 	if (cached && cached.expiresAt > Date.now()) return cached.map;
 
 	const refresh = async (): Promise<QrtBookingSeatMap | null> => {
 		try {
-			const map = await fetchMap(service, ctx, state);
+			const map = (await fetchMap(service, ctx, state)) ?? archived;
 			state.seatMaps.set(key, {
 				map,
 				expiresAt: Date.now() + (map ? SEAT_MAP_TTL_MS : MISSING_SEAT_MAP_TTL_MS),

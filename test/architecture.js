@@ -223,9 +223,14 @@ const qrtBookingStops = [
 	},
 ];
 const qrtInProgressLeg = selectQrtBookingLeg({ stops: qrtBookingStops }, Date.parse("2026-09-01T09:00:00+10:00"));
-assert.equal(qrtInProgressLeg?.origin.placeCode, "MBJ");
-assert.equal(qrtInProgressLeg?.destination.placeCode, "ROK");
-assert.equal(qrtInProgressLeg?.departureDate, "2026-09-01T12:30:00");
+assert.equal(qrtInProgressLeg, null, "booking closes from the train's original departure");
+assert.equal(
+	selectQrtBookingLeg(
+		{ stops: [{ ...qrtBookingStops[0], trainPosition: "NotArrived" }, ...qrtBookingStops.slice(1)] },
+		Date.parse("2026-09-01T06:30:00+10:00"),
+	)?.origin.placeCode,
+	"BNE",
+);
 assert.equal(selectQrtBookingLeg({ stops: qrtBookingStops }, Date.parse("2026-09-01T13:30:00+10:00")), null);
 assert.equal(
 	selectQrtBookingLeg(
@@ -235,23 +240,6 @@ assert.equal(
 	null,
 );
 const rockhampton = { id: 6031, code: "ROK", name: "Rockhampton" };
-assert.equal(
-	selectQrtRailService(
-		[
-			{
-				...qrtRailService,
-				departurE_TIME: "9999-12-31T12:30:00",
-				startregioncode: "MBJ",
-				endregioncode: "ROK",
-			},
-		],
-		{ trip_number: "Q301", departureDate: "2026-09-01T10:00:00" },
-		qrtStations[1],
-		rockhampton,
-		"2026-09-01T12:30:00",
-	)?.startregioncode,
-	"MBJ",
-);
 assert.deepEqual(qrtRegularFareClasses(qrtRailService), [
 	{
 		code: "100:2",
@@ -322,7 +310,7 @@ try {
 			qrtBookingContext,
 		),
 		null,
-		"QRT services must stop advertising stale availability after the final bookable leg",
+		"QRT services must stop advertising availability after booking closes at origin",
 	);
 	assert.equal(
 		await getQrtBookingAvailability(

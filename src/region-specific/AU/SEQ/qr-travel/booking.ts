@@ -223,12 +223,7 @@ function stopHasPassed(stop: QRTTravelStopTime): boolean {
 	return position === "passed" || position === "departed" || position.includes("passed");
 }
 
-/**
- * Select the first bookable remaining leg. The provider search is for a journey
- * beginning at a station that is still ahead of the train, not for a departed
- * origin. Scheduled times are used because they are the times returned by the
- * booking service for exact service matching.
- */
+/** Online booking closes one hour before departure from the train's origin. */
 export function selectQrtBookingLeg(
 	service: Pick<QRTTravelTrip, "stops">,
 	now = Date.now(),
@@ -236,19 +231,20 @@ export function selectQrtBookingLeg(
 ): QrtBookingLeg | null {
 	const destination = service.stops.at(-1);
 	if (!destination || !stringValue(destination.placeCode) || !stringValue(destination.placeName)) return null;
-	const earliestDeparture = now + cutoffMs;
-	const timeZone = "Australia/Brisbane";
-
-	for (const stop of service.stops.slice(0, -1)) {
-		if (!stringValue(stop.placeCode) || !stringValue(stop.placeName) || !stringValue(stop.trainPosition)) continue;
-		if (stopHasPassed(stop)) continue;
-		const departureDate = stop.plannedDeparture;
-		if (!departureDate || departureDate === "0001-01-01T00:00:00") continue;
-		const departure = parseTimeWithConfig(departureDate, timeZone);
-		if (!Number.isFinite(departure) || departure < earliestDeparture) continue;
-		return { origin: stop, destination, departureDate };
-	}
-	return null;
+	const origin = service.stops[0];
+	if (
+		!origin ||
+		!stringValue(origin.placeCode) ||
+		!stringValue(origin.placeName) ||
+		!stringValue(origin.trainPosition) ||
+		stopHasPassed(origin)
+	)
+		return null;
+	const departureDate = origin.plannedDeparture;
+	if (!departureDate || departureDate === "0001-01-01T00:00:00") return null;
+	const departure = parseTimeWithConfig(departureDate, "Australia/Brisbane");
+	if (!Number.isFinite(departure) || departure < now + cutoffMs) return null;
+	return { origin, destination, departureDate };
 }
 
 export function bookingDate(value: string): string | null {
@@ -259,7 +255,7 @@ export function bookingDate(value: string): string | null {
 	return monthName && day >= 1 && day <= 31 ? `${String(day).padStart(2, "0")} ${monthName} ${year}` : null;
 }
 
-function runToken(value: string): string {
+export function runToken(value: string): string {
 	return (
 		value
 			.trim()
@@ -279,10 +275,9 @@ export function selectQrtRailService(
 	service: Pick<QRTTravelTrip, "trip_number" | "departureDate">,
 	origin: BookingStation,
 	destination: BookingStation,
-	departureDate = service.departureDate,
 ): RailService | null {
-	const date = isoDate(departureDate);
-	const minute = timeMinute(departureDate);
+	const date = isoDate(service.departureDate);
+	const minute = timeMinute(service.departureDate);
 	const expectedRun = runToken(service.trip_number);
 	const matches = services.filter((candidate) => {
 		const travelDate = stringValue(candidate.traveL_DATE);
@@ -402,13 +397,7 @@ async function queryAvailability(
 		body: JSON.stringify(qrtSearchRequest(origin, destination, travelDate)),
 	});
 	if (!response.ok) throw new Error(`QRT rail search HTTP ${response.status}`);
-	const candidate = selectQrtRailService(
-		qrtRailServices(await response.json()),
-		service,
-		origin,
-		destination,
-		leg.departureDate,
-	);
+	const candidate = selectQrtRailService(qrtRailServices(await response.json()), service, origin, destination);
 	if (!candidate) return null;
 	const fareClasses = qrtRegularFareClasses(candidate);
 	if (!fareClasses.length) return null;
@@ -438,8 +427,7 @@ export async function getQrtBookingAvailability(
 	if (previous && !lastAvailability) state.lastAvailability.delete(serviceKey);
 	const leg = selectQrtBookingLeg(service);
 	const travelDate = leg ? bookingDate(leg.departureDate) : null;
-	// No remaining valid leg means the journey is no longer bookable. A stale
-	// result from an earlier origin must not survive after the train passes it.
+	// A stale booking result must not imply that tickets remain available.
 	if (!leg || !travelDate) return null;
 	const stations = await qrtBookingStationsFor(ctx, state);
 	const origin = matchQrtBookingStation(leg.origin, stations);

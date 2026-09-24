@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 import type { CacheContext } from "../src/cache/types.js";
 import {
@@ -6,6 +9,7 @@ import {
 	getQrtSeatMapDiagram,
 	parseQrtSeatMap,
 	qrtSeatMapRequest,
+	saveQrtSeatMapSnapshot,
 	selectQrtSeatMapFareOption,
 	_test,
 	type QrtBookingSeatMap,
@@ -128,6 +132,76 @@ test("parseQrtSeatMap normalizes carriages, seats, and compatibility", () => {
 	assert.equal(cargo.available, false);
 	assert.equal(cargo.diagramHash, null);
 	assert.deepEqual(cargo.seats, []);
+});
+
+test("a future QRT map and diagram survive restart and remain visible after booking closes", async () => {
+	const cacheDir = mkdtempSync(join(process.cwd(), ".trax-qrt-seat-map-"));
+	try {
+		const first = {
+			pluginState: new Map(),
+			config: { cacheDir, requestTimeoutMs: 5000 },
+		} as unknown as CacheContext;
+		const hash = _test.storeDiagram(first, JPEG_BYTES.toString("base64"), "JPG");
+		assert.ok(hash);
+		const candidate = {
+			traiN_NAME: "Q301 Rockhampton Tilt Train",
+			traveL_DATE: "2099-08-31T00:00:00",
+			departurE_TIME: "9999-12-31T07:05:00",
+			endregioncode: "ROK",
+		};
+		const map: QrtBookingSeatMap = {
+			serviceId: "Q301",
+			travelDate: "2099-08-31",
+			selectedFare: null,
+			source: "Queensland Rail Travel booking",
+			asOf: new Date().toISOString(),
+			carriages: [
+				{
+					id: "1",
+					name: "A",
+					sequence: "A",
+					series: null,
+					available: true,
+					allowedServiceOptions: [],
+					diagramHash: hash,
+					diagramContentType: "image/jpeg",
+					seats: [],
+					publishedInformation: [],
+				},
+			],
+		};
+		saveQrtSeatMapSnapshot(first, candidate, map);
+		const second = {
+			pluginState: new Map(),
+			config: { cacheDir, requestTimeoutMs: 5000 },
+		} as unknown as CacheContext;
+		const trip = {
+			serviceId: "Q301T",
+			trip_number: "Q301",
+			departureDate: "2099-08-31T07:05:00",
+			stops: [
+				{
+					placeCode: "BNE",
+					placeName: "Brisbane",
+					trainPosition: "Departed",
+					plannedDeparture: "2099-08-31T07:05:00",
+				},
+				{
+					placeCode: "ROK",
+					placeName: "Rockhampton",
+					trainPosition: "NotArrived",
+					plannedDeparture: "2099-08-31T14:00:00",
+				},
+			],
+		} as never;
+		const restored = await getQrtBookingSeatMap(trip, second);
+		assert.equal(restored?.serviceId, "Q301T");
+		assert.equal(restored?.bookingClosed, true);
+		assert.equal(restored?.carriages[0].diagramHash, hash);
+		assert.deepEqual(getQrtSeatMapDiagram(second, hash), { bytes: JPEG_BYTES, contentType: "image/jpeg" });
+	} finally {
+		execFileSync("gio", ["trash", cacheDir]);
+	}
 });
 
 test("parseQrtSeatMap keeps seats that lack diagram coordinates", () => {

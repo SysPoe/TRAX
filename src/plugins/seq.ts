@@ -13,6 +13,7 @@ import { getVehicleInfo } from "../region-specific/AU/SEQ/vehicleModel.js";
 import { getServiceCapacity } from "../region-specific/AU/SEQ/serviceCapacity.js";
 import { getQrtFormation } from "../region-specific/AU/SEQ/qr-travel/formation.js";
 import { getQrtBookingSeatMap, getQrtSeatMapDiagram } from "../region-specific/AU/SEQ/qr-travel/seat-map.js";
+import { startQrtBookingCollector } from "../region-specific/AU/SEQ/qr-travel/booking-collector.js";
 
 export const seqPlugin: TransitPlugin = {
 	id: "au-seq",
@@ -31,6 +32,7 @@ export const seqPlugin: TransitPlugin = {
 	},
 	afterRealtime(ctx, changedTripKeys) {
 		refreshQRTTrainsInBackground(ctx);
+		startQrtBookingCollector(ctx);
 		refreshSeqDiagramAfterRealtimeBatch(ctx, new Set(changedTripKeys));
 	},
 	enrichStop: (stop, ctx, augmentationContext) =>
