@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, mkdtempSync, renameSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, join } from "node:path";
 import test from "node:test";
 import type { CacheContext } from "../src/cache/types.js";
 import {
@@ -89,6 +89,18 @@ function fakeContext(): CacheContext {
 		pluginState: new Map(),
 		config: { requestTimeoutMs: 5000 },
 	} as unknown as CacheContext;
+}
+
+function trashTestCache(cacheDir: string): void {
+	const trash = join(process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share"), "Trash");
+	mkdirSync(join(trash, "files"), { recursive: true });
+	mkdirSync(join(trash, "info"), { recursive: true });
+	const name = basename(cacheDir);
+	renameSync(cacheDir, join(trash, "files", name));
+	writeFileSync(
+		join(trash, "info", `${name}.trashinfo`),
+		`[Trash Info]\nPath=${encodeURI(cacheDir)}\nDeletionDate=${new Date().toISOString().slice(0, 19)}\n`,
+	);
 }
 
 test("parseQrtSeatMap normalizes carriages, seats, and compatibility", () => {
@@ -200,7 +212,7 @@ test("a future QRT map and diagram survive restart and remain visible after book
 		assert.equal(restored?.carriages[0].diagramHash, hash);
 		assert.deepEqual(getQrtSeatMapDiagram(second, hash), { bytes: JPEG_BYTES, contentType: "image/jpeg" });
 	} finally {
-		execFileSync("gio", ["trash", cacheDir]);
+		trashTestCache(cacheDir);
 	}
 });
 
