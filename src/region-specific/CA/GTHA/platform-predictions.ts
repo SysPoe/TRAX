@@ -1,6 +1,7 @@
 import { getFeedTimeZone } from "../../../config.js";
 import type { CacheContext } from "../../../cache/types.js";
 import { getPluginState } from "../../../plugins/types.js";
+import type { AugmentedStopTime } from "../../../utils/augmentedStopTime.js";
 import { getCacheFilePath } from "../../../utils/fs.js";
 import { getServiceDayStart } from "../../../utils/time.js";
 import {
@@ -49,7 +50,7 @@ function state(ctx: CacheContext): PlatformPredictionShadow {
 	);
 }
 
-/** Build shadow predictions and evaluate them later without applying them to stop times.
+/** Add eligible platform predictions to stop times and score them against later provider reports.
  *
  * Runs inside the GTHA plugin's `afterRealtime`, concurrently with the VIA
  * plugin's CIS application (shared `ca-supplemental` group). Both touch
@@ -66,8 +67,10 @@ export function updateGthaPlatformPredictionShadow(ctx: CacheContext, now = Date
 			.map((route) => [entityKey({ feedId: route.feed_id, localId: route.route_id }), route] as const),
 	);
 	const events: PlatformPredictionEvent[] = [];
+	const stopTimesByEventKey = new Map<string, AugmentedStopTime>();
 
 	for (const instance of ctx.augmented.instancesRec.values()) {
+		for (const stopTime of instance.stopTimes) stopTime.predicted_platform_code = null;
 		if (!PLATFORM_PREDICTION_FEED_IDS.has(instance.feed_id) || instance.nonRevenue) continue;
 		if (instance.schedule_relationship === TripScheduleRelationship.CANCELED) continue;
 		const route = routes.get(entityKey({ feedId: instance.feed_id, localId: instance.route_id }));
@@ -86,12 +89,17 @@ export function updateGthaPlatformPredictionShadow(ctx: CacheContext, now = Date
 				(location) =>
 					(location.kind === "track" || location.kind === "platform") && location.confidence !== "inferred",
 			);
-			const hasAnyLocation = stopTime.actual_departure_boarding_locations.some(
-				(location) => location.kind === "track" || location.kind === "platform",
-			);
+			const hasAnyLocation =
+				stopTime.actual_departure_boarding_locations.some(
+					(location) => location.kind === "track" || location.kind === "platform",
+				) ||
+				stopTime.actual_arrival_boarding_locations.some(
+					(location) => location.kind === "track" || location.kind === "platform",
+				);
 			const observedAt = reportedLocation ? Date.parse(reportedLocation.observed_at) : Number.NaN;
+			const eventKey = `${instance.instance_id}\0${index}\0departure`;
 			events.push({
-				eventKey: `${instance.instance_id}\0${index}\0departure`,
+				eventKey,
 				feedId: instance.feed_id,
 				routeId: instance.route_id,
 				routeLabel,
@@ -101,14 +109,21 @@ export function updateGthaPlatformPredictionShadow(ctx: CacheContext, now = Date
 				dayOfWeek: serviceDayOfWeek(instance.serviceDate),
 				scheduledAt: serviceDayStart + stopTime.scheduled_departure_time * 1000,
 				availablePlatform:
-					hasAnyLocation || stopTime.rt_platform_code_updated || stopTime.scheduled_platform_code != null,
+					hasAnyLocation ||
+					stopTime.actual_platform_code != null ||
+					stopTime.scheduled_platform_code != null ||
+					stopTime.rt_platform_code_updated,
 				reportedPlatform: reportedLocation?.value ?? null,
 				observedAt: Number.isFinite(observedAt) ? observedAt : null,
 			});
+			stopTimesByEventKey.set(eventKey, stopTime);
 		}
 	}
 
-	state(ctx).update(events, now);
+	for (const [eventKey, platform] of state(ctx).update(events, now)) {
+		const stopTime = stopTimesByEventKey.get(eventKey);
+		if (stopTime) stopTime.predicted_platform_code = platform;
+	}
 }
 
 export function getGthaPlatformPredictionDiagnostics(ctx: CacheContext, feedIds?: readonly string[]): PlatformPredictionDiagnostics {

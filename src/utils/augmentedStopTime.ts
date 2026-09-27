@@ -80,6 +80,7 @@ export type AugmentedStopTime = {
 	actual_stop_id: string | null;
 	actual_parent_station_id: string | null;
 	actual_platform_code: string | null;
+	predicted_platform_code?: string | null;
 	actual_arrival_boarding_locations: BoardingLocation[];
 	actual_departure_boarding_locations: BoardingLocation[];
 
@@ -326,6 +327,7 @@ function assignPlatformSides(st: IntermediateAST[], platformDataMap: PlatformDat
 			actual_exit_side: actSide,
 			scheduled_exit_side: schSide,
 			actual_platform_code: actPlat?.platform_code?.toString() ?? item.actual_platform_code,
+			predicted_platform_code: item.predicted_platform_code ?? null,
 			scheduled_platform_code: schPlat?.platform_code?.toString() ?? item.scheduled_platform_code,
 		} as AugmentedStopTime;
 		attachStopReferences(newEntry, refs);
@@ -818,6 +820,7 @@ export function augmentStopTimes(
 				? (actualParent?.stop_id ?? actualStop?.parent_stop_id ?? null)
 				: (actualParent?.stop_id ?? actualStop?.parent_stop_id ?? scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null),
 			actual_platform_code: isPassing ? null : (platformCode ?? scheduledStop?.platform_code ?? null),
+			predicted_platform_code: null,
 			actual_arrival_boarding_locations: [],
 			actual_departure_boarding_locations: [],
 

@@ -72,7 +72,16 @@ function accuracyPercent(correct: number, total: number): number {
 	return total === 0 ? 0 : Math.round((correct / total) * 1000) / 10;
 }
 
-/** Persist, predict, and score platform assignments without changing passenger-facing trip data. */
+function preferredPrediction(predictions: PendingRow): string | null {
+	// Keep the most specific history when several methods have enough samples.
+	return (
+		normalizedPlatform(predictions.service_day_prediction) ??
+		normalizedPlatform(predictions.service_prediction) ??
+		normalizedPlatform(predictions.route_prediction)
+	);
+}
+
+/** Keep platform history and scored guesses in a persistent shadow ledger. */
 export class PlatformPredictionShadow {
 	private readonly db: DatabaseSync;
 
@@ -153,8 +162,9 @@ export class PlatformPredictionShadow {
 		`);
 	}
 
-	update(events: readonly PlatformPredictionEvent[], now = Date.now()): void {
+	update(events: readonly PlatformPredictionEvent[], now = Date.now()): Map<string, string> {
 		const cutoff = now - RETENTION_MS;
+		const visiblePredictions = new Map<string, string>();
 		const routePrediction = this.db.prepare(`
 			SELECT platform, COUNT(*) AS sample_count
 			FROM platform_observations
@@ -306,11 +316,17 @@ export class PlatformPredictionShadow {
 					normalizedPlatform(event.reportedPlatform) ||
 					event.scheduledAt <= now ||
 					event.scheduledAt > now + PREDICTION_LOOKAHEAD_MS ||
-					pendingForEvent.get(event.eventKey) ||
 					outcomeExists.get(event.eventKey) ||
 					expiredExists.get(event.eventKey)
 				)
 					continue;
+
+				const pending = pendingForEvent.get(event.eventKey) as PendingRow | undefined;
+				if (pending) {
+					const prediction = preferredPrediction(pending);
+					if (prediction) visiblePredictions.set(event.eventKey, prediction);
+					continue;
+				}
 
 				const byRoute = pick(
 					routePrediction.get(event.feedId, event.routeId, event.directionId, event.stopId, cutoff) as
@@ -341,12 +357,19 @@ export class PlatformPredictionShadow {
 					byServiceDay,
 					now,
 				);
+				const prediction = preferredPrediction({
+					route_prediction: byRoute,
+					service_prediction: byService,
+					service_day_prediction: byServiceDay,
+				});
+				if (prediction) visiblePredictions.set(event.eventKey, prediction);
 			}
 			this.db.exec("COMMIT");
 		} catch (error) {
 			this.db.exec("ROLLBACK");
 			throw error;
 		}
+		return visiblePredictions;
 	}
 
 	diagnostics(feedIds?: readonly string[]): PlatformPredictionDiagnostics {
