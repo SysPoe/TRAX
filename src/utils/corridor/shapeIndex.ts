@@ -75,13 +75,6 @@ function stationKey(ctx: CacheContext, stop: Pick<Stop, "feed_id" | "stop_id" | 
 	);
 }
 
-function getStop(ctx: CacheContext, feedId: string, stopId: string): Stop | undefined {
-	return (
-		ctx.raw.stopsByKey.get(entityKey({ feedId, localId: stopId })) ??
-		ctx.gtfs?.getStops({ feed_id: feedId, stop_id: stopId })[0]
-	);
-}
-
 function getStationGeometry(
 	stops: readonly Stop[],
 	ctx: CacheContext,
@@ -352,13 +345,8 @@ export function buildCorridorIndex(ctx: CacheContext, trips: readonly Trip[] = c
 	const patternBuilder = createPatternIndexBuilder(ctx);
 
 	const processTrip = (trip: Trip, stopTimes: readonly StopTime[]) => {
-		for (const stopTime of stopTimes) {
-			const stop = getStop(ctx, stopTime.feed_id, stopTime.stop_id);
-			relevantStationIds.add(
-				stationKey(ctx, stop ?? { feed_id: stopTime.feed_id, stop_id: stopTime.stop_id, parent_station: null }),
-			);
-		}
-		patternBuilder.addTrip(trip, stopTimes);
+		const stationIds = patternBuilder.addTrip(trip, stopTimes);
+		for (const stationId of stationIds) relevantStationIds.add(stationId);
 		if (ctx.gtfs && trip.shape_id) {
 			const shapeKey = entityKey({ feedId: trip.feed_id, localId: trip.shape_id });
 			let shape = shapes.get(shapeKey);
@@ -387,15 +375,7 @@ export function buildCorridorIndex(ctx: CacheContext, trips: readonly Trip[] = c
 			shape.routeDirections.add(qualifiedRouteDirectionKey(trip.feed_id, trip.route_id, trip.direction_id));
 			shape.tripIds.add(entityKey({ feedId: trip.feed_id, localId: trip.trip_id }));
 			shape.serviceIds.add(trip.service_id);
-			for (const stopTime of stopTimes) {
-				const stop = getStop(ctx, stopTime.feed_id, stopTime.stop_id);
-				shape.scheduledStations.add(
-					stationKey(
-						ctx,
-						stop ?? { feed_id: stopTime.feed_id, stop_id: stopTime.stop_id, parent_station: null },
-					),
-				);
-			}
+			for (const stationId of stationIds) shape.scheduledStations.add(stationId);
 			const routeDirectionKey = qualifiedRouteDirectionKey(trip.feed_id, trip.route_id, trip.direction_id);
 			const group = shapesByRouteDirection.get(routeDirectionKey) ?? new Set<string>();
 			group.add(shapeKey);

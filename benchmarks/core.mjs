@@ -29,6 +29,8 @@ function runtimeOptions() {
 	return {
 		cacheDir,
 		cacheMaxAgeMs: CACHE_MAX_AGE_MS,
+		// Match the AU entry bound used by TRAX-GUI for this feed.
+		maxExtractedEntryBytes: 256 * 1024 * 1024,
 		disableTimers: true,
 		logFunction: () => {},
 		progressLog: () => {},
@@ -83,6 +85,8 @@ async function runStaticAndQueries() {
 
 	for (const [label, selected] of [
 		["departure-query-busy-station", busy],
+		["departure-query-busy-station-warm", busy],
+		["departure-query-busy-station-settled", busy],
 		["departure-query-small-station", small],
 	]) {
 		const result = await measure(() =>

@@ -54,7 +54,7 @@ export type PatternIndexData = {
 
 /** Incrementally build patterns so static loading can keep only one bounded row batch in JS. */
 export function createPatternIndexBuilder(ctx: CacheContext): {
-	addTrip(trip: Trip, stopTimes: readonly StopTime[]): void;
+	addTrip(trip: Trip, stopTimes: readonly StopTime[]): string[];
 	build(): PatternIndexData;
 } {
 	const patterns: RoutePattern[] = [];
@@ -62,8 +62,14 @@ export function createPatternIndexBuilder(ctx: CacheContext): {
 	const bySignature = new Map<string, RoutePattern>();
 	return {
 		addTrip(trip, inputStopTimes) {
-			const stopTimes = [...inputStopTimes].sort((a, b) => a.stop_sequence - b.stop_sequence);
-			if (stopTimes.length < 2) return;
+			let ordered = true;
+			for (let index = 1; index < inputStopTimes.length; index++) {
+				if (inputStopTimes[index - 1].stop_sequence > inputStopTimes[index].stop_sequence) {
+					ordered = false;
+					break;
+				}
+			}
+			const stopTimes = ordered ? inputStopTimes : [...inputStopTimes].sort((a, b) => a.stop_sequence - b.stop_sequence);
 			const stations = stopTimes.map((stopTime) => {
 				const stop = getStop(ctx, stopTime.feed_id, stopTime.stop_id);
 				return stationKey(
@@ -71,7 +77,7 @@ export function createPatternIndexBuilder(ctx: CacheContext): {
 					stop ?? { feed_id: stopTime.feed_id, stop_id: stopTime.stop_id, parent_station: null },
 				);
 			});
-			const metrics = edgeMetrics(stopTimes);
+			if (stopTimes.length < 2) return stations;
 			const routeDirectionKey = qualifiedRouteDirectionKey(trip.feed_id, trip.route_id, trip.direction_id);
 			const signature = JSON.stringify([
 				routeDirectionKey,
@@ -83,8 +89,9 @@ export function createPatternIndexBuilder(ctx: CacheContext): {
 			const existing = bySignature.get(signature);
 			if (existing) {
 				existing.tripIds.push(tripId);
-				return;
+				return stations;
 			}
+			const metrics = edgeMetrics(stopTimes);
 			const pattern: RoutePattern = {
 				feedId: trip.feed_id,
 				routeId: trip.route_id,
@@ -101,6 +108,7 @@ export function createPatternIndexBuilder(ctx: CacheContext): {
 			const group = byRouteDirection.get(routeDirectionKey) ?? [];
 			group.push(pattern);
 			byRouteDirection.set(routeDirectionKey, group);
+			return stations;
 		},
 		build: () => ({ patterns, byRouteDirection }),
 	};

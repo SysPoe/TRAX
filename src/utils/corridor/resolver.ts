@@ -366,6 +366,13 @@ function resolveCompatibleGap(
 			: null;
 	};
 	for (const candidate of candidates) {
+		// Compatible alignment cannot match a gap endpoint without a physical
+		// station projection (native chainage is only used for exact shapes).
+		if (
+			!from.stationId || !to.stationId ||
+			!candidate.shape.projections.has(from.stationId) ||
+			!candidate.shape.projections.has(to.stationId)
+		) continue;
 		// Candidate ranking uses the whole journey, but a partial shape must be
 		// aligned locally. An unmatched anchor before this gap can otherwise
 		// consume an early projection and move the seam anchor to a later loop

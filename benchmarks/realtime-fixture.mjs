@@ -111,6 +111,7 @@ function createGtfs(rows, updates) {
 		getShapes: () => [],
 		getCalendars: () => [],
 		getCalendarDates: () => [],
+		getFrequencies: () => [],
 		getServiceDates: () => rows.dates,
 		getRealtimeTripUpdates: () => updates,
 	};
