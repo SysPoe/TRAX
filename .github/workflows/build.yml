@@ -3,12 +3,10 @@ name: Build and Archive Artifacts
 on:
     push:
         branches:
-            - master
-            - staging
+            - main
     pull_request:
         branches:
-            - master
-            - staging
+            - main
     workflow_dispatch:
 
 jobs:
