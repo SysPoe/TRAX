@@ -28,7 +28,7 @@ importers:
         version: 7.1.0
       qdf-gtfs:
         specifier: github:SysPoe/QDF-GTFS#master
-        version: https://codeload.github.com/SysPoe/QDF-GTFS/tar.gz/a8ae396dc800fc9e9d079a6b4958be110c3e1260
+        version: https://codeload.github.com/SysPoe/QDF-GTFS/tar.gz/60c23dd3b31524565323718082ad577ad6b9e897
       strip-ansi:
         specifier: ^7.1.2
         version: 7.2.0
@@ -346,8 +346,8 @@ packages:
     resolution: {integrity: sha512-iG+GYldRf2BQ0UDUAd6JQ/RwzaQy6mXmsk/IzlYyal4A4SNFw54MeH4/tLkF4I5WoWG9SQwuqWzS99jaFQHBuQ==}
     engines: {node: ^20.17.0 || >=22.9.0}
 
-  qdf-gtfs@https://codeload.github.com/SysPoe/QDF-GTFS/tar.gz/a8ae396dc800fc9e9d079a6b4958be110c3e1260:
-    resolution: {gitHosted: true, integrity: sha512-/2HZqnRdNvRIDHwgxbYnMrs0pAalfIJwEc95ucllfiqwS11AFRorMpehpH1niRPc7CUbG5MtGCd6ymXCGw45BQ==, tarball: https://codeload.github.com/SysPoe/QDF-GTFS/tar.gz/a8ae396dc800fc9e9d079a6b4958be110c3e1260}
+  qdf-gtfs@https://codeload.github.com/SysPoe/QDF-GTFS/tar.gz/60c23dd3b31524565323718082ad577ad6b9e897:
+    resolution: {gitHosted: true, integrity: sha512-Vo+Oq4tUNd1w3taUfkvgefGfHiwoWD3gCszKtvDmiKZlY9ASftE1FtHgZN3VviokSizFbDocovwCv0rGHDh+9Q==, tarball: https://codeload.github.com/SysPoe/QDF-GTFS/tar.gz/60c23dd3b31524565323718082ad577ad6b9e897}
     version: 1.0.0
 
   resolve-pkg-maps@1.0.0:
@@ -634,7 +634,7 @@ snapshots:
 
   proc-log@6.1.0: {}
 
-  qdf-gtfs@https://codeload.github.com/SysPoe/QDF-GTFS/tar.gz/a8ae396dc800fc9e9d079a6b4958be110c3e1260:
+  qdf-gtfs@https://codeload.github.com/SysPoe/QDF-GTFS/tar.gz/60c23dd3b31524565323718082ad577ad6b9e897:
     dependencies:
       node-addon-api: 8.9.2
       node-gyp: 12.4.0
