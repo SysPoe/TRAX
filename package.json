@@ -24,7 +24,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "prepare": "nub run build",
+    "prepare": "npm run build",
     "link:local": "nub link ../QDF-GTFS",
     "format": "prettier . --write --config .prettierrc",
     "test": "nub run build && node test/corridor.js && node test/realtime-cache.js && node test/architecture.js",
