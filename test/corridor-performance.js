@@ -25,6 +25,15 @@ const config = {
 	diagnostics: false,
 };
 
+function packShapes(rows) {
+	return {
+		latitudes: Float64Array.from(rows, (row) => row.shape_pt_lat),
+		longitudes: Float64Array.from(rows, (row) => row.shape_pt_lon),
+		sequences: Int32Array.from(rows, (row) => row.shape_pt_sequence),
+		shapeDistances: Float64Array.from(rows, (row) => row.shape_dist_traveled ?? Number.NaN),
+	};
+}
+
 function fixture(pointCount = 2_000, anchorCount = 50) {
 	const points = [];
 	const projections = new Map();
@@ -209,7 +218,7 @@ function coldIndexFixture(shapeCount = 2_000) {
 					(!filter.feed_id || stop.feed_id === filter.feed_id) &&
 					(!filter.stop_id || stop.stop_id === filter.stop_id),
 			),
-		getShapes: ({ shape_id }) => shapes.get(shape_id) ?? [],
+		getShapesPacked: ({ shape_id }) => packShapes(shapes.get(shape_id) ?? []),
 	};
 	return {
 		ctx: {

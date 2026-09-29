@@ -40,6 +40,15 @@ import { findExpress } from "../dist/utils/SRT.js";
 
 const q = (feedId, localId) => qualifiedKey(feedId, localId);
 
+function packShapes(rows) {
+	return {
+		latitudes: Float64Array.from(rows, (row) => row.shape_pt_lat),
+		longitudes: Float64Array.from(rows, (row) => row.shape_pt_lon),
+		sequences: Int32Array.from(rows, (row) => row.shape_pt_sequence),
+		shapeDistances: Float64Array.from(rows, (row) => row.shape_dist_traveled ?? Number.NaN),
+	};
+}
+
 function anchor(feedId, localId, sequence, coordinates, options = {}) {
 	const coordinate = coordinates[localId];
 	return {
@@ -600,10 +609,10 @@ function testDisplacedParent() {
 	]);
 	ctx.gtfs = {
 		getStops: () => stops,
-		getShapes: () => [
+		getShapesPacked: () => packShapes([
 			{ feed_id: "feed", shape_id: "shape", shape_pt_lat: -27, shape_pt_lon: 153, shape_pt_sequence: 1 },
 			{ feed_id: "feed", shape_id: "shape", shape_pt_lat: -27, shape_pt_lon: 153.002, shape_pt_sequence: 2 },
-		],
+		]),
 	};
 	const index = buildCorridorIndex(ctx);
 	const station = index.stationGeometry.get(q("feed", "a"));
@@ -2587,16 +2596,17 @@ function testNonFiniteShapeCoordinatesAreSkipped() {
 		{ feed_id: "feed", trip_id: "trip", stop_id: "a", stop_sequence: 1, shape_dist_traveled: null },
 	]);
 	ctx.gtfs = {
-		getShapes: () => [
-			{ feed_id: "feed", shape_id: "shape", shape_pt_lat: 0, shape_pt_lon: 179, shape_pt_sequence: 1 },
+		getShapesPacked: () => packShapes([
+			{ feed_id: "feed", shape_id: "shape", shape_pt_lat: 0, shape_pt_lon: 179, shape_pt_sequence: 1, shape_dist_traveled: -1 },
 			{ feed_id: "feed", shape_id: "shape", shape_pt_lat: NaN, shape_pt_lon: Infinity, shape_pt_sequence: 2 },
 			{ feed_id: "feed", shape_id: "shape", shape_pt_lat: 0, shape_pt_lon: -179, shape_pt_sequence: 3 },
-		],
+		]),
 	};
 	const index = buildCorridorIndex(ctx);
 	const shape = [...index.shapes.values()][0];
 	assert.ok(shape, "a shape with one bad point should still be indexed from its finite points");
 	assert.equal(shape.points.length, 2, "non-finite shape points must be skipped before indexing");
+	assert.ok(Number.isNaN(shape.points.nativeDistances[0]), "negative native distance must remain missing");
 	assert.ok(
 		Number.isFinite(shape.lengthMeters) && shape.lengthMeters > 0,
 		"shape length must stay finite",

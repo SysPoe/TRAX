@@ -366,6 +366,7 @@ function realtimeUpdate({ tripId, startDate, startTime, relationship }) {
 		getTransfers: () => [],
 		getStopTimesPacked: ({ trip_ids }) => pack(trip_ids),
 		getShapes: () => [],
+		getShapesPacked: () => ({ latitudes: new Float64Array(), longitudes: new Float64Array(), sequences: new Int32Array(), shapeDistances: new Float64Array() }),
 		getStaticOccupancies: () => [],
 	};
 	const ctx = await refreshStaticCache(gtfs, qcfg);

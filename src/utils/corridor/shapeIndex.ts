@@ -1,4 +1,4 @@
-import type { Shape, Stop, StopTime, Trip } from "qdf-gtfs";
+import type { PackedShapes, Stop, StopTime, Trip } from "qdf-gtfs";
 import type { CacheContext } from "../../cache/types.js";
 import { getStopTimesForTrips } from "../../cache/gtfsReads.js";
 import { canonicalStationIdentity } from "../../config.js";
@@ -60,10 +60,6 @@ export interface CorridorIndex {
 	version: string;
 	/** False only for the empty placeholder created before static loading. */
 	built: boolean;
-}
-
-function finite(value: number | null | undefined): number | null {
-	return value != null && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
 function stationKey(ctx: CacheContext, stop: Pick<Stop, "feed_id" | "stop_id" | "parent_station">): string {
@@ -154,30 +150,40 @@ function shapePointValues(points: IndexedShape["points"], index: number) {
 	};
 }
 
-function shapePoints(rows: Shape[]): PackedShapePoints {
-	const finiteRows = rows.filter(
-		(row) => Number.isFinite(row.shape_pt_lat) && Number.isFinite(row.shape_pt_lon),
-	);
-	finiteRows.sort((a, b) => a.shape_pt_sequence - b.shape_pt_sequence);
-	const latitudes = new Float64Array(finiteRows.length);
-	const longitudes = new Float64Array(finiteRows.length);
-	const geometricDistances = new Float64Array(finiteRows.length);
-	const nativeDistances = new Float64Array(finiteRows.length);
-	for (let index = 0; index < finiteRows.length; index++) {
-		const row = finiteRows[index];
-		latitudes[index] = row.shape_pt_lat;
-		longitudes[index] = row.shape_pt_lon;
-		nativeDistances[index] = finite(row.shape_dist_traveled) ?? Number.NaN;
-		if (index > 0) {
-			geometricDistances[index] =
-				geometricDistances[index - 1] +
-				coordinateDistanceMeters(
-					{ lat: latitudes[index - 1], lon: longitudes[index - 1] },
-					{ lat: latitudes[index], lon: longitudes[index] },
-				);
+function shapePoints(rows: PackedShapes): PackedShapePoints {
+	let ordered = true;
+	for (let index = 0; index < rows.latitudes.length; index++) {
+		if (
+			!Number.isFinite(rows.latitudes[index]) ||
+			!Number.isFinite(rows.longitudes[index]) ||
+			(!Number.isNaN(rows.shapeDistances[index]) &&
+				(!Number.isFinite(rows.shapeDistances[index]) || rows.shapeDistances[index] < 0)) ||
+			(index > 0 && rows.sequences[index] < rows.sequences[index - 1])
+		) {
+			ordered = false;
+			break;
 		}
 	}
-	return { length: finiteRows.length, latitudes, longitudes, geometricDistances, nativeDistances };
+	const indexes = ordered ? null : Array.from(rows.sequences.keys())
+		.filter((index) => Number.isFinite(rows.latitudes[index]) && Number.isFinite(rows.longitudes[index]))
+		.sort((a, b) => rows.sequences[a] - rows.sequences[b]);
+	const latitudes = indexes ? Float64Array.from(indexes, (index) => rows.latitudes[index]) : rows.latitudes;
+	const longitudes = indexes ? Float64Array.from(indexes, (index) => rows.longitudes[index]) : rows.longitudes;
+	const nativeDistances = indexes
+		? Float64Array.from(indexes, (index) =>
+			Number.isFinite(rows.shapeDistances[index]) && rows.shapeDistances[index] >= 0
+				? rows.shapeDistances[index]
+				: Number.NaN,
+		)
+		: rows.shapeDistances;
+	const geometricDistances = new Float64Array(latitudes.length);
+	for (let index = 1; index < latitudes.length; index++) {
+		geometricDistances[index] = geometricDistances[index - 1] + coordinateDistanceMeters(
+			{ lat: latitudes[index - 1], lon: longitudes[index - 1] },
+			{ lat: latitudes[index], lon: longitudes[index] },
+		);
+	}
+	return { length: latitudes.length, latitudes, longitudes, geometricDistances, nativeDistances };
 }
 
 function appendProjection(
@@ -366,7 +372,7 @@ export function buildCorridorIndex(ctx: CacheContext, trips: readonly Trip[] = c
 			const shapeKey = entityKey({ feedId: trip.feed_id, localId: trip.shape_id });
 			let shape = shapes.get(shapeKey);
 			if (!shape) {
-				const rows = ctx.gtfs.getShapes({ feed_id: trip.feed_id, shape_id: trip.shape_id });
+				const rows = ctx.gtfs.getShapesPacked({ feed_id: trip.feed_id, shape_id: trip.shape_id });
 				const points = shapePoints(rows);
 				const lengthMeters = points.geometricDistances.at(-1) ?? 0;
 				if (points.length < 2 || !Number.isFinite(lengthMeters) || lengthMeters <= 0) return;
