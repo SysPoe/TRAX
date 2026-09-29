@@ -82,11 +82,13 @@ export function findCompatibleShapes(
 	const borrowedFeeds = journey.geometryFeedIds.filter(
 		(feedId) => feedId !== journey.feedId && configuredSource?.borrowFromFeedIds.includes(feedId),
 	);
-	for (const shape of index.shapes.values()) {
-		if (!borrowedFeeds.includes(shape.feedId) || overlapCount(shape, journey) < 2) continue;
-		const score = overlapScore(shape, journey);
-		if (!isActiveShape(shape, journey, ctx)) continue;
-		candidates.push({ shape, evidence: "borrowed-shape", score });
+	if (borrowedFeeds.length > 0) {
+		for (const shape of index.shapes.values()) {
+			if (!borrowedFeeds.includes(shape.feedId) || overlapCount(shape, journey) < 2) continue;
+			const score = overlapScore(shape, journey);
+			if (!isActiveShape(shape, journey, ctx)) continue;
+			candidates.push({ shape, evidence: "borrowed-shape", score });
+		}
 	}
 	candidates.sort((a, b) => b.score - a.score || a.shape.key.localeCompare(b.shape.key));
 	const unique = new Map<string, CompatibleShapeCandidate>();

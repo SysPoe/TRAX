@@ -19,7 +19,8 @@ import { mergeVehicleInfo } from "../../../utils/vehicleModel.js";
 import type { AugmentedStopTime } from "../../../utils/augmentedStopTime.js";
 import { propagateBlockHandoffs } from "./block-handoff.js";
 import { parse } from "node-html-parser";
-import { cacheFileExists, loadCacheFile, writeCacheFileAtomic } from "../../../utils/fs.js";
+import { statSync } from "node:fs";
+import { cacheFileExists, getCacheFilePath, loadCacheFile, writeCacheFileAtomic } from "../../../utils/fs.js";
 import {
 	GO_TRACKER_HEADERS,
 	SOURCE_A_THROTTLE_MS,
@@ -854,11 +855,13 @@ function normalizeStationName(value: string): string {
 		.trim();
 }
 
-function loadCachedSourceB(ctx: CacheContext, serviceDate: string): GthaOperatingScheduleResponse | null {
+function loadCachedSourceB(ctx: CacheContext, serviceDate: string): { data: GthaOperatingScheduleResponse; savedAtMs: number } | null {
 	if (!cacheFileExists(SOURCE_B_CACHE_FILE, ctx.config.cacheDir)) return null;
 	try {
 		const cached: unknown = JSON.parse(loadCacheFile(SOURCE_B_CACHE_FILE, ctx.config.cacheDir));
-		return isGthaOperatingScheduleForServiceDate(cached, serviceDate) ? cached : null;
+		if (!isGthaOperatingScheduleForServiceDate(cached, serviceDate)) return null;
+		const savedAtMs = statSync(getCacheFilePath(SOURCE_B_CACHE_FILE, ctx.config.cacheDir)).mtimeMs;
+		return { data: cached, savedAtMs };
 	} catch (error) {
 		logger.warn(
 			`Ignoring an unreadable Source B cache: ${error instanceof Error ? error.message : String(error)}`,
@@ -904,7 +907,14 @@ export async function refreshGthaOperatingSchedule(ctx: CacheContext): Promise<v
 	}
 	if (!state.sourceBCacheLoaded) {
 		state.sourceBCacheLoaded = true;
-		state.sourceBData = loadCachedSourceB(ctx, serviceDate);
+		const cached = loadCachedSourceB(ctx, serviceDate);
+		state.sourceBData = cached?.data ?? null;
+		// Use a valid same-day snapshot immediately. A stale snapshot gets a
+		// refresh on the next minute tick rather than holding startup on HTTP.
+		if (cached) {
+			state.lastSourceBFetchMs = Math.min(cached.savedAtMs, now);
+			state.nextSourceBFetchMs = Math.max(now + SOURCE_B_RETRY_MS, state.lastSourceBFetchMs + SOURCE_B_THROTTLE_MS);
+		}
 	}
 
 	if (now >= state.nextSourceBFetchMs) {
