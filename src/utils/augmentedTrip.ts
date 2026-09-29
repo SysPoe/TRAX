@@ -238,7 +238,7 @@ export function getOperationalServiceDatesForTrip(
 	}
 	const lookbackDays = clampLookbackDays(Math.ceil(effectiveBounds.end_time / 86_400) + 1);
 	// Fast path: use runtime-scoped inverse indexes when available.
-	if (ctx.runtimeState.servicesByDateHandle.size > 0 && ctx.runtimeState.tripsByServiceHandle.size > 0) {
+	if (ctx.runtimeState.servicesByDateHandle.size > 0 && ctx.raw.tripsByKey.size > 0) {
 		const serviceHandle = entityKey({ feedId: trip.feed_id, localId: trip.service_id });
 		const overlapping: string[] = [];
 		for (let epochDay = window.todayEpochDay - OPERATIONAL_HORIZON_PAST_DAYS - lookbackDays; epochDay <= window.todayEpochDay + OPERATIONAL_HORIZON_FUTURE_DAYS + 1; epochDay++) {

@@ -26,18 +26,20 @@ export class CoordinateGridIndex<T = string> {
 		this.cells.set(key, cell);
 	}
 
-	queryBounds(minLat: number, maxLat: number, minLon: number, maxLon: number): SpatialPoint<T>[] {
+	queryBounds(minLat: number, maxLat: number, minLon: number, maxLon: number, uniqueIds = false): SpatialPoint<T>[] {
 		const results: SpatialPoint<T>[] = [];
-		const seen = new Set<T>();
+		const seen = uniqueIds ? undefined : new Set<T>();
 		const minX = Math.floor(minLon / this.cellSizeDegrees);
 		const maxX = Math.floor(maxLon / this.cellSizeDegrees);
 		const minY = Math.floor(minLat / this.cellSizeDegrees);
 		const maxY = Math.floor(maxLat / this.cellSizeDegrees);
 		for (let y = minY; y <= maxY; y++) {
 			for (let x = minX; x <= maxX; x++) {
-				for (const point of this.cells.get(`${x}:${y}`) ?? []) {
-					if (seen.has(point.id)) continue;
-					seen.add(point.id);
+				const cell = this.cells.get(`${x}:${y}`);
+				if (!cell) continue;
+				for (const point of cell) {
+					if (seen?.has(point.id)) continue;
+					seen?.add(point.id);
 					if (point.lat >= minLat && point.lat <= maxLat && point.lon >= minLon && point.lon <= maxLon) {
 						results.push(point);
 					}
@@ -61,6 +63,8 @@ export class CoordinateGridIndex<T = string> {
 		bLat: number,
 		bLon: number,
 		expandedMeters: number,
+		// Callers may skip duplicate filtering only when each added point has a distinct id.
+		uniqueIds = false,
 	): SpatialPoint<T>[] {
 		if (
 			!Number.isFinite(aLat) ||
@@ -80,6 +84,7 @@ export class CoordinateGridIndex<T = string> {
 			Math.max(aLat, bLat) + latExpansion,
 			Math.min(aLon, bLon) - lonExpansion,
 			Math.max(aLon, bLon) + lonExpansion,
+			uniqueIds,
 		);
 	}
 

@@ -5,8 +5,6 @@ import { entityKey, parseEntityKey } from "../identity.js";
 
 function serviceKeyForTrip(trip: QualifiedEntityId, ctx: CacheContext): string {
 	const tripKey = entityKey(trip);
-	const mapped = ctx.raw.tripServiceIds?.get(tripKey);
-	if (mapped) return mapped;
 	const rawTrip = ctx.raw.tripsByKey.get(tripKey);
 	return rawTrip ? entityKey({ feedId: rawTrip.feed_id, localId: rawTrip.service_id }) : tripKey;
 }
@@ -142,13 +140,6 @@ export function loadServiceCalendarRules(
 /** Rebuild runtime-scoped inverse indexes for lazy date resolution. */
 export function rebuildServiceInverseIndexes(ctx: CacheContext): void {
 	ctx.runtimeState.servicesByDateHandle.clear();
-	ctx.runtimeState.tripsByServiceHandle.clear();
-	for (const [tripKey, trip] of ctx.raw.tripsByKey) {
-		const serviceKey = entityKey({ feedId: trip.feed_id, localId: trip.service_id });
-		let set = ctx.runtimeState.tripsByServiceHandle.get(serviceKey);
-		if (!set) { set = new Set(); ctx.runtimeState.tripsByServiceHandle.set(serviceKey, set); }
-		set.add(tripKey);
-	}
 	for (const serviceKey of ctx.runtimeState.serviceCalendarRules.keys()) {
 		let feedId: string;
 		let localId: string;

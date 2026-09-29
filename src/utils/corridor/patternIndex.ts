@@ -60,6 +60,7 @@ export function createPatternIndexBuilder(ctx: CacheContext): {
 	const patterns: RoutePattern[] = [];
 	const byRouteDirection = new Map<string, RoutePattern[]>();
 	const bySignature = new Map<string, RoutePattern>();
+	const stationByStop = new Map<string, string>();
 	return {
 		addTrip(trip, inputStopTimes) {
 			let ordered = true;
@@ -71,11 +72,16 @@ export function createPatternIndexBuilder(ctx: CacheContext): {
 			}
 			const stopTimes = ordered ? inputStopTimes : [...inputStopTimes].sort((a, b) => a.stop_sequence - b.stop_sequence);
 			const stations = stopTimes.map((stopTime) => {
+				const stopKey = entityKey({ feedId: stopTime.feed_id, localId: stopTime.stop_id });
+				const cached = stationByStop.get(stopKey);
+				if (cached) return cached;
 				const stop = getStop(ctx, stopTime.feed_id, stopTime.stop_id);
-				return stationKey(
+				const stationId = stationKey(
 					ctx,
 					stop ?? { feed_id: stopTime.feed_id, stop_id: stopTime.stop_id, parent_station: null },
 				);
+				stationByStop.set(stopKey, stationId);
+				return stationId;
 			});
 			if (stopTimes.length < 2) return stations;
 			const routeDirectionKey = qualifiedRouteDirectionKey(trip.feed_id, trip.route_id, trip.direction_id);

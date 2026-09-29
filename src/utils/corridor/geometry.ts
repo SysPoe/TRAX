@@ -3,6 +3,9 @@ const METERS_PER_DEGREE_LATITUDE = 111_320;
 /** Wrap a longitude difference to the shortest signed path across the dateline. */
 export function wrapLongitudeDelta(deltaLongitude: number): number {
 	if (!Number.isFinite(deltaLongitude)) return deltaLongitude;
+	// Nearly every segment is local; avoid modulo on that hot path. 180 must
+	// still wrap to -180 to preserve the signed dateline convention.
+	if (deltaLongitude >= -180 && deltaLongitude < 180) return deltaLongitude;
 	return ((((deltaLongitude + 540) % 360) + 360) % 360) - 180;
 }
 

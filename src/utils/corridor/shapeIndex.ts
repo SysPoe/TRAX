@@ -187,6 +187,18 @@ function appendProjection(
 	maxProjections: number,
 ): void {
 	const current = projections.get(stationId) ?? [];
+	const limit = Math.max(maxProjections, 1);
+	if (current.length >= limit) {
+		let worstLateralDistance = -Infinity;
+		for (const candidate of current) {
+			if (candidate.lateralDistanceMeters > worstLateralDistance) {
+				worstLateralDistance = candidate.lateralDistanceMeters;
+			}
+		}
+		// The bounded result already contains closer projections. A candidate
+		// at or beyond its worst lateral distance cannot survive either sort.
+		if (projection.lateralDistanceMeters >= worstLateralDistance) return;
+	}
 	const nearbyIndex = current.reduce((bestIndex, candidate, index) => {
 		if (
 			Math.abs(candidate.distanceAlongMeters - projection.distanceAlongMeters) >=
@@ -206,7 +218,7 @@ function appendProjection(
 		current.push(projection);
 	}
 	current.sort((a, b) => a.lateralDistanceMeters - b.lateralDistanceMeters);
-	const retained = current.slice(0, Math.max(maxProjections, 1));
+	const retained = current.slice(0, limit);
 	retained.sort((a, b) => a.distanceAlongMeters - b.distanceAlongMeters);
 	projections.set(stationId, retained);
 }
@@ -225,6 +237,8 @@ function buildProjectionGrid(
 	for (const [stationId, geometry] of stationGeometry) {
 		for (const coordinate of geometry.coordinates) {
 			grid.add({
+				// Each coordinate gets a distinct id object, so segment queries
+				// can skip the generic duplicate-id Set.
 				id: { stationId, stopId: coordinate.stopId, source: coordinate.source },
 				lat: coordinate.lat,
 				lon: coordinate.lon,
@@ -257,6 +271,7 @@ function indexShapeProjections(
 			to.lat,
 			to.lon,
 			config.geometry.endpointSnapMaxMeters,
+			true,
 		);
 		const segmentLength = to.geometricDistanceMeters - from.geometricDistanceMeters;
 		if (!Number.isFinite(segmentLength) || segmentLength < 0) continue;

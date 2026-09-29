@@ -273,7 +273,6 @@ function removeRealtimeOnlyTrip(ctx: CacheContext, tripKey: string): void {
 	if (!ctx.raw.realtimeOnlyTripKeys.delete(tripKey)) return;
 
 	ctx.raw.tripsByKey.delete(tripKey);
-	ctx.raw.tripServiceIds?.delete(tripKey);
 	ctx.augmented.rawTripsRec.delete(tripKey);
 
 	const tripNumber = ctx.augmented.tripNumberByTrip.get(tripKey);
@@ -484,6 +483,9 @@ export async function refreshStaticCache(
 	}
 	const consideredTrips = allTrips.filter((v: Trip) => isConsideredTrip(v, ctx));
 	newRawCache.consideredTrips = consideredTrips;
+	const consideredTripKeys = new Set(
+		consideredTrips.map((trip) => entityKey({ feedId: trip.feed_id, localId: trip.trip_id })),
+	);
 	ctx.augmented.timer.stop("refreshStaticCache:loadTrips");
 
 	ctx.augmented.timer.start("refreshStaticCache:loadTripStopTimeBounds");
@@ -502,8 +504,8 @@ export async function refreshStaticCache(
 	};
 	for (const bounds of gtfs.getTripStopTimeBounds()) {
 		const key = entityKey({ feedId: bounds.feed_id, localId: bounds.trip_id });
-		newRawCache.tripStopTimeBoundsByKey.set(key, bounds);
 		applyLookbackEndTime(bounds.end_time);
+		if (consideredTripKeys.has(key)) newRawCache.tripStopTimeBoundsByKey.set(key, bounds);
 	}
 	ctx.augmented.timer.stop("refreshStaticCache:loadTripStopTimeBounds");
 
@@ -541,13 +543,6 @@ export async function refreshStaticCache(
 	}
 	ctx.augmented.timer.stop("refreshStaticCache:loadFrequencies");
 
-	for (const trip of allTrips) {
-		newRawCache.tripServiceIds!.set(
-			entityKey({ feedId: trip.feed_id, localId: trip.trip_id }),
-			entityKey({ feedId: trip.feed_id, localId: trip.service_id }),
-		);
-		if ((newRawCache.tripServiceIds!.size & 2047) === 0) await yieldBudget.maybeYield();
-	}
 	rebuildServiceInverseIndexes(ctx);
 	const usableConsideredTrips = consideredTrips.filter((trip) =>
 		newRawCache.tripStopTimeBoundsByKey.has(entityKey({ feedId: trip.feed_id, localId: trip.trip_id })),

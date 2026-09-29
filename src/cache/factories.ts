@@ -7,7 +7,6 @@ import { createEmptyCorridorIndex } from "../utils/corridor/shapeIndex.js";
 
 export function createEmptyRawCache(): RawCache {
 	return {
-		tripServiceIds: new Map(),
 		routesByKey: new Map(),
 		tripsByKey: new Map(),
 		tripStopTimeBoundsByKey: new Map(),
@@ -87,7 +86,6 @@ export function createRuntimeState(): CacheContext["runtimeState"] {
 		serviceCalendarRules: new Map(),
 		serviceCalendarExceptions: new Map(),
 		servicesByDateHandle: new Map(),
-		tripsByServiceHandle: new Map(),
 		serviceDayStarts: new Map(),
 		availableServiceDates: null,
 		operationalServiceDates: new Set(),

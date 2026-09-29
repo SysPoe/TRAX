@@ -27,13 +27,12 @@ import { LRUCache } from "./lruCache.js";
 import * as qdf from "qdf-gtfs";
 
 export type RawCache = {
-	tripServiceIds?: Map<string, string>;
 	/** Feed-qualified static entities, populated once per GTFS snapshot. */
 	routesByKey: Map<string, Route>;
 	tripsByKey: Map<string, Trip>;
 	/** Considered trips from the same static snapshot as {@link tripsByKey}. */
 	consideredTrips?: Trip[];
-	/** Compact native extents used to select eager trip instances without loading stop-time rows. */
+	/** Compact native extents for considered trips, used without loading stop-time rows. */
 	tripStopTimeBoundsByKey: Map<string, TripStopTimeBounds>;
 	/** Feed-qualified frequency rows, grouped by their template trip. */
 	frequenciesByTripKey: Map<string, Frequency[]>;
@@ -156,7 +155,6 @@ export type CacheContext = {
 		serviceCalendarExceptions: Map<string, Map<number, 1 | 2>>;
 		// Inverse indexes for lazy date materialisation.
 		servicesByDateHandle: Map<string, Set<string>>;
-		tripsByServiceHandle: Map<string, Set<string>>;
 		serviceDayStarts: Map<string, number>;
 		availableServiceDates: string[] | null;
 		operationalServiceDates: Set<string>;

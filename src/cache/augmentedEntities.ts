@@ -451,8 +451,11 @@ export function getAvailableServiceDates(ctx: CacheContext): string[] {
 	if (ctx.runtimeState.availableServiceDates) return ctx.runtimeState.availableServiceDates;
 	const representativeByService = new Map<string, qdf.Trip>();
 	for (const [tripKey, trip] of ctx.augmented.rawTripsRec) {
-		const serviceKey = ctx.raw.tripServiceIds?.get(tripKey);
-		if (serviceKey && !representativeByService.has(serviceKey)) representativeByService.set(serviceKey, trip);
+		// Realtime-only trips have no static calendar and were not part of the
+		// former static trip/service index.
+		if (ctx.raw.realtimeOnlyTripKeys.has(tripKey)) continue;
+		const serviceKey = entityKey({ feedId: trip.feed_id, localId: trip.service_id });
+		if (!representativeByService.has(serviceKey)) representativeByService.set(serviceKey, trip);
 	}
 	const dates = new Set<string>();
 	for (const trip of representativeByService.values()) {
