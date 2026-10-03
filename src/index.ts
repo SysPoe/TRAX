@@ -842,3 +842,6 @@ export type {
 	VehicleObservationResolution,
 	ResolveOptions,
 } from "./qrtWifiResolver.js";
+export { createTransitAppPlugin, TRANSIT_APP_PLUGIN_ID } from "./plugins/transit-app.js";
+export type { TransitAppPluginOptions, TransitAppPluginApi, TransitAppDiagnostics, TransitTripObservation } from "./plugins/transit-app.js";
+export type { TransitFeedMapping, TransitCrowding } from "./plugins/transit-app-client.js";

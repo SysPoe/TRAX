@@ -11,7 +11,13 @@ build
 .TRAXCACHE
 pnpm-lock.yaml
 .env
+.env.*
+!.env.example
+!.env.*.example
+/transit-research/
+/transit-research-*/
+/transit-captures/
+/transit-*.apk
 *-ignore.*
 bun.lock
 AGENTS.md
-

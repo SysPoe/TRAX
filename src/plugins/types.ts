@@ -48,6 +48,8 @@ export interface TransitPlugin {
 		vehicle: RealtimeVehiclePosition,
 		ctx: CacheContext,
 	): RealtimeVehiclePosition | void;
+	/** Reject expired observations when positions are read, even between refreshes. */
+	considerVehiclePosition?(vehicle: RealtimeVehiclePosition, ctx: CacheContext): boolean;
 	enrichStop?(stop: AugmentedStop, ctx: CacheContext, augmentationContext?: unknown): AugmentedStop | void;
 	enrichTrip?(trip: AugmentedTripInstance, ctx: CacheContext): AugmentedTripInstance | void;
 	vehicleInfo?(vehicle: RealtimeVehiclePosition, ctx: CacheContext): unknown;
