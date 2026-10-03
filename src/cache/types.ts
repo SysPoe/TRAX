@@ -143,6 +143,10 @@ export type CacheContext = {
 	augmented: AugmentedCache;
 	config: TraxConfig;
 	gtfs?: GTFS;
+	/** Source observation clock, supplied by the owning runtime across static publications. */
+	getRealtimeObservationTime?: (
+		observation: { source_id?: string | null; timestamp?: number | null } | null | undefined,
+	) => string | null;
 	/** Every mutable cache owned by plugins is scoped to this runtime. */
 	pluginState: Map<string, unknown>;
 	runtimeState: {
@@ -160,7 +164,8 @@ export type CacheContext = {
 		operationalServiceDates: Set<string>;
 		operationalWindows: Map<string, { todayEpochDay: number; horizonStart: number; horizonEnd: number }>;
 		maxTripLookbackDays: number;
-		lazyServiceDates: Map<string, true>;
+		/** true means the whole date is materialized; false means selected trips only. */
+		lazyServiceDates: Map<string, boolean>;
 		dateOffsets: Map<string, string>;
 		serviceDateArrays: Map<string, string[]>;
 		/** Prevent provider callbacks from recursively enriching nested trip registration. */

@@ -102,14 +102,10 @@ function absoluteEventSeconds(
 	return getServiceDayStart(stopTime.service_date, getFeedTimeZone(ctx.config, stopTime.feed_id)) + seconds;
 }
 
-/** Passenger-usable calls can form a handoff: not passing and neither SKIPPED nor NO_DATA. */
+/** NO_DATA affects prediction availability; pickup and dropoff rules still apply. */
 function isPassengerUsable(stopTime: AugmentedStopTime): boolean {
 	const relationship = stopTime.realtime_info?.schedule_relationship;
-	return (
-		!stopTime.passing &&
-		relationship !== qdf.StopTimeScheduleRelationship.SKIPPED &&
-		relationship !== qdf.StopTimeScheduleRelationship.NO_DATA
-	);
+	return !stopTime.passing && relationship !== qdf.StopTimeScheduleRelationship.SKIPPED;
 }
 
 function handoffGapSeconds(
@@ -207,7 +203,8 @@ function explicitContinuationEdges(
 		const allowed = matching.find((transfer) => transfer.transfer_type === qdf.TransferType.InSeat);
 		if (!allowed) continue;
 		const gap = handoffGapSeconds(ctx, instance, next);
-		if (gap != null && (gap < 0 || (allowed.min_transfer_time != null && gap < allowed.min_transfer_time))) continue;
+		if (gap != null && (gap < 0 || (allowed.min_transfer_time != null && gap < allowed.min_transfer_time)))
+			continue;
 		edges.push({ next, source: "gtfs-transfer" });
 	}
 	return { authoritative: matchedRule, edges };
@@ -234,7 +231,10 @@ function rawBlockContinuationEdge(ctx: CacheContext, instance: AugmentedTripInst
 		.map((trip) => findInstanceForDate(ctx, trip.feed_id, trip.trip_id, instance.serviceDate))
 		.filter((candidate): candidate is AugmentedTripInstance => candidate != null);
 	const next = blockTrips
-		.filter((candidate) => candidate.instance_id !== instance.instance_id && sameCanonicalHandoff(ctx, instance, candidate))
+		.filter(
+			(candidate) =>
+				candidate.instance_id !== instance.instance_id && sameCanonicalHandoff(ctx, instance, candidate),
+		)
 		.map((candidate) => ({ candidate, gap: handoffGapSeconds(ctx, instance, candidate) }))
 		.filter(
 			(entry): entry is { candidate: AugmentedTripInstance; gap: number } =>
@@ -358,7 +358,7 @@ export function getOnboardReachableStops(
 		const state = pending.pop()!;
 		for (let index = state.startIndex; index < state.instance.stopTimes.length; index++) {
 			const stopTime = state.instance.stopTimes[index]!;
-			// Passing, SKIPPED, and NO_DATA calls never had an alighting opportunity,
+			// Passing and SKIPPED calls never had an alighting opportunity,
 			// so they must not claim station identity or truncate later reachable stops.
 			if (isSkippedOrPassing(stopTime)) continue;
 			const key = canonicalStopKey(ctx, stopTime);

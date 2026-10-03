@@ -8,12 +8,14 @@ export interface SeqPluginState {
 	qrtPlaces: QRTPlace[];
 	qrtStations: QRTStations;
 	qrtTrains: QRTTravelTrip[];
+	qrtObservedAt: string | null;
+	qrtRevision: number;
 	platformData?: PlatformData;
 	railwayStationFacilities: RailwayStationFacility[];
 }
 
 export function getSeqState(ctx: CacheContext): SeqPluginState {
 	return getPluginState(ctx, "au-seq:data", () => ({
-		qrtPlaces: [], qrtStations: {}, qrtTrains: [], platformData: undefined, railwayStationFacilities: [],
+		qrtPlaces: [], qrtStations: {}, qrtTrains: [], qrtObservedAt: null, qrtRevision: 0, platformData: undefined, railwayStationFacilities: [],
 	}));
 }

@@ -62,7 +62,13 @@ export async function loadStatic(gtfs: GTFS, config: TraxConfig, report?: Source
 	}
 }
 
-export async function loadRealtime(gtfs: GTFS, config: TraxConfig, report?: SourceReporter): Promise<void> {
+export type RealtimeLoadOutcome = { successfulSourceIds: string[]; failedSourceIds: string[] };
+
+export async function loadRealtime(
+	gtfs: GTFS,
+	config: TraxConfig,
+	report?: SourceReporter,
+): Promise<RealtimeLoadOutcome> {
 	const definitions = config.network.feeds.flatMap((feed) => feed.realtimeSources);
 	const sources: GTFSRealtimeFeedConfig[] = definitions.map((realtime) => ({
 		id: realtime.id,
@@ -71,7 +77,8 @@ export async function loadRealtime(gtfs: GTFS, config: TraxConfig, report?: Sour
 		url: realtime.source.url,
 		headers: realtime.source.headers,
 	}));
-	if (sources.length === 0) return;
+	const outcome: RealtimeLoadOutcome = { successfulSourceIds: [], failedSourceIds: [] };
+	if (sources.length === 0) return outcome;
 	logger.info(`Loading realtime data for ${config.network.id}...`);
 	for (const source of sources)
 		report?.({ id: source.id, feedId: source.targetFeedId, kind: source.kind, state: "loading" });
@@ -90,7 +97,8 @@ export async function loadRealtime(gtfs: GTFS, config: TraxConfig, report?: Sour
 		if (!result.ok) {
 			const seen = new Set([source.url]);
 			for (const fallbackUrl of definition.source.fallbackUrls ?? []) {
-				if (typeof fallbackUrl !== "string" || fallbackUrl.trim().length === 0 || seen.has(fallbackUrl)) continue;
+				if (typeof fallbackUrl !== "string" || fallbackUrl.trim().length === 0 || seen.has(fallbackUrl))
+					continue;
 				seen.add(fallbackUrl);
 				try {
 					const [fallbackResult] = await gtfs.updateRealtimeFromUrl([{ ...source, url: fallbackUrl }]);
@@ -112,8 +120,10 @@ export async function loadRealtime(gtfs: GTFS, config: TraxConfig, report?: Sour
 			state: result.ok ? "healthy" : "error",
 			error: result.error,
 		});
+		(result.ok ? outcome.successfulSourceIds : outcome.failedSourceIds).push(result.id);
 	}
 	logger.info(`Realtime data loaded for ${config.network.id}.`);
+	return outcome;
 }
 
 export async function createGtfs(config: TraxConfig, doRealtime = true, report?: SourceReporter): Promise<GTFS> {

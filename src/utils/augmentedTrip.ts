@@ -573,7 +573,11 @@ export function augmentTrip(
 		relationship: qdf.TripScheduleRelationship,
 	): void => {
 		const startDate = update.trip.start_date!;
-		const normalized = normalizeStartTime(update.trip.start_time, frequencyRun);
+		// start_time is optional for a normal static scheduled service. Several
+		// producers describing that same service must share one instance.
+		const normalized = relationship === qdf.TripScheduleRelationship.SCHEDULED && !hasFrequencyRows
+			? ""
+			: normalizeStartTime(update.trip.start_time, frequencyRun);
 		const dedupeKey = `${tripKey}\0${startDate}\0${normalized}`;
 		const candidate: Winner = { update, frequencyRun, relationship };
 		const existing = instanceWinners.get(dedupeKey);

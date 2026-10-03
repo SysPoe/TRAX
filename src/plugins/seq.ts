@@ -14,6 +14,8 @@ import { getServiceCapacity } from "../region-specific/AU/SEQ/serviceCapacity.js
 import { getQrtFormation } from "../region-specific/AU/SEQ/qr-travel/formation.js";
 import { getQrtBookingSeatMap, getQrtSeatMapDiagram } from "../region-specific/AU/SEQ/qr-travel/seat-map.js";
 import { startQrtBookingCollector } from "../region-specific/AU/SEQ/qr-travel/booking-collector.js";
+import { getSeqState } from "./seq-state.js";
+import type { QrtObservation } from "../region-specific/AU/SEQ/qr-travel/types.js";
 
 export const seqPlugin: TransitPlugin = {
 	id: "au-seq",
@@ -44,6 +46,7 @@ export const seqPlugin: TransitPlugin = {
 		getQrtPlaces: () => SEQgetQRTPlaces(ctx),
 		getQrtStations: () => SEQgetQRTStations(ctx),
 		getQrtTrains: () => SEQgetQRTTrains(ctx),
+		getQrtObservation: (): QrtObservation => ({ observedAt: getSeqState(ctx).qrtObservedAt, revision: getSeqState(ctx).qrtRevision }),
 		getQrtFormation: (serviceId: string) => {
 			const service = SEQgetQRTTrains(ctx).find((candidate) => candidate.serviceId === serviceId);
 			return service ? getQrtFormation(service, ctx) : Promise.resolve(null);

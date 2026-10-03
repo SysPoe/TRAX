@@ -55,7 +55,29 @@ type DepartureSlice = {
  * sort as Infinity (last), never as midnight, so they cannot masquerade as
  * 00:00 departures. Keep this order in sync with getStopDeparturesCached's sort key.
  */
-function departureTimeSeconds(stopTime: AugmentedStopTime): number {
+function hasExpiredPrediction(stopTime: AugmentedStopTime, ctx: cache.CacheContext, now: number): boolean {
+	if (!stopTime.realtime_info) return false;
+	const info = stopTime.realtime_info;
+	const observation =
+		stopTime.actual_departure_time != null || stopTime.scheduled_departure_time != null
+			? (info.departure_observation ?? info)
+			: (info.arrival_observation ?? info);
+	// Legacy callers can provide manually constructed rows without observation
+	// identity. Runtime-produced predictions always carry it.
+	if (!observation.source_id && observation.timestamp == null) return false;
+	const timestamp = observation.timestamp;
+	const observedAt = ctx.getRealtimeObservationTime
+		? Date.parse(ctx.getRealtimeObservationTime(observation) ?? "")
+		: timestamp != null && Number.isFinite(timestamp) && timestamp >= 0
+			? timestamp * 1000
+			: NaN;
+	return !Number.isFinite(observedAt) || observedAt > now + 30_000 || now - observedAt > 300_000;
+}
+
+function departureTimeSeconds(stopTime: AugmentedStopTime, ctx: cache.CacheContext, now: number): number {
+	if (hasExpiredPrediction(stopTime, ctx, now)) {
+		return stopTime.scheduled_departure_time ?? stopTime.scheduled_arrival_time ?? Number.POSITIVE_INFINITY;
+	}
 	return (
 		stopTime.actual_departure_time ??
 		stopTime.scheduled_departure_time ??
@@ -65,23 +87,33 @@ function departureTimeSeconds(stopTime: AugmentedStopTime): number {
 	);
 }
 
-function lowerBound(stopTimes: readonly AugmentedStopTime[], timeSeconds: number): number {
+function lowerBound(
+	stopTimes: readonly AugmentedStopTime[],
+	timeSeconds: number,
+	ctx: cache.CacheContext,
+	now: number,
+): number {
 	let low = 0;
 	let high = stopTimes.length;
 	while (low < high) {
 		const middle = low + Math.floor((high - low) / 2);
-		if (departureTimeSeconds(stopTimes[middle]) < timeSeconds) low = middle + 1;
+		if (departureTimeSeconds(stopTimes[middle], ctx, now) < timeSeconds) low = middle + 1;
 		else high = middle;
 	}
 	return low;
 }
 
-function upperBound(stopTimes: readonly AugmentedStopTime[], timeSeconds: number): number {
+function upperBound(
+	stopTimes: readonly AugmentedStopTime[],
+	timeSeconds: number,
+	ctx: cache.CacheContext,
+	now: number,
+): number {
 	let low = 0;
 	let high = stopTimes.length;
 	while (low < high) {
 		const middle = low + Math.floor((high - low) / 2);
-		if (departureTimeSeconds(stopTimes[middle]) <= timeSeconds) low = middle + 1;
+		if (departureTimeSeconds(stopTimes[middle], ctx, now) <= timeSeconds) low = middle + 1;
 		else high = middle;
 	}
 	return low;
@@ -92,14 +124,27 @@ function getDepartureSlice(
 	dayStart: number,
 	windowStartAbs: number,
 	windowEndAbs: number,
+	ctx: cache.CacheContext,
+	now: number,
 ): DepartureSlice {
-	const first = lowerBound(stopTimes, windowStartAbs - dayStart);
-	const end = upperBound(stopTimes, windowEndAbs - dayStart);
-	return { stopTimes: stopTimes.slice(first, end), dayStart };
+	// Expired predictions can change the cached actual-time order. Build a
+	// query view only then; cached rows and live binary-search paths stay intact.
+	const ordered = stopTimes.some((stopTime) => hasExpiredPrediction(stopTime, ctx, now))
+		? [...stopTimes].sort(
+				(left, right) => departureTimeSeconds(left, ctx, now) - departureTimeSeconds(right, ctx, now),
+			)
+		: stopTimes;
+	const first = lowerBound(ordered, windowStartAbs - dayStart, ctx, now);
+	const end = upperBound(ordered, windowEndAbs - dayStart, ctx, now);
+	return { stopTimes: ordered.slice(first, end), dayStart };
 }
 
 /** Merge the already sorted per-stop slices without sorting the combined day. */
-function mergeDepartureSlices(slices: readonly DepartureSlice[]): AugmentedStopTime[] {
+function mergeDepartureSlices(
+	slices: readonly DepartureSlice[],
+	ctx: cache.CacheContext,
+	now: number,
+): AugmentedStopTime[] {
 	const merged: AugmentedStopTime[] = [];
 	const cursors = slices.map((slice) => ({ slice, index: 0 }));
 
@@ -109,7 +154,7 @@ function mergeDepartureSlices(slices: readonly DepartureSlice[]): AugmentedStopT
 		for (const cursor of cursors) {
 			const stopTime = cursor.slice.stopTimes[cursor.index];
 			if (!stopTime) continue;
-			const time = cursor.slice.dayStart + departureTimeSeconds(stopTime);
+			const time = cursor.slice.dayStart + departureTimeSeconds(stopTime, ctx, now);
 			if (nextCursor === undefined || time < nextTime) {
 				nextCursor = cursor;
 				nextTime = time;
@@ -144,9 +189,7 @@ function mapDepartureResults(stopTimes: AugmentedStopTime[], ctx: cache.CacheCon
 	for (const st of stopTimes) {
 		if (st.pickup_type === qdf.PickupType.None) continue;
 		if (seenVisits.has(departureVisitKey(st))) continue;
-		const inst =
-			instanceCache.get(st.instance_id) ??
-			cache.getAugmentedTripInstance(ctx, st.instance_id);
+		const inst = instanceCache.get(st.instance_id) ?? cache.getAugmentedTripInstance(ctx, st.instance_id);
 		if (!inst) continue;
 		instanceCache.set(st.instance_id, inst);
 		seenVisits.add(departureVisitKey(st));
@@ -191,10 +234,16 @@ export function getDeparturesForInstantWindow(
 		);
 	}
 	const timeZone = getFeedTimeZone(ctx.config, stop.feed_id);
+	const now = Date.now();
 	const firstLocalDate = getServiceDate(new Date(windowStartEpochSeconds * 1000), timeZone);
 	const lastLocalDate = getServiceDate(new Date(windowEndEpochSeconds * 1000), timeZone);
-	const dayCount = Math.max(0, getEpochDayFromServiceDate(lastLocalDate) - getEpochDayFromServiceDate(firstLocalDate));
-	const validStops = new Set<string>([stop.stop_id, stop.parent_stop_id, ...stop.child_stop_ids].filter(Boolean) as string[]);
+	const dayCount = Math.max(
+		0,
+		getEpochDayFromServiceDate(lastLocalDate) - getEpochDayFromServiceDate(firstLocalDate),
+	);
+	const validStops = new Set<string>(
+		[stop.stop_id, stop.parent_stop_id, ...stop.child_stop_ids].filter(Boolean) as string[],
+	);
 	const candidates: { stopTime: AugmentedStopTime; at: number }[] = [];
 
 	// Long services can start several dates earlier than the requested window.
@@ -202,14 +251,21 @@ export function getDeparturesForInstantWindow(
 		const serviceDate = addDaysToServiceDate(firstLocalDate, offset);
 		const dayStart = getServiceDayStart(serviceDate, timeZone);
 		for (const stopId of validStops) {
-			for (const stopTime of cache.getStopDeparturesCached(ctx, { feedId: stop.feed_id, localId: stopId }, serviceDate)) {
-				const at = dayStart + departureTimeSeconds(stopTime);
+			for (const stopTime of cache.getStopDeparturesCached(
+				ctx,
+				{ feedId: stop.feed_id, localId: stopId },
+				serviceDate,
+			)) {
+				const at = dayStart + departureTimeSeconds(stopTime, ctx, now);
 				if (at >= windowStartEpochSeconds && at <= windowEndEpochSeconds) candidates.push({ stopTime, at });
 			}
 		}
 	}
 	candidates.sort((a, b) => a.at - b.at);
-	return mapDepartureResults(candidates.map(({ stopTime }) => stopTime), ctx);
+	return mapDepartureResults(
+		candidates.map(({ stopTime }) => stopTime),
+		ctx,
+	);
 }
 
 export function getDeparturesForStop(
@@ -251,6 +307,7 @@ export function getDeparturesForStop(
 
 	ctx.augmented.timer.start("getDeparturesForStop:collect");
 	const slices: DepartureSlice[] = [];
+	const now = Date.now();
 
 	// GTFS trips can spill past midnight (including multi-day 25:00+ times),
 	// so an early absolute window must also scan service dates that started
@@ -267,12 +324,12 @@ export function getDeparturesForStop(
 				{ feedId: stop.feed_id, localId: stopId },
 				serviceDateStr,
 			);
-			slices.push(getDepartureSlice(stopDepartures, dayStart, windowStartAbs, windowEndAbs));
+			slices.push(getDepartureSlice(stopDepartures, dayStart, windowStartAbs, windowEndAbs, ctx, now));
 		}
 	}
 	ctx.augmented.timer.stop("getDeparturesForStop:collect");
 
-	const mergedResults = mergeDepartureSlices(slices);
+	const mergedResults = mergeDepartureSlices(slices, ctx, now);
 	ctx.augmented.timer.start("getDeparturesForStop:map");
 	const results = mapDepartureResults(mergedResults, ctx);
 	ctx.augmented.timer.stop("getDeparturesForStop:map");
@@ -318,6 +375,7 @@ export function getServiceDateDeparturesForStop(
 
 	ctx.augmented.timer.start("getServiceDateDeparturesForStop:collect");
 	const slices: DepartureSlice[] = [];
+	const now = Date.now();
 
 	for (const stopId of validStops) {
 		const stopDepartures = cache.getStopDeparturesCached(
@@ -325,11 +383,11 @@ export function getServiceDateDeparturesForStop(
 			{ feedId: stop.feed_id, localId: stopId },
 			serviceDate,
 		);
-		slices.push(getDepartureSlice(stopDepartures, dayStart, windowStartAbs, windowEndAbs));
+		slices.push(getDepartureSlice(stopDepartures, dayStart, windowStartAbs, windowEndAbs, ctx, now));
 	}
 	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:collect");
 
-	const mergedResults = mergeDepartureSlices(slices);
+	const mergedResults = mergeDepartureSlices(slices, ctx, now);
 	ctx.augmented.timer.start("getServiceDateDeparturesForStop:map");
 	const results = mapDepartureResults(mergedResults, ctx);
 	ctx.augmented.timer.stop("getServiceDateDeparturesForStop:map");

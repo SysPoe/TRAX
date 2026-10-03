@@ -115,6 +115,11 @@ export type AugmentedStopTime = {
 				schedule_relationship: qdf.StopTimeScheduleRelationship;
 				propagated: boolean;
 				rt_start_date: string | null;
+				/** Observation identity follows the timed anchor, including propagated calls. */
+				source_id?: string | null;
+				timestamp?: number | null;
+				arrival_observation?: { source_id: string | null; timestamp: number | null } | null;
+				departure_observation?: { source_id: string | null; timestamp: number | null } | null;
 			};
 	  }
 	| {
@@ -140,9 +145,7 @@ export function matchRealtimeStopTimeUpdate(input: {
 	byParentStationId: ReadonlyMap<string, qdf.RealtimeStopTimeUpdate>;
 }): qdf.RealtimeStopTimeUpdate | undefined {
 	const sequenceMatch = input.bySequence.get(input.stopSequence);
-	const parentMatch = input.parentStationId
-		? input.byParentStationId.get(input.parentStationId)
-		: undefined;
+	const parentMatch = input.parentStationId ? input.byParentStationId.get(input.parentStationId) : undefined;
 	// One-hop boarding-area children are indexed by their GTFS parent. A
 	// realtime boarding area matches its scheduled platform when the parent
 	// contract points exactly one hop up, and nothing further.
@@ -594,8 +597,10 @@ export function augmentStopTimes(
 		actDep: Math.floor(initialActualDep / 86400),
 	};
 
-	let lastDelay = 0;
-	const propagateOnTime = scheduleRelationship === qdf.TripScheduleRelationship.SCHEDULED && !!tripUpdate;
+	let lastDelay = Number.isFinite(tripUpdate?.delay) ? tripUpdate!.delay! : 0;
+	let predictionAvailable = Number.isFinite(tripUpdate?.delay);
+	let predictionSource = predictionAvailable ? (tripUpdate?.source_id ?? null) : null;
+	let predictionTimestamp = predictionAvailable ? (tripUpdate?.timestamp ?? null) : null;
 
 	/** Raw GTFS timeline seconds (may exceed 86400); used to re-interpolate passing rows against actual segment anchors. */
 	let lastNonPassingActDepRaw: number | null = null;
@@ -630,8 +635,12 @@ export function augmentStopTimes(
 		const schedDep = stopTime.departure_time;
 		let actArr = schedArr;
 		let actDep = schedDep;
+		let arrivalObservation = predictionAvailable
+			? { source_id: predictionSource, timestamp: predictionTimestamp }
+			: null;
+		let departureObservation = arrivalObservation;
 
-		let delaySecs = lastDelay;
+		let delaySecs = predictionAvailable ? lastDelay : 0;
 		let propagated = false;
 		let currentScheduleRelationship = rtUpdate?.schedule_relationship ?? qdf.StopTimeScheduleRelationship.SCHEDULED;
 
@@ -653,49 +662,71 @@ export function augmentStopTimes(
 			currentScheduleRelationship !== qdf.StopTimeScheduleRelationship.SKIPPED &&
 			currentScheduleRelationship !== qdf.StopTimeScheduleRelationship.NO_DATA;
 		if (updateCarriesTimes) {
-			propagated = false;
-			if (rtUpdate.departure_delay !== null && rtUpdate.departure_delay !== undefined) {
-				actDep = (schedDep ?? 0) + rtUpdate.departure_delay;
-				delaySecs = rtUpdate.departure_delay;
-				lastDelay = delaySecs;
-				rtFlags.dep = true;
-			} else if (rtUpdate.departure_time) {
-				const depAbs = Math.floor(Number(rtUpdate.departure_time) - serviceDayStart);
-				delaySecs = depAbs - (schedDep ?? 0);
-				actDep = depAbs;
-				lastDelay = delaySecs;
-				rtFlags.dep = true;
-			} else if (lastDelay) {
-				actDep = (schedDep ?? 0) + lastDelay;
+			const eventDelay = (absolute: number | null, delay: number | null, scheduled: number | null) => {
+				if (absolute != null && Number.isFinite(Number(absolute))) {
+					const actual = Math.floor(Number(absolute) - serviceDayStart);
+					return { actual, delay: scheduled == null ? 0 : actual - scheduled };
+				}
+				return delay != null && Number.isFinite(delay) && scheduled != null
+					? { actual: scheduled + delay, delay }
+					: null;
+			};
+			const arrival = eventDelay(rtUpdate.arrival_time, rtUpdate.arrival_delay, schedArr);
+			const departure = eventDelay(rtUpdate.departure_time, rtUpdate.departure_delay, schedDep);
+			const observed = rtUpdate as qdf.RealtimeStopTimeUpdate & {
+				observation_timestamp?: number | null;
+				departure_observation?: { source_id: string | null; timestamp: number | null };
+			};
+			const observation = {
+				source_id: rtUpdate.source_id ?? tripUpdate?.source_id ?? null,
+				timestamp: observed.observation_timestamp ?? tripUpdate?.timestamp ?? null,
+			};
+			// Arrival becomes the current anchor first. A departure event then owns
+			// propagation to the next call, including an explicit zero delay.
+			if (arrival) {
+				actArr = arrival.actual;
+				arrivalObservation = observation;
+				predictionSource = observation.source_id;
+				predictionTimestamp = observation.timestamp;
+				lastDelay = arrival.delay;
+				predictionAvailable = true;
+				rtFlags.arr = true;
+			} else if (predictionAvailable && schedArr != null) {
+				actArr = schedArr + lastDelay;
 				propagated = true;
 			}
-
-			if (rtUpdate.arrival_delay !== null && rtUpdate.arrival_delay !== undefined) {
-				actArr = (schedArr ?? 0) + rtUpdate.arrival_delay;
-				delaySecs = rtUpdate.arrival_delay;
-				rtFlags.arr = true;
-			} else if (rtUpdate.arrival_time) {
-				const arrAbs = Math.floor(Number(rtUpdate.arrival_time) - serviceDayStart);
-				actArr = arrAbs;
-				rtFlags.arr = true;
-			} else if (lastDelay) {
-				actArr = (schedArr ?? 0) + lastDelay;
+			if (departure) {
+				actDep = departure.actual;
+				departureObservation = observed.departure_observation ?? observation;
+				predictionSource = departureObservation.source_id;
+				predictionTimestamp = departureObservation.timestamp;
+				lastDelay = departure.delay;
+				predictionAvailable = true;
+				rtFlags.dep = true;
+			} else if (predictionAvailable && schedDep != null) {
+				actDep = schedDep + lastDelay;
+				departureObservation = { source_id: predictionSource, timestamp: predictionTimestamp };
 				propagated = true;
 			}
+			delaySecs = predictionAvailable ? lastDelay : 0;
 
 			const rtRawStop = cache.getRawStops(ctx, { feed_id: feedId, stop_id: rtUpdate.stop_id })[0];
 			if (rtRawStop?.platform_code) {
 				platformCode = rtRawStop.platform_code;
 				rtFlags.platform = true;
 			}
-
+		} else if (currentScheduleRelationship === qdf.StopTimeScheduleRelationship.NO_DATA) {
+			lastDelay = 0;
+			predictionAvailable = false;
+			predictionSource = null;
+			predictionTimestamp = null;
+			arrivalObservation = null;
+			departureObservation = null;
+			delaySecs = 0;
 		} else if (!rtUpdate) {
-			if (lastDelay !== 0) {
+			if (predictionAvailable) {
 				if (schedArr !== null) actArr = schedArr + lastDelay;
 				if (schedDep !== null) actDep = schedDep + lastDelay;
-				propagated = true;
-			} else if (propagateOnTime) {
-				delaySecs = 0;
 				propagated = true;
 			}
 		}
@@ -755,7 +786,8 @@ export function augmentStopTimes(
 
 		let realtimeInfo = null;
 		const hasRealtime =
-			!!rtUpdate || propagated || (!!tripUpdate && scheduleRelationship === qdf.TripScheduleRelationship.ADDED);
+			currentScheduleRelationship === qdf.StopTimeScheduleRelationship.SKIPPED ||
+			(currentScheduleRelationship !== qdf.StopTimeScheduleRelationship.NO_DATA && predictionAvailable);
 
 		if (hasRealtime) {
 			const { str, cls } = calculateDelayClass(delaySecs);
@@ -766,6 +798,10 @@ export function augmentStopTimes(
 				schedule_relationship: currentScheduleRelationship,
 				propagated: propagated && !isPassing,
 				rt_start_date: tripUpdate?.trip.start_date ?? serviceDate,
+				source_id: predictionSource ?? rtUpdate?.source_id ?? tripUpdate?.source_id ?? null,
+				timestamp: predictionTimestamp ?? tripUpdate?.timestamp ?? null,
+				arrival_observation: arrivalObservation,
+				departure_observation: departureObservation,
 			};
 		}
 
@@ -818,7 +854,11 @@ export function augmentStopTimes(
 			actual_stop_id: actualStop?.stop_id ?? null,
 			actual_parent_station_id: rtFlags.parent
 				? (actualParent?.stop_id ?? actualStop?.parent_stop_id ?? null)
-				: (actualParent?.stop_id ?? actualStop?.parent_stop_id ?? scheduledParent?.stop_id ?? scheduledStop?.parent_stop_id ?? null),
+				: (actualParent?.stop_id ??
+					actualStop?.parent_stop_id ??
+					scheduledParent?.stop_id ??
+					scheduledStop?.parent_stop_id ??
+					null),
 			actual_platform_code: isPassing ? null : (platformCode ?? scheduledStop?.platform_code ?? null),
 			predicted_platform_code: null,
 			actual_arrival_boarding_locations: [],

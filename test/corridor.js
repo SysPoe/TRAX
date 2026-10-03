@@ -2429,7 +2429,7 @@ function testRepeatedOccurrenceNeedsDepartureTime() {
 	);
 }
 
-function testNoDataOriginCannotBoard() {
+function testNoDataOriginCanBoard() {
 	const noDataOrigin = passengerInstance({
 		tripId: "nodata-orig",
 		instanceId: "nodata-orig-1",
@@ -2445,12 +2445,12 @@ function testNoDataOriginCannotBoard() {
 				departureTime: 36000,
 			}),
 		),
-		[],
-		"NO_DATA origin must not be boardable",
+		["n"],
+		"NO_DATA removes timing information while retaining scheduled boarding",
 	);
 }
 
-function testNoDataDestinationNotReachable() {
+function testNoDataDestinationReachable() {
 	const inst = passengerInstance({
 		tripId: "nodata-dest",
 		instanceId: "nodata-dest-1",
@@ -2466,8 +2466,8 @@ function testNoDataDestinationNotReachable() {
 	});
 	assert.deepEqual(
 		passengerStopIds(result),
-		["normal"],
-		"NO_DATA calls must not be treated as alightable",
+		["nodata", "normal"],
+		"NO_DATA retains scheduled alighting",
 	);
 }
 
@@ -2902,8 +2902,8 @@ for (const testCase of [
 	["skipped terminal keeps handoff", testSkippedTerminalKeepsHandoff],
 	["skipped intermediates do not claim later visits", testSkippedIntermediateDoesNotClaimLaterVisit],
 	["repeated occurrence needs departure time", testRepeatedOccurrenceNeedsDepartureTime],
-	["NO_DATA origin cannot board", testNoDataOriginCannotBoard],
-	["NO_DATA destination not reachable", testNoDataDestinationNotReachable],
+	["NO_DATA origin can board", testNoDataOriginCanBoard],
+	["NO_DATA destination reachable", testNoDataDestinationReachable],
 	["loop origin without departureTime uses first occurrence", testLoopOriginWithoutDepartureTimeUsesFirstOccurrence],
 	["drop-only origin cannot board", testDropOnlyOriginCannotBoard],
 	["non-boardable origin cannot board", testNonBoardableOriginCannotBoard],

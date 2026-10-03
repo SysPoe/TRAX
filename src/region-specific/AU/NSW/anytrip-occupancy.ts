@@ -78,7 +78,7 @@ function number(value: unknown): number | null {
 
 function parseStatuses(value: unknown): OccupancyStatus[] {
 	if (!Array.isArray(value)) return [];
-	return value.filter((status): status is OccupancyStatus => Number.isInteger(status) && status >= 0 && status <= 6);
+	return value.filter((status): status is OccupancyStatus => Number.isInteger(status) && status >= 0 && status <= 8);
 }
 
 export function parseAnyTripNswOccupancy(

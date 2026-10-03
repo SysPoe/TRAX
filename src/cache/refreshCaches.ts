@@ -41,7 +41,11 @@ import {
 import { clearPreviousVehicleInfo, prunePreviousVehicleInfo } from "../utils/vehicleModel.js";
 import { entityKey } from "../identity.js";
 import { getSeqState } from "../plugins/seq-state.js";
-import { applyRealtimeReplacementPrecedence, canonicalizeRealtimeTripUpdates } from "./realtime.js";
+import {
+	applyRealtimeReplacementPrecedence,
+	canonicalizeRealtimeTripUpdates,
+	mergeSupplementalTripUpdates,
+} from "./realtime.js";
 import { primeRawStopTimes } from "./gtfsReads.js";
 import { buildCorridorIndex } from "../utils/corridor/shapeIndex.js";
 import { YieldBudget } from "../utils/cooperative.js";
@@ -88,7 +92,10 @@ export function refreshQRTTrainsInBackground(ctx: CacheContext): void {
 		.then((trains: QRTTravelTrip[]) => {
 			// Replace the snapshot atomically. Readers continue using the prior
 			// successful value while this request is in flight.
-			getSeqState(ctx).qrtTrains = trains;
+			const state = getSeqState(ctx);
+			state.qrtTrains = trains;
+			state.qrtObservedAt = new Date(Date.now()).toISOString();
+			state.qrtRevision += 1;
 			logger.debug(`Loaded ${trains.length} QRT trains.`, {
 				module: "cache",
 				function: "refreshRealtimeCache",
@@ -112,29 +119,59 @@ export function refreshQRTTrainsInBackground(ctx: CacheContext): void {
 	ctx.augmented.qrtRefreshInFlight = refreshPromise;
 }
 
-export type RetainedStaticRefreshState = { qrtTrains: QRTTravelTrip[] };
+export type RetainedStaticRefreshState = { qrtTrains: QRTTravelTrip[]; qrtObservedAt?: string | null; qrtRevision?: number };
 
 export function retainStaticRefreshState(ctx: CacheContext): RetainedStaticRefreshState {
-	return { qrtTrains: getSeqState(ctx).qrtTrains };
+	const state = getSeqState(ctx);
+	return { qrtTrains: state.qrtTrains, qrtObservedAt: state.qrtObservedAt, qrtRevision: state.qrtRevision };
 }
 
-function tripUpdateSignature(updates: readonly unknown[]): string {
+function tripUpdateSignature(updates: readonly unknown[], ctx?: CacheContext): string {
+	const competing = new Map<string, RealtimeTripUpdate[]>();
 	const materialized = updates.map((update) => {
 		if (update === null || typeof update !== "object" || Array.isArray(update)) return update;
-		const { timestamp: _timestamp, update_id: _updateId, ...materialized } = update as Record<string, unknown>;
+		const { timestamp, update_id, ...materialized } = update as Record<string, unknown>;
+		const value = update as RealtimeTripUpdate;
+		if (value.trip) {
+			const tripKey = entityKey({ feedId: value.feed_id, localId: value.trip.trip_id });
+			const frequency = (ctx?.raw.frequenciesByTripKey.get(tripKey)?.length ?? 0) > 0;
+			const start =
+				value.trip.schedule_relationship === TripScheduleRelationship.SCHEDULED && !frequency
+					? ""
+					: normalizeClockForKey(value.trip.start_time);
+			const key = JSON.stringify([tripKey, value.trip.start_date, start]);
+			const values = competing.get(key) ?? [];
+			values.push(value);
+			competing.set(key, values);
+		}
 		return materialized;
 	});
 	// The feed order of a semantically identical update set is not meaningful.
 	// Sort canonically so a permutation reuses the previous signature instead
 	// of triggering needless re-augmentation. Sorting keeps duplicates (length
-	// still matters) and timestamp/update_id stay stripped for metadata-only
-	// refreshes.
+	// still matters). A sole update's metadata remains outside the signature.
 	materialized.sort((left, right) => {
 		const leftText = JSON.stringify(left) ?? "";
 		const rightText = JSON.stringify(right) ?? "";
 		return leftText < rightText ? -1 : leftText > rightText ? 1 : 0;
 	});
-	return JSON.stringify(materialized);
+	// Ranking metadata only matters if it changes the payload selected for one
+	// instance. Independent dates/runs and unchanged winners keep their caches.
+	const winners: unknown[] = [];
+	for (const [key, values] of competing) {
+		if (values.length < 2) continue;
+		const winner = values.reduce((best, candidate) => {
+			const left = candidate.timestamp ?? 0,
+				right = best.timestamp ?? 0;
+			if (left !== right) return left > right ? candidate : best;
+			if (candidate.update_id !== best.update_id) return candidate.update_id < best.update_id ? candidate : best;
+			return JSON.stringify(candidate) < JSON.stringify(best) ? candidate : best;
+		});
+		const { timestamp, update_id, ...payload } = winner;
+		winners.push([key, payload]);
+	}
+	winners.sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+	return JSON.stringify([materialized, winners]);
 }
 
 function normalizeClockForKey(value: string | null | undefined): string {
@@ -178,11 +215,41 @@ function refreshRealtimeMetadata(ctx: CacheContext, tripKey: string, updates: re
 		values.push(update);
 		replacements.set(key, values);
 	}
+	for (const values of replacements.values()) {
+		values.sort(
+			(left, right) =>
+				(right.timestamp ?? 0) - (left.timestamp ?? 0) ||
+				left.update_id.localeCompare(right.update_id) ||
+				JSON.stringify(left).localeCompare(JSON.stringify(right)),
+		);
+	}
 	for (const instance of trip.instances) {
 		if (!instance.realtime_update) continue;
 		const values = replacements.get(realtimeInstanceKey(instance.realtime_update));
-		const replacement = values?.shift();
-		if (replacement) instance.realtime_update = replacement;
+		const replacement = values?.[0];
+		if (!replacement) continue;
+		const previous = instance.realtime_update;
+		instance.realtime_update = replacement;
+		for (const stop of instance.stopTimes) {
+			const observation = stop.realtime_info;
+			if (!observation) continue;
+			const replaceObservation = (
+				value: { source_id: string | null; timestamp: number | null } | null | undefined,
+			) =>
+				value?.source_id === previous.source_id && value.timestamp === previous.timestamp
+					? { source_id: replacement.source_id, timestamp: replacement.timestamp }
+					: value;
+			// Only the native anchor follows the update metadata. Supplemental
+			// anchors retain their separate producer's observation timestamp.
+			stop.realtime_info = {
+				...observation,
+				...(observation.source_id === previous.source_id && observation.timestamp === previous.timestamp
+					? { source_id: replacement.source_id, timestamp: replacement.timestamp }
+					: {}),
+				arrival_observation: replaceObservation(observation.arrival_observation),
+				departure_observation: replaceObservation(observation.departure_observation),
+			};
+		}
 	}
 }
 
@@ -382,7 +449,12 @@ export async function refreshStaticCache(
 		pluginState: new Map(),
 		runtimeState: createRuntimeState(),
 	};
-	if (retainedState) getSeqState(ctx).qrtTrains = retainedState.qrtTrains;
+	if (retainedState) {
+		const state = getSeqState(ctx);
+		state.qrtTrains = retainedState.qrtTrains;
+		state.qrtObservedAt = retainedState.qrtObservedAt ?? null;
+		state.qrtRevision = retainedState.qrtRevision ?? 0;
+	}
 	const startTotal = Date.now();
 	ctx.augmented.timer.clear();
 	ctx.augmented.timer.start("refreshStaticCache");
@@ -400,27 +472,6 @@ export async function refreshStaticCache(
 		{ abortOnError: true },
 	);
 	yieldBudget.noteYield();
-
-	ctx.augmented.timer.start("refreshStaticCache:preloadTripUpdates");
-	const allUpdates = gtfs.getRealtimeTripUpdates();
-	const injected = ctx.raw.injectedTripUpdates ?? [];
-	for (const update of allUpdates.concat(injected)) {
-		const tripId = update.trip.trip_id;
-		if (!tripId || !update.feed_id) continue;
-		const key = entityKey({ feedId: update.feed_id, localId: tripId });
-
-		const existing = ctx.augmented.tripUpdatesCache.get(key);
-		if (existing) {
-			existing.push(update);
-		} else {
-			ctx.augmented.tripUpdatesCache.set(key, [update]);
-		}
-	}
-	for (const [tripId, updates] of ctx.augmented.tripUpdatesCache) {
-		ctx.augmented.tripUpdateSignatures.set(tripId, tripUpdateSignature(updates));
-		await yieldBudget.maybeYield();
-	}
-	ctx.augmented.timer.stop("refreshStaticCache:preloadTripUpdates");
 
 	ctx.augmented.timer.start("refreshStaticCache:loadStops");
 	const stops = gtfs.getStops();
@@ -542,6 +593,29 @@ export async function refreshStaticCache(
 		applyLookbackEndTime(effectiveEnd);
 	}
 	ctx.augmented.timer.stop("refreshStaticCache:loadFrequencies");
+
+	ctx.augmented.timer.start("refreshStaticCache:preloadTripUpdates");
+	const allUpdates = gtfs.getRealtimeTripUpdates();
+	const injected = ctx.raw.injectedTripUpdates ?? [];
+	for (const update of applyRealtimeReplacementPrecedence(
+		mergeSupplementalTripUpdates(canonicalizeRealtimeTripUpdates(allUpdates.concat(injected), ctx), ctx),
+	)) {
+		const tripId = update.trip.trip_id;
+		if (!tripId || !update.feed_id) continue;
+		const key = entityKey({ feedId: update.feed_id, localId: tripId });
+
+		const existing = ctx.augmented.tripUpdatesCache.get(key);
+		if (existing) {
+			existing.push(update);
+		} else {
+			ctx.augmented.tripUpdatesCache.set(key, [update]);
+		}
+	}
+	for (const [tripId, updates] of ctx.augmented.tripUpdatesCache) {
+		ctx.augmented.tripUpdateSignatures.set(tripId, tripUpdateSignature(updates, ctx));
+		await yieldBudget.maybeYield();
+	}
+	ctx.augmented.timer.stop("refreshStaticCache:preloadTripUpdates");
 
 	rebuildServiceInverseIndexes(ctx);
 	const usableConsideredTrips = consideredTrips.filter((trip) =>
@@ -767,7 +841,9 @@ export async function refreshStaticCache(
 		(batch) => primeRawStopTimes(ctx, batch),
 		yieldBudget,
 	);
-	newAugmentedCache.trips = augmentedResults.filter((trip): trip is import("../utils/augmentedTrip.js").AugmentedTrip => trip !== null);
+	newAugmentedCache.trips = augmentedResults.filter(
+		(trip): trip is import("../utils/augmentedTrip.js").AugmentedTrip => trip !== null,
+	);
 	ctx.augmented.timer.stop("refreshStaticCache:augmentTrips");
 
 	rebuildAugmentedTripArrayIndex(ctx);
@@ -818,7 +894,10 @@ export async function refreshRealtimeCache(
 	const timer = ctx.augmented.timer;
 	timer.start("refreshRealtimeCache:collectChangedIds");
 	const allTripUpdates = applyRealtimeReplacementPrecedence(
-		canonicalizeRealtimeTripUpdates(tripUpdates.concat(ctx.raw.injectedTripUpdates ?? []), ctx),
+		mergeSupplementalTripUpdates(
+			canonicalizeRealtimeTripUpdates(tripUpdates.concat(ctx.raw.injectedTripUpdates ?? []), ctx),
+			ctx,
+		),
 	);
 	const nextUpdatesByTrip = new Map<string, typeof allTripUpdates>();
 	for (const update of allTripUpdates) {
@@ -830,7 +909,7 @@ export async function refreshRealtimeCache(
 		else nextUpdatesByTrip.set(tripKey, [update]);
 	}
 	const nextSignatures = new Map<string, string>();
-	for (const [tripId, updates] of nextUpdatesByTrip) nextSignatures.set(tripId, tripUpdateSignature(updates));
+	for (const [tripId, updates] of nextUpdatesByTrip) nextSignatures.set(tripId, tripUpdateSignature(updates, ctx));
 	const realtimeOnlyTrips = createRealtimeOnlyTrips(nextUpdatesByTrip, ctx);
 	const nextRealtimeOnlyTripKeys = new Set<string>();
 	for (const trip of realtimeOnlyTrips) {
@@ -851,12 +930,11 @@ export async function refreshRealtimeCache(
 			function: "refreshRealtimeCache",
 		},
 	);
-	const updatedTripIds = findChangedRealtimeTripIds(
-		augmentedCache.tripUpdateSignatures,
-		nextSignatures,
-		(tripKey) => augmentedCache.rawTripsRec.has(tripKey),
+	const updatedTripIds = findChangedRealtimeTripIds(augmentedCache.tripUpdateSignatures, nextSignatures, (tripKey) =>
+		augmentedCache.rawTripsRec.has(tripKey),
 	);
-	for (const tripKey of nextRealtimeOnlyTripKeys) if (!augmentedCache.tripsRec.has(tripKey)) updatedTripIds.add(tripKey);
+	for (const tripKey of nextRealtimeOnlyTripKeys)
+		if (!augmentedCache.tripsRec.has(tripKey)) updatedTripIds.add(tripKey);
 	// Cross-feed pairs share one passenger presentation: a realtime change on one
 	// side must also refresh the paired trip so the merged realtime stays current.
 	for (const pairedKey of expandTfnswChangedTripKeys(ctx, updatedTripIds)) updatedTripIds.add(pairedKey);

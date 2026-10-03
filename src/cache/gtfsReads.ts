@@ -19,6 +19,7 @@ import {
 	applyRealtimeReplacementPrecedence,
 	canonicalizeRealtimeTripUpdates,
 	canonicalizeRealtimeVehiclePositions,
+	mergeSupplementalTripUpdates,
 } from "./realtime.js";
 
 export function getCalendars(ctx: CacheContext, filter?: Partial<Calendar>): Calendar[] {
@@ -169,7 +170,7 @@ export function getTripUpdates(ctx: CacheContext, trip?: QualifiedEntityId): Rea
 	const updates = trip ? gtfs.getRealtimeTripUpdates({ feed_id: trip.feedId }) : gtfs.getRealtimeTripUpdates();
 	const injected = ctx.raw.injectedTripUpdates ?? [];
 	const allUpdates = applyRealtimeReplacementPrecedence(
-		canonicalizeRealtimeTripUpdates(updates.concat(injected), ctx),
+		mergeSupplementalTripUpdates(canonicalizeRealtimeTripUpdates(updates.concat(injected), ctx), ctx),
 	);
 
 	if (trip) {
@@ -189,16 +190,22 @@ export function getVehiclePositions(ctx: CacheContext, trip?: QualifiedEntityId)
 		? gtfs.getRealtimeVehiclePositions({ feed_id: trip.feedId })
 		: gtfs.getRealtimeVehiclePositions();
 	const injected = ctx.raw.injectedVehiclePositions ?? [];
-	const allPositions = canonicalizeRealtimeVehiclePositions(positions.concat(injected), ctx).filter((position) =>
-		ctx.config.network.plugins.every((plugin) => !plugin.feedIds.includes(position.feed_id) || plugin.considerVehiclePosition?.(position, ctx) !== false),
-	).map((position) => {
-		let enriched = position;
-		for (const plugin of ctx.config.network.plugins) {
-			if (!plugin.feedIds.includes(enriched.feed_id) || !plugin.enrichVehiclePosition) continue;
-			enriched = plugin.enrichVehiclePosition(enriched, ctx) ?? enriched;
-		}
-		return enriched;
-	});
+	const allPositions = canonicalizeRealtimeVehiclePositions(positions.concat(injected), ctx)
+		.filter((position) =>
+			ctx.config.network.plugins.every(
+				(plugin) =>
+					!plugin.feedIds.includes(position.feed_id) ||
+					plugin.considerVehiclePosition?.(position, ctx) !== false,
+			),
+		)
+		.map((position) => {
+			let enriched = position;
+			for (const plugin of ctx.config.network.plugins) {
+				if (!plugin.feedIds.includes(enriched.feed_id) || !plugin.enrichVehiclePosition) continue;
+				enriched = plugin.enrichVehiclePosition(enriched, ctx) ?? enriched;
+			}
+			return enriched;
+		});
 	if (trip)
 		return allPositions.filter(
 			(v: RealtimeVehiclePosition) => v.feed_id === trip.feedId && v.trip.trip_id === trip.localId,

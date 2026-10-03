@@ -3,6 +3,17 @@ import type { CacheContext } from "../cache/index.js";
 import { getEpochDayFromServiceDate, getServiceDateFromEpochDay } from "./time.js";
 import { entityKey, parseEntityKey } from "../identity.js";
 
+/** One-day lookups need no retained arrays; larger queries have a finite LRU. */
+const MAX_CALENDAR_QUERY_CACHE = 64;
+
+function cacheServiceDates(ctx: CacheContext, key: string, dates: string[]): void {
+	ctx.runtimeState.serviceDates.delete(key);
+	ctx.runtimeState.serviceDates.set(key, dates);
+	while (ctx.runtimeState.serviceDates.size > MAX_CALENDAR_QUERY_CACHE) {
+		ctx.runtimeState.serviceDates.delete(ctx.runtimeState.serviceDates.keys().next().value!);
+	}
+}
+
 function serviceKeyForTrip(trip: QualifiedEntityId, ctx: CacheContext): string {
 	const tripKey = entityKey(trip);
 	const rawTrip = ctx.raw.tripsByKey.get(tripKey);
@@ -30,7 +41,7 @@ function serviceDatesFromStaticCalendar(
 	const result: string[] = [];
 	for (let epochDay = first; epochDay <= last; epochDay++) {
 		const exception = exceptions?.get(epochDay);
-		const weekday = ((epochDay + 3) % 7 + 7) % 7;
+		const weekday = (((epochDay + 3) % 7) + 7) % 7;
 		const scheduled = rules.some(
 			(rule) =>
 				epochDay >= rule.startEpochDay &&
@@ -52,7 +63,10 @@ export function getServiceDatesByTrip(
 	const serviceKey = serviceKeyForTrip(trip, ctx);
 	const cacheKey = `${serviceKey}|${minEpochDay}|${maxEpochDay}`;
 	const cached = ctx.runtimeState.serviceDates.get(cacheKey);
-	if (cached) return cached;
+	if (cached) {
+		cacheServiceDates(ctx, cacheKey, cached);
+		return cached;
+	}
 	const fallbackDates = () => {
 		const gtfs = ctx.gtfs as typeof ctx.gtfs & {
 			getServiceDatesByTrip?: (value: QualifiedEntityId) => string[];
@@ -74,7 +88,7 @@ export function getServiceDatesByTrip(
 					(maxEpochDay < 0 || epochDay <= maxEpochDay)
 				);
 			});
-	ctx.runtimeState.serviceDates.set(cacheKey, result);
+	if (minEpochDay !== maxEpochDay || minEpochDay < 0) cacheServiceDates(ctx, cacheKey, result);
 	return result;
 }
 
@@ -88,7 +102,10 @@ export function getServiceDatesByService(
 	const serviceKey = entityKey(service);
 	const cacheKey = `service|${serviceKey}`;
 	const cached = ctx.runtimeState.serviceDates.get(cacheKey);
-	if (cached) return cached;
+	if (cached) {
+		cacheServiceDates(ctx, cacheKey, cached);
+		return cached;
+	}
 	const result = ctx.runtimeState.serviceCalendarLoaded
 		? serviceDatesFromStaticCalendar(serviceKey, ctx)
 		: typeof ctx.gtfs.getServiceDates === "function"
@@ -96,7 +113,7 @@ export function getServiceDatesByService(
 			: fallbackTrip
 				? ctx.gtfs.getServiceDatesByTrip(fallbackTrip)
 				: [];
-	ctx.runtimeState.serviceDates.set(cacheKey, result);
+	cacheServiceDates(ctx, cacheKey, result);
 	return result;
 }
 
@@ -152,7 +169,10 @@ export function rebuildServiceInverseIndexes(ctx: CacheContext): void {
 		const dates = getServiceDatesByService({ feedId, localId }, ctx);
 		for (const d of dates) {
 			let set = ctx.runtimeState.servicesByDateHandle.get(d);
-			if (!set) { set = new Set(); ctx.runtimeState.servicesByDateHandle.set(d, set); }
+			if (!set) {
+				set = new Set();
+				ctx.runtimeState.servicesByDateHandle.set(d, set);
+			}
 			set.add(serviceHandle);
 		}
 	}
@@ -169,7 +189,10 @@ export function rebuildServiceInverseIndexes(ctx: CacheContext): void {
 			if (exc !== 1) continue;
 			const date = getServiceDateFromEpochDay(epochDay);
 			let set = ctx.runtimeState.servicesByDateHandle.get(date);
-			if (!set) { set = new Set(); ctx.runtimeState.servicesByDateHandle.set(date, set); }
+			if (!set) {
+				set = new Set();
+				ctx.runtimeState.servicesByDateHandle.set(date, set);
+			}
 			set.add(serviceHandle);
 		}
 	}

@@ -5,7 +5,12 @@ import { augmentTrip, calculateRunSeries } from "../utils/augmentedTrip.js";
 import type { AugmentedTrip, AugmentedTripInstance, RunSeries } from "../utils/augmentedTrip.js";
 import type { AugmentedStopTime } from "../utils/augmentedStopTime.js";
 import { addVehicleModel } from "../utils/vehicleModel.js";
-import { addDaysToServiceDate, getEpochDayFromServiceDate, getServiceDayStart } from "../utils/time.js";
+import {
+	addDaysToServiceDate,
+	getEpochDayFromServiceDate,
+	getServiceDateFromEpochDay,
+	getServiceDayStart,
+} from "../utils/time.js";
 import {
 	applySeqDiagramToInstances,
 	patchSeqDiagramOntoAugmentedTrip,
@@ -52,7 +57,12 @@ function evictOldestRunSeriesDates(ctx: CacheContext): void {
 	}
 }
 
-function evictOldestRunSeriesEntries(dateMap: Map<string, { series: string; date: string; trips: string[]; vehicle_sightings: { vehicle_id: string; trip_id: string }[] }>): void {
+function evictOldestRunSeriesEntries(
+	dateMap: Map<
+		string,
+		{ series: string; date: string; trips: string[]; vehicle_sightings: { vehicle_id: string; trip_id: string }[] }
+	>,
+): void {
 	while (dateMap.size > MAX_RUN_SERIES_PER_DATE) {
 		const oldest = dateMap.keys().next().value as string | undefined;
 		if (oldest === undefined) break;
@@ -371,10 +381,14 @@ function evictStartServiceDate(ctx: CacheContext, serviceDate: string): void {
 	refreshDiagramAfterInstanceChange(ctx, affectedTripIds);
 }
 
-function touchLazyServiceDate(ctx: CacheContext, serviceDate: string): void {
+function touchLazyServiceDate(
+	ctx: CacheContext,
+	serviceDate: string,
+	complete = ctx.runtimeState.lazyServiceDates.get(serviceDate) ?? false,
+): void {
 	const lru = ctx.runtimeState.lazyServiceDates;
 	lru.delete(serviceDate);
-	lru.set(serviceDate, true);
+	lru.set(serviceDate, complete);
 	while (lru.size > MAX_LAZY_SERVICE_DATES) {
 		const oldest = lru.keys().next().value as string | undefined;
 		if (oldest === undefined) break;
@@ -384,18 +398,39 @@ function touchLazyServiceDate(ctx: CacheContext, serviceDate: string): void {
 }
 
 /** Materialize one calendar start date into the authoritative augmented indexes. */
-export function ensureStartServiceDateMaterialized(ctx: CacheContext, serviceDate: string): void {
-	if (!/^\d{8}$/.test(serviceDate) || !Number.isFinite(getEpochDayFromServiceDate(serviceDate))) return;
-	if (ctx.runtimeState.operationalServiceDates.has(serviceDate)) return;
-	if (ctx.runtimeState.lazyServiceDates.has(serviceDate)) {
+export function ensureStartServiceDateMaterialized(
+	ctx: CacheContext,
+	serviceDate: string,
+	trip?: QualifiedEntityId,
+): void {
+	const epochDay = getEpochDayFromServiceDate(serviceDate);
+	if (
+		!/^\d{8}$/.test(serviceDate) ||
+		!Number.isFinite(epochDay) ||
+		getServiceDateFromEpochDay(epochDay) !== serviceDate
+	)
+		return;
+	const requestedKey = trip ? entityKey(trip) : null;
+	const requestedTrip = requestedKey ? ctx.augmented.rawTripsRec.get(requestedKey) : null;
+	if (trip && !requestedTrip) return;
+	if (!trip && ctx.runtimeState.operationalServiceDates.has(serviceDate)) return;
+	if (ctx.runtimeState.lazyServiceDates.get(serviceDate) === true) {
 		touchLazyServiceDate(ctx, serviceDate);
 		return;
 	}
+	if (
+		requestedKey &&
+		ctx.augmented.tripsRec.get(requestedKey)?.instances.some((instance) => instance.serviceDate === serviceDate)
+	) {
+		if (!ctx.runtimeState.operationalServiceDates.has(serviceDate)) touchLazyServiceDate(ctx, serviceDate);
+		return;
+	}
 
-	const epochDay = getEpochDayFromServiceDate(serviceDate);
 	const affectedTripIds = new Set<string>();
+	const selectedTrips =
+		requestedKey && requestedTrip ? [[requestedKey, requestedTrip] as const] : ctx.augmented.rawTripsRec;
 	const eligible: Array<{ tripKey: string; rawTrip: qdf.Trip; scheduled: boolean }> = [];
-	for (const [tripKey, rawTrip] of ctx.augmented.rawTripsRec) {
+	for (const [tripKey, rawTrip] of selectedTrips) {
 		const tripRef = { feedId: rawTrip.feed_id, localId: rawTrip.trip_id };
 		const scheduled = getServiceDatesByTrip(tripRef, ctx, epochDay, epochDay).includes(serviceDate);
 		const hasRealtime = (ctx.augmented.tripUpdatesCache.get(tripKey) ?? []).some(
@@ -404,10 +439,12 @@ export function ensureStartServiceDateMaterialized(ctx: CacheContext, serviceDat
 		if (!scheduled && !hasRealtime) continue;
 		eligible.push({ tripKey, rawTrip, scheduled });
 	}
-
 	for (let offset = 0; offset < eligible.length; offset += 250) {
 		const batch = eligible.slice(offset, offset + 250);
-		primeRawStopTimes(ctx, batch.map(({ rawTrip }) => rawTrip));
+		primeRawStopTimes(
+			ctx,
+			batch.map(({ rawTrip }) => rawTrip),
+		);
 		for (const { tripKey, rawTrip, scheduled } of batch) {
 			const existing = ctx.augmented.tripsRec.get(tripKey);
 			const dateTrip = augmentTrip(rawTrip, ctx, ctx.augmented.tripUpdatesCache, existing, {
@@ -430,7 +467,9 @@ export function ensureStartServiceDateMaterialized(ctx: CacheContext, serviceDat
 			existing.instances = existing.instances
 				.filter((instance) => instance.serviceDate !== serviceDate)
 				.concat(nextInstances)
-				.sort((a, b) => a.serviceDate.localeCompare(b.serviceDate) || a.instance_id.localeCompare(b.instance_id));
+				.sort(
+					(a, b) => a.serviceDate.localeCompare(b.serviceDate) || a.instance_id.localeCompare(b.instance_id),
+				);
 			if (scheduled && !existing.scheduledStartServiceDates.includes(serviceDate)) {
 				existing.scheduledStartServiceDates.push(serviceDate);
 				existing.scheduledStartServiceDates.sort();
@@ -440,7 +479,7 @@ export function ensureStartServiceDateMaterialized(ctx: CacheContext, serviceDat
 		}
 	}
 
-	touchLazyServiceDate(ctx, serviceDate);
+	if (!ctx.runtimeState.operationalServiceDates.has(serviceDate)) touchLazyServiceDate(ctx, serviceDate, !trip);
 	refreshDiagramAfterInstanceChange(ctx, affectedTripIds);
 	buildTfnswCrossFeedIndex(ctx);
 }
@@ -623,9 +662,10 @@ export function getAugmentedTripInstance(ctx: CacheContext, instance_id: string)
 	try {
 		const identity = decodeTripInstanceId(instance_id);
 		if (identity.networkId !== ctx.config.network.id) return null;
-		ensureStartServiceDateMaterialized(ctx, identity.serviceDate);
-		if (getTfnswCrossFeedPair(ctx, instance_id)) return getTfnswCanonicalTripInstance(ctx, instance_id);
 		const tripRef = { feedId: identity.feedId, localId: identity.localId };
+		if (!ctx.augmented.rawTripsRec.has(entityKey(tripRef))) return null;
+		ensureStartServiceDateMaterialized(ctx, identity.serviceDate, tripRef);
+		if (getTfnswCrossFeedPair(ctx, instance_id)) return getTfnswCanonicalTripInstance(ctx, instance_id);
 		const trip = ctx.augmented.tripsRec.get(entityKey(tripRef));
 		if (trip) {
 			const inst = trip.instances.find((v) => v.instance_id === instance_id);
@@ -661,7 +701,7 @@ export function getVehicleTripInstance(
 
 	const startDate = vehicle.trip.start_date;
 	if (startDate) {
-		ensureStartServiceDateMaterialized(ctx, startDate);
+		ensureStartServiceDateMaterialized(ctx, startDate, { feedId: vehicle.feed_id, localId: tripId });
 		const candidates = augmentedTrip.instances.filter((i) => i.serviceDate === startDate);
 		if (candidates.length === 0) return null;
 		if (candidates.length === 1) return candidates[0];

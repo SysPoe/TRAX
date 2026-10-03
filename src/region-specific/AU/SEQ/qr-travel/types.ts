@@ -159,8 +159,12 @@ export interface QRTTravelTrip {
 	offersGoldClass: boolean;
 	serviceDate: string;
 	sourceModifiedAt?: string;
+	/** Successful service-tracking observation, independent of the native GTFS clock. */
+	observedAt?: string;
 	departureDate: string;
 	stops: QRTTravelStopTime[];
 	stopsWithPassing?: QRTSRTStop[];
 	disruption?: QRTServiceDisruption;
 }
+
+export type QrtObservation = { observedAt: string | null; revision: number };

@@ -527,6 +527,7 @@ async function processService(
 				});
 				return {
 					...travelTrip,
+					observedAt: new Date(Date.now()).toISOString(),
 					stopsWithPassing: expanded,
 				};
 			} else {
@@ -578,6 +579,9 @@ export async function getCurrentQRTravelTrains(ctx: CacheContext, retries = 2): 
 		});
 		await Promise.all(workers);
 		const travelTrips = results.filter((trip): trip is QRTTravelTrip => trip !== null);
+		if (tasks.length > 0 && travelTrips.length === 0) {
+			throw new Error("No QRT service tracking observation succeeded");
+		}
 
 		return travelTrips;
 	} catch (error) {
