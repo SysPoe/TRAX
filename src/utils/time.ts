@@ -101,11 +101,12 @@ export function getTimezoneOffsetSeconds(timezone: string, date: Date = new Date
 	return hours * 3600 + (hours >= 0 ? minutes : -minutes) * 60;
 }
 
+/** GTFS times are elapsed seconds from local noon minus twelve hours, including DST days. */
 export function getServiceDayStart(serviceDate: string, timezone: string): number {
 	if (!/^\d{8}$/.test(serviceDate)) return 0;
-	const localMidnight = `${serviceDate.slice(0, 4)}-${serviceDate.slice(4, 6)}-${serviceDate.slice(6, 8)}T00:00:00`;
-	const midnightMs = parseTimeWithConfig(localMidnight, timezone);
-	return Number.isFinite(midnightMs) && midnightMs !== 0 ? midnightMs / 1000 : 0;
+	const localNoon = `${serviceDate.slice(0, 4)}-${serviceDate.slice(4, 6)}-${serviceDate.slice(6, 8)}T12:00:00`;
+	const noonMs = parseTimeWithConfig(localNoon, timezone);
+	return Number.isFinite(noonMs) && noonMs !== 0 ? noonMs / 1000 - 43_200 : 0;
 }
 
 export function serviceTimeToInstant(serviceDate: ServiceDate | string, serviceTime: GtfsTime | number, timezone: string): Instant {

@@ -296,11 +296,19 @@ try {
 	assert.equal(availableBooking?.fareClasses[0]?.minimumAvailability, 133);
 	for (const entry of qrtBookingCache.inventory.values()) entry.expiresAt = 0;
 	qrtBookingProviderFails = true;
-	assert.equal(
+	assert.deepEqual(
 		await getQrtBookingAvailability(cachedBookingTrip, qrtBookingContext),
-		availableBooking,
-		"QRT booking refresh failures should retain the last observed availability",
+		{ ...availableBooking, stale: true },
+		"QRT booking refresh failures must label retained availability as stale",
 	);
+	const coldContext = { pluginState: new Map(), config: { requestTimeoutMs: 5_000 } };
+	const coldState = qrtBookingState(coldContext);
+	coldState.signer = qrtBookingCache.signer;
+	coldState.signerExpiresAt = Number.MAX_SAFE_INTEGER;
+	coldState.stations = qrtBookingCache.stations;
+	coldState.stationsExpiresAt = Number.MAX_SAFE_INTEGER;
+	await assert.rejects(getQrtBookingAvailability(cachedBookingTrip, coldContext), /simulated QRT booking outage/);
+	assert.equal(coldState.inFlight.size, 0, "a failed QRT request must remain retryable");
 	assert.equal(
 		await getQrtBookingAvailability(
 			{
@@ -2978,12 +2986,12 @@ try {
 	assert.equal(new Date(winter).toISOString(), "2026-01-15T17:00:00.000Z");
 	assert.equal(new Date(summer).toISOString(), "2026-07-15T16:00:00.000Z");
 	const serviceOriginCases = [
-		["20260308", "America/Toronto", "2026-03-08T05:00:00.000Z"],
-		["20261101", "America/Toronto", "2026-11-01T04:00:00.000Z"],
-		["20260329", "Europe/London", "2026-03-29T00:00:00.000Z"],
-		["20261025", "Europe/London", "2026-10-24T23:00:00.000Z"],
-		["20260405", "Australia/Sydney", "2026-04-04T13:00:00.000Z"],
-		["20261004", "Australia/Sydney", "2026-10-03T14:00:00.000Z"],
+		["20260308", "America/Toronto", "2026-03-08T04:00:00.000Z"],
+		["20261101", "America/Toronto", "2026-11-01T05:00:00.000Z"],
+		["20260329", "Europe/London", "2026-03-28T23:00:00.000Z"],
+		["20261025", "Europe/London", "2026-10-25T00:00:00.000Z"],
+		["20260405", "Australia/Sydney", "2026-04-04T14:00:00.000Z"],
+		["20261004", "Australia/Sydney", "2026-10-03T13:00:00.000Z"],
 		["20260115", "Australia/Brisbane", "2026-01-14T14:00:00.000Z"],
 		["20260715", "Australia/Brisbane", "2026-07-14T14:00:00.000Z"],
 	];

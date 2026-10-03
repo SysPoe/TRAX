@@ -2,16 +2,18 @@ import type { RealtimeVehiclePosition } from "qdf-gtfs";
 import { DropOffType, PickupType, StopTimeScheduleRelationship, TripScheduleRelationship } from "qdf-gtfs";
 import type { CacheContext } from "../../../cache/types.js";
 import type { AugmentedTripInstance } from "../../../utils/augmentedTrip.js";
+import { remainingBookingJourney } from "../../../utils/bookingJourney.js";
 import {
 	createVehicleFormation,
 	type VehicleBookingAvailability,
+	type VehicleBookingAvailabilityStatus,
 	type VehicleFormation,
 	type VehicleFormationUnit,
 	type VehicleInfo,
 } from "../../../utils/vehicleModel.js";
 import { getVehiclePositions } from "../../../cache/gtfsReads.js";
 import logger from "../../../utils/logger.js";
-import { getServiceDayStart, parseTimeWithConfig, serviceTimeToInstant } from "../../../utils/time.js";
+import { getLocalISOString, getServiceDayStart, parseTimeWithConfig, serviceTimeToInstant } from "../../../utils/time.js";
 import { AnyTripPlatformClient, type AnyTripPlatformCall } from "./anytrip.js";
 import { saveVLineBookingSnapshots, shouldPrefetchVLineBooking, vlineBookingSnapshotKey } from "./booking-snapshots.js";
 import { getVLineState } from "./state.js";
@@ -932,6 +934,7 @@ export const _test = {
 	platformPriority,
 	bookingSnapshotExpiry,
 	scheduledInstant,
+	scheduledLocalDateTime,
 	quarantineCanceledVLineTrip,
 };
 
@@ -1000,16 +1003,8 @@ export function journeyLocationName(
 }
 
 function scheduledLocalDateTime(trip: AugmentedTripInstance, seconds: number | null | undefined): string | null {
-	if (seconds == null) return null;
-	const dayOffset = Math.floor(seconds / 86_400);
-	const date = new Date(Date.UTC(
-		Number(trip.serviceDate.slice(0, 4)), Number(trip.serviceDate.slice(4, 6)) - 1,
-		Number(trip.serviceDate.slice(6, 8)) + dayOffset,
-	));
-	const local = ((seconds % 86_400) + 86_400) % 86_400;
-	const day = date.toISOString().slice(0, 10);
-	const time = `${Math.floor(local / 3600).toString().padStart(2, "0")}:${Math.floor((local % 3600) / 60).toString().padStart(2, "0")}:${(local % 60).toString().padStart(2, "0")}`;
-	return `${day}T${time}`;
+	const instant = scheduledInstant(trip, seconds);
+	return instant == null ? null : getLocalISOString(new Date(instant), "Australia/Melbourne");
 }
 
 function bookingSnapshotKeyForTrip(
@@ -1103,15 +1098,17 @@ async function cachedBookingAvailability(
 	destination: string,
 	scheduledDepartureTime: string,
 	timeoutMs: number | undefined,
+	searchDate = trip.serviceDate,
 ) {
-	const state = getVLineState(ctx), key = trip.instance_id;
+	const state = getVLineState(ctx), key = bookingSnapshotKeyForTrip(trip, origin, destination, scheduledDepartureTime);
 	const cached = state.bookingCache.get(key);
 	if (cached && cached.expiresAt > Date.now()) return cached.availability;
 	const active = state.bookingInFlight.get(key);
 	if (active) return active;
 	const request = getVLineWebBookingAvailability(
-		origin, destination, trip.serviceDate, vlineTdn(trip.trip_id)!, scheduledDepartureTime, timeoutMs,
+		origin, destination, searchDate, vlineTdn(trip.trip_id)!, scheduledDepartureTime, timeoutMs,
 	).then((availability) => {
+		if (availability) availability.journey = { origin, destination };
 		state.bookingCache.set(key, {
 			availability,
 			expiresAt: Date.now() + (availability ? ON_DEMAND_JOURNEY_TTL_MS : MISSING_BOOKING_TTL_MS),
@@ -1214,26 +1211,34 @@ export async function getVLineVehicleFormation(
 ): Promise<VehicleFormation | null> {
 	if (trip.feed_id !== "vic-vline") return null;
 	const first = firstScheduledCall(trip), last = lastScheduledCall(trip);
+	const remaining = remainingBookingJourney(trip, "Australia/Melbourne");
+	const boarding = remaining ? firstScheduledCall(remaining) : first;
 	const details = detailsFor(ctx, trip);
 	if (!details) return null;
 	const locationResult = options.journeyPlanner
 		? await platformLocationsForPolling(getVLineState(ctx), options.journeyPlanner, options.requestTimeoutMs)
 		: null;
 	const locations = locationResult?.locations ?? [];
-	const origin = journeyLocationName(first ? callName(first) : null, locations);
+	const origin = journeyLocationName(boarding ? callName(boarding) : null, locations);
+	const serviceOrigin = journeyLocationName(first ? callName(first) : null, locations);
 	const destination = journeyLocationName(last ? callName(last) : null, locations);
 	const scheduled = first?.scheduled_departure_time ?? first?.scheduled_arrival_time;
 	const scheduledDepartureTime = scheduledLocalDateTime(trip, scheduled);
+	const boardingDate = scheduledLocalDateTime(trip, boarding?.scheduled_departure_time ?? boarding?.scheduled_arrival_time)
+		?.slice(0, 10).replaceAll("-", "") ?? trip.serviceDate;
 	const bookingSnapshotKey = origin && destination && scheduledDepartureTime
 		? bookingSnapshotKeyForTrip(trip, origin, destination, scheduledDepartureTime)
 		: null;
+	// Inventory for a previous boarding station must never carry into the next segment.
+	if (details.bookingAvailability?.journey?.origin !== origin) details.bookingAvailability = null;
 	if (bookingSnapshotKey) restoreBookingSnapshot(ctx, details, bookingSnapshotKey);
+	let bookingStatus: VehicleBookingAvailabilityStatus = remaining ? "no-match" : "closed";
 
 	let service: VLineJourneyPlannerService | null = null;
-	if (options.journeyPlanner && origin && destination) {
+	if (options.journeyPlanner && serviceOrigin && destination) {
 		try {
 			const services = await cachedJourneyServices(
-				ctx, options.journeyPlanner, origin, destination, trip.serviceDate, options.requestTimeoutMs,
+				ctx, options.journeyPlanner, serviceOrigin, destination, trip.serviceDate, options.requestTimeoutMs,
 			);
 			const matches = services.filter((candidate) => serviceMatchesTrip(candidate, trip));
 			service = matches.find((candidate) => candidate.scheduledDepartureTime === scheduledDepartureTime) ?? matches[0] ?? null;
@@ -1243,24 +1248,29 @@ export async function getVLineVehicleFormation(
 		}
 	}
 
-	if (origin && destination && scheduledDepartureTime && journeyServiceSupportsBooking(service)) {
+	// The SOAP API has a rolling window. A dated public-page lookup also covers later services.
+	if (remaining && origin && destination && scheduledDepartureTime) {
 		try {
 			const booking = await cachedBookingAvailability(
-				ctx, trip, origin, destination, scheduledDepartureTime, options.requestTimeoutMs,
+				ctx, trip, origin, destination, scheduledDepartureTime, options.requestTimeoutMs, boardingDate,
 			);
 			if (booking) {
+				bookingStatus = "available";
 				if ((booking.unreservedTicketsAvailable ?? 0) <= 0) {
 					booking.reservationRequired ||= service?.reservationRequired ?? false;
 				}
 				if (booking.reservedCarriages.length === 0 && service?.reservedCarriages.length) {
 					booking.reservedCarriages = [...service.reservedCarriages];
 				}
-				booking.reservedSeatsAvailable ??= reportedAvailabilityCount(service?.reservedSeatsAvailable);
-				booking.unreservedTicketsAvailable ??= reportedAvailabilityCount(service?.unreservedTicketsAvailable);
+				if (boarding === first) {
+					booking.reservedSeatsAvailable ??= reportedAvailabilityCount(service?.reservedSeatsAvailable);
+					booking.unreservedTicketsAvailable ??= reportedAvailabilityCount(service?.unreservedTicketsAvailable);
+				}
 				details.bookingAvailability = booking;
 				if (bookingSnapshotKey) persistBookingSnapshot(ctx, trip, bookingSnapshotKey, booking);
 			}
 		} catch {
+			bookingStatus = "error";
 			// Formation data remains useful when the public booking page is temporarily unavailable.
 		}
 	}
@@ -1284,7 +1294,11 @@ export async function getVLineVehicleFormation(
 		journeyUrl: details.bookingAvailability.journeyUrl,
 		source: "V/Line Journey Planner",
 		observedAt: details.bookingAvailability.observedAt,
-	} : vlineServiceBookingAvailability(service, new Date().toISOString());
+		timeZone: "Australia/Melbourne",
+		journey: details.bookingAvailability.journey ?? (origin && destination ? { origin, destination } : undefined),
+		bookingClosed: !remaining,
+		stale: bookingStatus !== "available" || Date.now() - Date.parse(details.bookingAvailability.observedAt) >= ON_DEMAND_JOURNEY_TTL_MS,
+	} : boarding === first && remaining ? vlineServiceBookingAvailability(service, new Date().toISOString()) : null;
 	const observed = details.fullConsist ?? details.subtype ?? details.passengerCars;
 	const formationSource = observed?.source === "vline-platform-services" ? "V/Line Platform Services"
 		: observed ? "V/Line Journey Planner" : null;
@@ -1297,6 +1311,8 @@ export async function getVLineVehicleFormation(
 		source: formationSource,
 		observedAt: observed?.observedAt ?? null,
 		bookingAvailability: booking,
+		bookingAvailabilityStatus: bookingStatus === "error" || bookingStatus === "closed" ? bookingStatus
+			: booking ? "available" : bookingStatus,
 	});
 }
 

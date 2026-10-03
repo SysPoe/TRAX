@@ -24,7 +24,7 @@ const SEAT_MAP_URL =
 	"https://queenslandrailtravel-booking.opendestinations.com/bookingsiteapi/api/rail/InteractiveSeatMap";
 const STATE_ID = "au-seq-qrt-seat-map";
 /** Availability is a snapshot; refresh at most this often and serve stale data meanwhile. */
-const SEAT_MAP_TTL_MS = 30 * 60 * 1000;
+const SEAT_MAP_TTL_MS = 5 * 60 * 1000;
 const MISSING_SEAT_MAP_TTL_MS = 60 * 1000;
 /** Candidate provider services rarely change within a schedule day. */
 const CANDIDATE_TTL_MS = 30 * 60 * 1000;
@@ -88,6 +88,8 @@ export type QrtBookingSeatMap = {
 	asOf: string;
 	/** True when booking has closed and this is the last collected snapshot. */
 	bookingClosed?: boolean;
+	/** A previous observation served during refresh or following a provider failure. */
+	stale?: boolean;
 	carriages: QrtBookingSeatMapCarriage[];
 };
 
@@ -509,7 +511,7 @@ export async function fetchQrtSeatMapForCandidate(
 }
 
 /**
- * Booking-oriented seat map for a tracked QRT run. Fresh for 30 minutes; after
+ * Booking-oriented seat map for a tracked QRT run. Fresh for five minutes; after
  * that the last cached map is served immediately while a refresh runs in the
  * background. Availability is a timestamped snapshot, never live occupancy.
  */
@@ -532,25 +534,29 @@ export async function getQrtBookingSeatMap(
 
 	const refresh = async (): Promise<QrtBookingSeatMap | null> => {
 		try {
-			const map = (await fetchMap(service, ctx, state)) ?? archived;
+			const fresh = await fetchMap(service, ctx, state);
+			const previous = cached?.map ?? archived;
+			const map = fresh ?? (previous ? { ...previous, stale: true } : null);
 			state.seatMaps.set(key, {
 				map,
-				expiresAt: Date.now() + (map ? SEAT_MAP_TTL_MS : MISSING_SEAT_MAP_TTL_MS),
+				expiresAt: Date.now() + (fresh ? SEAT_MAP_TTL_MS : MISSING_SEAT_MAP_TTL_MS),
 			});
 			return map;
-		} catch {
-			// Keep serving the last map on refresh failure; brief negative cache otherwise.
-			state.seatMaps.set(key, { map: cached?.map ?? null, expiresAt: Date.now() + MISSING_SEAT_MAP_TTL_MS });
-			return cached?.map ?? null;
+		} catch (error) {
+			// Keep the last map on refresh failure; a missing map must expose the error.
+			if (!cached?.map) throw error;
+			const map = { ...cached.map, stale: true };
+			state.seatMaps.set(key, { map, expiresAt: Date.now() + MISSING_SEAT_MAP_TTL_MS });
+			return map;
 		} finally {
 			state.inFlight.delete(key);
 		}
 	};
 
-	if (cached) {
+	if (cached?.map) {
 		// Stale-while-revalidate: hand back the last map now, refresh quietly.
 		if (!state.inFlight.has(key)) state.inFlight.set(key, refresh());
-		return cached.map;
+		return { ...cached.map, stale: true };
 	}
 	const active = state.inFlight.get(key);
 	if (active) return active;

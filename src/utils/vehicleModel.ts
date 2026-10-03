@@ -83,9 +83,14 @@ export type VehicleBookingAvailability = {
 	source: string;
 	observedAt: string;
 	timeZone?: string;
+	/** Stations checked for this inventory, which may start after the train's origin. */
+	journey?: { origin: string; destination: string };
+	/** Inventory retained after a failed refresh or after booking has closed. */
+	stale?: boolean;
+	bookingClosed?: boolean;
 };
 
-export type VehicleBookingAvailabilityStatus = "available" | "unavailable";
+export type VehicleBookingAvailabilityStatus = "available" | "unavailable" | "error" | "no-match" | "sold-out" | "closed" | "unsupported";
 
 export type VehicleFormationMetadata = {
 	accessibleSpaces?: number | null;

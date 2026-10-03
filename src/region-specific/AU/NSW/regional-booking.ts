@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { remainingBookingJourney } from "../../../utils/bookingJourney.js";
+import { getLocalISOString, serviceTimeToInstant } from "../../../utils/time.js";
 import type { CacheContext } from "../../../cache/types.js";
 import type { AugmentedTripInstance } from "../../../utils/augmentedTrip.js";
 import logger from "../../../utils/logger.js";
@@ -7,13 +9,12 @@ import {
 	createVehicleFormation,
 	type VehicleBookingAvailability,
 	type VehicleBookingFareClass,
+	type VehicleBookingAvailabilityStatus,
 	type VehicleFormation,
 } from "../../../utils/vehicleModel.js";
 
 const DEFAULT_PAGE_URL = "https://transportnsw.info/regional-travel/trip-selection";
-const DEFAULT_ACTION_ID = "7f0d1acc145b1083b6d4195f42bc401b36df4427c9";
 const STATION_CACHE_MS = 6 * 60 * 60 * 1000;
-const STATION_RETRY_MS = 5 * 60 * 1000;
 const INVENTORY_CACHE_MS = 5 * 60 * 1000;
 const MISSING_INVENTORY_CACHE_MS = 60 * 1000;
 const INVENTORY_PRUNE_INTERVAL_MS = 60 * 1000;
@@ -64,10 +65,14 @@ type RegionalTrip = {
 type RegionalBookingState = {
 	stationCodes: Map<string, string> | null;
 	stationCodesExpiresAt: number;
-	inventory: Map<string, { availability: VehicleBookingAvailability | null; expiresAt: number }>;
-	inFlight: Map<string, Promise<VehicleBookingAvailability | null>>;
+	action: { id: string; expiresAt: number } | null;
+	actionInFlight: Promise<string> | null;
+	inventory: Map<string, BookingResult & { expiresAt: number }>;
+	inFlight: Map<string, Promise<BookingResult>>;
 	lastInventoryPruneAt: number;
 };
+
+type BookingResult = { availability: VehicleBookingAvailability | null; status: VehicleBookingAvailabilityStatus };
 
 let lastEmptyResultWarningAt = 0;
 
@@ -175,7 +180,7 @@ function parseRegionalTrip(value: unknown): RegionalTrip | null {
 		? item.legs.map(parseLeg).filter((leg): leg is RegionalLeg => leg !== null)
 		: [];
 	const offers = record(item?.offers);
-	if (!item || !origin || !destination || !offers || !legs.length) return null;
+	if (!item || !origin || !destination || !offers || !legs.length || !Object.keys(offers).length) return null;
 	const originId = stringValue(origin.id),
 		originName = stringValue(origin.name);
 	const destinationId = stringValue(destination.id),
@@ -183,8 +188,10 @@ function parseRegionalTrip(value: unknown): RegionalTrip | null {
 	if (!originId || !originName || !destinationId || !destinationName) return null;
 	const parsedOffers: Record<string, RegionalOffer[]> = {};
 	for (const [classCode, value] of Object.entries(offers)) {
-		if (!Array.isArray(value)) continue;
-		parsedOffers[classCode] = value.map(parseOffer).filter((offer): offer is RegionalOffer => offer !== null);
+		if (!Array.isArray(value)) return null;
+		const parsed = value.map(parseOffer);
+		if (parsed.some((offer) => offer === null)) return null;
+		parsedOffers[classCode] = parsed as RegionalOffer[];
 	}
 	return {
 		origin: { id: originId, name: originName },
@@ -202,9 +209,11 @@ export function parseTfnswRegionalSearchResponse(body: string): RegionalTrip[] {
 		});
 		const result = record(value);
 		if (!result || !Array.isArray(result.trips)) continue;
-		return result.trips.map(parseRegionalTrip).filter((trip): trip is RegionalTrip => trip !== null);
+		const trips = result.trips.map(parseRegionalTrip);
+		if (trips.some((trip) => trip === null)) throw new Error("TfNSW regional search returned an invalid trip");
+		return trips as RegionalTrip[];
 	}
-	return [];
+	throw new Error("TfNSW regional search response did not contain trips");
 }
 
 function normalizeStationName(value: string): string {
@@ -232,7 +241,7 @@ function stationKey(feedId: string, localId: string): string {
 }
 
 async function fetchStations(options: TfnswRegionalBookingOptions, timeoutMs: number): Promise<RegionalStation[]> {
-	const pageUrl = options.pageUrl ?? DEFAULT_PAGE_URL;
+	const pageUrl = bookingLandingUrl(options);
 	const response = await fetch(pageUrl, {
 		signal: AbortSignal.timeout(timeoutMs),
 		headers: {
@@ -254,23 +263,13 @@ async function stationMap(
 	if (state.stationCodes && state.stationCodesExpiresAt > now) return state.stationCodes;
 	const result = new Map(Object.entries(DEFAULT_STATION_CODES));
 	for (const [key, code] of Object.entries(options.stationCodes ?? {})) result.set(key, code);
-	let cacheDuration = STATION_CACHE_MS;
-	try {
-		const stations = await fetchStations(options, timeoutMs);
-		if (stations.length === 0) throw new Error("TfNSW regional station list was empty");
-		for (const station of stations) {
-			result.set(`name:${normalizeStationName(station.name)}`, station.id);
-		}
-	} catch (error) {
-		cacheDuration = STATION_RETRY_MS;
-		const message = error instanceof Error ? error.message : String(error);
-		logger.warn(`TfNSW regional station list unavailable: ${message}. Retrying soon.`, {
-			module: "TfNSW regional booking",
-			function: "stationMap",
-		});
+	const stations = await fetchStations(options, timeoutMs);
+	if (stations.length === 0) throw new Error("TfNSW regional station list was empty");
+	for (const station of stations) {
+		result.set(`name:${normalizeStationName(station.name)}`, station.id);
 	}
 	state.stationCodes = result;
-	state.stationCodesExpiresAt = now + cacheDuration;
+	state.stationCodesExpiresAt = now + STATION_CACHE_MS;
 	return result;
 }
 
@@ -310,11 +309,8 @@ function scheduledDepartureIdentity(
 		.find((time): time is number => time != null);
 	const date = isoDate(serviceDate);
 	if (seconds == null || !date) return null;
-	const dayOffset = Math.floor(seconds / 86_400);
-	const minute = Math.floor((((seconds % 86_400) + 86_400) % 86_400) / 60);
-	const [year, month, day] = date.split("-").map(Number);
-	const serviceDay = new Date(Date.UTC(year, month - 1, day + dayOffset));
-	return { date: serviceDay.toISOString().slice(0, 10), minute };
+	const departure = getLocalISOString(new Date(serviceTimeToInstant(serviceDate, seconds, "Australia/Sydney")), "Australia/Sydney");
+	return regionalDepartureIdentity(departure);
 }
 
 function regionalDepartureIdentity(value: string): { date: string; minute: number } | null {
@@ -324,7 +320,10 @@ function regionalDepartureIdentity(value: string): { date: string; minute: numbe
 }
 
 function bookingServiceNumber(trip: AugmentedTripInstance, ctx: CacheContext): string | null {
-	return ctx.gtfs?.getRoutes({ feed_id: trip.feed_id, route_id: trip.route_id })[0]?.route_short_name?.trim() ?? null;
+	const route = ctx.gtfs?.getRoutes({ feed_id: trip.feed_id, route_id: trip.route_id })[0]?.route_short_name?.trim();
+	// TrainLink's interstate booking codes include a 6 prefix (ST21 becomes 621).
+	const interstate = /^ST(\d{2})$/i.exec(route ?? trip.trip_number ?? "");
+	return interstate ? `6${interstate[1]}` : route ?? null;
 }
 
 function matchesTrip(
@@ -338,6 +337,8 @@ function matchesTrip(
 	if (candidate.origin.id !== originCode || candidate.destination.id !== destinationCode) return null;
 	const wantedDeparture = scheduledDepartureIdentity(trip, serviceDate);
 	if (!wantedDeparture) return null;
+	// Whole-journey offers cannot be attributed to one train in a connecting itinerary.
+	if (candidate.legs.length !== 1) return null;
 	return (
 		candidate.legs.find((leg) => {
 			const departure = regionalDepartureIdentity(leg.startDate);
@@ -345,10 +346,51 @@ function matchesTrip(
 				leg.service.carrier.toLowerCase() === "nsw trainlink" &&
 				(!serviceNumber || normalizedNumber(leg.service.lineNumber) === normalizedNumber(serviceNumber)) &&
 				departure?.date === wantedDeparture.date &&
-				departure.minute === wantedDeparture.minute
+				Math.abs(departure.minute - wantedDeparture.minute) <= (serviceNumber ? 5 : 0)
 			);
 		}) ?? null
 	);
+}
+
+function bookingLandingUrl(options: TfnswRegionalBookingOptions): string {
+	const url = new URL(options.pageUrl ?? DEFAULT_PAGE_URL);
+	url.pathname = url.pathname.replace(/\/trip-selection\/?$/, "");
+	url.search = "";
+	return url.toString();
+}
+
+/** Next server-action IDs change at deployment. Discover the public getTrips reference. */
+async function bookingAction(state: RegionalBookingState, options: TfnswRegionalBookingOptions, timeoutMs: number): Promise<string> {
+	if (options.actionId) return options.actionId;
+	if (state.action && state.action.expiresAt > Date.now()) return state.action.id;
+	if (state.actionInFlight) return state.actionInFlight;
+	const request = (async () => {
+		const pageUrl = bookingLandingUrl(options);
+		const page = await fetch(pageUrl, { signal: AbortSignal.timeout(timeoutMs), headers: { accept: "text/html" } });
+		if (!page.ok) throw new Error(`TfNSW regional booking page HTTP ${page.status}`);
+		const scripts = [...(await page.text()).matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/g)]
+			.map((match) => new URL(match[1], pageUrl))
+			.filter((url) => url.origin === new URL(pageUrl).origin && url.pathname.startsWith("/_next/static/chunks/"));
+		let cursor = 0, action: string | null = null;
+		const signal = AbortSignal.timeout(timeoutMs);
+		await Promise.all(Array.from({ length: Math.min(4, scripts.length) }, async () => {
+			while (!action && cursor < scripts.length && !signal.aborted) {
+				const url = scripts[cursor++];
+				try {
+					const response = await fetch(url, { signal });
+					if (!response.ok) continue;
+					const match = /createServerReference\)\(\s*["']([a-f0-9]{40,64})["'][\s\S]{0,200}?["']getTrips["']\)/.exec(await response.text());
+					if (match) action = match[1];
+				} catch { /* Another public chunk may contain the action. */ }
+			}
+		}));
+		if (!action) throw new Error("TfNSW regional booking action was not found");
+		state.action = { id: action, expiresAt: Date.now() + STATION_CACHE_MS };
+		return action;
+	})();
+	state.actionInFlight = request;
+	try { return await request; }
+	finally { state.actionInFlight = null; }
 }
 
 function offersForTrip(trip: RegionalTrip): VehicleBookingFareClass[] {
@@ -383,14 +425,16 @@ async function queryAvailability(
 	originCode: string,
 	destinationCode: string,
 	serviceDate: string,
-): Promise<VehicleBookingAvailability | null> {
+	state: RegionalBookingState,
+): Promise<BookingResult> {
 	const pageUrl = options.pageUrl ?? DEFAULT_PAGE_URL;
-	const response = await fetch(pageUrl, {
+	const timeoutMs = options.requestTimeoutMs ?? ctx.config.requestTimeoutMs;
+	const search = async () => fetch(pageUrl, {
 		method: "POST",
 		signal: AbortSignal.timeout(options.requestTimeoutMs ?? ctx.config.requestTimeoutMs),
 		headers: {
 			accept: "text/x-component",
-			"next-action": options.actionId ?? DEFAULT_ACTION_ID,
+			"next-action": await bookingAction(state, options, timeoutMs),
 			"content-type": "text/plain;charset=UTF-8",
 			origin: new URL(pageUrl).origin,
 		},
@@ -399,11 +443,16 @@ async function queryAvailability(
 				id: randomUUID(),
 				origin: originCode,
 				destination: destinationCode,
-				departingDateTime: `${isoDate(serviceDate)}T00:00:00`,
+				departingDateTime: `${scheduledDepartureIdentity(trip, serviceDate)?.date}T00:00:00`,
 				passengers: [{ externalRef: randomUUID(), age: "$undefined", prmNeeds: "$undefined" }],
 			},
 		]),
 	});
+	let response = await search();
+	if (response.status === 404 && !options.actionId) {
+		state.action = null;
+		response = await search();
+	}
 	if (!response.ok) throw new Error(`TfNSW regional search HTTP ${response.status}`);
 	const regionalTrips = parseTfnswRegionalSearchResponse(await response.text());
 	const serviceNumber = bookingServiceNumber(trip, ctx);
@@ -412,32 +461,36 @@ async function queryAvailability(
 			regionalTrip,
 			leg: matchesTrip(regionalTrip, trip, originCode, destinationCode, serviceDate, serviceNumber),
 		}))
-		.find((match): match is { regionalTrip: RegionalTrip; leg: RegionalLeg } => match.leg !== null);
-	if (!candidate) {
+		.filter((match): match is { regionalTrip: RegionalTrip; leg: RegionalLeg } => match.leg !== null);
+	if (candidate.length !== 1) {
 		warnEmptySearchResult(trip, serviceDate, regionalTrips.length);
-		return null;
+		return { availability: null, status: "no-match" };
 	}
-	const fareClasses = offersForTrip(candidate.regionalTrip);
-	if (!fareClasses.length) return null;
-	return {
+	const fareClasses = offersForTrip(candidate[0].regionalTrip);
+	// The official client treats a matched trip with no positive offers as fully booked.
+	const soldOut = fareClasses.length === 0 || fareClasses.every((fare) => fare.minimumAvailability === 0);
+	return { status: soldOut ? "sold-out" : "available", availability: {
 		reservedCarriages: [],
 		reservedSeatsAvailable: null,
 		unreservedTicketsAvailable: null,
 		fareClasses,
-		reservationAvailable: true,
-		reservationRequired: !candidate.leg.isUnreservedService,
+		reservationAvailable: !soldOut,
+		reservationRequired: !candidate[0].leg.isUnreservedService,
 		seatMapAvailable: false,
-		journeyUrl: pageUrl,
+		journeyUrl: `${pageUrl}?$=numAdults:1&tripPlans@$origin$value=${encodeURIComponent(originCode)}&inputValue=${encodeURIComponent(candidate[0].regionalTrip.origin.name)};&destination$value=${encodeURIComponent(destinationCode)}&inputValue=${encodeURIComponent(candidate[0].regionalTrip.destination.name)};&tripDates$type=oneWay&departing=${scheduledDepartureIdentity(trip, serviceDate)?.date}&returning=;;`,
 		source: "Transport for NSW regional booking",
 		observedAt: new Date().toISOString(),
 		timeZone: "Australia/Sydney",
-	};
+		journey: { origin: candidate[0].regionalTrip.origin.name, destination: candidate[0].regionalTrip.destination.name },
+	} };
 }
 
 function getState(ctx: CacheContext): RegionalBookingState {
 	return getPluginState(ctx, TFNSW_REGIONAL_BOOKING_PLUGIN_ID, () => ({
 		stationCodes: null,
 		stationCodesExpiresAt: 0,
+		action: null,
+		actionInFlight: null,
 		inventory: new Map(),
 		inFlight: new Map(),
 		lastInventoryPruneAt: 0,
@@ -455,12 +508,13 @@ function pruneExpiredInventory(state: RegionalBookingState, now: number): void {
 function formationFromAvailability(
 	trip: AugmentedTripInstance,
 	availability: VehicleBookingAvailability | null,
+	status: VehicleBookingAvailabilityStatus = availability ? "available" : "unavailable",
 ): VehicleFormation | null {
 	return createVehicleFormation(trip, null, {
 		source: availability?.source ?? "Transport for NSW regional booking",
 		observedAt: availability?.observedAt ?? null,
 		bookingAvailability: availability,
-		bookingAvailabilityStatus: availability ? "available" : "unavailable",
+		bookingAvailabilityStatus: status,
 	});
 }
 
@@ -475,35 +529,56 @@ export async function getTfnswRegionalBookingFormation(
 	options: TfnswRegionalBookingOptions = {},
 ): Promise<VehicleFormation | null> {
 	if (trip.feed_id !== NSW_TRAINLINK_FEED_ID) return null;
+	try { return await regionalBookingFormation(trip, ctx, options); }
+	catch (error) {
+		logger.warn(error instanceof Error ? error.message : "TfNSW regional booking check failed", {
+			module: "TfNSW regional booking", function: "getTfnswRegionalBookingFormation",
+		});
+		return formationFromAvailability(trip, null, "error");
+	}
+}
+
+async function regionalBookingFormation(trip: AugmentedTripInstance, ctx: CacheContext, options: TfnswRegionalBookingOptions,
+	deadline = Date.now() + (options.requestTimeoutMs ?? ctx.config.requestTimeoutMs)): Promise<VehicleFormation | null> {
+	const journey = remainingBookingJourney(trip, "Australia/Sydney");
+	if (!journey) return formationFromAvailability(trip, null, "closed");
 	const timeoutMs = options.requestTimeoutMs ?? ctx.config.requestTimeoutMs;
 	const state = getState(ctx);
 	const now = Date.now();
 	pruneExpiredInventory(state, now);
-	const originCode = await resolveStationCode(trip, state, options, true, timeoutMs);
-	const destinationCode = await resolveStationCode(trip, state, options, false, timeoutMs);
+	const originCode = await resolveStationCode(journey, state, options, true, timeoutMs);
+	const destinationCode = await resolveStationCode(journey, state, options, false, timeoutMs);
 	const serviceDate = trip.serviceDate;
-	if (!originCode || !destinationCode || !isoDate(serviceDate)) return formationFromAvailability(trip, null);
+	if (!originCode || !destinationCode || !isoDate(serviceDate)) return formationFromAvailability(trip, null, "unsupported");
+	const renderResult = async (result: BookingResult): Promise<VehicleFormation | null> => {
+		// Near-departure stations may be omitted from online search. Check later pickup
+		// stations before reporting no match; every returned count names its actual leg.
+		if (result.status === "no-match" && Date.now() < deadline) {
+			const following = remainingBookingJourney({ ...journey, stopTimes: journey.stopTimes.slice(1) }, "Australia/Sydney");
+			if (following) return regionalBookingFormation(following, ctx, options, deadline);
+		}
+		return formationFromAvailability(trip, result.availability, result.status);
+	};
 	const key = `${trip.instance_id}\0${originCode}\0${destinationCode}`;
 	const cached = state.inventory.get(key);
-	if (cached && cached.expiresAt > now) return formationFromAvailability(trip, cached.availability);
+	if (cached && cached.expiresAt > now) return renderResult(cached);
 	const active = state.inFlight.get(key);
 	if (active) {
-		const availability = await active;
-		return formationFromAvailability(trip, availability);
+		const result = await active;
+		return renderResult(result);
 	}
-	const request = queryAvailability(trip, ctx, options, originCode, destinationCode, serviceDate)
-		.catch(() => null)
-		.then((availability) => {
+	const request = queryAvailability(journey, ctx, { ...options, requestTimeoutMs: Math.max(1, deadline - Date.now()) }, originCode, destinationCode, serviceDate, state)
+		.then((result) => {
 			state.inventory.set(key, {
-				availability,
-				expiresAt: Date.now() + (availability ? INVENTORY_CACHE_MS : MISSING_INVENTORY_CACHE_MS),
+				...result,
+				expiresAt: Date.now() + (result.availability ? INVENTORY_CACHE_MS : MISSING_INVENTORY_CACHE_MS),
 			});
-			return availability;
+			return result;
 		});
 	state.inFlight.set(key, request);
 	try {
-		const availability = await request;
-		return formationFromAvailability(trip, availability);
+		const result = await request;
+		return renderResult(result);
 	} finally {
 		state.inFlight.delete(key);
 	}

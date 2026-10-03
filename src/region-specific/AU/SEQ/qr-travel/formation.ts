@@ -1,14 +1,19 @@
 import type { CacheContext } from "../../../../cache/types.js";
-import type { VehicleFormation } from "../../../../utils/vehicleModel.js";
-import { getQrtBookingAvailability } from "./booking.js";
+import type { VehicleFormation, VehicleBookingAvailabilityStatus } from "../../../../utils/vehicleModel.js";
+import { getQrtBookingAvailability, selectQrtBookingLeg } from "./booking.js";
 import { getQrtPublishedFormation } from "./published-formations.js";
 import type { QRTTravelTrip } from "./types.js";
 
 export async function getQrtFormation(service: QRTTravelTrip, ctx: CacheContext): Promise<VehicleFormation> {
+	let bookingStatus: VehicleBookingAvailabilityStatus = selectQrtBookingLeg(service) ? "no-match" : "closed";
 	const [published, bookingAvailability] = await Promise.all([
 		getQrtPublishedFormation(service, ctx),
-		getQrtBookingAvailability(service, ctx),
+		getQrtBookingAvailability(service, ctx).catch(() => { bookingStatus = "error"; return null; }),
 	]);
+	if (bookingAvailability) {
+		bookingStatus = bookingAvailability.stale ? "available"
+			: bookingAvailability.fareClasses?.every((fare) => fare.minimumAvailability === 0) ? "sold-out" : "available";
+	}
 	return {
 		vehicleId: null,
 		model: published?.matchName ?? service.line ?? service.serviceName ?? null,
@@ -28,7 +33,7 @@ export async function getQrtFormation(service: QRTTravelTrip, ctx: CacheContext)
 		source: published ? "Queensland Rail Travel published train information" : "Queensland Rail Travel",
 		observedAt: published?.observedAt ?? null,
 		bookingAvailability,
-		bookingAvailabilityStatus: bookingAvailability ? "available" : "unavailable",
+		bookingAvailabilityStatus: bookingStatus,
 		publishedProfile: published
 			? {
 					...published.profile,

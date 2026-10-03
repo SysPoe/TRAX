@@ -15,7 +15,7 @@ const MINUTES = 60 * 1000;
 const TOKEN_SAFETY_MS = 1 * MINUTES;
 const BOOKING_CACHE_MS = 10 * MINUTES;
 const LAYOUT_CACHE_MS = 5 * MINUTES;
-const CONSIST_CACHE_MS = 24 * 60 * MINUTES;
+const CONSIST_CACHE_MS = 15 * MINUTES;
 const REQUEST_TIMEOUT_MS = 15_000;
 
 // --- Types & Interfaces ---

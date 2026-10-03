@@ -180,6 +180,7 @@ export type VLineBookingAvailability = {
 	seatMapAvailable: boolean;
 	journeyUrl: string;
 	observedAt: string;
+	journey?: { origin: string; destination: string };
 };
 
 export type VLineScsBoardRow = {

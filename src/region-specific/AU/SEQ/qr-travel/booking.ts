@@ -413,6 +413,7 @@ async function queryAvailability(
 		source: "Queensland Rail Travel booking",
 		observedAt: new Date().toISOString(),
 		timeZone: "Australia/Brisbane",
+		journey: { origin: leg.origin.placeName, destination: leg.destination.placeName },
 	};
 }
 
@@ -440,10 +441,14 @@ export async function getQrtBookingAvailability(
 	const active = state.inFlight.get(key);
 	const refresh = () =>
 		queryAvailability(service, leg, ctx, state, origin, destination, travelDate)
-			.catch(() => null)
+			.catch((error) => {
+				const previous = cached?.availability ?? lastAvailability;
+				if (previous) return { ...previous, stale: true };
+				throw error;
+			})
 			.then((availability) => {
-				const retained = availability ?? lastAvailability;
-				if (availability) {
+				const retained = availability ?? (lastAvailability ? { ...lastAvailability, stale: true } : null);
+				if (availability && !availability.stale) {
 					const refreshedAt = Date.now();
 					for (const [key, entry] of state.lastAvailability) {
 						if (entry.expiresAt <= refreshedAt) state.lastAvailability.delete(key);
@@ -455,14 +460,14 @@ export async function getQrtBookingAvailability(
 				}
 				state.inventory.set(key, {
 					availability: retained,
-					expiresAt: Date.now() + (availability ? INVENTORY_CACHE_MS : MISSING_INVENTORY_CACHE_MS),
+					expiresAt: Date.now() + (availability && !availability.stale ? INVENTORY_CACHE_MS : MISSING_INVENTORY_CACHE_MS),
 				});
-				state.inFlight.delete(key);
 				return retained;
-			});
-	if (cached) {
+			}).finally(() => state.inFlight.delete(key));
+	if (cached?.availability) {
 		if (!active) state.inFlight.set(key, refresh());
-		return cached.availability ?? lastAvailability;
+		const previous = cached.availability ?? lastAvailability;
+		return previous ? { ...previous, stale: true } : null;
 	}
 	if (active) return active;
 	const request = refresh();

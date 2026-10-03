@@ -199,8 +199,8 @@ function describedCount(element: ReturnType<typeof parse>, selector: string, uni
 
 function normalizedBookingDateTime(value: string | null): string | null {
 	if (!value) return null;
-	const iso = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/.exec(value.trim());
-	if (iso) return iso[1];
+	const iso = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/.exec(value.trim());
+	if (iso) return `${iso[1]}T${iso[2]}`;
 	const local = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP]M)?$/i.exec(value.trim());
 	if (!local) return null;
 	let hour = Number(local[4]);
@@ -225,14 +225,17 @@ export function parseVLineBookingPage(
 	const departureMatches = serviceInputs.filter((candidate) => {
 		const id = candidate.getAttribute("id")!;
 		const prefix = id.slice(0, -"hdnServiceCode".length);
-		const departure = document.querySelector(`[id="${prefix}hdnServiceOriginDateTime"]`)?.getAttribute("value") ?? null;
+		let ancestor = candidate.parentNode;
+		while (ancestor && !ancestor.getAttribute?.("data-departure-time")) ancestor = ancestor.parentNode;
+		const departure = document.querySelector(`[id="${prefix}hdnServiceOriginDateTime"]`)?.getAttribute("value")
+			?? ancestor?.getAttribute?.("data-departure-time") ?? null;
 		return expectedDeparture && normalizedBookingDateTime(departure) === expectedDeparture;
 	});
 	// Journey Planner run numbers and the public site's booking-leg codes can
 	// differ for the same service. Prefer the exact departure when it is unique.
-	const serviceInput = departureMatches.find((candidate) => candidate.getAttribute("value") === expected.tdn)
-		?? (departureMatches.length === 1 ? departureMatches[0] : null)
-		?? serviceInputs.find((candidate) => candidate.getAttribute("value") === expected.tdn);
+	const numberedMatches = departureMatches.filter((candidate) => candidate.getAttribute("value") === expected.tdn);
+	const serviceInput = numberedMatches.length === 1 ? numberedMatches[0]
+		: numberedMatches.length === 0 && departureMatches.length === 1 ? departureMatches[0] : null;
 	if (!serviceInput) return null;
 	const serviceInputId = serviceInput.getAttribute("id")!;
 	const prefix = serviceInputId.slice(0, -"hdnServiceCode".length);
