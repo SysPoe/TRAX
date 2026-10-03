@@ -18,7 +18,7 @@ import type { CacheContext } from "./types.js";
 import { getFeedTimeZone } from "../config.js";
 import * as qdf from "qdf-gtfs";
 import type { ExpressInfo, PassingStop } from "../utils/SRT.js";
-import { getRawStopTimes, getStops, getTrips } from "./gtfsReads.js";
+import { getRawStopTimes, getStops, getTrips, primeRawStopTimes } from "./gtfsReads.js";
 import { decodeTripInstanceId, entityKey } from "../identity.js";
 import { getSeqState } from "../plugins/seq-state.js";
 import { getServiceDatesByTrip } from "../utils/calendar.js";
@@ -394,6 +394,7 @@ export function ensureStartServiceDateMaterialized(ctx: CacheContext, serviceDat
 
 	const epochDay = getEpochDayFromServiceDate(serviceDate);
 	const affectedTripIds = new Set<string>();
+	const eligible: Array<{ tripKey: string; rawTrip: qdf.Trip; scheduled: boolean }> = [];
 	for (const [tripKey, rawTrip] of ctx.augmented.rawTripsRec) {
 		const tripRef = { feedId: rawTrip.feed_id, localId: rawTrip.trip_id };
 		const scheduled = getServiceDatesByTrip(tripRef, ctx, epochDay, epochDay).includes(serviceDate);
@@ -401,35 +402,42 @@ export function ensureStartServiceDateMaterialized(ctx: CacheContext, serviceDat
 			(update) => update.trip.start_date === serviceDate,
 		);
 		if (!scheduled && !hasRealtime) continue;
+		eligible.push({ tripKey, rawTrip, scheduled });
+	}
 
-		const existing = ctx.augmented.tripsRec.get(tripKey);
-		const dateTrip = augmentTrip(rawTrip, ctx, ctx.augmented.tripUpdatesCache, existing, {
-			serviceDates: scheduled ? [serviceDate] : [],
-			realtimeDates: [serviceDate],
-		});
-		const nextInstances = dateTrip.instances.filter((instance) => instance.serviceDate === serviceDate);
-		if (nextInstances.length === 0) continue;
-		if (!existing) {
-			dateTrip.instances = nextInstances;
-			ctx.augmented.tripsRec.set(tripKey, dateTrip);
-			replaceAugmentedTripInArray(ctx, dateTrip);
-			registerAugmentedTrip(ctx, dateTrip);
-			patchSeqDiagramOntoAugmentedTrip(ctx, dateTrip);
-			affectedTripIds.add(dateTrip.trip_id);
-			continue;
-		}
+	for (let offset = 0; offset < eligible.length; offset += 250) {
+		const batch = eligible.slice(offset, offset + 250);
+		primeRawStopTimes(ctx, batch.map(({ rawTrip }) => rawTrip));
+		for (const { tripKey, rawTrip, scheduled } of batch) {
+			const existing = ctx.augmented.tripsRec.get(tripKey);
+			const dateTrip = augmentTrip(rawTrip, ctx, ctx.augmented.tripUpdatesCache, existing, {
+				serviceDates: scheduled ? [serviceDate] : [],
+				realtimeDates: [serviceDate],
+			});
+			const nextInstances = dateTrip.instances.filter((instance) => instance.serviceDate === serviceDate);
+			if (nextInstances.length === 0) continue;
+			if (!existing) {
+				dateTrip.instances = nextInstances;
+				ctx.augmented.tripsRec.set(tripKey, dateTrip);
+				replaceAugmentedTripInArray(ctx, dateTrip);
+				registerAugmentedTrip(ctx, dateTrip);
+				patchSeqDiagramOntoAugmentedTrip(ctx, dateTrip);
+				affectedTripIds.add(dateTrip.trip_id);
+				continue;
+			}
 
-		unregisterAugmentedTrip(ctx, tripKey);
-		existing.instances = existing.instances
-			.filter((instance) => instance.serviceDate !== serviceDate)
-			.concat(nextInstances)
-			.sort((a, b) => a.serviceDate.localeCompare(b.serviceDate) || a.instance_id.localeCompare(b.instance_id));
-		if (scheduled && !existing.scheduledStartServiceDates.includes(serviceDate)) {
-			existing.scheduledStartServiceDates.push(serviceDate);
-			existing.scheduledStartServiceDates.sort();
+			unregisterAugmentedTrip(ctx, tripKey);
+			existing.instances = existing.instances
+				.filter((instance) => instance.serviceDate !== serviceDate)
+				.concat(nextInstances)
+				.sort((a, b) => a.serviceDate.localeCompare(b.serviceDate) || a.instance_id.localeCompare(b.instance_id));
+			if (scheduled && !existing.scheduledStartServiceDates.includes(serviceDate)) {
+				existing.scheduledStartServiceDates.push(serviceDate);
+				existing.scheduledStartServiceDates.sort();
+			}
+			registerAugmentedTrip(ctx, existing);
+			affectedTripIds.add(existing.trip_id);
 		}
-		registerAugmentedTrip(ctx, existing);
-		affectedTripIds.add(existing.trip_id);
 	}
 
 	touchLazyServiceDate(ctx, serviceDate);

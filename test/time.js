@@ -105,6 +105,26 @@ assert.ok(
 // Deterministic invalid contracts: bad service dates resolve to epoch 0.
 assert.equal(getServiceDayStart("not-a-date", "UTC"), 0);
 assert.equal(getServiceDayStart("", "UTC"), 0);
+
+// Thousands of stop DTOs share the same day origin. Resolve it once per
+// date/zone, without caching an offset across distinct DST dates.
+const originalFormatToParts = Intl.DateTimeFormat.prototype.formatToParts;
+let dayStartConversions = 0;
+Intl.DateTimeFormat.prototype.formatToParts = function (...args) {
+	dayStartConversions++;
+	return originalFormatToParts.apply(this, args);
+};
+try {
+	const first = getServiceDayStart("20270506", "Australia/Sydney");
+	const coldConversions = dayStartConversions;
+	assert.ok(coldConversions > 0);
+	for (let index = 0; index < 100; index++) {
+		assert.equal(getServiceDayStart("20270506", "Australia/Sydney"), first);
+	}
+	assert.equal(dayStartConversions, coldConversions, "stop conversions must reuse their date and zone's origin");
+} finally {
+	Intl.DateTimeFormat.prototype.formatToParts = originalFormatToParts;
+}
 assert.equal(parseTimeWithConfig("", "UTC"), 0);
 assert.equal(parseTimeWithConfig("not-a-date", "UTC"), 0);
 assert.throws(() => getServiceDate(new Date(), "Invalid/Timezone"), RangeError);

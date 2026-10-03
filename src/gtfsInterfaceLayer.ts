@@ -122,6 +122,7 @@ export async function createGtfs(config: TraxConfig, doRealtime = true, report?:
 		logger: config.logFunction,
 		progress: config.progressLog,
 		cache: true,
+		compiledCache: true,
 		cacheDir: config.cacheDir,
 		cacheMaxAgeMs: config.cacheMaxAgeMs,
 		requestTimeoutMs: config.requestTimeoutMs,

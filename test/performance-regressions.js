@@ -475,6 +475,13 @@ function testPrimeRawStopTimesSkipsCachedTrips() {
 		"changed-trip priming must preserve already-cached stop times",
 	);
 	assert.equal(ctx.augmented.rawStopTimesCache.get("4:feedtrip-b")?.length, 1);
+	const nativeQuery = ctx.gtfs.getStopTimesPacked;
+	ctx.gtfs.getStopTimesPacked = () => { throw new Error("transient native read failure"); };
+	assert.throws(() => primeRawStopTimes(ctx, [{ feed_id: "feed", trip_id: "trip-c" }]), /transient native read failure/);
+	assert.equal(ctx.augmented.rawStopTimesCache.has("4:feedtrip-c"), false, "failed reads must remain uncached so they can be retried");
+	ctx.gtfs.getStopTimesPacked = nativeQuery;
+	primeRawStopTimes(ctx, [{ feed_id: "feed", trip_id: "trip-c" }]);
+	assert.deepEqual(ctx.augmented.rawStopTimesCache.get("4:feedtrip-c"), [], "successful empty reads can be cached");
 }
 
 function testFilteredTripUpdatesAvoidOtherFeeds() {

@@ -130,7 +130,6 @@ export function primeRawStopTimes(ctx: CacheContext, trips: readonly Trip[]): vo
 		// cached. Only the uncached tail needs a native query; re-querying the
 		// cached head repeats native work and would clobber retained rows.
 		if (ctx.augmented.rawStopTimesCache.has(key)) continue;
-		ctx.augmented.rawStopTimesCache.set(key, []);
 		let ids = tripIdsByFeed.get(trip.feed_id);
 		if (!ids) {
 			ids = new Set();

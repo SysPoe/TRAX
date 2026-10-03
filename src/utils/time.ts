@@ -6,6 +6,8 @@ const MAX_TIMEZONE_FORMATTERS = 64;
 const serviceDateFormatters = new Map<string, Intl.DateTimeFormat>();
 const localIsoFormatters = new Map<string, Intl.DateTimeFormat>();
 const offsetFormatters = new Map<string, Intl.DateTimeFormat>();
+const MAX_SERVICE_DAY_STARTS = 1024;
+const serviceDayStarts = new Map<string, number>();
 
 /** Reuse Intl setup, but evaluate every instant so DST offsets stay exact. */
 function timezoneFormatter(
@@ -104,9 +106,15 @@ export function getTimezoneOffsetSeconds(timezone: string, date: Date = new Date
 /** GTFS times are elapsed seconds from local noon minus twelve hours, including DST days. */
 export function getServiceDayStart(serviceDate: string, timezone: string): number {
 	if (!/^\d{8}$/.test(serviceDate)) return 0;
+	const key = `${timezone}\0${serviceDate}`;
+	const cached = serviceDayStarts.get(key);
+	if (cached !== undefined) return cached;
 	const localNoon = `${serviceDate.slice(0, 4)}-${serviceDate.slice(4, 6)}-${serviceDate.slice(6, 8)}T12:00:00`;
 	const noonMs = parseTimeWithConfig(localNoon, timezone);
-	return Number.isFinite(noonMs) && noonMs !== 0 ? noonMs / 1000 - 43_200 : 0;
+	const value = Number.isFinite(noonMs) && noonMs !== 0 ? noonMs / 1000 - 43_200 : 0;
+	if (serviceDayStarts.size >= MAX_SERVICE_DAY_STARTS) serviceDayStarts.delete(serviceDayStarts.keys().next().value!);
+	serviceDayStarts.set(key, value);
+	return value;
 }
 
 export function serviceTimeToInstant(serviceDate: ServiceDate | string, serviceTime: GtfsTime | number, timezone: string): Instant {

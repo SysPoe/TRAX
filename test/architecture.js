@@ -2898,8 +2898,17 @@ try {
 	const eagerInstanceCount = alphaTrip.instances.length;
 	assert.ok(runtime.getAvailableServiceDates().includes("20261215"));
 	assert.equal(alphaTrip.instances.length, eagerInstanceCount, "listing calendar dates must not build instances");
+	const nativeGtfs = runtime.utils.getGtfs();
+	runtime.ctx.augmented.rawStopTimesCache.clear();
+	runtime.ctx.runtimeState.lazyServiceDates.clear();
+	const readStopTimes = nativeGtfs.getStopTimes.bind(nativeGtfs);
+	let lazyRowQueries = 0;
+	nativeGtfs.getStopTimes = (...args) => { lazyRowQueries++; return readStopTimes(...args); };
+	const lazyDateTrips = runtime.getTripIdsByServiceDate("20261215");
+	nativeGtfs.getStopTimes = readStopTimes;
+	assert.equal(lazyRowQueries, 0, "lazy dates should batch missing stop times instead of querying every trip");
 	assert.deepEqual(
-		new Set(runtime.getTripIdsByServiceDate("20261215")),
+		new Set(lazyDateTrips),
 		new Set(
 			[
 				["alpha", "shared"],
