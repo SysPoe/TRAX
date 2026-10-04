@@ -92,6 +92,7 @@ export function createRuntimeState(): CacheContext["runtimeState"] {
 		operationalWindows: new Map(),
 		maxTripLookbackDays: 1,
 		lazyServiceDates: new Map(),
+		lazyMaterializationRevision: 0,
 		dateOffsets: new Map(),
 		serviceDateArrays: new Map(),
 		vehicleEnrichmentActive: false,

@@ -6,13 +6,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { context, update, key, date } from "./fixtures/runtime-audit.mjs";
 import { augmentTrip } from "../dist/utils/augmentedTrip.js";
-import { registerAugmentedTrip } from "../dist/cache/augmentedEntities.js";
-import { refreshRealtimeCache, StaleGenerationError } from "../dist/cache/refreshCaches.js";
+import { registerAugmentedTrip, getStopDeparturesCached } from "../dist/cache/augmentedEntities.js";
+import { refreshRealtimeCache, refreshStaticCache, StaleGenerationError } from "../dist/cache/refreshCaches.js";
 import { TRAX } from "../dist/index.js";
 import { GTFS } from "qdf-gtfs";
 import { loadRealtime, replayRetainedRealtime } from "../dist/gtfsInterfaceLayer.js";
 import { createRealtimeReadView } from "../dist/cache/snapshot.js";
 import { staticZip } from "./fixtures/native-realtime.mjs";
+import { addDaysToServiceDate, getServiceDate } from "../dist/utils/time.js";
+import { YieldBudget } from "../dist/utils/cooperative.js";
 
 function fixture() {
 	const { ctx, gtfs, trip } = context();
@@ -409,6 +411,88 @@ test("snapshot copying yields inside one large frequency trip", async () => {
 	} finally {
 		running = false;
 		Date.now = originalNow;
+	}
+});
+
+test("snapshot copying retains coherent native lazy dates when public queries materialize or evict during a yield", async () => {
+	const { forkRealtimeContext } = await import("../dist/cache/snapshot.js");
+	for (const preload of [0, 8]) {
+		const { ctx } = context();
+		const gtfs = new GTFS({ cache: false, logger() {}, progress() {} });
+		const today = getServiceDate(new Date(), "UTC");
+		const lazyDate = addDaysToServiceDate(today, 5 + preload);
+		await gtfs.loadFromBuffers(
+			[
+				staticZip({
+					"agency.txt":
+						"agency_id,agency_name,agency_url,agency_timezone\na,Fixture,https://example.test,UTC\n",
+					"stops.txt": "stop_id,stop_name,stop_lat,stop_lon\nA,A,0,0\nB,B,0,0.1\n",
+					"routes.txt": "route_id,agency_id,route_short_name,route_long_name,route_type\nR,a,R,Rail,2\n",
+					"calendar.txt": `service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\ndaily,1,1,1,1,1,1,1,${addDaysToServiceDate(today, -2)},${addDaysToServiceDate(today, 20)}\n`,
+					"trips.txt": "route_id,service_id,trip_id\nR,daily,trip\n",
+					"stop_times.txt":
+						"trip_id,arrival_time,departure_time,stop_id,stop_sequence\ntrip,10:00:00,10:00:00,A,1\ntrip,10:10:00,10:10:00,B,2\n",
+				}),
+			],
+			["rail"],
+		);
+		ctx.gtfs = gtfs;
+		Object.assign(ctx, await refreshStaticCache(gtfs, ctx.config, ctx));
+		const oldestDate = addDaysToServiceDate(today, 5);
+		for (let offset = 0; offset < preload; offset++) {
+			assert.equal(
+				getStopDeparturesCached(ctx, { feedId: "rail", localId: "A" }, addDaysToServiceDate(oldestDate, offset))
+					.length,
+				1,
+			);
+		}
+		let copiedTrips = false,
+			interleaved = false;
+		const entries = ctx.augmented.tripsRec.entries.bind(ctx.augmented.tripsRec);
+		ctx.augmented.tripsRec.entries = function* () {
+			yield* entries();
+			copiedTrips = true;
+		};
+		const originalYield = YieldBudget.prototype.maybeYield;
+		YieldBudget.prototype.maybeYield = async function () {
+			if (copiedTrips && !interleaved) {
+				interleaved = true;
+				assert.equal(getStopDeparturesCached(ctx, { feedId: "rail", localId: "A" }, lazyDate).length, 1);
+			}
+			await originalYield.call(this);
+		};
+		try {
+			const candidate = await forkRealtimeContext(ctx);
+			assert.ok(interleaved, "the public query must run after the old trip graph was copied");
+			assert.equal(candidate.runtimeState.lazyServiceDates.get(lazyDate), true);
+			const instance = candidate.augmented.tripsRec
+				.get(key)
+				.instances.find((value) => value.serviceDate === lazyDate);
+			assert.ok(instance, "a complete lazy-date marker must have its trip instance");
+			assert.equal(candidate.augmented.instancesRec.get(instance.instance_id), instance);
+			for (const stopId of ["A", "B", "B"]) {
+				assert.equal(
+					getStopDeparturesCached(candidate, { feedId: "rail", localId: stopId }, lazyDate).length,
+					1,
+					`${stopId} must resolve the new date, including uncached and repeated reads`,
+				);
+			}
+			if (preload) {
+				assert.equal(candidate.runtimeState.lazyServiceDates.has(oldestDate), false);
+				assert.equal(
+					candidate.augmented.tripsRec.get(key).instances.some((value) => value.serviceDate === oldestDate),
+					false,
+					"eviction must remove the same date from trip instances and lazy markers",
+				);
+				assert.equal(
+					[...candidate.augmented.instancesRec.values()].some((value) => value.serviceDate === oldestDate),
+					false,
+				);
+			}
+		} finally {
+			YieldBudget.prototype.maybeYield = originalYield;
+			gtfs.clearStatic();
+		}
 	}
 });
 

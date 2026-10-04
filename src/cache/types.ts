@@ -168,6 +168,8 @@ export type CacheContext = {
 		maxTripLookbackDays: number;
 		/** true means the whole date is materialized; false means selected trips only. */
 		lazyServiceDates: Map<string, boolean>;
+		/** Detect public lazy writes while a realtime snapshot is cooperatively copied. */
+		lazyMaterializationRevision: number;
 		dateOffsets: Map<string, string>;
 		serviceDateArrays: Map<string, string[]>;
 		/** Prevent provider callbacks from recursively enriching nested trip registration. */

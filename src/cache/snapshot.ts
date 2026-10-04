@@ -180,6 +180,16 @@ export function forkStaticPluginState(ctx: CacheContext): CacheContext["pluginSt
  * until this candidate is complete; failed candidates are discarded.
  */
 export async function forkRealtimeContext(ctx: CacheContext): Promise<CacheContext> {
+	while (true) {
+		const revision = ctx.runtimeState.lazyMaterializationRevision ?? 0;
+		const candidate = await forkRealtimeContextOnce(ctx);
+		if ((ctx.runtimeState.lazyMaterializationRevision ?? 0) === revision) return candidate;
+		// A public date query changed the authoritative graph during a yield.
+		// Discard this mixed copy and retry from the complete source state.
+	}
+}
+
+async function forkRealtimeContextOnce(ctx: CacheContext): Promise<CacheContext> {
 	ctx.publicationOwner ??= { current: ctx };
 	const seen = new Map<object, unknown>();
 	const share = (value: unknown) => {

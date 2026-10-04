@@ -387,6 +387,16 @@ function touchLazyServiceDate(
 	complete = ctx.runtimeState.lazyServiceDates.get(serviceDate) ?? false,
 ): void {
 	const lru = ctx.runtimeState.lazyServiceDates;
+	let newest: string | undefined;
+	for (const date of lru.keys()) newest = date;
+	if (
+		lru.has(serviceDate) &&
+		lru.get(serviceDate) === complete &&
+		newest === serviceDate &&
+		lru.size <= MAX_LAZY_SERVICE_DATES
+	)
+		return;
+	ctx.runtimeState.lazyMaterializationRevision = (ctx.runtimeState.lazyMaterializationRevision ?? 0) + 1;
 	lru.delete(serviceDate);
 	lru.set(serviceDate, complete);
 	while (lru.size > MAX_LAZY_SERVICE_DATES) {
@@ -426,6 +436,9 @@ export function ensureStartServiceDateMaterialized(
 		return;
 	}
 
+	// Public materialization is synchronous, but a concurrent snapshot copy can
+	// yield between the trip graph and its authoritative indexes.
+	ctx.runtimeState.lazyMaterializationRevision = (ctx.runtimeState.lazyMaterializationRevision ?? 0) + 1;
 	const affectedTripIds = new Set<string>();
 	const selectedTrips =
 		requestedKey && requestedTrip ? [[requestedKey, requestedTrip] as const] : ctx.augmented.rawTripsRec;
@@ -639,6 +652,7 @@ export function getAugmentedTrips(ctx: CacheContext, trip?: QualifiedEntityId): 
 		if (cachedTrip) return [cachedTrip];
 		const rawTrip = getTrips(ctx, { feed_id: trip.feedId, trip_id: trip.localId })[0];
 		if (rawTrip && getRawStopTimes(ctx, trip).length > 0) {
+			ctx.runtimeState.lazyMaterializationRevision = (ctx.runtimeState.lazyMaterializationRevision ?? 0) + 1;
 			const augmentedTrip = augmentTrip(rawTrip, context);
 			registerAugmentedTrip(ctx, augmentedTrip);
 			augmented.tripsRec.set(key, augmentedTrip);
