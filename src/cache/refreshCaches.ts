@@ -52,6 +52,7 @@ import { YieldBudget } from "../utils/cooperative.js";
 import { runPluginHooks } from "../plugins/concurrency.js";
 import type { TransitPlugin } from "../plugins/types.js";
 import { expandTfnswChangedTripKeys } from "../region-specific/AU/NSW/tfnsw-cross-feed.js";
+import { createRealtimeReadView, forkRealtimeContext, forkStaticPluginState } from "./snapshot.js";
 
 type CacheProgressReporter = (info: Parameters<TraxConfig["progressLog"]>[0] & { unit?: "bytes" | "items" }) => void;
 // Native packed reads cannot yield while materializing their result. Keep the
@@ -74,6 +75,10 @@ export class StaleGenerationError extends Error {
 export interface RefreshRealtimeHooks {
 	/** Polled at existing yield points; return true to abort with StaleGenerationError. */
 	shouldAbort?: () => boolean;
+	/** Acquire native/supplemental observations inside the detached candidate. */
+	prepare?: (candidate: CacheContext) => Promise<void>;
+	/** Synchronous runtime publication; omitted for standalone cache users. */
+	publish?: (candidate: CacheContext) => void;
 }
 
 function assertFresh(hooks: RefreshRealtimeHooks | undefined): void {
@@ -92,6 +97,7 @@ export function refreshQRTTrainsInBackground(ctx: CacheContext): void {
 		.then((trains: QRTTravelTrip[]) => {
 			// Replace the snapshot atomically. Readers continue using the prior
 			// successful value while this request is in flight.
+			ctx = ctx.publicationOwner?.current ?? ctx;
 			const state = getSeqState(ctx);
 			state.qrtTrains = trains;
 			state.qrtObservedAt = new Date(Date.now()).toISOString();
@@ -109,6 +115,7 @@ export function refreshQRTTrainsInBackground(ctx: CacheContext): void {
 			});
 		})
 		.finally(() => {
+			ctx = ctx.publicationOwner?.current ?? ctx;
 			if (ctx.augmented.qrtRefreshInFlight === refreshPromise) {
 				ctx.augmented.qrtRefreshInFlight = undefined;
 			}
@@ -119,11 +126,28 @@ export function refreshQRTTrainsInBackground(ctx: CacheContext): void {
 	ctx.augmented.qrtRefreshInFlight = refreshPromise;
 }
 
-export type RetainedStaticRefreshState = { qrtTrains: QRTTravelTrip[]; qrtObservedAt?: string | null; qrtRevision?: number };
+export type RetainedStaticRefreshState = {
+	qrtTrains: QRTTravelTrip[];
+	qrtObservedAt?: string | null;
+	qrtRevision?: number;
+	injectedTripUpdates?: RealtimeTripUpdate[];
+	injectedVehiclePositions?: import("qdf-gtfs").RealtimeVehiclePosition[];
+	pluginState?: CacheContext["pluginState"];
+};
 
-export function retainStaticRefreshState(ctx: CacheContext): RetainedStaticRefreshState {
+export function retainStaticRefreshState(
+	ctx: CacheContext,
+	includePluginState: boolean = true,
+): RetainedStaticRefreshState {
 	const state = getSeqState(ctx);
-	return { qrtTrains: state.qrtTrains, qrtObservedAt: state.qrtObservedAt, qrtRevision: state.qrtRevision };
+	return {
+		qrtTrains: state.qrtTrains,
+		qrtObservedAt: state.qrtObservedAt,
+		qrtRevision: state.qrtRevision,
+		injectedTripUpdates: ctx.raw.injectedTripUpdates,
+		injectedVehiclePositions: ctx.raw.injectedVehiclePositions,
+		pluginState: includePluginState ? forkStaticPluginState(ctx) : undefined,
+	};
 }
 
 function tripUpdateSignature(updates: readonly unknown[], ctx?: CacheContext): string {
@@ -136,7 +160,9 @@ function tripUpdateSignature(updates: readonly unknown[], ctx?: CacheContext): s
 			const tripKey = entityKey({ feedId: value.feed_id, localId: value.trip.trip_id });
 			const frequency = (ctx?.raw.frequenciesByTripKey.get(tripKey)?.length ?? 0) > 0;
 			const start =
-				value.trip.schedule_relationship === TripScheduleRelationship.SCHEDULED && !frequency
+				(value.trip.schedule_relationship === TripScheduleRelationship.SCHEDULED ||
+					value.trip.schedule_relationship === TripScheduleRelationship.REPLACEMENT) &&
+				!frequency
 					? ""
 					: normalizeClockForKey(value.trip.start_time);
 			const key = JSON.stringify([tripKey, value.trip.start_date, start]);
@@ -256,6 +282,7 @@ function refreshRealtimeMetadata(ctx: CacheContext, tripKey: string, updates: re
 function isRealtimeOnlyRelationship(relationship: TripScheduleRelationship): boolean {
 	return (
 		relationship === TripScheduleRelationship.ADDED ||
+		relationship === TripScheduleRelationship.NEW ||
 		relationship === TripScheduleRelationship.UNSCHEDULED ||
 		relationship === TripScheduleRelationship.DUPLICATED ||
 		relationship === TripScheduleRelationship.REPLACEMENT
@@ -446,7 +473,7 @@ export async function refreshStaticCache(
 		augmented: newAugmentedCache,
 		config,
 		gtfs,
-		pluginState: new Map(),
+		pluginState: retainedState?.pluginState ?? new Map(),
 		runtimeState: createRuntimeState(),
 	};
 	if (retainedState) {
@@ -454,6 +481,8 @@ export async function refreshStaticCache(
 		state.qrtTrains = retainedState.qrtTrains;
 		state.qrtObservedAt = retainedState.qrtObservedAt ?? null;
 		state.qrtRevision = retainedState.qrtRevision ?? 0;
+		ctx.raw.injectedTripUpdates = retainedState.injectedTripUpdates ?? [];
+		ctx.raw.injectedVehiclePositions = retainedState.injectedVehiclePositions ?? [];
 	}
 	const startTotal = Date.now();
 	ctx.augmented.timer.clear();
@@ -599,6 +628,7 @@ export async function refreshStaticCache(
 	const injected = ctx.raw.injectedTripUpdates ?? [];
 	for (const update of applyRealtimeReplacementPrecedence(
 		mergeSupplementalTripUpdates(canonicalizeRealtimeTripUpdates(allUpdates.concat(injected), ctx), ctx),
+		ctx,
 	)) {
 		const tripId = update.trip.trip_id;
 		if (!tripId || !update.feed_id) continue;
@@ -876,6 +906,39 @@ export async function refreshRealtimeCache(
 	ctx: CacheContext,
 	hooks?: RefreshRealtimeHooks,
 ): Promise<void> {
+	const inheritedQrtRefresh = ctx.augmented.qrtRefreshInFlight;
+	const candidate = await forkRealtimeContext(ctx);
+	assertFresh(hooks);
+	await hooks?.prepare?.(candidate);
+	assertFresh(hooks);
+	candidate.gtfs = createRealtimeReadView(gtfs);
+	await refreshRealtimeCacheInPlace(candidate.gtfs, config, candidate, hooks);
+	assertFresh(hooks);
+	if (candidate.augmented.qrtRefreshInFlight === inheritedQrtRefresh) {
+		candidate.augmented.qrtRefreshInFlight = ctx.augmented.qrtRefreshInFlight;
+	}
+	if (hooks?.publish) {
+		hooks.publish(candidate);
+		candidate.publicationOwner!.current = candidate;
+	} else {
+		// Preserve the outer cache objects for standalone callers retaining them.
+		Object.assign(ctx.raw, candidate.raw);
+		Object.assign(ctx.augmented, candidate.augmented);
+		Object.assign(ctx.runtimeState, candidate.runtimeState);
+		candidate.raw = ctx.raw;
+		candidate.augmented = ctx.augmented;
+		candidate.runtimeState = ctx.runtimeState;
+		Object.assign(ctx, candidate);
+		ctx.publicationOwner!.current = ctx;
+	}
+}
+
+async function refreshRealtimeCacheInPlace(
+	gtfs: GTFS,
+	config: TraxConfig,
+	ctx: CacheContext,
+	hooks?: RefreshRealtimeHooks,
+): Promise<void> {
 	const startTotal = Date.now();
 	ctx.augmented.timer.start("refreshRealtimeCache");
 	const { augmented: augmentedCache } = ctx;
@@ -898,6 +961,7 @@ export async function refreshRealtimeCache(
 			canonicalizeRealtimeTripUpdates(tripUpdates.concat(ctx.raw.injectedTripUpdates ?? []), ctx),
 			ctx,
 		),
+		ctx,
 	);
 	const nextUpdatesByTrip = new Map<string, typeof allTripUpdates>();
 	for (const update of allTripUpdates) {
@@ -1058,9 +1122,7 @@ export async function refreshRealtimeCache(
 					// Yield on time budget rather than item count: re-augmentation
 					// cost varies widely per trip, and this loop runs every 60s.
 					await realtimeYield.maybeYield();
-					// Abort (never partially commit further) when the generation this
-					// rebuild derived from is no longer published; the caller retries
-					// against the new snapshot. Partial writes heal on that retry.
+					// Discard the candidate if its static generation is superseded.
 					assertFresh(hooks);
 					if (current % 10 === 0 || current === total) {
 						const elapsed = (Date.now() - startedAt) / 1000;

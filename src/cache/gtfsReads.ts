@@ -171,6 +171,7 @@ export function getTripUpdates(ctx: CacheContext, trip?: QualifiedEntityId): Rea
 	const injected = ctx.raw.injectedTripUpdates ?? [];
 	const allUpdates = applyRealtimeReplacementPrecedence(
 		mergeSupplementalTripUpdates(canonicalizeRealtimeTripUpdates(updates.concat(injected), ctx), ctx),
+		ctx,
 	);
 
 	if (trip) {

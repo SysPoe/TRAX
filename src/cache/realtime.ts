@@ -57,8 +57,25 @@ function inferScheduledServiceDate(update: RealtimeTripUpdate, ctx: CacheContext
 	};
 }
 
-function tripServiceKey(update: RealtimeTripUpdate): string {
-	return [update.feed_id, update.trip.trip_id, update.trip.start_date ?? "", update.trip.start_time ?? ""].join("\0");
+function tripServiceKey(update: RealtimeTripUpdate, ctx: CacheContext): string {
+	const key = update.feed_id && update.trip.trip_id
+		? entityKey({ feedId: update.feed_id, localId: update.trip.trip_id })
+		: null;
+	const frequency = key !== null && (ctx.raw.frequenciesByTripKey.get(key)?.length ?? 0) > 0;
+	const relationship = update.trip.schedule_relationship;
+	const additionalInstance =
+		relationship === TripScheduleRelationship.ADDED ||
+		relationship === TripScheduleRelationship.NEW ||
+		relationship === TripScheduleRelationship.UNSCHEDULED ||
+		relationship === TripScheduleRelationship.DUPLICATED;
+	// A static nonfrequency trip has one instance per service date. Its optional
+	// start_time describes that instance rather than creating another one.
+	return [
+		update.feed_id,
+		update.trip.trip_id,
+		update.trip.start_date ?? "",
+		frequency || additionalInstance ? normalizeClock(update.trip.start_time) : "",
+	].join("\0");
 }
 
 /** Replace one supplemental producer's snapshot without disturbing other plugins. */
@@ -91,18 +108,27 @@ export function replaceInjectedVehiclePositions(
 	];
 }
 
-/** A GTFS-RT REPLACEMENT owns the trip instance for its service key. */
-export function applyRealtimeReplacementPrecedence(updates: readonly RealtimeTripUpdate[]): RealtimeTripUpdate[] {
+/** Deleted trips are hidden; a replacement owns the matching scheduled instance. */
+export function applyRealtimeReplacementPrecedence(
+	updates: readonly RealtimeTripUpdate[],
+	ctx: CacheContext,
+): RealtimeTripUpdate[] {
+	const deletedKeys = new Set(
+		updates
+			.filter((update) => update.trip.schedule_relationship === TripScheduleRelationship.DELETED)
+			.map((update) => tripServiceKey(update, ctx)),
+	);
 	const replacementKeys = new Set(
 		updates
 			.filter((update) => update.trip.schedule_relationship === TripScheduleRelationship.REPLACEMENT)
-			.map(tripServiceKey),
+			.map((update) => tripServiceKey(update, ctx)),
 	);
-	return updates.filter(
-		(update) =>
-			update.trip.schedule_relationship === TripScheduleRelationship.REPLACEMENT ||
-			!replacementKeys.has(tripServiceKey(update)),
-	);
+	return updates.filter((update) => {
+		if (update.trip.schedule_relationship === TripScheduleRelationship.DELETED) return true;
+		const key = tripServiceKey(update, ctx);
+		if (deletedKeys.has(key)) return false;
+		return update.trip.schedule_relationship === TripScheduleRelationship.REPLACEMENT || !replacementKeys.has(key);
+	});
 }
 
 /** Transit supplies missing calls inside the authoritative dated instance. */

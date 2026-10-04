@@ -257,7 +257,8 @@ test("metadata-only observations refresh event ages without re-augmenting predic
 	current = { ...current, timestamp: old + 30 };
 	await refreshRealtimeCache(gtfs, ctx.config, ctx);
 	const next = ctx.augmented.tripsRec.get(key).instances.find((i) => i.serviceDate === date);
-	assert.equal(next, first);
+	assert.notEqual(next, first, "metadata publishes a new observation without mutating the previous snapshot");
+	assert.equal(first.stopTimes[0].realtime_info.timestamp, old);
 	assert.equal(next.stopTimes[0].realtime_info.timestamp, old + 30);
 	assert.equal(next.stopTimes[0].realtime_info.departure_observation.timestamp, old + 30);
 	assert.equal(next.stopTimes[1].realtime_info.arrival_observation.timestamp, old + 30);
@@ -473,7 +474,7 @@ test("service-date inference uses the previous service day for after-midnight ca
 	assert.equal(canonicalizeRealtimeTripUpdate(omitted, ctx).trip.start_date, date);
 });
 
-test("stale late and early estimates use scheduled window boundaries and ordering without changing cached rows", () => {
+test("retained late and early estimates use actual window boundaries regardless of age", () => {
 	const { ctx, trip, rows } = context();
 	const now = Date.parse("2026-10-03T10:00:00Z");
 	const originalNow = Date.now;
@@ -510,7 +511,7 @@ test("stale late and early estimates use scheduled window boundaries and orderin
 		}
 		const stop = ctx.augmented.stopsRec.get(entityKey({ feedId: "rail", localId: "A" })),
 			epoch = getServiceDayStart(date, "UTC");
-		const expected = ["late", "early", "fresh"];
+		const expected = ["fresh"];
 		assert.deepEqual(
 			getDeparturesForInstantWindow(stop, epoch + 35940, epoch + 36960, ctx).map((r) => r.trip_id),
 			expected,
@@ -523,6 +524,10 @@ test("stale late and early estimates use scheduled window boundaries and orderin
 			getServiceDateDeparturesForStop(stop, date, 35940, 36960, ctx).map((r) => r.trip_id),
 			expected,
 		);
+		assert.deepEqual(
+			getDeparturesForInstantWindow(stop, epoch + 32400, epoch + 39660, ctx).map((r) => r.trip_id),
+			["early", "fresh", "late"],
+		);
 		const original = ctx.augmented.tripsRec.get(entityKey({ feedId: "rail", localId: "late" })).instances[0]
 			.stopTimes[0];
 		assert.equal(original.actual_departure_time, 39600);
@@ -531,7 +536,7 @@ test("stale late and early estimates use scheduled window boundaries and orderin
 	}
 });
 
-test("five-minute prediction boundary and missing-timestamp source ages match window selection", () => {
+test("prediction windows retain old and missing-timestamp source observations but honor explicit absence", () => {
 	const { ctx, trip } = context(),
 		epoch = getServiceDayStart(date, "UTC"),
 		now = (epoch + 36000) * 1000,
@@ -548,7 +553,8 @@ test("five-minute prediction boundary and missing-timestamp source ages match wi
 		const stop = ctx.augmented.stopsRec.get(entityKey({ feedId: "rail", localId: "A" }));
 		assert.equal(getDeparturesForInstantWindow(stop, epoch + 39599, epoch + 39601, ctx).length, 1);
 		Date.now = () => now + 1;
-		assert.equal(getDeparturesForInstantWindow(stop, epoch + 35999, epoch + 36001, ctx).length, 1);
+		assert.equal(getDeparturesForInstantWindow(stop, epoch + 39599, epoch + 39601, ctx).length, 1);
+		assert.equal(getDeparturesForInstantWindow(stop, epoch + 35999, epoch + 36001, ctx).length, 0);
 		for (const row of augmented.instances[0].stopTimes) {
 			if (row.realtime_info) {
 				row.realtime_info.timestamp = null;
@@ -556,6 +562,9 @@ test("five-minute prediction boundary and missing-timestamp source ages match wi
 			}
 		}
 		ctx.getRealtimeObservationTime = () => new Date(now - 600000).toISOString();
+		assert.equal(getDeparturesForInstantWindow(stop, epoch + 39599, epoch + 39601, ctx).length, 1);
+		assert.equal(getDeparturesForInstantWindow(stop, epoch + 35999, epoch + 36001, ctx).length, 0);
+		ctx.getRealtimeObservationTime = () => new Date(0).toISOString();
 		assert.equal(getDeparturesForInstantWindow(stop, epoch + 35999, epoch + 36001, ctx).length, 1);
 	} finally {
 		Date.now = originalNow;

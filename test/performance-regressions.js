@@ -488,7 +488,7 @@ function testFilteredTripUpdatesAvoidOtherFeeds() {
 	const filters = [];
 	const ctx = {
 		augmented: { tripUpdatesCache: new Map() },
-		raw: { injectedTripUpdates: [] },
+		raw: { injectedTripUpdates: [], frequenciesByTripKey: new Map() },
 		config: { network: { plugins: [] } },
 		gtfs: {
 			getRealtimeTripUpdates(filter) {

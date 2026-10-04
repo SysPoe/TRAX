@@ -143,6 +143,8 @@ export type CacheContext = {
 	augmented: AugmentedCache;
 	config: TraxConfig;
 	gtfs?: GTFS;
+	/** Stable owner for pending auxiliary work; retains only the current publication. */
+	publicationOwner?: { current: CacheContext };
 	/** Source observation clock, supplied by the owning runtime across static publications. */
 	getRealtimeObservationTime?: (
 		observation: { source_id?: string | null; timestamp?: number | null } | null | undefined,

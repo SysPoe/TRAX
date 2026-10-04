@@ -181,8 +181,17 @@ config.progressLog = (progress) => {
 	if (progress.task === "Re-augmenting updated trips") metadataOnlyReaugmentation = true;
 };
 await refreshRealtimeCache(gtfs, config, ctx);
-assert.equal(metadataOnlyReaugmentation, false, "coarse native candidates and timestamp-only updates must not rebuild trips");
-assert.strictEqual(augmented.tripsRec.get(tripKey), metadataOnlyTrip, "metadata-only updates should reuse the trip");
+assert.equal(
+	metadataOnlyReaugmentation,
+	false,
+	"coarse native candidates and timestamp-only updates must not rebuild trips",
+);
+assert.notStrictEqual(
+	augmented.tripsRec.get(tripKey),
+	metadataOnlyTrip,
+	"metadata-only observations must preserve the prior publication",
+);
+assert.equal(metadataOnlyTrip.instances[0].realtime_update.timestamp, 0);
 assert.equal(
 	augmented.tripsRec.get(tripKey)?.instances[0].realtime_update?.timestamp,
 	1,
@@ -360,14 +369,26 @@ augmented.timer = {
 updates = [realtimeUpdate({ timestamp: 2, delay: 60 })];
 await refreshRealtimeCache(gtfs, config, ctx);
 
-assert.equal(serviceDateTrips.entryIterations, 0, "realtime refresh must not scan service-date buckets");
-assert.equal(passingTrips.entryIterations, 0, "realtime refresh must not scan passing-stop buckets");
+assert.equal(
+	serviceDateTrips.entryIterations,
+	1,
+	"snapshot isolation copies service-date buckets once without rebuilding them per changed trip",
+);
+assert.equal(
+	passingTrips.entryIterations,
+	1,
+	"snapshot isolation copies passing-stop buckets once without rebuilding them per changed trip",
+);
 assert.equal(rawTripsRec.keyIterations, 0, "realtime refresh must not enumerate static raw trips");
 assert.equal(tripsRec.keyIterations, 0, "realtime refresh must not enumerate augmented trips");
 assert.equal(tripsRec.valueIterations, 0, "realtime refresh must not rebuild the trip array from all records");
 assert.equal(augmented.stops.iterations, 0, "realtime refresh must not scan all stops");
 assert.equal(stopsRec.setCalls, 0, "realtime refresh must not rebuild stopsRec");
-assert.strictEqual(augmented.trips, tripsArray, "realtime refresh must update the trip list in place");
+assert.notStrictEqual(
+	augmented.trips,
+	tripsArray,
+	"realtime refresh publishes a new trip list while retaining the prior reader's array",
+);
 for (const category of [
 	"refreshRealtimeCache:collectChangedIds",
 	"refreshRealtimeCache:unregisterChangedTrips",
@@ -403,7 +424,7 @@ config.progressLog = (progress) => {
 	observedIncrementalCheckpoint = true;
 	for (const id of streamedTripIds.slice(0, 10)) {
 		const key = entityKey({ feedId, localId: id });
-		assert.equal(augmented.tripsRec.get(key)?.instances[0].realtime_update?.timestamp, 3);
+		assert.equal(augmented.tripsRec.get(key)?.instances[0].realtime_update?.timestamp, 2);
 	}
 	for (const id of streamedTripIds.slice(10)) {
 		const key = entityKey({ feedId, localId: id });
@@ -412,7 +433,11 @@ config.progressLog = (progress) => {
 };
 updates = streamedTripIds.map((id) => realtimeUpdate({ id, timestamp: 3, delay: 60 }));
 await refreshRealtimeCache(gtfs, config, ctx);
-assert.equal(observedIncrementalCheckpoint, true, "realtime trips must be replaced incrementally");
+assert.equal(
+	observedIncrementalCheckpoint,
+	true,
+	"realtime work must yield while the previous snapshot remains published",
+);
 config.progressLog = () => {};
 
 const signaturesBeforeStaleAbort = new Map(augmented.tripUpdateSignatures);
@@ -436,8 +461,10 @@ assert.deepEqual(
 const timestampsAfterAbort = streamedTripIds.map(
 	(id) => augmented.tripsRec.get(entityKey({ feedId, localId: id }))?.instances[0].realtime_update?.timestamp,
 );
-assert.ok(timestampsAfterAbort.includes(4), "the regression must interrupt after realtime work has begun");
-assert.ok(timestampsAfterAbort.includes(3), "the regression must leave an unprocessed tail for the retry");
+assert.ok(
+	timestampsAfterAbort.every((timestamp) => timestamp === 3),
+	"aborted work must retain the complete prior snapshot",
+);
 
 await refreshRealtimeCache(gtfs, config, ctx);
 for (const id of streamedTripIds) {
@@ -536,20 +563,24 @@ config.progressLog = (progress) => {
 updates = [orderUpdateB(), orderUpdateA()];
 await refreshRealtimeCache(gtfs, config, ctx);
 assert.equal(orderReaugmented, false, "a reordered but identical update set must not re-augment");
-assert.strictEqual(
+assert.deepEqual(
 	augmented.tripsRec.get(orderTripKey),
 	orderTripBefore,
-	"a reordered but identical update set must reuse the trip",
+	"a reordered identical set preserves trip values without re-augmentation",
 );
 
 orderReaugmented = false;
 updates = [orderUpdateB(11), orderUpdateA(11)];
 await refreshRealtimeCache(gtfs, config, ctx);
 assert.equal(orderReaugmented, false, "timestamp-only changes must not re-augment, even when reordered");
-assert.strictEqual(
+assert.notStrictEqual(
 	augmented.tripsRec.get(orderTripKey),
 	orderTripBefore,
-	"metadata-only updates must reuse the trip",
+	"metadata-only updates publish an isolated observation without re-augmentation",
+);
+assert.deepEqual(
+	orderTripBefore.instances.map((instance) => instance.realtime_update.timestamp),
+	[10, 10],
 );
 assert.deepEqual(
 	augmented

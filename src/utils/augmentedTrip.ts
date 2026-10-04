@@ -16,6 +16,7 @@ import { addDaysToServiceDate, getEpochDayFromServiceDate, getServiceDateFromEpo
 import { encodeTripInstanceId, entityKey } from "../identity.js";
 import { isNonRevenueTrip } from "./considered.js";
 import { pluginSupportsFeed } from "../plugins/types.js";
+import { applyRealtimeReplacementPrecedence } from "../cache/realtime.js";
 
 export type AugmentedTripInstance = qdf.Trip & {
 	instance_id: string;
@@ -307,7 +308,7 @@ export function augmentTrip(
 	const tripRef = { feedId: trip.feed_id, localId: trip.trip_id };
 	const tripKey = entityKey(tripRef);
 	const route = cache.getRawRoute(ctx, { feedId: trip.feed_id, localId: trip.route_id });
-	const rawStopTimes = cache.getRawStopTimes(ctx, tripRef).sort((a, b) => a.stop_sequence - b.stop_sequence);
+	const rawStopTimes = [...cache.getRawStopTimes(ctx, tripRef)].sort((a, b) => a.stop_sequence - b.stop_sequence);
 	const frequencyRows = ctx.raw.frequenciesByTripKey?.get(tripKey) ?? [];
 	const firstTemplateTimeRaw = rawStopTimes[0]?.departure_time ?? rawStopTimes[0]?.arrival_time ?? 0;
 	const firstTemplateTime = Number.isFinite(firstTemplateTimeRaw) ? firstTemplateTimeRaw : 0;
@@ -366,7 +367,10 @@ export function augmentTrip(
 	const journey = createJourneyContext(trip, rawStopTimes, ctx);
 
 	ctx.augmented.timer.start("augmentTrip:getTripUpdates");
-	const allUpdates = tripUpdatesCache ? (tripUpdatesCache.get(tripKey) ?? []) : cache.getTripUpdates(ctx, tripRef);
+	const allUpdates = applyRealtimeReplacementPrecedence(
+		tripUpdatesCache ? (tripUpdatesCache.get(tripKey) ?? []) : cache.getTripUpdates(ctx, tripRef),
+		ctx,
+	);
 	const realtimeDateSet = options.realtimeDates ? new Set(options.realtimeDates) : null;
 	const updates = realtimeDateSet
 		? allUpdates.filter((update) => {
@@ -413,6 +417,7 @@ export function augmentTrip(
 		// sequences; retain the static trip in that case and apply updates by stop.
 		const realtimeOwnsStopSequence =
 			scheduleRelationship === qdf.TripScheduleRelationship.ADDED ||
+			scheduleRelationship === qdf.TripScheduleRelationship.NEW ||
 			scheduleRelationship === qdf.TripScheduleRelationship.UNSCHEDULED ||
 			(scheduleRelationship === qdf.TripScheduleRelationship.REPLACEMENT &&
 				update !== null &&
@@ -573,9 +578,11 @@ export function augmentTrip(
 		relationship: qdf.TripScheduleRelationship,
 	): void => {
 		const startDate = update.trip.start_date!;
-		// start_time is optional for a normal static scheduled service. Several
-		// producers describing that same service must share one instance.
-		const normalized = relationship === qdf.TripScheduleRelationship.SCHEDULED && !hasFrequencyRows
+		// A nonfrequency schedule or replacement has one instance on a service
+		// date, regardless of producers including its optional start_time.
+		const normalized =
+			(relationship === qdf.TripScheduleRelationship.SCHEDULED ||
+				relationship === qdf.TripScheduleRelationship.REPLACEMENT) && !hasFrequencyRows
 			? ""
 			: normalizeStartTime(update.trip.start_time, frequencyRun);
 		const dedupeKey = `${tripKey}\0${startDate}\0${normalized}`;
@@ -654,6 +661,12 @@ export function augmentTrip(
 			continue;
 		}
 		if (frequencyRun) coveredFrequencyRuns.add(`${startDate}\0${frequencyRun.startTime}`);
+		if (rel === qdf.TripScheduleRelationship.DELETED) {
+			// Suppress only this service date or frequency run. No instance or
+			// cancellation row may survive, even if the deletion includes calls.
+			if (!frequencyRun) coveredServiceDates.add(startDate);
+			continue;
+		}
 
 		if (rel === qdf.TripScheduleRelationship.SCHEDULED) {
 			if (!frequencyRun) coveredServiceDates.add(startDate);
@@ -672,13 +685,13 @@ export function augmentTrip(
 			offerWinner(update, frequencyRun, rel);
 		} else if (rel === qdf.TripScheduleRelationship.REPLACEMENT) {
 			// Same-key REPLACEMENT updates share one qualified instance identity
-			// (trip + service date + realtime start time). Creating one instance
+			// (trip + service date + frequency run, where applicable). Creating one instance
 			// per update would duplicate instance_id and corrupt instancesRec.
 			// Keep a single deterministic winner per key: latest timestamp,
 			// then smallest update_id, then smallest payload.
 			offerWinner(update, frequencyRun, rel);
 			if (!frequencyRun) coveredServiceDates.add(startDate);
-		} else if (rel === qdf.TripScheduleRelationship.ADDED) {
+		} else if (rel === qdf.TripScheduleRelationship.ADDED || rel === qdf.TripScheduleRelationship.NEW) {
 			if (!frequencyRun) coveredServiceDates.add(startDate);
 			offerWinner(update, frequencyRun, rel);
 		}

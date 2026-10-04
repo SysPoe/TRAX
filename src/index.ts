@@ -30,7 +30,8 @@ import {
 	type TraxConfig,
 	resolveConfig,
 } from "./config.js";
-import { createGtfs, loadRealtime, loadStatic, type SourceReport } from "./gtfsInterfaceLayer.js";
+import { createGtfs, loadRealtime, replayRetainedRealtime, type SourceReport } from "./gtfsInterfaceLayer.js";
+import { createRealtimeReadView, getRealtimeOwner } from "./cache/snapshot.js";
 import { runPluginHooks } from "./plugins/concurrency.js";
 import { entityKey } from "./identity.js";
 import { createVehicleFormation, type VehicleFormation } from "./utils/vehicleModel.js";
@@ -62,6 +63,8 @@ export type RealtimeObservation = { source_id?: string | null; timestamp?: numbe
 
 export type StaticRefreshCoordinator = <T>(task: () => Promise<T>) => Promise<T>;
 
+const snapshotMutatingApiMethods = new Set(["refreshTripPlatforms", "refreshStationPlatforms", "refreshTripOccupancy"]);
+
 export class TRAX {
 	public config: TraxConfig;
 	public gtfs?: GTFS;
@@ -77,6 +80,8 @@ export class TRAX {
 	private autoRefreshEnabled = false;
 	private sourceHealth = new Map<string, SourceHealth>();
 	private coordinateStaticRefresh: StaticRefreshCoordinator;
+	private snapshotRefreshTail: Promise<void> = Promise.resolve();
+	private realtimeObservationTimes = new Map<string, string | null>();
 	/**
 	 * Monotonic static publication counter. Bumped in the same synchronous
 	 * block as the gtfs/config/ctx pointer swap, so any reader that sees the
@@ -276,16 +281,34 @@ export class TRAX {
 	}
 
 	private async initializeGtfs(initialRealtime: boolean): Promise<void> {
-		const gtfs = await createGtfs(this.config, initialRealtime, this.reportSource);
-		this.validateFeedTimeZones(gtfs);
+		const nativeGtfs = await createGtfs(this.config, initialRealtime, this.reportSource);
+		const config = this.validateFeedTimeZones(nativeGtfs);
+		const gtfs = createRealtimeReadView(nativeGtfs);
 		this.ctx.augmented.timer.start("TRAX:initialCacheRefresh");
-		const nextCtx = await cache.refreshStaticCache(gtfs, this.config);
+		const nextCtx = await cache.refreshStaticCache(gtfs, config);
 		nextCtx.augmented.timer.stop("TRAX:initialCacheRefresh");
 		this.gtfs = gtfs;
 		this.config = nextCtx.config;
 		this.ctx = nextCtx;
-		this.ctx.getRealtimeObservationTime = this.getRealtimeObservationTime;
+		this.ctx.publicationOwner = { current: this.ctx };
+		this.realtimeObservationTimes = this.captureRealtimeObservationTimes();
+		const observationTimes = this.realtimeObservationTimes;
+		this.ctx.getRealtimeObservationTime = (observation) => this.observationTime(observation, observationTimes);
 		this.publishStaticGeneration();
+	}
+
+	/** Serialize construction so only the published snapshot and one candidate remain owned. */
+	private withSnapshotRefresh<T>(task: () => Promise<T>): Promise<T> {
+		const result = this.snapshotRefreshTail.then(task, task);
+		this.snapshotRefreshTail = result.then(
+			() => {},
+			() => {},
+		);
+		return result;
+	}
+
+	private captureRealtimeObservationTimes(): Map<string, string | null> {
+		return new Map(Array.from(this.sourceHealth, ([id, source]) => [id, source.lastSuccessAt]));
 	}
 
 	/** Record a successful static publication alongside the pointer swap. */
@@ -308,42 +331,60 @@ export class TRAX {
 	 */
 	public async refreshStatic(initialRealtime: boolean = false): Promise<void> {
 		if (this.staticRefreshInFlight) return this.staticRefreshInFlight;
-		this.staticRefreshInFlight = this.coordinateStaticRefresh(async () => {
-			if (!this.gtfs) {
-				await this.initializeGtfs(initialRealtime);
-				return;
-			}
-			const retainedState = cache.retainStaticRefreshState(this.ctx);
-			const previousGtfs = this.gtfs;
-			let nextGtfs: import("qdf-gtfs").GTFS | null = null;
-			let nextCtx: cache.CacheContext | null = null;
-			try {
-				const { createGtfs } = await import("./gtfsInterfaceLayer.js");
-				nextGtfs = await createGtfs(this.config, false, this.reportSource);
-				this.validateFeedTimeZones(nextGtfs);
-				nextCtx = await cache.refreshStaticCache(nextGtfs, this.config, retainedState);
-			} catch (error) {
-				logger.error(
-					`Static refresh failed, retaining previous generation: ${error instanceof Error ? error.message : String(error)}`,
-					{ module: "index", function: "refreshStatic" },
-				);
-				if (nextGtfs)
-					try {
-						nextGtfs.clearStatic();
-					} catch {}
-				throw error;
-			}
-			this.gtfs = nextGtfs!;
-			this.config = nextCtx!.config;
-			this.ctx = nextCtx!;
-			this.ctx.getRealtimeObservationTime = this.getRealtimeObservationTime;
-			this.publishStaticGeneration();
-			setTimeout(() => {
+		this.staticRefreshInFlight = this.coordinateStaticRefresh(() =>
+			this.withSnapshotRefresh(async () => {
+				if (!this.gtfs) {
+					await this.initializeGtfs(initialRealtime);
+					return;
+				}
+				const retainedState = cache.retainStaticRefreshState(this.ctx);
+				const previousCtx = this.ctx;
+				const publicationOwner = (previousCtx.publicationOwner ??= { current: previousCtx });
+				const previousGtfs = this.gtfs;
+				let nextGtfs: import("qdf-gtfs").GTFS | null = null;
+				let nextCtx: cache.CacheContext | null = null;
 				try {
-					previousGtfs.clearStatic();
-				} catch {}
-			}, 30_000).unref?.();
-		}).finally(() => {
+					const { createGtfs } = await import("./gtfsInterfaceLayer.js");
+					nextGtfs = await createGtfs(this.config, false, this.reportSource);
+					const config = this.validateFeedTimeZones(nextGtfs);
+					replayRetainedRealtime(previousGtfs, nextGtfs);
+					nextGtfs = createRealtimeReadView(nextGtfs);
+					nextCtx = await cache.refreshStaticCache(nextGtfs, config, retainedState);
+				} catch (error) {
+					logger.error(
+						`Static refresh failed, retaining previous generation: ${error instanceof Error ? error.message : String(error)}`,
+						{ module: "index", function: "refreshStatic" },
+					);
+					if (nextGtfs)
+						try {
+							nextGtfs.clearStatic();
+						} catch {}
+					throw error;
+				}
+				this.gtfs = nextGtfs!;
+				this.config = nextCtx!.config;
+				this.ctx = nextCtx!;
+				// QRT can finish independently while static construction yields.
+				const auxiliaryState = cache.retainStaticRefreshState(previousCtx, false);
+				const nextSeqState = this.ctx.pluginState.get("au-seq:data") as
+					| { qrtTrains: typeof auxiliaryState.qrtTrains; qrtObservedAt: string | null; qrtRevision: number }
+					| undefined;
+				if (nextSeqState) {
+					nextSeqState.qrtTrains = auxiliaryState.qrtTrains;
+					nextSeqState.qrtObservedAt = auxiliaryState.qrtObservedAt ?? null;
+					nextSeqState.qrtRevision = auxiliaryState.qrtRevision ?? 0;
+				}
+				this.ctx.augmented.qrtRefreshInFlight = previousCtx.augmented.qrtRefreshInFlight;
+				this.ctx.publicationOwner = publicationOwner;
+				publicationOwner.current = this.ctx;
+				const observationTimes = this.realtimeObservationTimes;
+				this.ctx.getRealtimeObservationTime = (observation) =>
+					this.observationTime(observation, observationTimes);
+				this.publishStaticGeneration();
+				// Let the previous native snapshot be reclaimed when its readers finish.
+				// A timer retaining every old snapshot can accumulate full native feeds.
+			}),
+		).finally(() => {
 			this.staticRefreshInFlight = null;
 		});
 		return this.staticRefreshInFlight;
@@ -386,64 +427,86 @@ export class TRAX {
 	}
 
 	private async refreshRealtimeOnce(loadTransport: boolean): Promise<void> {
-		const gtfs = await this.ensureGtfs(loadTransport);
-		this.ctx.getRealtimeObservationTime = this.getRealtimeObservationTime;
+		await this.ensureGtfs(loadTransport);
+		return this.withSnapshotRefresh(() => this.buildRealtimePublication(loadTransport));
+	}
+
+	private async buildRealtimePublication(loadTransport: boolean): Promise<void> {
+		const publishedGtfs = this.gtfs!;
+		const gtfs = getRealtimeOwner(publishedGtfs);
 		const generation = this.staticGeneration;
 		const assertCurrent = () => {
-			if (this.staticGeneration !== generation || this.gtfs !== gtfs) throw new cache.StaleGenerationError();
+			if (this.staticGeneration !== generation || this.gtfs !== publishedGtfs)
+				throw new cache.StaleGenerationError();
 		};
-		const shouldAbort = () => this.staticGeneration !== generation || this.gtfs !== gtfs;
+		const shouldAbort = () => this.staticGeneration !== generation || this.gtfs !== publishedGtfs;
 		this.ctx.augmented.timer.start("refreshRealtime");
 		let sourceSucceeded =
 			!loadTransport &&
 			Array.from(this.sourceHealth.values()).some(
 				(source) => source.kind !== "static" && source.kind !== "supplemental" && source.state === "healthy",
 			);
-		if (loadTransport && this.config.network.feeds.some((feed) => feed.realtimeSources.length > 0)) {
-			const outcome = await loadRealtime(gtfs, this.config, this.reportSource);
-			sourceSucceeded = outcome.successfulSourceIds.length > 0;
-		}
-		assertCurrent();
 		const failedSupplemental = new Set<string>();
-		await runPluginHooks(
-			this.config.network.plugins.filter((plugin) => plugin.beforeRealtime),
-			(plugin) => {
-				assertCurrent();
-				this.reportSupplemental(plugin.id, plugin.feedIds[0], "loading");
-				return plugin.beforeRealtime!(this.ctx);
-			},
-			{
-				abortOnError: false,
-				onError: (plugin, error) => {
-					if (error instanceof cache.StaleGenerationError) throw error;
-					failedSupplemental.add(plugin.id);
-					const message = error instanceof Error ? error.message : String(error);
-					this.reportSupplemental(plugin.id, plugin.feedIds[0], "error", message);
-					logger.error(`Supplemental source '${plugin.id}' failed: ${message}`, {
-						module: "index",
-						function: "refreshRealtime",
-					});
+		const prepare = async (candidate: cache.CacheContext) => {
+			if (loadTransport && this.config.network.feeds.some((feed) => feed.realtimeSources.length > 0)) {
+				const outcome = await loadRealtime(gtfs, this.config, this.reportSource);
+				sourceSucceeded = outcome.successfulSourceIds.length > 0;
+			}
+			assertCurrent();
+			candidate.gtfs = createRealtimeReadView(gtfs);
+			await runPluginHooks(
+				this.config.network.plugins.filter((plugin) => plugin.beforeRealtime),
+				(plugin) => {
+					assertCurrent();
+					this.reportSupplemental(plugin.id, plugin.feedIds[0], "loading");
+					return plugin.beforeRealtime!(candidate);
 				},
-			},
-		);
-		for (const plugin of this.config.network.plugins) {
-			if (!plugin.beforeRealtime || failedSupplemental.has(plugin.id)) continue;
-			this.reportSupplemental(plugin.id, plugin.feedIds[0], "healthy");
-			sourceSucceeded = true;
-		}
+				{
+					abortOnError: false,
+					onError: (plugin, error) => {
+						if (error instanceof cache.StaleGenerationError) throw error;
+						failedSupplemental.add(plugin.id);
+						const message = error instanceof Error ? error.message : String(error);
+						this.reportSupplemental(plugin.id, plugin.feedIds[0], "error", message);
+						logger.error(`Supplemental source '${plugin.id}' failed: ${message}`, {
+							module: "index",
+							function: "refreshRealtime",
+						});
+					},
+				},
+			);
+			for (const plugin of this.config.network.plugins) {
+				if (!plugin.beforeRealtime || failedSupplemental.has(plugin.id)) continue;
+				this.reportSupplemental(plugin.id, plugin.feedIds[0], "healthy");
+				sourceSucceeded = true;
+			}
+			const observationTimes = this.captureRealtimeObservationTimes();
+			candidate.getRealtimeObservationTime = (observation) => this.observationTime(observation, observationTimes);
+		};
 		const afterRealtimePlugins = this.config.network.plugins.filter((plugin) => plugin.afterRealtime);
 		for (const plugin of afterRealtimePlugins) {
 			if (!failedSupplemental.has(plugin.id)) this.reportSupplemental(plugin.id, plugin.feedIds[0], "loading");
 		}
 		try {
 			assertCurrent();
-			await cache.refreshRealtimeCache(this.gtfs!, this.config, this.ctx, {
+			await cache.refreshRealtimeCache(gtfs, this.config, this.ctx, {
 				shouldAbort,
+				prepare,
+				publish: (candidate) => {
+					assertCurrent();
+					for (const plugin of afterRealtimePlugins) {
+						if (!failedSupplemental.has(plugin.id))
+							this.reportSupplemental(plugin.id, plugin.feedIds[0], "healthy");
+					}
+					this.realtimeObservationTimes = this.captureRealtimeObservationTimes();
+					const observationTimes = this.realtimeObservationTimes;
+					candidate.getRealtimeObservationTime = (observation) =>
+						this.observationTime(observation, observationTimes);
+					this.gtfs = candidate.gtfs;
+					this.config = candidate.config;
+					this.ctx = candidate;
+				},
 			});
-			for (const plugin of afterRealtimePlugins) {
-				if (!failedSupplemental.has(plugin.id))
-					this.reportSupplemental(plugin.id, plugin.feedIds[0], "healthy");
-			}
 		} catch (error) {
 			if (error instanceof cache.StaleGenerationError) throw error;
 			const message = error instanceof Error ? error.message : String(error);
@@ -496,7 +559,7 @@ export class TRAX {
 		return timeUtils.getServiceDate(new Date(), getFeedTimeZone(this.config, firstFeed.id));
 	}
 
-	private validateFeedTimeZones(gtfs: GTFS): void {
+	private validateFeedTimeZones(gtfs: GTFS): TraxConfig {
 		const next = new Map<string, string>();
 		for (const feed of this.config.network.feeds) {
 			const agencyZones = new Set(
@@ -516,7 +579,7 @@ export class TRAX {
 			}
 			next.set(feed.id, Array.from(agencyZones)[0]);
 		}
-		this.config.feedTimeZones = next;
+		return { ...this.config, feedTimeZones: next };
 	}
 
 	public get metadata() {
@@ -555,9 +618,22 @@ export class TRAX {
 		return place ? { ...place, members: place.members.map((member) => ({ ...member })) } : null;
 	};
 	public getAgencies = () => this.gtfs?.getAgencies() ?? [];
-	public getSourceHealth = (): SourceHealth[] => Array.from(this.sourceHealth.values(), (source) => ({ ...source }));
+	public getSourceHealth = (): SourceHealth[] =>
+		Array.from(this.sourceHealth.values(), (source) => ({
+			...source,
+			lastSuccessAt:
+				source.kind === "static"
+					? source.lastSuccessAt
+					: (this.realtimeObservationTimes.get(source.id) ?? null),
+		}));
 	/** Original entity time wins; missing times use only that source's last successful observation. */
 	public getRealtimeObservationTime = (observation: RealtimeObservation | null | undefined): string | null => {
+		return this.observationTime(observation, this.realtimeObservationTimes);
+	};
+	private observationTime(
+		observation: RealtimeObservation | null | undefined,
+		sourceTimes: ReadonlyMap<string, string | null>,
+	): string | null {
 		const timestamp = observation?.timestamp;
 		if (
 			timestamp != null &&
@@ -570,12 +646,9 @@ export class TRAX {
 		}
 		if (!observation?.source_id) return null;
 		return (
-			(
-				this.sourceHealth.get(observation.source_id) ??
-				this.sourceHealth.get(`${observation.source_id}:supplemental`)
-			)?.lastSuccessAt ?? null
+			sourceTimes.get(observation.source_id) ?? sourceTimes.get(`${observation.source_id}:supplemental`) ?? null
 		);
-	};
+	}
 	public getConsistDetails = async (instanceId: string): Promise<VehicleFormation | null> => {
 		const trip = this.getAugmentedTripInstance(instanceId);
 		if (!trip) return null;
@@ -595,7 +668,27 @@ export class TRAX {
 
 	public getPluginApi<T>(pluginId: string): T | null {
 		const plugin = this.config.network.plugins.find((candidate) => candidate.id === pluginId);
-		return (plugin?.api?.(this.ctx) as T | undefined) ?? null;
+		const api = plugin?.api?.(this.ctx);
+		if (!api || !plugin?.api) return null;
+		// A retained API must read the current publication without keeping old
+		// method closures alive. Provider writes share the snapshot refresh queue.
+		const shape = Object.fromEntries(Object.keys(api).map((key) => [key, undefined]));
+		return new Proxy(shape, {
+			get: (_target, property) => {
+				const current = plugin.api!(this.ctx) as object;
+				const value = Reflect.get(current, property);
+				if (typeof value !== "function") return value;
+				return (...args: unknown[]) => {
+					const invoke = () => {
+						const latest = plugin.api!(this.ctx) as object;
+						return Reflect.apply(Reflect.get(latest, property), latest, args);
+					};
+					return snapshotMutatingApiMethods.has(String(property))
+						? this.withSnapshotRefresh(async () => invoke())
+						: invoke();
+				};
+			},
+		}) as T;
 	}
 
 	/** AU/SEQ inferred diagram (prev/next trip, synthetic block id). Null if not SEQ or cache not built. */
@@ -671,7 +764,7 @@ export class TRAX {
 			isConsideredStop: (stop: AugmentedStop | Stop) => isConsideredStop(stop, this.ctx),
 			isConsideredStopId: (stop: import("qdf-gtfs").QualifiedEntityId) => isConsideredStopId(stop, this.ctx),
 			departures: {
-				attachDeparturesHelpers: (stop: any) => attachDeparturesHelpers(stop, this.ctx),
+				attachDeparturesHelpers: (stop: any) => attachDeparturesHelpers(stop, () => this.ctx),
 				getDeparturesForStop: (stop: any, date: string, st: string, et: string) =>
 					getDeparturesForStop(stop, date, st, et, this.ctx),
 				getServiceDateDeparturesForStop: (stop: any, date: string, st: number, et: number) =>

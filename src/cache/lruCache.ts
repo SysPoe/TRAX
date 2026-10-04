@@ -33,6 +33,13 @@ export class LRUCache<K, V> {
 		this.cache.clear();
 	}
 
+	/** Copy eviction order while sharing immutable cached results. */
+	fork(): LRUCache<K, V> {
+		const result = new LRUCache<K, V>(this.maxSize);
+		result.cache = new Map(this.cache);
+		return result;
+	}
+
 	get size(): number {
 		return this.cache.size;
 	}

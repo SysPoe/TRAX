@@ -579,7 +579,10 @@ const officialScheduled = {
 	trip: { ...gthaReplacement.trip, schedule_relationship: TripScheduleRelationship.SCHEDULED },
 	stop_time_updates: [],
 };
-assert.deepEqual(applyRealtimeReplacementPrecedence([officialScheduled, gthaReplacement]), [gthaReplacement]);
+assert.deepEqual(
+	applyRealtimeReplacementPrecedence([officialScheduled, gthaReplacement], { raw: { frequenciesByTripKey: new Map() } }),
+	[gthaReplacement],
+);
 const injectionCtx = { raw: { injectedTripUpdates: [{ ...officialScheduled, source_id: "other-source" }] } };
 replaceInjectedTripUpdates(injectionCtx, GTHA_OPERATING_SCHEDULE_SOURCE_ID, [gthaReplacement]);
 assert.deepEqual(
@@ -2636,10 +2639,11 @@ try {
 		],
 	};
 	const initialRealtimeOrder = [];
-	const originalUpdateRealtimeFromUrl = GTFS.prototype.updateRealtimeFromUrl;
-	GTFS.prototype.updateRealtimeFromUrl = async function (sources) {
+	const originalFetchRealtimeSources = GTFS.prototype.fetchRealtimeSources;
+	GTFS.prototype.fetchRealtimeSources = async function (sources) {
 		initialRealtimeOrder.push("realtime");
-		return sources.map((source) => ({ id: source.id, ok: true }));
+		const emptyFeed = Buffer.from([10, 5, 10, 3, 50, 46, 48]);
+		return sources.map((source) => ({ source, data: emptyFeed, ok: true }));
 	};
 	try {
 		const initialRealtimeRuntime = new TRAX(
@@ -2684,7 +2688,7 @@ try {
 			"initial startup must reuse its realtime transport for the plugin-aware refresh",
 		);
 	} finally {
-		GTFS.prototype.updateRealtimeFromUrl = originalUpdateRealtimeFromUrl;
+		GTFS.prototype.fetchRealtimeSources = originalFetchRealtimeSources;
 	}
 	assert.throws(
 		() =>

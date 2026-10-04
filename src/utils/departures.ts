@@ -55,7 +55,7 @@ type DepartureSlice = {
  * sort as Infinity (last), never as midnight, so they cannot masquerade as
  * 00:00 departures. Keep this order in sync with getStopDeparturesCached's sort key.
  */
-function hasExpiredPrediction(stopTime: AugmentedStopTime, ctx: cache.CacheContext, now: number): boolean {
+function hasUnavailablePrediction(stopTime: AugmentedStopTime, ctx: cache.CacheContext, now: number): boolean {
 	if (!stopTime.realtime_info) return false;
 	const info = stopTime.realtime_info;
 	const observation =
@@ -71,11 +71,11 @@ function hasExpiredPrediction(stopTime: AugmentedStopTime, ctx: cache.CacheConte
 		: timestamp != null && Number.isFinite(timestamp) && timestamp >= 0
 			? timestamp * 1000
 			: NaN;
-	return !Number.isFinite(observedAt) || observedAt > now + 30_000 || now - observedAt > 300_000;
+	return !Number.isFinite(observedAt) || observedAt === 0 || observedAt > now + 30_000;
 }
 
 function departureTimeSeconds(stopTime: AugmentedStopTime, ctx: cache.CacheContext, now: number): number {
-	if (hasExpiredPrediction(stopTime, ctx, now)) {
+	if (hasUnavailablePrediction(stopTime, ctx, now)) {
 		return stopTime.scheduled_departure_time ?? stopTime.scheduled_arrival_time ?? Number.POSITIVE_INFINITY;
 	}
 	return (
@@ -127,9 +127,9 @@ function getDepartureSlice(
 	ctx: cache.CacheContext,
 	now: number,
 ): DepartureSlice {
-	// Expired predictions can change the cached actual-time order. Build a
+	// Unavailable observations can change the cached actual-time order. Build a
 	// query view only then; cached rows and live binary-search paths stay intact.
-	const ordered = stopTimes.some((stopTime) => hasExpiredPrediction(stopTime, ctx, now))
+	const ordered = stopTimes.some((stopTime) => hasUnavailablePrediction(stopTime, ctx, now))
 		? [...stopTimes].sort(
 				(left, right) => departureTimeSeconds(left, ctx, now) - departureTimeSeconds(right, ctx, now),
 			)
@@ -396,21 +396,25 @@ export function getServiceDateDeparturesForStop(
 	return results;
 }
 
-export function attachDeparturesHelpers(stop: AugmentedStop, ctx: cache.CacheContext): AugmentedStop {
+export function attachDeparturesHelpers(
+	stop: AugmentedStop,
+	context: cache.CacheContext | (() => cache.CacheContext),
+): AugmentedStop {
+	const currentContext = typeof context === "function" ? context : () => context;
 	Object.defineProperties(stop, {
 		getDepartures: {
 			value: (date: string, start_time: string, end_time: string) =>
-				getDeparturesForStop(stop, date, start_time, end_time, ctx),
+				getDeparturesForStop(stop, date, start_time, end_time, currentContext()),
 			enumerable: false,
 		},
 		_getSDDepartures: {
 			value: (serviceDate: string, start_time_secs: number, end_time_secs: number) =>
-				getServiceDateDeparturesForStop(stop, serviceDate, start_time_secs, end_time_secs, ctx),
+				getServiceDateDeparturesForStop(stop, serviceDate, start_time_secs, end_time_secs, currentContext()),
 			enumerable: false,
 		},
 		_getInstantDepartures: {
 			value: (startEpochSeconds: number, endEpochSeconds: number) =>
-				getDeparturesForInstantWindow(stop, startEpochSeconds, endEpochSeconds, ctx),
+				getDeparturesForInstantWindow(stop, startEpochSeconds, endEpochSeconds, currentContext()),
 			enumerable: false,
 		},
 	});
