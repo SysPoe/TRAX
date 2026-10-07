@@ -815,6 +815,8 @@ export {
 	createCaGthaNetwork,
 } from "./networks.js";
 export type { AuRailNetworkOptions, AuVicVlineNetworkOptions } from "./networks.js";
+export { getMtpDataset, getMtpServiceDetails, MTP_FEED_ID } from "./region-specific/AU/SEQ/mtp.js";
+export type { MtpDataset, MtpService, MtpServiceDetails, MtpPlan, MtpStation } from "./region-specific/AU/SEQ/mtp.js";
 export { createTfnswRegionalBookingPlugin, parseTfnswTripId } from "./plugins/tfnsw-rail.js";
 export type { TfnswRailPluginOptions, TfnswSetType, TfnswTripDescriptor } from "./plugins/tfnsw-rail.js";
 export {

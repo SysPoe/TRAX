@@ -6,6 +6,8 @@ import type { CorridorResolutionConfig, CorridorResolutionOverrides } from "./ut
 
 export interface FeedSource {
 	url: string;
+	/** Bundled static ZIP bytes; the URL identifies the publisher. */
+	buffer?: Buffer;
 	/** Ordered alternatives used when the primary endpoint fails. */
 	fallbackUrls?: readonly string[];
 	headers?: Record<string, string>;

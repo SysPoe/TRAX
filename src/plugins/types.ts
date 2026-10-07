@@ -1,4 +1,4 @@
-import type { RealtimeTripUpdate, RealtimeUpdateTripInfo, RealtimeVehiclePosition, Route } from "qdf-gtfs";
+import type { RealtimeTripUpdate, RealtimeUpdateTripInfo, RealtimeVehiclePosition, Route, Trip } from "qdf-gtfs";
 import type { CacheContext } from "../cache/types.js";
 import type { AugmentedStop } from "../utils/augmentedStop.js";
 import type { AugmentedTripInstance } from "../utils/augmentedTrip.js";
@@ -72,7 +72,13 @@ export interface TransitPlugin {
 		ctx: CacheContext,
 	): Promise<readonly VehicleFormationUnit[] | null> | readonly VehicleFormationUnit[] | null;
 	filterTrackEdges?(edges: Set<string>): void;
-	enrichTrackGraph?(matrix: Record<string, Record<string, number>>, adjacency: Record<string, string[]>): void;
+	/** Exclude incomplete schedules from physical topology inference without hiding their services. */
+	considerTopologyTrip?(trip: Trip, ctx: CacheContext): boolean;
+	enrichTrackGraph?(
+		matrix: Record<string, Record<string, number>>,
+		adjacency: Record<string, string[]>,
+		ctx: CacheContext,
+	): void;
 	/** Optional region service surface, available only when this plugin is installed. */
 	api?(ctx: CacheContext): unknown;
 }

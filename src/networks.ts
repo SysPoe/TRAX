@@ -11,8 +11,9 @@ import {
 } from "./plugins/tfnsw-rail.js";
 import type { VLinePluginOptions } from "./region-specific/AU/VIC/types.js";
 import { getQrtManualNetwork } from "./region-specific/AU/SEQ/qr-travel/manual-network.js";
+import { withMtpServices } from "./region-specific/AU/SEQ/mtp.js";
 
-export const AU_SEQ_NETWORK: NetworkDefinition = {
+const SEQ_BASE_NETWORK: NetworkDefinition = {
 	id: "au-seq",
 	name: "South East Queensland",
 	feeds: [
@@ -64,6 +65,8 @@ export const AU_SEQ_NETWORK: NetworkDefinition = {
 		},
 	],
 };
+
+export const AU_SEQ_NETWORK = withMtpServices(SEQ_BASE_NETWORK);
 
 export type AuVicVlineNetworkOptions = VLinePluginOptions & { gtfsRtKey?: string };
 

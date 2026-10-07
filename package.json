@@ -28,7 +28,7 @@
     "prepare": "npm run build",
     "link:local": "nub link ../QDF-GTFS",
     "format": "prettier . --write --config .prettierrc",
-    "test": "nub run build && node test/corridor.js && node test/realtime-cache.js && node --test --test-concurrency=1 test/realtime-publication.js test/realtime-relationships.js test/plugin-publication.js && node test/architecture.js && node --test test/booking-regressions.js && node test/time.js && node test/transit-app.js && node --test --test-concurrency=1 test/runtime-regressions.js",
+    "test": "nub run build && node test/corridor.js && node test/realtime-cache.js && node --test --test-concurrency=1 test/realtime-publication.js test/realtime-relationships.js test/plugin-publication.js && node test/architecture.js && node test/mtp.js && node --test test/booking-regressions.js && node test/time.js && node test/transit-app.js && node --test --test-concurrency=1 test/runtime-regressions.js",
     "test:performance-regressions": "nub run build && node test/performance-regressions.js",
     "test:corridor-performance": "nub run build && node test/corridor-performance.js",
     "test:seq-diagram": "nub run build && node test/seq-diagram-benchmark.js",

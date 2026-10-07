@@ -138,7 +138,7 @@ export type SourceReport = {
 	kind: "static" | "trip-updates" | "vehicles" | "alerts";
 	state: "loading" | "healthy" | "stale" | "error";
 	error?: string;
-	transport?: "network" | "fresh-cache" | "stale-cache";
+	transport?: "network" | "fresh-cache" | "stale-cache" | "local";
 };
 export type SourceReporter = (report: SourceReport) => void;
 
@@ -161,6 +161,7 @@ export async function loadStatic(gtfs: GTFS, config: TraxConfig, report?: Source
 		return {
 			id: feed.id,
 			url: feed.staticSource.url,
+			buffer: feed.staticSource.buffer,
 			headers: feed.staticSource.headers,
 			archiveEntry: feed.staticSource.archiveEntry,
 			...(fallbackUrls.length > 0 ? { fallbackUrls } : {}),

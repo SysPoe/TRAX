@@ -259,6 +259,12 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		gtfs.getStops().map((stop) => [entityKey({ feedId: stop.feed_id, localId: stop.stop_id }), stop]),
 	);
 	const railTrips = trips.filter((trip) => {
+		if (
+			ctx.config.network.plugins.some(
+				(plugin) => plugin.feedIds.includes(trip.feed_id) && plugin.considerTopologyTrip?.(trip, ctx) === false,
+			)
+		)
+			return false;
 		const route = routesById.get(entityKey({ feedId: trip.feed_id, localId: trip.route_id }));
 		return route ? isConsideredRoute(route, ctx) : false;
 	});
@@ -374,7 +380,7 @@ function generateNetworkData(ctx: cache.CacheContext): NetworkData {
 		if (!matrix[to][from]) matrix[to][from] = parseFloat(avg.toFixed(2));
 	}
 
-	for (const plugin of ctx.config.network.plugins) plugin.enrichTrackGraph?.(matrix, adjacency);
+	for (const plugin of ctx.config.network.plugins) plugin.enrichTrackGraph?.(matrix, adjacency, ctx);
 
 	const result = {
 		matrix,

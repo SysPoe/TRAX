@@ -11,6 +11,7 @@ import {
 	resolveJourneyCorridor,
 } from "./corridor/resolver.js";
 import type { CorridorResolution, JourneyContext } from "./corridor/types.js";
+import type { MtpServiceDetails } from "../region-specific/AU/SEQ/mtp.js";
 import { getFeedTimeZone, resolveTripNumber } from "../config.js";
 import { addDaysToServiceDate, getEpochDayFromServiceDate, getServiceDateFromEpochDay, getServiceDayStart, getToday } from "./time.js";
 import { encodeTripInstanceId, entityKey } from "../identity.js";
@@ -19,6 +20,7 @@ import { pluginSupportsFeed } from "../plugins/types.js";
 import { applyRealtimeReplacementPrecedence } from "../cache/realtime.js";
 
 export type AugmentedTripInstance = qdf.Trip & {
+	plannedService?: MtpServiceDetails;
 	instance_id: string;
 	trip_id: string;
 	serviceDate: string;
