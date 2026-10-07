@@ -6,6 +6,8 @@ import { entityKey } from "../../../identity.js";
 import type { TransitPlugin } from "../../../plugins/types.js";
 import type { ManualNetwork } from "../../../utils/corridor/types.js";
 import { getDataFilePath } from "../../../utils/fs.js";
+import type { AugmentationContext } from "../../../utils/augmentedStop.js";
+import { normalizeQRTStationLookupKey, getQRTStationCode } from "./qr-travel/stations.js";
 
 export const MTP_FEED_ID = "qr-mtp";
 
@@ -156,6 +158,23 @@ export function withMtpServices(network: NetworkDefinition): NetworkDefinition {
 		// Partial review journeys must never create express-skip edges in the
 		// passenger graph. Only independently adjacent chart rows contribute.
 		considerTopologyTrip: () => false,
+		enrichStop(stop, _ctx, augmentationContext) {
+			const station = dataset.stations.find((s) => s.id === stop.stop_id);
+			const lookup = (augmentationContext as AugmentationContext | undefined)?.qrtStationsByKey;
+			const linked = station && lookup?.get(normalizeQRTStationLookupKey(station.name));
+			if (!linked) return;
+			stop.regionSpecific = { SEQ: {
+				qrt_Place: true, qrt_PlaceCode: getQRTStationCode(linked), qrt_Station: linked,
+			} };
+			// Preserve coordinates for shared Travel stations in maps and nearby search.
+			const latitude = linked.lat?.trim() ? Number(linked.lat) : NaN;
+			const longitude = linked.lng?.trim() ? Number(linked.lng) : NaN;
+			if (stop.stop_lat == null && Number.isFinite(latitude) && Math.abs(latitude) <= 90
+				&& Number.isFinite(longitude) && Math.abs(longitude) <= 180) {
+				stop.stop_lat = latitude;
+				stop.stop_lon = longitude;
+			}
+		},
 		enrichTrip(trip) {
 			trip.plannedService = getMtpServiceDetails(trip.trip_id) ?? undefined;
 		},

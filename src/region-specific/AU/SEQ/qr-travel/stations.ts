@@ -26,6 +26,7 @@ export function normalizeQRTStationLookupKey(value: string): string {
 		.replace(/[()]/g, " ")
 		.replace(/[.&]/g, " ")
 		.replace(/-/g, " ")
+		.replace(/\bstation\s+and\s+travel\s+centre\b/g, " ")
 		.replace(/\btravel centre\b/g, " ")
 		.replace(/\brailway\b/g, " ")
 		.replace(/\bstation\b/g, " ")

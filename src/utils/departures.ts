@@ -187,10 +187,11 @@ function mapDepartureResults(stopTimes: AugmentedStopTime[], ctx: cache.CacheCon
 	const seenVisits = new Set<string>();
 	const results: DepartureResult[] = [];
 	for (const st of stopTimes) {
-		if (st.pickup_type === qdf.PickupType.None) continue;
 		if (seenVisits.has(departureVisitKey(st))) continue;
 		const inst = instanceCache.get(st.instance_id) ?? cache.getAugmentedTripInstance(ctx, st.instance_id);
 		if (!inst) continue;
+		// MTP timing points are operational movements, never passenger pickup.
+		if (st.pickup_type === qdf.PickupType.None && !inst.plannedService) continue;
 		instanceCache.set(st.instance_id, inst);
 		seenVisits.add(departureVisitKey(st));
 		results.push({

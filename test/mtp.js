@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import TRAX, { AU_SEQ_NETWORK, getMtpDataset, MTP_FEED_ID, encodeTripInstanceId } from "../dist/index.js";
 
+const { normalizeQRTStationLookupKey, buildQRTStationLookupMap } = await import("../dist/region-specific/AU/SEQ/qr-travel/stations.js");
+assert.equal(normalizeQRTStationLookupKey("Gladstone Station and Travel Centre"), "gladstone");
 const data = getMtpDataset();
 assert.equal(data.plans.length, 140);
 assert.equal(new Set(data.plans.map((p) => p.id)).size, 140);
@@ -71,6 +73,10 @@ for (const [run, station, arrival, departure] of [
 // Only directly adjacent, source-confirmed chart rows can add physical edges.
 const plugin = standalone.plugins[0];
 assert.equal(plugin.considerTopologyTrip({}, {}), false);
+const qrtStation = { Title: "Gladstone Station and Travel Centre", qrt_PlaceCode: "GLT", stops: [] };
+const gladstone = runtime.getStations().find((s) => s.stop_name === "Gladstone");
+plugin.enrichStop(gladstone, {}, { qrtStationsByKey: buildQRTStationLookupMap({ GLT: qrtStation }) });
+assert.equal(gladstone.regionSpecific.SEQ.qrt_Station, qrtStation);
 const matrix = {},
 	adjacency = {};
 plugin.enrichTrackGraph(matrix, adjacency, { config: runtime.config });
