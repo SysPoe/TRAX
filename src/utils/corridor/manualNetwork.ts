@@ -410,6 +410,41 @@ function toNode(
 	};
 }
 
+type ManualPathResult = ManualPath | "ambiguous" | null;
+const manualPathCache = new WeakMap<CorridorIndex, WeakMap<ManualNetwork, Map<string, ManualPathResult>>>();
+
+/**
+ * Path search reads only the anchors' station identity and name, the journey
+ * scope, and the index. Thousands of trips repeat the same station pairs.
+ */
+function manualPath(
+	network: ManualNetwork,
+	from: JourneyAnchor,
+	to: JourneyAnchor,
+	index: CorridorIndex,
+	journey: JourneyContext,
+): ManualPathResult {
+	let byNetwork = manualPathCache.get(index);
+	if (!byNetwork) manualPathCache.set(index, (byNetwork = new WeakMap()));
+	let paths = byNetwork.get(network);
+	if (!paths) byNetwork.set(network, (paths = new Map()));
+	const key = JSON.stringify([
+		from.stationId,
+		from.name ?? null,
+		to.stationId,
+		to.name ?? null,
+		journey.routeId,
+		journey.direction,
+		journey.geometryFeedIds,
+	]);
+	let path = paths.get(key);
+	if (path === undefined) {
+		path = explicitPath(network, from, to, index, journey) ?? topologyPath(network, from, to, index, journey);
+		paths.set(key, path);
+	}
+	return path;
+}
+
 function resolveNetworkGap(
 	network: ManualNetwork,
 	from: JourneyAnchor,
@@ -418,7 +453,7 @@ function resolveNetworkGap(
 	journey: JourneyContext,
 ): { path: ManualPath; nodes: CorridorNode[] } | "ambiguous" | null {
 	const byId = new Map(network.nodes.map((node) => [nodeKey(network, node.id), node]));
-	const path = explicitPath(network, from, to, index, journey) ?? topologyPath(network, from, to, index, journey);
+	const path = manualPath(network, from, to, index, journey);
 	if (!path || path === "ambiguous") return path;
 	const confidence: CorridorConfidence = path.evidence === "manual-corridor" ? "high" : "medium";
 	const nodes = path.nodes.map((key, nodeIndex) =>

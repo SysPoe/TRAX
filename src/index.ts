@@ -33,6 +33,8 @@ import {
 import { createGtfs, loadRealtime, replayRetainedRealtime, type SourceReport } from "./gtfsInterfaceLayer.js";
 import { createRealtimeReadView, getRealtimeOwner } from "./cache/snapshot.js";
 import { runPluginHooks } from "./plugins/concurrency.js";
+
+const RETIRED_SNAPSHOT_GRACE_MS = 30_000;
 import { entityKey } from "./identity.js";
 import { createVehicleFormation, type VehicleFormation } from "./utils/vehicleModel.js";
 import { getOnboardReachableStops, type ReachabilityOrigin } from "./utils/passengerContinuations.js";
@@ -295,6 +297,8 @@ export class TRAX {
 		const observationTimes = this.realtimeObservationTimes;
 		this.ctx.getRealtimeObservationTime = (observation) => this.observationTime(observation, observationTimes);
 		this.publishStaticGeneration();
+		// Cache construction leaves gigabytes of parse and build garbage behind.
+		nativeGtfs.releaseFreeMemory();
 	}
 
 	/** Serialize construction so only the published snapshot and one candidate remain owned. */
@@ -381,8 +385,15 @@ export class TRAX {
 				this.ctx.getRealtimeObservationTime = (observation) =>
 					this.observationTime(observation, observationTimes);
 				this.publishStaticGeneration();
-				// Let the previous native snapshot be reclaimed when its readers finish.
-				// A timer retaining every old snapshot can accumulate full native feeds.
+				// Readers of the previous snapshot are short-lived. Release its native
+				// data after a grace period: waiting for V8 to finalize it can leave
+				// gigabytes resident, and clearStatic also returns freed pages to the OS.
+				const retiredGtfs = getRealtimeOwner(previousGtfs);
+				setTimeout(() => {
+					try {
+						retiredGtfs.clearStatic();
+					} catch {}
+				}, RETIRED_SNAPSHOT_GRACE_MS).unref();
 			}),
 		).finally(() => {
 			this.staticRefreshInFlight = null;

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { RealtimeTripUpdate, Stop, StopTime, Trip } from "qdf-gtfs";
 import type { CacheContext } from "../../cache/types.js";
 import { getRawStopTimes } from "../../cache/gtfsReads.js";
@@ -183,18 +184,29 @@ export function createRealtimeJourneyContext(
 	};
 }
 
+const configVersions = new WeakMap<object, string>();
+
+/** Short, memoized identity of the corridor settings that affect resolution results. */
 function configVersion(ctx: CacheContext): string {
-	return JSON.stringify({
-		version: ctx.config.corridor.version,
-		geometry: ctx.config.corridor.geometry,
-		geometrySources: ctx.config.corridor.geometrySources,
-		manualNetworks: ctx.config.corridor.manualNetworks.map((network) => ({
-			id: network.id,
-			pathSelection: network.pathSelection ?? "unique",
-			version: network.version ?? "1",
-		})),
-		minimumOutputConfidence: ctx.config.corridor.minimumOutputConfidence,
-	});
+	const corridor = ctx.config.corridor;
+	let version = configVersions.get(corridor);
+	if (version === undefined) {
+		const settings = JSON.stringify({
+			version: corridor.version,
+			geometry: corridor.geometry,
+			geometrySources: corridor.geometrySources,
+			manualNetworks: corridor.manualNetworks.map((network) => ({
+				id: network.id,
+				pathSelection: network.pathSelection ?? "unique",
+				version: network.version ?? "1",
+			})),
+			minimumOutputConfidence: corridor.minimumOutputConfidence,
+		});
+		// Cache keys repeat this for every journey; a digest keeps them small.
+		version = createHash("sha256").update(settings).digest("base64url").slice(0, 22);
+		configVersions.set(corridor, version);
+	}
+	return version;
 }
 
 function emptyGap(from: JourneyAnchor, to: JourneyAnchor, diagnostic: string): CorridorGapResolution {
@@ -215,15 +227,11 @@ function alignmentCacheKey(
 	useNativeShapeDistance: boolean,
 	ctx: CacheContext,
 ): string {
-	return JSON.stringify([
-		shape.key,
-		useNativeShapeDistance,
-		ctx.config.corridor.geometry,
-		anchors.map((anchor) => [
-			anchor.stationId,
-			useNativeShapeDistance ? (anchor.shapeDistTraveled ?? null) : null,
-		]),
-	]);
+	// Hot during static construction: avoid serializing the geometry settings per call.
+	let key = `${shape.key}\0${useNativeShapeDistance ? 1 : 0}\0${configVersion(ctx)}`;
+	for (const anchor of anchors)
+		key += `\0${anchor.stationId}\u0001${useNativeShapeDistance ? (anchor.shapeDistTraveled ?? "") : ""}`;
+	return key;
 }
 
 function rebindAlignment(alignment: ShapeAlignment, anchors: readonly JourneyAnchor[]): ShapeAlignment {

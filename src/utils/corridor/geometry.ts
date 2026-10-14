@@ -53,12 +53,21 @@ export function cumulativePolylineDistance(points: readonly { lat: number; lon: 
 }
 
 /** Normalize a station name for alias matching. */
+const normalizedStationNames = new Map<string, string>();
+
 export function normalizeStationName(value: string): string {
-	return value
-		.toLocaleLowerCase()
-		.replace(/\brailway\b/g, " ")
-		.replace(/\bstation\b/g, " ")
-		.replace(/[().,&]/g, " ")
-		.replace(/\s+/g, " ")
-		.trim();
+	let normalized = normalizedStationNames.get(value);
+	if (normalized === undefined) {
+		normalized = value
+			.toLocaleLowerCase()
+			.replace(/\brailway\b/g, " ")
+			.replace(/\bstation\b/g, " ")
+			.replace(/[().,&]/g, " ")
+			.replace(/\s+/g, " ")
+			.trim();
+		// Station names form a small, fixed vocabulary; bound the memo defensively.
+		if (normalizedStationNames.size >= 50_000) normalizedStationNames.clear();
+		normalizedStationNames.set(value, normalized);
+	}
+	return normalized;
 }

@@ -11,7 +11,7 @@ export interface SpatialPoint<T = string> {
  * candidates from an expanded box and does not make geographic accuracy claims.
  */
 export class CoordinateGridIndex<T = string> {
-	private readonly cells = new Map<string, SpatialPoint<T>[]>();
+	private readonly cells = new Map<number, SpatialPoint<T>[]>();
 	private readonly cellSizeDegrees: number;
 
 	constructor(cellSizeMeters = 250) {
@@ -35,7 +35,7 @@ export class CoordinateGridIndex<T = string> {
 		const maxY = Math.floor(maxLat / this.cellSizeDegrees);
 		for (let y = minY; y <= maxY; y++) {
 			for (let x = minX; x <= maxX; x++) {
-				const cell = this.cells.get(`${x}:${y}`);
+				const cell = this.cells.get(cellKey(x, y));
 				if (!cell) continue;
 				for (const point of cell) {
 					if (seen?.has(point.id)) continue;
@@ -88,9 +88,16 @@ export class CoordinateGridIndex<T = string> {
 		);
 	}
 
-	private key(lat: number, lon: number): string {
-		return `${Math.floor(lon / this.cellSizeDegrees)}:${Math.floor(lat / this.cellSizeDegrees)}`;
+	private key(lat: number, lon: number): number {
+		return cellKey(Math.floor(lon / this.cellSizeDegrees), Math.floor(lat / this.cellSizeDegrees));
 	}
+}
+
+// Even 1 m cells span at most ±2^25 columns, so this packing is exact and avoids
+// building a string per probed cell.
+const CELL_OFFSET = 2 ** 25;
+function cellKey(x: number, y: number): number {
+	return (x + CELL_OFFSET) * 2 ** 26 + (y + CELL_OFFSET);
 }
 
 export const _test = { latitudeDistanceMeters, longitudeDistanceMeters };
